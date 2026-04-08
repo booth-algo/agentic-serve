@@ -1,0 +1,16 @@
+\section{Evaluation}
+\label{sec:evaluation}
+
+\subsection{Experimental setup}
+\label{sec:setup}
+
+We conduct experiments across multiple GPU configurations including NVIDIA A100, H100, and L40S accelerators. Models evaluated span dense architectures (LLaMA, Mistral) and mixture-of-experts architectures (Mixtral, DeepSeek) ranging from 7B to 70B+ parameters. We simulate production workloads using synthetic request traces that model varying request rates, prompt lengths, and generation lengths derived from real-world usage patterns.
+
+All experiments are run in isolated environments with fixed driver versions, CUDA toolkits, and library dependencies to ensure reproducibility. Each configuration is evaluated over multiple trials with statistical significance testing.
+
+\subsection{Results}
+\label{sec:results}
+
+Our results reveal significant performance variation across inference engines depending on the workload regime and hardware configuration. Under high-throughput batch processing scenarios, engines with continuous batching and paged attention demonstrate clear advantages. For latency-sensitive interactive workloads, the choice of scheduling policy and KV-cache management strategy becomes the dominant factor.
+
+We observe that no single engine dominates across all evaluation dimensions, highlighting the importance of workload-aware infrastructure selection. Detailed results and performance breakdowns are presented in the following subsections.

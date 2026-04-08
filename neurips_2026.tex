@@ -59,6 +59,8 @@
 \usepackage{adjustbox}      % table scaling
 \usepackage{multirow}       % multi-row cells
 \usepackage{makecell}       % line breaks in cells
+\usepackage{graphicx}       % figures
+\graphicspath{{image/}}     % look for figures in image/
 
 % Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote. 
 \title{TODO: Paper Title}
@@ -86,121 +88,15 @@
 \end{abstract}
 
 
-\section{Introduction}
-\label{sec:intro}
+\input{text/introduction}
 
-The rapid proliferation of large language models (LLMs) has driven significant interest in efficient inference serving systems. As models scale to hundreds of billions of parameters, the computational demands of serving these models in production settings have become a critical bottleneck. Several inference engines have emerged to address this challenge, each employing distinct optimization strategies such as continuous batching, paged attention, speculative decoding, and tensor parallelism. However, a systematic and reproducible comparison of these systems across diverse hardware configurations and workload characteristics remains lacking.
+\input{text/background}
 
-In this work, we present a comprehensive benchmarking framework for LLM inference engines. Our framework evaluates throughput, latency, memory efficiency, and cost-effectiveness across multiple hardware platforms, model architectures, and serving scenarios. We identify key performance bottlenecks and provide actionable insights for practitioners selecting inference infrastructure.
+\input{text/method}
 
+\input{text/evaluation}
 
-\section{Related work}
-\label{sec:related}
-
-We categorize prior work into \emph{inference benchmarks} that measure serving performance and \emph{inference simulators} that predict it. Table~\ref{tab:comparison} provides a unified feature comparison.
-
-\paragraph{Inference benchmarks.}
-MLPerf Inference~\cite{mlperf} provides standardized throughput and latency measurements with SLO enforcement but uses fixed reference datasets and does not support agentic or multi-turn workloads.
-SGLang~\cite{sglang} includes a benchmark suite with ShareGPT traces but focuses on single-turn chat.
-InferenceX provides a public dashboard of hardware comparisons but uses random tokens with arbitrary input/output lengths that do not reflect real-world agentic workloads.
-ML.ENERGY~\cite{mlenergy} benchmarks energy consumption across 46 models but does not measure latency or provide kernel-level analysis.
-None of these tools provide per-kernel profiling or latency prediction capabilities.
-
-\paragraph{Inference simulators.}
-LLMCompass~\cite{llmcompass} uses analytical tile-by-tile simulation for hardware design exploration, achieving 4.1\% end-to-end error but does not model serving features (continuous batching, CUDA graphs) or validate against hardware counters.
-Vidur~\cite{vidur} uses Random Forest interpolation with profiling data, supporting five scheduling policies with ${<}5\%$ error at 85\% capacity, but lacks per-kernel validation and MoE support.
-LLMServingSim~v2~\cite{llmservingsim} achieves 0.97--1.54\% error with runtime-loop simulation and supports MoE, but uses lookup tables rather than generalizable ML and does not validate against ncu hardware counters.
-DistServe~\cite{distserve} models SLO attainment for prefill-decode disaggregation with ${<}2\%$ error using queueing theory but only supports dense architectures.
-Frontier~\cite{frontier} uses per-operator Random Forest prediction for MoE and disaggregated systems but reports 19--23\% end-to-end error.
-No existing simulator validates per-kernel predictions against ncu hardware counter ground truth or links kernel-level resource utilization to serving-level performance.
-
-\definecolor{okgreen}{RGB}{0,140,54}
-\definecolor{nored}{RGB}{200,30,30}
-\definecolor{partialorange}{RGB}{210,125,0}
-\newcommand{\cmark}{\textcolor{okgreen}{\checkmark}}
-\newcommand{\xmark}{\textcolor{nored}{\texttimes}}
-\newcommand{\pmark}{\textcolor{partialorange}{$\sim$}}
-\begin{table}[t]
-\caption{Feature comparison of representative LLM inference simulators and benchmarks against our work. \cmark\ denotes full support, \xmark\ no support, and \pmark\ partial support. Reported accuracy is the end-to-end latency error stated by each system on its own validation setup (lower is better; ``---'' indicates the system does not predict latency). To our knowledge, ours is the first framework to unify agentic trace benchmarking with per-kernel roofline validation against hardware counters.}
-\label{tab:comparison}
-\centering
-\small
-\setlength{\tabcolsep}{4pt}
-\renewcommand{\arraystretch}{1.1}
-\begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{l ccccccc}
-\toprule
-\textbf{Feature} & \textbf{LLMCompass} & \textbf{Vidur} & \textbf{LLMServ.\,v2} & \textbf{DistServe} & \textbf{MLPerf} & \textbf{ML.ENERGY} & \textbf{Ours} \\
- & \scriptsize ISCA'24 & \scriptsize MLSys'24 & \scriptsize CAL'25 & \scriptsize OSDI'24 & \scriptsize MLSys & \scriptsize NeurIPS'25 & \\
-\midrule
-\multicolumn{8}{l}{\emph{Prediction \& measurement}} \\
-\quad Predicts latency                & \cmark & \cmark & \cmark & \cmark & \xmark & \xmark & \cmark \\
-\quad Measures real serving           & \xmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
-\quad Per-kernel \texttt{ncu} validation & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
-\quad Agentic workload profiles       & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
-\quad Multi-turn benchmarking         & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
-\midrule
-\multicolumn{8}{l}{\emph{Model architecture}} \\
-\quad Dense transformer               & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
-\quad Mixture-of-experts              & \pmark & \xmark & \cmark & \xmark & \xmark & \cmark & \cmark \\
-\quad Grouped-query attention         & \xmark & \cmark & \pmark & \xmark & \xmark & \cmark & \cmark \\
-\midrule
-\multicolumn{8}{l}{\emph{Serving features}} \\
-\quad Tensor parallelism              & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
-\quad Continuous batching             & \xmark & \cmark & \cmark & \cmark & \cmark & \cmark & \xmark \\
-\quad CUDA graphs                     & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \pmark \\
-\midrule
-\multicolumn{8}{l}{\emph{Analysis}} \\
-\quad Roofline analysis               & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
-\quad Kernel resource utilization     & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
-\quad Saturation curves               & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
-\midrule
-\multicolumn{8}{l}{\emph{Validation \& availability}} \\
-\quad Reported latency error          & 4.1\% & ${<}5\%$ & 0.97\% & ${<}2\%$ & --- & --- & \textbf{2\%} \\
-\quad Public profiling dataset        & \xmark & \xmark & \xmark & \xmark & \xmark & \cmark & \textbf{\cmark} \\
-\quad Open source                     & \pmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
-\bottomrule
-\end{tabular}
-\end{adjustbox}
-\end{table}
-
-
-\section{Methodology}
-\label{sec:method}
-
-We design our benchmarking methodology around three core axes: (1) inference engine configurations, (2) model architectures and sizes, and (3) workload characteristics. For each axis, we define a set of controlled variables and measurement protocols to ensure reproducibility.
-
-Our evaluation metrics include time-to-first-token (TTFT), inter-token latency (ITL), end-to-end throughput (tokens per second), peak memory utilization, and cost per million tokens. We instrument each engine with unified telemetry to capture fine-grained performance data across the inference pipeline.
-
-
-\section{Experimental setup}
-\label{sec:setup}
-
-We conduct experiments across multiple GPU configurations including NVIDIA A100, H100, and L40S accelerators. Models evaluated span dense architectures (LLaMA, Mistral) and mixture-of-experts architectures (Mixtral, DeepSeek) ranging from 7B to 70B+ parameters. We simulate production workloads using synthetic request traces that model varying request rates, prompt lengths, and generation lengths derived from real-world usage patterns.
-
-All experiments are run in isolated environments with fixed driver versions, CUDA toolkits, and library dependencies to ensure reproducibility. Each configuration is evaluated over multiple trials with statistical significance testing.
-
-
-\section{Results}
-\label{sec:results}
-
-Our results reveal significant performance variation across inference engines depending on the workload regime and hardware configuration. Under high-throughput batch processing scenarios, engines with continuous batching and paged attention demonstrate clear advantages. For latency-sensitive interactive workloads, the choice of scheduling policy and KV-cache management strategy becomes the dominant factor.
-
-We observe that no single engine dominates across all evaluation dimensions, highlighting the importance of workload-aware infrastructure selection. Detailed results and performance breakdowns are presented in the following subsections.
-
-
-\section{Discussion}
-\label{sec:discussion}
-
-Our findings suggest several practical guidelines for deploying LLM inference at scale. First, the optimal engine choice depends critically on the target latency SLO and expected request concurrency. Second, memory efficiency gains from quantization vary substantially across model architectures, with mixture-of-experts models presenting unique challenges. Third, multi-GPU scaling efficiency differs markedly between engines, with implications for cost optimization in cloud deployments.
-
-We also identify several open challenges including the lack of standardized benchmarking protocols, the difficulty of comparing systems with different API semantics, and the need for adaptive serving strategies that dynamically select backends based on workload conditions.
-
-
-\section{Conclusion}
-\label{sec:conclusion}
-
-We presented a comprehensive benchmarking study of LLM inference engines across diverse hardware, model, and workload configurations. Our results demonstrate that infrastructure selection has a first-order impact on serving cost and quality of service, and that no single system is universally optimal. We release our benchmarking framework and datasets to facilitate reproducible evaluation of future inference systems.
+\input{text/discussion_conclusion}
 
 
 \begin{ack}

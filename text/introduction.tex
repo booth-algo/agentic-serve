@@ -1,0 +1,6 @@
+\section{Introduction}
+\label{sec:intro}
+
+The rapid proliferation of large language models (LLMs) has driven significant interest in efficient inference serving systems. As models scale to hundreds of billions of parameters, the computational demands of serving these models in production settings have become a critical bottleneck. Several inference engines have emerged to address this challenge, each employing distinct optimization strategies such as continuous batching, paged attention, speculative decoding, and tensor parallelism. However, a systematic and reproducible comparison of these systems across diverse hardware configurations and workload characteristics remains lacking.
+
+In this work, we present a comprehensive benchmarking framework for LLM inference engines. Our framework evaluates throughput, latency, memory efficiency, and cost-effectiveness across multiple hardware platforms, model architectures, and serving scenarios. We identify key performance bottlenecks and provide actionable insights for practitioners selecting inference infrastructure.

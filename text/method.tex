@@ -1,0 +1,6 @@
+\section{Method}
+\label{sec:method}
+
+We design our benchmarking methodology around three core axes: (1) inference engine configurations, (2) model architectures and sizes, and (3) workload characteristics. For each axis, we define a set of controlled variables and measurement protocols to ensure reproducibility.
+
+Our evaluation metrics include time-to-first-token (TTFT), inter-token latency (ITL), end-to-end throughput (tokens per second), peak memory utilization, and cost per million tokens. We instrument each engine with unified telemetry to capture fine-grained performance data across the inference pipeline.

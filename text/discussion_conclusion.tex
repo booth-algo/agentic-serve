@@ -1,0 +1,10 @@
+\section{Discussion and Conclusion}
+\label{sec:discussion}
+
+\paragraph{Discussion.}
+Our findings suggest several practical guidelines for deploying LLM inference at scale. First, the optimal engine choice depends critically on the target latency SLO and expected request concurrency. Second, memory efficiency gains from quantization vary substantially across model architectures, with mixture-of-experts models presenting unique challenges. Third, multi-GPU scaling efficiency differs markedly between engines, with implications for cost optimization in cloud deployments.
+
+We also identify several open challenges including the lack of standardized benchmarking protocols, the difficulty of comparing systems with different API semantics, and the need for adaptive serving strategies that dynamically select backends based on workload conditions.
+
+\paragraph{Conclusion.}
+We presented a comprehensive benchmarking study of LLM inference engines across diverse hardware, model, and workload configurations. Our results demonstrate that infrastructure selection has a first-order impact on serving cost and quality of service, and that no single system is universally optimal. We release our benchmarking framework and datasets to facilitate reproducible evaluation of future inference systems.

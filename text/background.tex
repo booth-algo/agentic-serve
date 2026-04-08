@@ -1,0 +1,69 @@
+\section{Background}
+\label{sec:background}
+
+We categorize prior work into \emph{inference benchmarks} that measure serving performance and \emph{inference simulators} that predict it. Table~\ref{tab:comparison} provides a unified feature comparison.
+
+\paragraph{Inference benchmarks.}
+MLPerf Inference~\cite{mlperf} provides standardized throughput and latency measurements with SLO enforcement but uses fixed reference datasets and does not support agentic or multi-turn workloads.
+SGLang~\cite{sglang} includes a benchmark suite with ShareGPT traces but focuses on single-turn chat.
+InferenceX provides a public dashboard of hardware comparisons but uses random tokens with arbitrary input/output lengths that do not reflect real-world agentic workloads.
+ML.ENERGY~\cite{mlenergy} benchmarks energy consumption across 46 models but does not measure latency or provide kernel-level analysis.
+None of these tools provide per-kernel profiling or latency prediction capabilities.
+
+\paragraph{Inference simulators.}
+LLMCompass~\cite{llmcompass} uses analytical tile-by-tile simulation for hardware design exploration, achieving 4.1\% end-to-end error but does not model serving features (continuous batching, CUDA graphs) or validate against hardware counters.
+Vidur~\cite{vidur} uses Random Forest interpolation with profiling data, supporting five scheduling policies with ${<}5\%$ error at 85\% capacity, but lacks per-kernel validation and MoE support.
+LLMServingSim~v2~\cite{llmservingsim} achieves 0.97--1.54\% error with runtime-loop simulation and supports MoE, but uses lookup tables rather than generalizable ML and does not validate against ncu hardware counters.
+DistServe~\cite{distserve} models SLO attainment for prefill-decode disaggregation with ${<}2\%$ error using queueing theory but only supports dense architectures.
+Frontier~\cite{frontier} uses per-operator Random Forest prediction for MoE and disaggregated systems but reports 19--23\% end-to-end error.
+No existing simulator validates per-kernel predictions against ncu hardware counter ground truth or links kernel-level resource utilization to serving-level performance.
+
+\definecolor{okgreen}{RGB}{0,140,54}
+\definecolor{nored}{RGB}{200,30,30}
+\definecolor{partialorange}{RGB}{210,125,0}
+\newcommand{\cmark}{\textcolor{okgreen}{\checkmark}}
+\newcommand{\xmark}{\textcolor{nored}{\texttimes}}
+\newcommand{\pmark}{\textcolor{partialorange}{$\sim$}}
+\begin{table}[t]
+\caption{Feature comparison of representative LLM inference simulators and benchmarks against our work. \cmark\ denotes full support, \xmark\ no support, and \pmark\ partial support. Reported accuracy is the end-to-end latency error stated by each system on its own validation setup (lower is better; ``---'' indicates the system does not predict latency). To our knowledge, ours is the first framework to unify agentic trace benchmarking with per-kernel roofline validation against hardware counters.}
+\label{tab:comparison}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{l ccccccc}
+\toprule
+\textbf{Feature} & \textbf{LLMCompass} & \textbf{Vidur} & \textbf{LLMServ.\,v2} & \textbf{DistServe} & \textbf{MLPerf} & \textbf{ML.ENERGY} & \textbf{Ours} \\
+ & \scriptsize ISCA'24 & \scriptsize MLSys'24 & \scriptsize CAL'25 & \scriptsize OSDI'24 & \scriptsize MLSys & \scriptsize NeurIPS'25 & \\
+\midrule
+\multicolumn{8}{l}{\emph{Prediction \& measurement}} \\
+\quad Predicts latency                & \cmark & \cmark & \cmark & \cmark & \xmark & \xmark & \cmark \\
+\quad Measures real serving           & \xmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\quad Per-kernel \texttt{ncu} validation & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Agentic workload profiles       & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Multi-turn benchmarking         & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\midrule
+\multicolumn{8}{l}{\emph{Model architecture}} \\
+\quad Dense transformer               & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\quad Mixture-of-experts              & \pmark & \xmark & \cmark & \xmark & \xmark & \cmark & \cmark \\
+\quad Grouped-query attention         & \xmark & \cmark & \pmark & \xmark & \xmark & \cmark & \cmark \\
+\midrule
+\multicolumn{8}{l}{\emph{Serving features}} \\
+\quad Tensor parallelism              & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\quad Continuous batching             & \xmark & \cmark & \cmark & \cmark & \cmark & \cmark & \xmark \\
+\quad CUDA graphs                     & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \pmark \\
+\midrule
+\multicolumn{8}{l}{\emph{Analysis}} \\
+\quad Roofline analysis               & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Kernel resource utilization     & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Saturation curves               & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\midrule
+\multicolumn{8}{l}{\emph{Validation \& availability}} \\
+\quad Reported latency error          & 4.1\% & ${<}5\%$ & 0.97\% & ${<}2\%$ & --- & --- & \textbf{2\%} \\
+\quad Public profiling dataset        & \xmark & \xmark & \xmark & \xmark & \xmark & \cmark & \textbf{\cmark} \\
+\quad Open source                     & \pmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
