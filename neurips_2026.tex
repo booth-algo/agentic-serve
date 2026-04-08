@@ -7,14 +7,14 @@
 % The authors should use one of these tracks.
 % Before accepting by the NeurIPS conference, select one of the options below.
 % 0. "default" for submission
-\usepackage{neurips_2026}
+% \usepackage{neurips_2026}
 % the "default" option is equal to the "main" option, which is used for the Main Track with double-blind reviewing.
 % 1. "main" option is used for the Main Track
 %  \usepackage[main]{neurips_2026}
 % 2. "position" option is used for the Position Paper Track
 %  \usepackage[position]{neurips_2026}
 % 3. "eandd" option is used for the Evaluations & Datasets Track
- % \usepackage[eandd]{neurips_2026}
+ \usepackage[eandd]{neurips_2026}
  % if you want to opt-in for a de-anomymized submission (not recommended, but OK):
  %\usepackage[eandd, nonanonymous]{neurips_2026}
 % 4. "creativeai" option is used for the Creative AI Track
@@ -56,6 +56,9 @@
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
 \usepackage{xcolor}         % colors
+\usepackage{adjustbox}      % table scaling
+\usepackage{multirow}       % multi-row cells
+\usepackage{makecell}       % line breaks in cells
 
 % Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote. 
 \title{TODO: Paper Title}
@@ -94,9 +97,63 @@ In this work, we present a comprehensive benchmarking framework for LLM inferenc
 \section{Related work}
 \label{sec:related}
 
-Prior work on LLM serving can be broadly categorized into systems-level optimizations and algorithmic improvements. On the systems side, frameworks such as vLLM, TensorRT-LLM, and SGLang have introduced novel memory management and scheduling strategies. Algorithmic advances include quantization techniques, speculative decoding, and structured pruning methods that reduce computational requirements at the cost of modest accuracy trade-offs.
+We categorize prior work into \emph{inference benchmarks} that measure serving performance and \emph{inference simulators} that predict it. Table~\ref{tab:comparison} provides a unified feature comparison.
 
-Several benchmarking efforts have compared subsets of these systems, but they often focus on narrow workload profiles or single hardware configurations. Our work differs by providing a unified evaluation methodology that spans the full landscape of modern inference engines under realistic production workloads.
+\paragraph{Inference benchmarks.}
+MLPerf Inference~\cite{mlperf} provides standardized throughput and latency measurements with SLO enforcement but uses fixed reference datasets and does not support agentic or multi-turn workloads.
+SGLang~\cite{sglang} includes a benchmark suite with ShareGPT traces but focuses on single-turn chat.
+InferenceX provides a public dashboard of hardware comparisons but uses random tokens with arbitrary input/output lengths that do not reflect real-world agentic workloads.
+ML.ENERGY~\cite{mlenergy} benchmarks energy consumption across 46 models but does not measure latency or provide kernel-level analysis.
+None of these tools provide per-kernel profiling or latency prediction capabilities.
+
+\paragraph{Inference simulators.}
+LLMCompass~\cite{llmcompass} uses analytical tile-by-tile simulation for hardware design exploration, achieving 4.1\% end-to-end error but does not model serving features (continuous batching, CUDA graphs) or validate against hardware counters.
+Vidur~\cite{vidur} uses Random Forest interpolation with profiling data, supporting five scheduling policies with ${<}5\%$ error at 85\% capacity, but lacks per-kernel validation and MoE support.
+LLMServingSim~v2~\cite{llmservingsim} achieves 0.97--1.54\% error with runtime-loop simulation and supports MoE, but uses lookup tables rather than generalizable ML and does not validate against ncu hardware counters.
+DistServe~\cite{distserve} models SLO attainment for prefill-decode disaggregation with ${<}2\%$ error using queueing theory but only supports dense architectures.
+Frontier~\cite{frontier} uses per-operator Random Forest prediction for MoE and disaggregated systems but reports 19--23\% end-to-end error.
+No existing simulator validates per-kernel predictions against ncu hardware counter ground truth or links kernel-level resource utilization to serving-level performance.
+
+\begin{table}[t]
+\caption{Feature comparison of LLM inference simulators and benchmarks. \checkmark = supported, \texttimes = not supported, $\sim$ = partial. Our work is the first to combine agentic trace benchmarking with kernel-level roofline analysis.}
+\label{tab:comparison}
+\centering
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{l cc cc cc cc cc cc cc c}
+\toprule
+& \multicolumn{2}{c}{\textbf{LLMCompass}} & \multicolumn{2}{c}{\textbf{Vidur}} & \multicolumn{2}{c}{\textbf{LLMServ.v2}} & \multicolumn{2}{c}{\textbf{DistServe}} & \multicolumn{2}{c}{\textbf{MLPerf}} & \multicolumn{2}{c}{\textbf{ML.ENERGY}} & \textbf{Ours} \\
+& \multicolumn{2}{c}{\scriptsize ISCA'24} & \multicolumn{2}{c}{\scriptsize MLSys'24} & \multicolumn{2}{c}{\scriptsize CAL'25} & \multicolumn{2}{c}{\scriptsize OSDI'24} & \multicolumn{2}{c}{\scriptsize MLSys} & \multicolumn{2}{c}{\scriptsize NeurIPS'25} & \\
+\midrule
+\multicolumn{14}{l}{\textit{Prediction \& Measurement}} \\
+Predicts latency & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \checkmark \\
+Measures real serving & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
+Per-kernel ncu validation & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
+Agentic workload profiles & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
+Multi-turn benchmarking & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
+\midrule
+\multicolumn{14}{l}{\textit{Model Architecture}} \\
+Dense transformer & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
+MoE & \multicolumn{2}{c}{$\sim$} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
+GQA & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{$\sim$} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
+\midrule
+\multicolumn{14}{l}{\textit{Serving Features}} \\
+Tensor parallelism & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
+Continuous batching & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \texttimes \\
+CUDA graphs & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & $\sim$ \\
+\midrule
+\multicolumn{14}{l}{\textit{Analysis}} \\
+Roofline analysis & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
+Kernel resource utilization & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
+Saturation curves & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
+\midrule
+\multicolumn{14}{l}{\textit{Validation}} \\
+Reported accuracy & \multicolumn{2}{c}{4.1\%} & \multicolumn{2}{c}{{<}5\%} & \multicolumn{2}{c}{0.97\%} & \multicolumn{2}{c}{{<}2\%} & \multicolumn{2}{c}{---} & \multicolumn{2}{c}{---} & 98\% \\
+Public profiling dataset & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \textbf{\checkmark} \\
+Open source & \multicolumn{2}{c}{$\sim$} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
 
 
 \section{Methodology}
