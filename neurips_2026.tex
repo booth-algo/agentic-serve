@@ -114,42 +114,51 @@ DistServe~\cite{distserve} models SLO attainment for prefill-decode disaggregati
 Frontier~\cite{frontier} uses per-operator Random Forest prediction for MoE and disaggregated systems but reports 19--23\% end-to-end error.
 No existing simulator validates per-kernel predictions against ncu hardware counter ground truth or links kernel-level resource utilization to serving-level performance.
 
+\definecolor{okgreen}{RGB}{0,140,54}
+\definecolor{nored}{RGB}{200,30,30}
+\definecolor{partialorange}{RGB}{210,125,0}
+\newcommand{\cmark}{\textcolor{okgreen}{\checkmark}}
+\newcommand{\xmark}{\textcolor{nored}{\texttimes}}
+\newcommand{\pmark}{\textcolor{partialorange}{$\sim$}}
 \begin{table}[t]
-\caption{Feature comparison of LLM inference simulators and benchmarks. \checkmark = supported, \texttimes = not supported, $\sim$ = partial. Our work is the first to combine agentic trace benchmarking with kernel-level roofline analysis.}
+\caption{Feature comparison of representative LLM inference simulators and benchmarks against our work. \cmark\ denotes full support, \xmark\ no support, and \pmark\ partial support. Reported accuracy is the end-to-end latency error stated by each system on its own validation setup (lower is better; ``---'' indicates the system does not predict latency). To our knowledge, ours is the first framework to unify agentic trace benchmarking with per-kernel roofline validation against hardware counters.}
 \label{tab:comparison}
 \centering
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{l cc cc cc cc cc cc cc c}
+\begin{tabular}{l ccccccc}
 \toprule
-& \multicolumn{2}{c}{\textbf{LLMCompass}} & \multicolumn{2}{c}{\textbf{Vidur}} & \multicolumn{2}{c}{\textbf{LLMServ.v2}} & \multicolumn{2}{c}{\textbf{DistServe}} & \multicolumn{2}{c}{\textbf{MLPerf}} & \multicolumn{2}{c}{\textbf{ML.ENERGY}} & \textbf{Ours} \\
-& \multicolumn{2}{c}{\scriptsize ISCA'24} & \multicolumn{2}{c}{\scriptsize MLSys'24} & \multicolumn{2}{c}{\scriptsize CAL'25} & \multicolumn{2}{c}{\scriptsize OSDI'24} & \multicolumn{2}{c}{\scriptsize MLSys} & \multicolumn{2}{c}{\scriptsize NeurIPS'25} & \\
+\textbf{Feature} & \textbf{LLMCompass} & \textbf{Vidur} & \textbf{LLMServ.\,v2} & \textbf{DistServe} & \textbf{MLPerf} & \textbf{ML.ENERGY} & \textbf{Ours} \\
+ & \scriptsize ISCA'24 & \scriptsize MLSys'24 & \scriptsize CAL'25 & \scriptsize OSDI'24 & \scriptsize MLSys & \scriptsize NeurIPS'25 & \\
 \midrule
-\multicolumn{14}{l}{\textit{Prediction \& Measurement}} \\
-Predicts latency & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \checkmark \\
-Measures real serving & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
-Per-kernel ncu validation & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
-Agentic workload profiles & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
-Multi-turn benchmarking & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
+\multicolumn{8}{l}{\emph{Prediction \& measurement}} \\
+\quad Predicts latency                & \cmark & \cmark & \cmark & \cmark & \xmark & \xmark & \cmark \\
+\quad Measures real serving           & \xmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\quad Per-kernel \texttt{ncu} validation & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Agentic workload profiles       & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Multi-turn benchmarking         & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
 \midrule
-\multicolumn{14}{l}{\textit{Model Architecture}} \\
-Dense transformer & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
-MoE & \multicolumn{2}{c}{$\sim$} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
-GQA & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{$\sim$} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
+\multicolumn{8}{l}{\emph{Model architecture}} \\
+\quad Dense transformer               & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\quad Mixture-of-experts              & \pmark & \xmark & \cmark & \xmark & \xmark & \cmark & \cmark \\
+\quad Grouped-query attention         & \xmark & \cmark & \pmark & \xmark & \xmark & \cmark & \cmark \\
 \midrule
-\multicolumn{14}{l}{\textit{Serving Features}} \\
-Tensor parallelism & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
-Continuous batching & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \texttimes \\
-CUDA graphs & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & $\sim$ \\
+\multicolumn{8}{l}{\emph{Serving features}} \\
+\quad Tensor parallelism              & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\quad Continuous batching             & \xmark & \cmark & \cmark & \cmark & \cmark & \cmark & \xmark \\
+\quad CUDA graphs                     & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \pmark \\
 \midrule
-\multicolumn{14}{l}{\textit{Analysis}} \\
-Roofline analysis & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
-Kernel resource utilization & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
-Saturation curves & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \textbf{\checkmark} \\
+\multicolumn{8}{l}{\emph{Analysis}} \\
+\quad Roofline analysis               & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Kernel resource utilization     & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Saturation curves               & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
 \midrule
-\multicolumn{14}{l}{\textit{Validation}} \\
-Reported accuracy & \multicolumn{2}{c}{4.1\%} & \multicolumn{2}{c}{{<}5\%} & \multicolumn{2}{c}{0.97\%} & \multicolumn{2}{c}{{<}2\%} & \multicolumn{2}{c}{---} & \multicolumn{2}{c}{---} & 98\% \\
-Public profiling dataset & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\texttimes} & \multicolumn{2}{c}{\checkmark} & \textbf{\checkmark} \\
-Open source & \multicolumn{2}{c}{$\sim$} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \multicolumn{2}{c}{\checkmark} & \checkmark \\
+\multicolumn{8}{l}{\emph{Validation \& availability}} \\
+\quad Reported latency error          & 4.1\% & ${<}5\%$ & 0.97\% & ${<}2\%$ & --- & --- & \textbf{2\%} \\
+\quad Public profiling dataset        & \xmark & \xmark & \xmark & \xmark & \xmark & \cmark & \textbf{\cmark} \\
+\quad Open source                     & \pmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
