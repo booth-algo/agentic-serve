@@ -1,32 +1,42 @@
 \section{Discussion}
 \label{sec:discussion}
 
-\paragraph{Practical implications.}
-Our results have direct implications for practitioners deploying LLM agents in production. First, \emph{capacity planning based on chat benchmarks overprovisions decode resources and underprovisions prefill compute}. A system sized for 920 tok/s on chat-short workloads may only deliver 240 tok/s under coding-agent workloads---a 3.8$\times$ gap that translates directly to cost overruns or SLO violations. Second, \emph{tensor parallelism decisions depend on the workload profile}: TP=4 provides diminishing returns for decode-heavy workloads (memory-bound, allreduce overhead dominates) but substantial benefit for prefill-heavy agentic workloads where compute can be effectively distributed. Third, \emph{multi-turn agent sessions require KV cache-aware scheduling}: the growing context accumulation across turns degrades TTFT by $N\times$ at turn $K$, suggesting that prefill-decode disaggregation~\citep{distserve, splitwise} is particularly important for agentic serving.
+\paragraph{Capacity planning.}
+Chat benchmarks overestimate serving capacity for agentic workloads by up to 3.8$\times$ (Section~\ref{sec:workload_gap}). A deployment sized from chat-benchmark numbers will either overprovision decode-side resources (memory bandwidth) or underprovision prefill compute, leading to TTFT violations under agentic load. Prefill-decode disaggregation~\citep{distserve, splitwise} is one mitigation---our data quantifies where the split should occur.
 
-\paragraph{Why kernel-level analysis matters.}
-The roofline analysis in Section~\ref{sec:roofline} provides the mechanistic explanation for the workload-dependent saturation behavior. Without this kernel-level perspective, the throughput gap between chat and agentic profiles appears as an opaque system-level phenomenon. With it, we can attribute the gap to the shift from memory-bound decode kernels (where continuous batching is highly effective) to compute-bound prefill GEMMs (where batching provides less benefit). This attribution enables targeted optimization: for agentic workloads, the priority should be prefill compute efficiency (chunked prefill, speculative prefill, or dedicated prefill GPUs) rather than decode batch scheduling.
+\paragraph{Tensor parallelism.}
+TP decisions interact with workload profile. For decode-heavy chat workloads, increasing TP adds allreduce overhead with diminishing latency benefit. For prefill-heavy agentic workloads, TP distributes compute-bound GEMMs across GPUs more effectively. Practitioners should evaluate TP configurations against their actual workload distribution, not a generic chat benchmark.
+
+\paragraph{Multi-turn context growth.}
+Agent sessions accumulate context across turns, growing KV cache and prefill cost. This makes KV cache-aware scheduling and context-length-dependent routing increasingly important as agents move from single-turn to session-based interaction patterns.
+
+\paragraph{Why kernel-level analysis.}
+The roofline analysis in Section~\ref{sec:roofline} makes the throughput gap actionable: the bottleneck for agentic workloads is prefill GEMM throughput, not decode batching efficiency. This points to chunked prefill, speculative prefill, or dedicated prefill GPUs as the high-leverage optimizations for agentic serving.
 
 \paragraph{Limitations.}
-Our study has several limitations. (1)~We evaluate on two GPU generations (A100 and H100); newer hardware (B100, MI300X) may shift the compute-memory balance point and change the roofline characteristics. (2)~We focus on single-node configurations; multi-node deployments with inter-node communication introduce additional bottlenecks not captured here. (3)~Our ncu kernel profiles are collected on 2-layer model stubs rather than full models, which may underestimate cache effects at scale. (4)~We do not evaluate quantized models (FP8, INT4), which change both the roofline characteristics and the serving throughput. (5)~Our agentic traces from SWE-Bench and TerminalBench represent software engineering agents; other agent types (web browsing, data analysis, tool orchestration) may exhibit different ISL/OSL distributions.
+(1)~We evaluate two GPU generations (A100, H100); newer hardware (B200, MI300X) may shift the compute--memory balance.
+(2)~All experiments are single-node; multi-node deployments introduce communication bottlenecks we do not capture.
+(3)~ncu profiles are from 2-layer model stubs, which may underestimate cache effects at full depth.
+(4)~We do not evaluate quantized models (FP8, INT4), which alter both roofline characteristics and serving throughput.
+(5)~Our agentic traces come from software engineering agents; web browsing, data analysis, and tool-orchestration agents may exhibit different ISL/OSL distributions.
 
 \paragraph{Future work.}
-We identify three natural extensions: (1)~\emph{Multi-node and disaggregated serving}: extending the benchmark to prefill-decode disaggregation~\citep{distserve, splitwise} and pipeline-parallel deployments, where the workload-dependent bottleneck analysis becomes even more critical for placement decisions. (2)~\emph{Continuous batching simulation}: building a simulator that predicts serving metrics from the kernel-level data, enabling hardware/software co-design without expensive GPU experiments. (3)~\emph{Broader agent trace collection}: extending the workload taxonomy to cover web agents, data analysis agents, and multi-agent orchestration systems.
+Two extensions follow directly: (1)~benchmarking prefill-decode disaggregated serving~\citep{distserve, splitwise} under our workload taxonomy, where the workload-dependent bottleneck analysis informs placement decisions; and (2)~building a kernel-level simulator that predicts serving metrics from ncu data, enabling co-design without full GPU experiments.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented \textsc{AgentServe-Bench}, a benchmarking framework and dataset for evaluating LLM inference under realistic agentic workloads. Through 2,400+ benchmark experiments across 9 models, 2 hardware platforms, and 10 workload profiles, we demonstrated that agentic workloads---characterized by high input/output ratios and multi-turn context accumulation---exhibit fundamentally different saturation behavior than the chat and synthetic workloads used by current benchmarks. Our kernel-level roofline analysis using 1,900+ ncu hardware counter profiles explains this difference mechanistically: agentic requests shift GPU utilization from memory-bound decode to compute-bound prefill, changing which hardware resource is the bottleneck. We release the complete dataset, benchmark tool, and kernel profiles to enable the community to evaluate inference systems under the workloads that increasingly define production LLM deployments.
+Agentic LLM workloads differ from chat workloads in a measurable, consequential way: ISL/OSL ratios above 20:1 shift GPU utilization from memory-bound decode to compute-bound prefill, reducing peak serving throughput by up to 3.8$\times$. Current inference benchmarks do not test this regime. \textsc{AgentServe-Bench} fills the gap with real agent traces, systematic saturation analysis, and kernel-level roofline data that explains the throughput difference mechanistically. We release the full dataset and tooling to support reproducible evaluation of inference systems under realistic agentic workloads.
 
 \section{Dataset and Reproducibility}
 \label{sec:dataset}
 
-We release the following artifacts:
+We release:
 \begin{itemize}
-    \item \textbf{Benchmark results}: 2,400+ JSON files with per-request TTFT, TPOT, ITL, throughput across all (model, profile, concurrency, hardware) configurations.
-    \item \textbf{ncu kernel profiles}: Hardware counter data for 1,900+ CUDA kernels from Llama-8B and Mixtral forward passes, plus 56 isolated GEMM shapes.
-    \item \textbf{Workload traces}: Real agentic request traces extracted from SWE-Bench and TerminalBench, including multi-turn session logs with per-turn metrics.
-    \item \textbf{Benchmark tool}: Open-source asynchronous benchmarking framework with 20 workload profiles, configurable concurrency, and support for any OpenAI-compatible endpoint.
+    \item \textbf{Benchmark results}: 2{,}400+ JSON files with per-request TTFT, TPOT, ITL, and throughput across all (model, profile, concurrency, hardware) configurations.
+    \item \textbf{ncu kernel profiles}: Hardware counter data for 1{,}900+ CUDA kernels from Llama-8B and Mixtral forward passes, plus 56 isolated GEMM shapes.
+    \item \textbf{Workload traces}: Agent request traces from SWE-Bench and TerminalBench, including multi-turn session logs with per-turn metrics.
+    \item \textbf{Benchmark tool}: Asynchronous benchmarking framework with 20 workload profiles, configurable concurrency, supporting any OpenAI-compatible endpoint.
 \end{itemize}
 
-All artifacts are available under an open-source license. The dataset is hosted with machine-readable metadata to facilitate discovery and reuse.
+All artifacts are released under an open-source license with a Croissant metadata record for machine-readable discovery.\footnote{Hosted at \url{[anonymized for review]}.}

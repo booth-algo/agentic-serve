@@ -7,13 +7,13 @@
 We organize LLM inference workloads into four tiers based on their origin and input/output characteristics, shown in Table~\ref{tab:profiles}:
 
 \begin{itemize}
-    \item \textbf{Tier~1: Real agent traces.} We extract request traces from production-representative agent systems: SWE-Bench~\citep{swebench} coding agents (ISL$\approx$17K, OSL$\approx$800) that process entire repository contexts, and TerminalBench CLI agents that execute multi-step terminal workflows. These traces exhibit extremely long input sequences with short outputs---the defining characteristic of agentic workloads. Multi-turn variants span 13--400+ interaction steps with growing context.
+    \item \textbf{Tier~1: Agent traces.} Request logs from SWE-Bench~\citep{swebench} coding agents (ISL$\approx$17K, OSL$\approx$800) and TerminalBench CLI agents. ISL/OSL ratios range from 21:1 (single-turn) to 33:1 (multi-turn with accumulated context).
 
-    \item \textbf{Tier~2: Curated conversation traces.} ShareGPT-derived conversations at three length scales: short (ISL=500, OSL=300), medium (ISL=2000, OSL=1000), and long (ISL=8000, OSL=2000). These represent the current benchmark standard and serve as our baseline.
+    \item \textbf{Tier~2: Chat baselines.} ShareGPT-derived conversations at three scales: short (ISL=500, OSL=300), medium (ISL=2{,}000, OSL=1{,}000), and long (ISL=8{,}000, OSL=2{,}000). These represent current benchmark practice.
 
-    \item \textbf{Tier~3: Synthetic stress tests.} Controlled workloads that isolate specific system bottlenecks: decode-heavy (ISL=256, OSL=4096) for memory-bandwidth stress, prefill-heavy (ISL=8192, OSL=256) for compute stress, and balanced (ISL=1024, OSL=1024).
+    \item \textbf{Tier~3: Synthetic stress tests.} Controlled workloads isolating specific bottlenecks: decode-heavy (ISL=256, OSL=4{,}096) for memory-bandwidth stress, prefill-heavy (ISL=8{,}192, OSL=256) for compute stress, and balanced (ISL=1{,}024, OSL=1{,}024).
 
-    \item \textbf{Tier~4: Multi-turn sessions.} Extended conversations and agent sessions with context accumulation across turns: chat multi-turn (3--5 turns), SWE-Bench multi-turn (13--400 steps at context windows up to 131K tokens), and TerminalBench multi-turn (2--876 steps).
+    \item \textbf{Tier~4: Multi-turn sessions.} Extended interactions with context accumulation: chat multi-turn (3--5 turns), SWE-Bench sessions (13--400 steps, context up to 131K tokens), and TerminalBench sessions (2--876 steps).
 \end{itemize}
 
 \begin{table}[t]

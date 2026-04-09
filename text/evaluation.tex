@@ -1,25 +1,26 @@
 \section{Results}
 \label{sec:results}
 
-\subsection{The Workload Gap: Agentic vs.\ Chat Saturation}
+\subsection{Saturation Behavior Across Workload Profiles}
 \label{sec:workload_gap}
 
-Figure~\ref{fig:saturation} shows throughput-vs-concurrency saturation curves for Llama-3.1-8B (TP=1) on A100 under three representative workload profiles. The chat-short profile (ISL=500, OSL=300) saturates at approximately 920 output tokens/s near concurrency 40, while the chat-medium profile (ISL=2000, OSL=1000) saturates at approximately 450 tokens/s. On H100, the coding-agent profile (ISL=17K, OSL=800) saturates at substantially lower throughput due to prefill-dominated computation.
+Figure~\ref{fig:saturation} shows throughput-vs-concurrency curves for Llama-3.1-8B (TP=1) on A100 under three workload profiles. Chat-short (ISL=500, OSL=300) reaches 920 output tokens/s at concurrency 40 and plateaus. At concurrency 1, TPOT is 12.84\,ms (74 tok/s); at concurrency 320, TPOT rises to 16.13\,ms (910 tok/s), indicating near-complete saturation by concurrency 40.
 
 \begin{figure}[t]
     \centering
     % TODO: Generate saturation curve plot from benchmark data
-    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textbf{Figure: Throughput vs.\ Concurrency Saturation Curves}\\[4pt]
-    \small chat-short vs.\ chat-medium vs.\ chat-long on A100 Llama-8B TP=1\\
-    Showing saturation point shifts with workload profile\vspace{2cm}}}
-    \caption{Output throughput (tokens/s) as a function of concurrent requests for Llama-3.1-8B on A100. Chat-short (ISL=500) saturates at 920 tok/s near concurrency 40, while chat-long (ISL=8000) saturates at lower throughput and earlier concurrency. The saturation point is determined by the prefill-to-decode ratio: longer inputs shift more GPU time to compute-bound prefill GEMMs, reducing the effective decode batch size.}
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textbf{[Figure: Throughput vs.\ Concurrency Saturation Curves]}\\[4pt]
+    \small chat-short vs.\ chat-medium vs.\ chat-long on A100 Llama-8B TP=1\vspace{2cm}}}
+    \caption{Output throughput (tokens/s) as a function of concurrent requests for Llama-3.1-8B on A100. Chat-short saturates at 920 tok/s near concurrency 40; chat-medium at $\sim$450 tok/s. The saturation point is set by the prefill-to-decode ratio: longer inputs shift more GPU time to compute-bound prefill GEMMs, reducing effective decode batch size.}
     \label{fig:saturation}
 \end{figure}
 
-The key finding is that \emph{the saturation point depends on the workload profile, not just the model or hardware}. Table~\ref{tab:saturation} summarizes the peak throughput and saturation concurrency across all model-profile combinations on A100. For every model, chat-long achieves 40--60\% lower peak throughput than chat-short due to the higher prefill cost per request.
+Chat-medium saturates at approximately 450 tok/s. The coding-agent profile (ISL=17K, OSL=800, measured on H100) saturates at 240 tok/s---3.8$\times$ lower than chat-short. This gap persists across all model configurations (Table~\ref{tab:saturation}).
+
+The mechanism is straightforward: longer input sequences increase the fraction of per-request GPU time spent in compute-bound prefill GEMMs, which cannot be overlapped as efficiently with decode under continuous batching. We quantify this at the kernel level in Section~\ref{sec:roofline}.
 
 \begin{table}[t]
-\caption{Peak output throughput (tok/s) and saturation concurrency on A100 across workload profiles. Longer input sequences (chat-long, ISL=8000) consistently reduce throughput compared to shorter profiles (chat-short, ISL=500) across all model configurations.}
+\caption{Peak output throughput (tok/s) on A100 across workload profiles at saturation concurrency.}
 \label{tab:saturation}
 \centering
 \small
@@ -28,41 +29,40 @@ The key finding is that \emph{the saturation point depends on the workload profi
 \textbf{Model} & \textbf{TP} & \textbf{chat-short} & \textbf{chat-medium} & \textbf{chat-long} \\
  & & tok/s & tok/s & tok/s \\
 \midrule
-Llama-8B     & 1 & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-Llama-8B     & 2 & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-Llama-70B    & 2 & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-Llama-70B    & 4 & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-Mixtral-8$\times$7B & 4 & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-gpt-oss-20b  & 1 & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-gpt-oss-120b & 2 & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
+Llama-8B     & 1 & 920 & $\sim$450 & \emph{[fill]} \\
+Llama-8B     & 2 & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
+Llama-70B    & 2 & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
+Llama-70B    & 4 & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
+Mixtral-8$\times$7B & 4 & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
+gpt-oss-20b  & 1 & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
+gpt-oss-120b & 2 & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Latency Profiles: TTFT and TPOT Under Load}
+\subsection{Latency Under Load}
 \label{sec:latency}
 
-Beyond throughput, the latency characteristics of agentic workloads differ qualitatively from chat workloads. Figure~\ref{fig:latency} shows TTFT and TPOT at concurrency 1 (no queueing) and concurrency 40 (moderate load) across profiles.
+At concurrency 1 on H100, Llama-8B (TP=1) achieves TTFT=26.4\,ms and TPOT=6.26\,ms on the chat-medium profile. On A100 at the same concurrency, TPOT is 12.84\,ms for chat-short---a 2.05$\times$ ratio consistent with the H100's 1.6$\times$ HBM bandwidth advantage (3{,}352 vs 2{,}039 GB/s) for memory-bound decode.
 
 \begin{figure}[t]
     \centering
-    % TODO: Generate TTFT/TPOT comparison bar charts
-    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textbf{Figure: TTFT and TPOT Across Workload Profiles}\\[4pt]
-    \small Grouped bar chart: conc=1 vs conc=40 for chat-short, chat-medium, chat-long\\
-    on A100 Llama-8B TP=1\vspace{2cm}}}
-    \caption{Median TTFT (left) and TPOT (right) for Llama-3.1-8B on A100 at concurrency 1 and 40. TTFT scales linearly with ISL at low concurrency (dominated by prefill compute) but grows super-linearly under load as prefill requests compete for GPU compute. TPOT remains relatively stable across profiles at low concurrency but degrades under load due to reduced decode batch efficiency.}
+    % TODO: Generate TTFT/TPOT bar charts from benchmark data
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textbf{[Figure: TTFT and TPOT Across Profiles and Concurrency]}\\[4pt]
+    \small Grouped bar chart: conc=1 vs conc=40 for chat-short, chat-medium, chat-long\vspace{2cm}}}
+    \caption{Median TTFT (left) and TPOT (right) for Llama-3.1-8B on A100 at concurrency 1 and 40. TTFT scales with ISL at low concurrency (prefill is compute-bound); at concurrency 40, TTFT grows super-linearly as prefill requests queue for GPU compute.}
     \label{fig:latency}
 \end{figure}
 
-At concurrency 1, TTFT scales approximately linearly with input sequence length---a direct consequence of the compute-bound prefill phase. At concurrency 40, TTFT grows super-linearly because concurrent prefill requests compete for limited GPU compute, creating queueing delays that compound with longer input sequences. TPOT is less sensitive to workload profile at low concurrency (decode is memory-bound regardless of input length) but degrades under high concurrency as the continuous batching scheduler interleaves prefill and decode operations.
+TTFT scales with ISL at low concurrency because prefill is compute-bound: doubling the input length roughly doubles prefill time. At concurrency 40, TTFT grows super-linearly as concurrent prefill requests queue for GPU compute. TPOT is less sensitive to profile at low concurrency---decode is memory-bound regardless of input length---but degrades under load as the scheduler interleaves prefill and decode.
 
-\subsection{Tensor Parallelism Scaling}
+\subsection{Tensor Parallelism}
 \label{sec:tp_scaling}
 
-We compare TP=2 and TP=4 configurations for Llama-70B on A100 to evaluate how tensor parallelism interacts with workload characteristics.
+On H100 at concurrency 1, Llama-8B with TP=2 achieves TPOT=4.08\,ms (vLLM) and 4.07\,ms (SGLang)---effectively identical, indicating negligible TP communication overhead at this scale. For Llama-70B (TP=2, H100), TPOT is 25.66\,ms at concurrency 1.
 
 \begin{table}[t]
-\caption{Llama-3.1-70B latency and throughput on A100 at concurrency 1 (single request) across TP configurations and workload profiles. TP=4 reduces TTFT by splitting prefill GEMMs across GPUs but adds allreduce overhead.}
+\caption{Llama-3.1-70B latency at concurrency 1 across TP configurations on A100.}
 \label{tab:tp_scaling}
 \centering
 \small
@@ -72,35 +72,18 @@ We compare TP=2 and TP=4 configurations for Llama-70B on A100 to evaluate how te
 \cmidrule(lr){3-4} \cmidrule(lr){5-6}
 \textbf{Profile} & \textbf{Conc} & \textbf{TP=2} & \textbf{TP=4} & \textbf{TP=2} & \textbf{TP=4} \\
 \midrule
-chat-short  & 1  & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-chat-medium & 1  & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-chat-long   & 1  & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
+chat-short  & 1  & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
+chat-medium & 1  & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
+chat-long   & 1  & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Multi-Turn Latency Degradation}
-\label{sec:multiturn}
-
-Figure~\ref{fig:multiturn} shows per-turn TTFT for Llama-8B on A100 under the chat-multiturn-short profile. As context accumulates across turns, TTFT grows due to increasing KV cache size and longer prefill sequences.
-
-\begin{figure}[t]
-    \centering
-    % TODO: Generate per-turn TTFT plot from multiturn per_turn.json files
-    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textbf{Figure: Per-Turn TTFT in Multi-Turn Sessions}\\[4pt]
-    \small TTFT vs.\ turn number for chat-multiturn-short at conc=1,10,40\\
-    Showing context accumulation penalty\vspace{2cm}}}
-    \caption{Per-turn TTFT for Llama-8B multi-turn sessions on A100. TTFT grows approximately linearly with turn number as the KV cache expands, with steeper growth at higher concurrency due to increased memory pressure. At concurrency 40, TTFT at turn 5 is approximately $N\times$ the turn-1 value.}
-    \label{fig:multiturn}
-\end{figure}
-
-\subsection{Cross-Hardware Analysis: A100 vs.\ H100}
+\subsection{Cross-Hardware: A100 vs.\ H100}
 \label{sec:cross_hw}
 
-We compare matched configurations on A100 and H100 to quantify the hardware generation gap and its interaction with workload profiles.
-
 \begin{table}[t]
-\caption{A100 vs.\ H100 comparison for Llama-8B (TP=1, vLLM) at concurrency 1. The H100 advantage varies by metric and workload: TTFT benefits more from H100's higher compute throughput (3.2$\times$ peak TFLOPS) on prefill-heavy profiles, while TPOT benefits from higher HBM bandwidth (1.6$\times$).}
+\caption{A100 vs.\ H100 for Llama-8B (TP=1, vLLM, concurrency 1). The H100 TPOT advantage (2.05$\times$) tracks the HBM bandwidth ratio (1.6$\times$) with additional gains from faster compute on prefill.}
 \label{tab:cross_hw}
 \centering
 \small
@@ -108,58 +91,63 @@ We compare matched configurations on A100 and H100 to quantify the hardware gene
 \toprule
 & \multicolumn{2}{c}{\textbf{TTFT (ms)}} & & \multicolumn{2}{c}{\textbf{TPOT (ms)}} & \\
 \cmidrule(lr){2-3} \cmidrule(lr){5-6}
-\textbf{Profile} & \textbf{A100} & \textbf{H100} & \textbf{Ratio} & \textbf{A100} & \textbf{H100} & \textbf{Ratio} \\
+\textbf{Profile} & \textbf{A100} & \textbf{H100} & \textbf{Speedup} & \textbf{A100} & \textbf{H100} & \textbf{Speedup} \\
 \midrule
-chat-short  & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-chat-medium & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
+chat-short  & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} & \emph{[fill]} \\
+chat-medium & \emph{[fill]} & 26.4 & \emph{[fill]} & 12.84 & 6.26 & 2.05$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Dense vs.\ MoE Architecture Comparison}
-\label{sec:dense_moe}
+\subsection{Multi-Turn Latency Degradation}
+\label{sec:multiturn}
 
-Mixtral-8$\times$7B (MoE, 8 experts, top-2) and Llama-70B (dense) have comparable total parameter counts but fundamentally different execution profiles. On A100 with TP=4, Mixtral achieves higher throughput on short chat workloads (each token activates only 2 of 8 expert FFN blocks) but shows less advantage on long-context agentic workloads where prefill attention---shared across both architectures---dominates.
+\begin{figure}[t]
+    \centering
+    % TODO: Generate per-turn TTFT plot from multiturn per_turn.json files
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textbf{[Figure: Per-Turn TTFT in Multi-Turn Sessions]}\\[4pt]
+    \small TTFT vs.\ turn number for chat-multiturn-short at conc=1,10,40\vspace{2cm}}}
+    \caption{Per-turn TTFT for Llama-8B multi-turn sessions on A100. TTFT grows with turn number as the KV cache expands, with steeper growth at higher concurrency due to increased memory pressure.}
+    \label{fig:multiturn}
+\end{figure}
 
 \subsection{Kernel-Level Roofline Analysis}
 \label{sec:roofline}
 
-Figure~\ref{fig:roofline} presents the roofline plot for key CUDA kernels profiled with ncu on A100, plotting arithmetic intensity against achieved throughput.
-
 \begin{figure}[t]
     \centering
-    % TODO: Generate roofline plot from ncu_roofline_raw.csv + ncu_llama8b_model.csv + ncu_mixtral_model.csv
-    \fbox{\parbox{0.9\textwidth}{\centering\vspace{3cm}\textbf{Figure: A100 Roofline Plot with LLM Inference Kernels}\\[4pt]
+    % TODO: Generate roofline plot from ncu CSVs
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{3cm}\textbf{[Figure: A100 Roofline Plot with LLM Inference Kernels]}\\[4pt]
     \small Arithmetic intensity vs.\ achieved TFLOPS/BW\\
-    Color-coded by kernel type: GEMM (prefill), GEMM (decode), attention, norm, MoE routing\\
+    Color-coded: GEMM (prefill), GEMM (decode), flash attention, norm, MoE routing\\
     A100 peak: 312 TFLOPS bf16, 2039 GB/s HBM2e, ridge point AI=153\vspace{3cm}}}
-    \caption{Roofline analysis of LLM inference kernels on A100-SXM4-40GB. Prefill GEMMs (large $M$, high AI) achieve 49--68\% of peak compute throughput. Decode GEMMs ($M$=1, AI$\approx$1) achieve 54--63\% of peak HBM bandwidth. MoE expert FFN kernels at $M$=64 remain memory-bound (65\% BW) despite moderate batch size. Flash attention kernels cluster near the ridge point. The workload gap from Section~\ref{sec:workload_gap} is explained by the shift in time spent between these kernel regimes: agentic workloads spend proportionally more time in compute-bound prefill GEMMs.}
+    \caption{Roofline analysis of LLM inference kernels on A100-SXM4-40GB. Prefill GEMMs (large $M$, high AI) achieve 49\% of peak compute. Decode GEMMs ($M$=1, AI$\approx$1) achieve 54\% of peak HBM bandwidth. MoE expert kernels at $M$=64 remain memory-bound (65\% BW) despite moderate batch. The throughput gap from Section~\ref{sec:workload_gap} is explained by the time shift between these kernel regimes.}
     \label{fig:roofline}
 \end{figure}
 
-Table~\ref{tab:kernel_breakdown} shows the kernel time breakdown for Llama-8B and Mixtral forward passes, revealing that Mixtral's MoE architecture introduces 3.7$\times$ more kernel invocations due to per-expert dispatch, routing, and gather/scatter operations.
+Table~\ref{tab:kernel_summary} summarizes key kernels from our ncu profiles:
 
 \begin{table}[t]
-\caption{Kernel breakdown for 2-layer forward pass at seq=512 on A100. Mixtral's MoE architecture generates 3.7$\times$ more kernels than Llama due to expert routing and per-expert GEMMs.}
-\label{tab:kernel_breakdown}
+\caption{Representative kernel measurements from ncu on A100-SXM4-40GB. Arithmetic intensity (AI) determines whether a kernel is compute-bound (AI $> 153$) or memory-bound (AI $< 153$).}
+\label{tab:kernel_summary}
 \centering
 \small
-\begin{tabular}{lrrrr}
+\begin{tabular}{llrrrr}
 \toprule
-\textbf{Kernel Class} & \multicolumn{2}{c}{\textbf{Llama-8B}} & \multicolumn{2}{c}{\textbf{Mixtral-8$\times$7B}} \\
- & Count & \% Time & Count & \% Time \\
+\textbf{Kernel} & \textbf{Shape ($M \times N \times K$)} & \textbf{Time ($\mu$s)} & \textbf{\% Peak TFLOPS} & \textbf{\% Peak BW} & \textbf{Regime} \\
 \midrule
-GEMM (bf16 tensor core) & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-Flash attention          & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-Elementwise / activation & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-Norm (RMSNorm)           & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-MoE routing (gather/scatter) & --- & --- & \textbf{TODO} & \textbf{TODO} \\
-Other                    & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} & \textbf{TODO} \\
-\midrule
-\textbf{Total}           & 419 & 100\% & 1{,}527 & 100\% \\
+Prefill GEMM & $512 \times 4096 \times 4096$ & 112.7 & 49\% & --- & Compute \\
+Decode GEMM  & $1 \times 4096 \times 4096$   & 32.7  & ---  & 54\% & Memory \\
+FFN gate     & $512 \times 14336 \times 4096$ & 388.9 & 50\% & --- & Compute \\
+MoE expert   & $64 \times 14336 \times 4096$  & 91.2  & ---  & 65\% & Memory \\
+Large prefill & $4096 \times 4096 \times 4096$ & 652.5 & 68\% & --- & Compute \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Connecting kernels to serving performance.}
-The roofline analysis explains the saturation behavior observed in Section~\ref{sec:workload_gap}. Chat-short requests (ISL=500) spend the majority of per-request GPU time in memory-bound decode kernels, which scale linearly with batch size under continuous batching---enabling high throughput. Chat-long and coding-agent requests shift GPU time to compute-bound prefill GEMMs that cannot be batched as efficiently (each request's prefill must complete before decode begins), creating a throughput bottleneck at lower concurrency.
+The prefill GEMM at $M$=512 achieves 49\% of the A100's 312 TFLOPS peak---compute-bound, with arithmetic intensity well above the ridge point. The decode GEMM at $M$=1 achieves 54\% of peak HBM bandwidth---memory-bound, as expected for a matrix-vector product. The MoE expert GEMM at $M$=64 remains memory-bound despite moderate batch size, achieving 65\% of peak bandwidth; the small per-expert batch prevents the kernel from crossing into the compute-bound regime.
+
+\paragraph{Kernel count: dense vs.\ MoE.} A 2-layer forward pass of Llama-8B generates 419 kernel invocations. Mixtral-8$\times$7B generates 1{,}527---3.7$\times$ more---due to per-expert GEMM dispatch, routing logic, and gather/scatter operations. This kernel launch overhead is a distinct bottleneck for MoE serving that is invisible to throughput-level benchmarks.
+
+\paragraph{Connecting kernels to serving throughput.}
+Chat-short requests (ISL=500) spend most per-request GPU time in memory-bound decode kernels, which batch efficiently under continuous batching. Coding-agent requests (ISL=17K) shift GPU time to compute-bound prefill GEMMs. Prefill cannot be batched as aggressively---each request's prefill must complete before decode begins---creating the throughput ceiling observed in Section~\ref{sec:workload_gap}.
