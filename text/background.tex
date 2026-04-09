@@ -4,7 +4,7 @@
 We categorize prior work into \emph{inference benchmarks} that measure serving performance and \emph{inference simulators} that predict it. Table~\ref{tab:comparison} provides a unified feature comparison.
 
 \paragraph{Inference benchmarks.}
-MLPerf Inference~\cite{mlperf} provides standardized throughput and latency measurements with SLO enforcement but uses fixed reference datasets and does not support agentic or multi-turn workloads.
+MLPerf Inference~\citep{mlperf} provides standardized throughput and latency measurements with SLO enforcement but uses fixed reference datasets and does not support agentic or multi-turn workloads.
 SGLang~\cite{sglang} includes a benchmark suite with ShareGPT traces but focuses on single-turn chat.
 InferenceX provides a public dashboard of hardware comparisons but uses random tokens with arbitrary input/output lengths that do not reflect real-world agentic workloads.
 ML.ENERGY~\cite{mlenergy} benchmarks energy consumption across 46 models but does not measure latency or provide kernel-level analysis.
