@@ -13,6 +13,8 @@ We organize LLM inference workloads into four tiers based on their origin and in
 
     \item \textbf{Tier~3: Synthetic stress tests.} Controlled workloads isolating specific bottlenecks: decode-heavy (ISL=256, OSL=4{,}096) for memory-bandwidth stress, prefill-heavy (ISL=8{,}192, OSL=256) for compute stress, and balanced (ISL=1{,}024, OSL=1{,}024).
 
+    this is bs -> just combine tier 1 and tier 4
+
     \item \textbf{Tier~4: Multi-turn sessions.} Extended interactions with context accumulation: chat multi-turn (3--5 turns), SWE-Bench sessions (13--400 steps, context up to 131K tokens), and TerminalBench sessions (2--876 steps).
 \end{itemize}
 
