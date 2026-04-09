@@ -4,22 +4,18 @@
 \subsection{Workload Taxonomy}
 \label{sec:taxonomy}
 
-We organize LLM inference workloads into four tiers based on their origin and input/output characteristics, shown in Table~\ref{tab:profiles}:
+We organize inference workloads into three tiers (Table~\ref{tab:profiles}):
 
 \begin{itemize}
-    \item \textbf{Tier~1: Agent traces.} Request logs from SWE-Bench~\citep{swebench} coding agents (ISL$\approx$17K, OSL$\approx$800) and TerminalBench CLI agents. ISL/OSL ratios range from 21:1 (single-turn) to 33:1 (multi-turn with accumulated context).
+    \item \textbf{Tier~1: Agentic traces.} Real request logs from SWE-Bench~\citep{swebench} coding agents and TerminalBench CLI agents, in both single-turn (ISL$\approx$17K, OSL$\approx$800, ratio 21:1) and multi-turn variants (13--876 steps, growing context up to 131K tokens, ratio 33:1). These capture the high ISL/OSL ratios and context accumulation that define agentic workloads.
 
-    \item \textbf{Tier~2: Chat baselines.} ShareGPT-derived conversations at three scales: short (ISL=500, OSL=300), medium (ISL=2{,}000, OSL=1{,}000), and long (ISL=8{,}000, OSL=2{,}000). These represent current benchmark practice.
+    \item \textbf{Tier~2: Chat baselines.} ShareGPT-derived conversations at three scales: short (ISL=500, OSL=300), medium (ISL=2{,}000, OSL=1{,}000), and long (ISL=8{,}000, OSL=2{,}000). These represent current benchmark practice and serve as our control group.
 
     \item \textbf{Tier~3: Synthetic stress tests.} Controlled workloads isolating specific bottlenecks: decode-heavy (ISL=256, OSL=4{,}096) for memory-bandwidth stress, prefill-heavy (ISL=8{,}192, OSL=256) for compute stress, and balanced (ISL=1{,}024, OSL=1{,}024).
-
-    this is bs -> just combine tier 1 and tier 4
-
-    \item \textbf{Tier~4: Multi-turn sessions.} Extended interactions with context accumulation: chat multi-turn (3--5 turns), SWE-Bench sessions (13--400 steps, context up to 131K tokens), and TerminalBench sessions (2--876 steps).
 \end{itemize}
 
 \begin{table}[t]
-\caption{Workload profiles used in our evaluation. ISL/OSL denote median input/output sequence lengths in tokens. Tier~1 profiles are derived from real agent execution traces; Tiers~2--3 use curated or synthetic data. The ISL/OSL ratio for coding-agent (21:1) is 11$\times$ larger than chat-short (1.7:1), reflecting the prefill-dominated nature of agentic workloads.}
+\caption{Workload profiles. ISL/OSL = median input/output sequence lengths. Tier~1 profiles use real agent traces; Tier~2 uses curated chat data; Tier~3 uses synthetic tokens. The coding-agent ISL/OSL ratio (21:1) is 12$\times$ that of chat-short (1.7:1).}
 \label{tab:profiles}
 \centering
 \small
@@ -27,19 +23,18 @@ We organize LLM inference workloads into four tiers based on their origin and in
 \toprule
 \textbf{Tier} & \textbf{Profile} & \textbf{ISL} & \textbf{OSL} & \textbf{ISL/OSL} & \textbf{Data Source} \\
 \midrule
-1 & coding-agent       & 17{,}000 & 800   & 21.3 & SWE-Bench \\
-1 & swebench-multiturn & 65{,}536 & 2{,}000 & 32.8 & SWE-Bench \\
+1 & coding-agent           & 17{,}000 & 800   & 21.3 & SWE-Bench \\
+1 & swebench-multiturn     & 65{,}536 & 2{,}000 & 32.8 & SWE-Bench \\
 1 & terminalbench-multiturn & 65{,}536 & 2{,}000 & 32.8 & TerminalBench \\
+1 & chat-multiturn-short   & 8{,}192  & 1{,}000 & 8.2  & ShareGPT \\
 \midrule
-2 & chat-short         & 500    & 300   & 1.7  & ShareGPT \\
-2 & chat-medium        & 2{,}000  & 1{,}000 & 2.0  & ShareGPT \\
-2 & chat-long          & 8{,}000  & 2{,}000 & 4.0  & ShareGPT \\
+2 & chat-short             & 500    & 300   & 1.7  & ShareGPT \\
+2 & chat-medium            & 2{,}000  & 1{,}000 & 2.0  & ShareGPT \\
+2 & chat-long              & 8{,}000  & 2{,}000 & 4.0  & ShareGPT \\
 \midrule
-3 & decode-heavy       & 256    & 4{,}096 & 0.06 & Random \\
-3 & prefill-heavy      & 8{,}192  & 256   & 32.0 & Random \\
-3 & random-1k          & 1{,}024  & 1{,}024 & 1.0  & Random \\
-\midrule
-4 & chat-multiturn-short & 8{,}192 & 1{,}000 & 8.2 & ShareGPT \\
+3 & decode-heavy           & 256    & 4{,}096 & 0.06 & Random \\
+3 & prefill-heavy          & 8{,}192  & 256   & 32.0 & Random \\
+3 & random-1k              & 1{,}024  & 1{,}024 & 1.0  & Random \\
 \bottomrule
 \end{tabular}
 \end{table}
