@@ -1,6 +1,12 @@
 \section{Introduction}
 \label{sec:intro}
 
+limited set of workloads -> not representative of real life workload
+no saturating benchmarks as well # -> fact check? from others
+
+
+
+
 When a coding agent processes a SWE-Bench task, it sends a 17{,}000-token repository context to the LLM and receives an 800-token code patch---an input/output ratio of 21:1. When the same model serves a chat request, the ratio is closer to 1.7:1. This 12$\times$ difference in ISL/OSL ratio changes which hardware resource is the bottleneck: chat workloads are decode-dominated and memory-bound, while agentic workloads are prefill-dominated and compute-bound. Yet every major inference benchmark---MLPerf Inference~\citep{mlperf}, InferenceX, and the ShareGPT-based benchmarks built into vLLM and SGLang~\citep{sglang}---evaluates serving systems using chat-scale request distributions.
 
 This mismatch produces misleading capacity estimates. On an A100 GPU, Llama-3.1-8B sustains 920 output tokens/s under a chat-short workload (ISL=500, OSL=300) but only 240 tokens/s under a coding-agent workload at matched concurrency---a 3.8$\times$ gap. A practitioner sizing infrastructure from chat benchmarks would need nearly four times more GPUs than expected to meet an agentic SLO.

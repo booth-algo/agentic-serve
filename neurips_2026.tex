@@ -87,16 +87,13 @@
 
 
 \begin{abstract}
-  There is significant interest in optimising LLM serving on GPU infrastructure, driving the development of inference benchmarks across serving engines such as vLLM and SGLang. However, nearly all existing benchmarks evaluate single-turn workloads---short chat exchanges or synthetic random-token requests. In practice, the fastest-growing deployment pattern is LLM agents: coding assistants, terminal automation, and tool-use systems that issue multi-turn requests with high input/output ratios over sessions spanning hundreds of interaction steps. No existing benchmark captures this regime. 
+There is significant interest in optimising LLM serving on GPU infrastructure, driving the development of inference benchmarks across serving engines such as vLLM and SGLang. However, nearly all existing benchmarks evaluate single-turn workloads---short chat exchanges or synthetic random-token requests. In practice, the fastest-growing deployment pattern is LLM agents: coding assistants, terminal automation, and tool-use systems that issue multi-turn requests with growing context length over sessions spanning hundreds of interaction steps. No existing benchmark captures this regime. 
 
-  limited set of workloads -> not representative of real life workload
-  no saturating benchmarks as well # -> fact check? from others
+We introduce \textsc{AgentServe}, an agentic inference benchmark suite. Using real-life agentic traces from SWE-Bench and TerminalBench alongside standard chat baselines, we run saturation benchmarks across X? model families on A100, H100 and RTX GPUs, measuring first-token latency, per-token latency, and output throughput at varying concurrency levels. We complement this with kernel-level Nsight Compute (ncu) traces to construct a roofline model that reveals actual GPU resource utilisation. Additionally, we train per-operator and per-kernel ML predictors on the collected profiling data, enabling latency estimations without re-running expensive GPU experiments, XXX [achieving bla bla bla]. 
 
-  
+[Something about multi-node - haven't done experiments so don't know what to write yet]
 
-  # here maybe instead of noting high i/o ratios, we can mention growing ctx length as an alternative term?
-
-  We introduce \textsc{AgentServe-Bench}, an agentic inference benchmark suite. Using real agentic traces from SWE-Bench and TerminalBench alongside standard chat baselines, we run saturation benchmarks across X model families on A100 and H100 GPUs to collect TPOT, TTFT, ITL, and throughput at concurrency levels from 1 to 320. We complement this with kernel-level Nsight Compute (ncu) traces to construct roofline models that reveal actual GPU resource utilisation. Additionally, we train per-operator ML predictors on the collected profiling data, enabling latency estimation without re-running expensive GPU experiments. Together, these contributions inform disaggregation and parallelism decisions for future multi-node serving deployments. We release 2{,}400+ benchmark results, 1{,}900+ ncu kernel profiles, trained predictors, and the benchmarking tool as an open dataset.
+Together, these contributions quantify the chat-to-agentic gap in current inference benchmarks, characterise per-kernel GPU resource utilisation via roofline analysis, and enable cheap exploration of expected compute of new models via trained predictors. We release X{,}XXX+ benchmark results, X{,}XXX+ ncu kernel profiles, trained predictors, and the benchmarking tool as an open codebase.
 \end{abstract}
 
 
@@ -127,7 +124,7 @@
 \label{app:results}
 
 \newpage
-\input{checklist}
+% \input{checklist}
 
 
 \end{document}
