@@ -34,30 +34,27 @@ No existing simulator validates per-kernel predictions against ncu hardware coun
 \begin{adjustbox}{max width=\textwidth}
 \begin{tabular}{l ccccccc}
 \toprule
-\textbf{Feature} & \textbf{LLMCompass} & \textbf{Vidur} & \textbf{LLMServ.\,v2} & \textbf{DistServe} & \textbf{MLPerf} & \textbf{ML.ENERGY} & \textbf{Ours} \\
- & \scriptsize ISCA'24 & \scriptsize MLSys'24 & \scriptsize CAL'25 & \scriptsize OSDI'24 & \scriptsize MLSys & \scriptsize NeurIPS'25 & \\
+\textbf{Feature} & \textbf{LLMCompass} & \textbf{Vidur} & \textbf{LLMServSim\,2} & \textbf{DistServe} & \textbf{MLPerf} & \textbf{ML.ENERGY} & \textbf{Ours} \\
+ & \scriptsize ISCA'24 & \scriptsize MLSys'24 & \scriptsize arXiv'26 & \scriptsize OSDI'24 & \scriptsize MLSys & \scriptsize NeurIPS'25 & \\
 \midrule
 \multicolumn{8}{l}{\emph{Prediction \& measurement}} \\
-\quad Predicts TPOT?                & \cmark & \cmark & \cmark & \cmark & \xmark & \xmark & \cmark \\
-\quad Measures real serving           & \xmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
-\quad Per-kernel \texttt{ncu} validation & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
-\quad Agentic workload profiles       & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
-\quad Multi-turn         & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Predicts per-request latency (TTFT/ITL) & \cmark & \cmark & \cmark & \cmark & \xmark & \xmark & \cmark \\
+\quad Predicts throughput (TP)                & \cmark & \cmark & \cmark & \pmark & \xmark & \xmark & \cmark \\
+\quad Per-kernel \texttt{ncu} validation      & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Agentic workload profiles               & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Multi-turn                              & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
 \midrule
 \multicolumn{8}{l}{\emph{Model architecture}} \\
-\quad Dense transformer               & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
-\quad MoE              & \pmark & \xmark & \cmark & \xmark & \xmark & \cmark & \cmark \\
-\quad GQA         & \xmark & \cmark & \pmark & \xmark & \xmark & \cmark & \cmark \\
-\midrule
-\multicolumn{8}{l}{\emph{Serving features}} \\
-\quad Tensor parallelism              & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\quad Dense                                   & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\quad MoE                                     & \pmark & \xmark & \cmark & \xmark & \xmark & \cmark & \cmark \\
+\quad GQA                                     & \xmark & \cmark & \pmark & \xmark & \xmark & \cmark & \cmark \\
 \midrule
 \multicolumn{8}{l}{\emph{Analysis}} \\
-\quad Open-source kernel trace     & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
-\quad Saturation curves               & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Open-source kernel trace                & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Saturation curves                       & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
 \midrule
 \multicolumn{8}{l}{\emph{Validation \& availability}} \\
-\quad Reported latency error          & 4.1\% & ${<}5\%$ & 0.97\% & ${<}2\%$ & --- & --- & \textbf{2\%} \\
+\quad Reported latency error                  & 4.1\% & ${<}5\%$ & 0.97\% & ${<}2\%$ & --- & --- & \textbf{2\%} \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
