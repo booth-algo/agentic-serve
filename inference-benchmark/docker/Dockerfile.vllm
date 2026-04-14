@@ -1,0 +1,34 @@
+# =============================================================================
+# inference-benchmark — vLLM image
+#
+# Build:
+#   docker build -f docker/Dockerfile.vllm -t boothalgo01/bench-vllm:latest .
+#
+# Run (RunPod or local):
+#   docker run --gpus all \
+#     -v /path/to/hf_cache:/root/.cache/huggingface \
+#     -e BENCH_BRANCH=main \
+#     -p 8000:8000 \
+#     boothalgo01/bench-vllm:latest
+#
+# Model weights via HuggingFace cache volume — NOT baked in.
+# Latest benchmark code pulled from git at container start.
+# =============================================================================
+FROM vllm/vllm-openai:latest
+
+# Install git + minimal system utils (not present in vllm base image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl vim openssh-server \
+    && mkdir -p /run/sshd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pre-install benchmark Python deps (speeds up first startup)
+COPY requirements.txt /tmp/bench_requirements.txt
+RUN pip install -q -r /tmp/bench_requirements.txt
+
+# Copy entrypoint
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+WORKDIR /workspace
+ENTRYPOINT ["/entrypoint.sh"]

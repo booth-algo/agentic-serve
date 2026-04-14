@@ -1,0 +1,34 @@
+{
+  "tp1_short": {
+    "tp": 1,
+    "prompt": "short",
+    "prompt_toks": 3,
+    "output_toks": 32,
+    "e2e_ms": 416.6,
+    "tpot_ms": 13.0
+  },
+  "tp1_medium": {
+    "tp": 1,
+    "prompt": "medium",
+    "prompt_toks": 14,
+    "output_toks": 32,
+    "e2e_ms": 416.8,
+    "tpot_ms": 13.0
+  },
+  "tp2_short": {
+    "tp": 2,
+    "prompt": "short",
+    "prompt_toks": 3,
+    "output_toks": 32,
+    "e2e_ms": 251.8,
+    "tpot_ms": 7.9
+  },
+  "tp2_medium": {
+    "tp": 2,
+    "prompt": "medium",
+    "prompt_toks": 14,
+    "output_toks": 32,
+    "e2e_ms": 252.3,
+    "tpot_ms": 7.9
+  }
+}

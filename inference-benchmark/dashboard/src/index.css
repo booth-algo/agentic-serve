@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/* Thin scrollbar for dark theme */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #30363d transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}

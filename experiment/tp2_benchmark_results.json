@@ -1,0 +1,12 @@
+{
+  "model": "Llama-3.1-8B-Instruct",
+  "tp1": {
+    "ttft_ms": 24.334614165127277,
+    "tpot_ms": 22.682026028633118
+  },
+  "pp2": {
+    "ttft_ms": 32.87223121151328,
+    "tpot_ms": 31.045497860759497
+  },
+  "note": "pp2 = pipeline parallel (device_map=auto), not true tensor parallel"
+}

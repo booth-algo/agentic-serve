@@ -1,0 +1,36 @@
+# =============================================================================
+# inference-benchmark — TensorRT-LLM image
+#
+# Build:
+#   docker build -f docker/Dockerfile.trtllm -t boothalgo01/bench-trtllm:latest .
+#
+# Run (RunPod):
+#   docker run --gpus all \
+#     -v /path/to/hf_cache:/root/.cache/huggingface \
+#     -e BENCH_BRANCH=main \
+#     -p 8000:8000 \
+#     boothalgo01/bench-trtllm:latest
+#
+# TRT-LLM 1.2.0 requires CUDA 13. Uses nvidia/cuda:13.2.0-cudnn-devel-ubuntu22.04
+# base and installs tensorrt-llm via pip.
+# Serves via: python -m tensorrt_llm.serve (OpenAI-compatible)
+# =============================================================================
+FROM nvcr.io/nvidia/tritonserver:25.01-trtllm-python-py3
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# MPI runtime (fixes "cannot load MPI library" at import time)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl vim openssh-server \
+    libopenmpi-dev openmpi-bin \
+    && mkdir -p /run/sshd \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/bench_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/bench_requirements.txt
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+WORKDIR /workspace
+ENTRYPOINT ["/entrypoint.sh"]

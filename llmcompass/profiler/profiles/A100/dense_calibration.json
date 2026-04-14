@@ -1,0 +1,19 @@
+{
+    "hardware": "NVIDIA A100-SXM4-40GB",
+    "calibration_models": [
+        "Qwen2.5-72B-Instruct",
+        "Llama-3.1-8B-Instruct"
+    ],
+    "framework_overhead_us": 0.0,
+    "kernel_overhead_us": 0.0,
+    "elementwise_scale": 2.5874,
+    "n_kernels_dense": 14,
+    "n_data_points": 48,
+    "mean_error_pct": 10.38,
+    "max_error_pct": 27.99,
+    "raw_mean_error_pct": 14.89,
+    "raw_max_error_pct": 25.5,
+    "timestamp": "2026-04-06",
+    "global_scale": 1.45,
+    "calibration_method": "global_scale_from_Llama8B+Qwen72B"
+}

@@ -1,0 +1,71 @@
+{
+    "name": "NVIDIA Jetson TX2",
+    "device_count": 1,
+    "interconnect": {
+        "link": {
+            "name": "PCIe",
+            "bandwidth_per_direction_byte": 4e9,
+            "bandwidth_both_directions_byte": 8e9,
+            "latency_second": 1e-6,
+            "flit_size_byte": 16,
+            "header_size_byte": 16,
+            "max_payload_size_byte": 256
+        },
+        "link_count_per_device": 1,
+        "topology": "FC"
+    },
+    "device": {
+        "frequency_Hz": 1300e6,
+        "compute_chiplet_count": 1,
+        "compute_chiplet": {
+            "physical_core_count": 2,
+            "core_count": 2,
+            "process_node": "7nm",
+            "core": {
+                "sublane_count": 2,
+                "systolic_array": {
+                    "array_width": 8,
+                    "array_height": 8,
+                    "data_type": "fp16",
+                    "mac_per_cycle": 1
+                },
+                "vector_unit": {
+                    "vector_width": 16,
+                    "flop_per_cycle": 2,
+                    "data_type": "fp16",
+                    "int32_count": 8,
+                    "fp16_count": 0,
+                    "fp32_count": 8,
+                    "fp64_count": 4
+                },
+                "register_file": {
+                    "num_reg_files": 1,
+                    "num_registers": 8192,
+                    "register_bitwidth": 32,
+                    "num_rdwr_ports": 4
+                },
+                "SRAM_KB": 64
+            }
+        },
+        "memory_protocol": "DDR4",
+        "_memory_protocol_list": [
+            "DDR4",
+            "LPDDR4",
+            "DDR5"
+        ],
+        "io": {
+            "process_node": "7nm",
+            "global_buffer_MB": 1,
+            "physical_global_buffer_MB": 1,
+            "global_buffer_bandwidth_per_cycle_byte": 1024,
+            "memory_channel_physical_count": 2,
+            "memory_channel_active_count": 2,
+            "pin_count_per_channel": 64,
+            "bandwidth_per_pin_bit": 1.17e9
+        },
+        "memory": {
+            "total_capacity_GB": 8
+        }
+    }
+}
+

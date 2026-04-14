@@ -1,0 +1,12 @@
+{
+  "Llama-70B": {
+    "tp": 4,
+    "e2e_ms": 1015.2,
+    "tpot_ms": 31.7,
+    "prompt_toks": 12,
+    "output_toks": 32
+  },
+  "Qwen-72B": {
+    "error": "Engine core initialization failed. See root cause above. Failed core proc(s): {'EngineCore': 1}"
+  }
+}

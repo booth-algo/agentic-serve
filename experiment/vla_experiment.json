@@ -1,0 +1,420 @@
+{
+  "experiment_name": "OpenVLA-7B Hardware Configuration Cross-Validation Experiments",
+  "description": "10 diverse hardware configurations for validating VLA model performance modeling",
+  "model": {
+    "name": "openvla-7b",
+    "model_type": "openvla",
+    "description": "OpenVLA (Vision-Language-Action) model based on Llama-2-7b backbone with ViT vision encoder",
+    "architecture": {
+      "vision_encoder": {
+        "type": "ViT-L",
+        "image_size": 224,
+        "patch_size": 14,
+        "d_model": 1024,
+        "n_layers": 24,
+        "n_heads": 16,
+        "n_patches": 256,
+        "seq_len": 257
+      },
+      "llm_backbone": {
+        "type": "Llama-2-7b",
+        "d_model": 4096,
+        "n_heads": 32,
+        "n_layers": 32,
+        "vocab_size": 32064
+      },
+      "action_head": {
+        "n_action_bins": 256,
+        "action_dim": 7
+      },
+      "text_sequence_length": 512,
+      "data_type": "fp16"
+    }
+  },
+  "experiments": [
+    {
+      "experiment_id": "exp_001",
+      "name": "H100 Single Device Baseline",
+      "description": "Single H100 device baseline - no parallelism, validates basic model performance",
+      "hardware_config": {
+        "config_path": "device_configs/H100.json",
+        "device_count": 1,
+        "device_type": "H100"
+      },
+      "parallelism": {
+        "type": "none",
+        "pp_stages": [
+          {
+            "layer_range": [0, 32],
+            "tp_size": 1,
+            "dp_size": 1
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 1,
+        "text_seq_len": 512
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [50, 200],
+        "expected_memory_usage_GB": [15, 25],
+        "notes": "Baseline single-device performance"
+      }
+    },
+    {
+      "experiment_id": "exp_002",
+      "name": "H100 2-Way Tensor Parallelism",
+      "description": "2 H100 devices with tensor parallelism - validates TP communication overhead",
+      "hardware_config": {
+        "config_path": "device_configs/H100.json",
+        "device_count": 2,
+        "device_type": "H100"
+      },
+      "parallelism": {
+        "type": "tp",
+        "pp_stages": [
+          {
+            "layer_range": [0, 32],
+            "tp_size": 2,
+            "dp_size": 1
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 1,
+        "text_seq_len": 512
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [30, 120],
+        "expected_communication_overhead_ms": [5, 30],
+        "notes": "TP=2 should reduce latency vs single device, but adds AllReduce overhead"
+      }
+    },
+    {
+      "experiment_id": "exp_003",
+      "name": "H100 4-Way Tensor Parallelism",
+      "description": "4 H100 devices with tensor parallelism - tests higher TP scaling",
+      "hardware_config": {
+        "config_path": "device_configs/H100.json",
+        "device_count": 4,
+        "device_type": "H100"
+      },
+      "parallelism": {
+        "type": "tp",
+        "pp_stages": [
+          {
+            "layer_range": [0, 32],
+            "tp_size": 4,
+            "dp_size": 1
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 1,
+        "text_seq_len": 512
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [20, 80],
+        "expected_communication_overhead_ms": [10, 50],
+        "notes": "TP=4 further reduces per-device memory but increases communication"
+      }
+    },
+    {
+      "experiment_id": "exp_004",
+      "name": "H100 2-Stage Pipeline Parallelism",
+      "description": "8 H100 devices with 2-stage PP, TP=4 per stage - validates PP with P2P communication",
+      "hardware_config": {
+        "config_path": "device_configs/H100.json",
+        "device_count": 8,
+        "device_type": "H100"
+      },
+      "parallelism": {
+        "type": "pp_tp",
+        "pp_stages": [
+          {
+            "layer_range": [0, 16],
+            "tp_size": 4,
+            "dp_size": 1
+          },
+          {
+            "layer_range": [16, 32],
+            "tp_size": 4,
+            "dp_size": 1
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 1,
+        "text_seq_len": 512
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [25, 100],
+        "expected_p2p_communication_ms": [2, 15],
+        "expected_pipeline_overhead_ms": [5, 25],
+        "notes": "PP splits model across stages, P2P communication between stages"
+      }
+    },
+    {
+      "experiment_id": "exp_005",
+      "name": "H100 4-Stage Pipeline Parallelism",
+      "description": "8 H100 devices with 4-stage PP, TP=2 per stage - tests fine-grained PP",
+      "hardware_config": {
+        "config_path": "device_configs/H100.json",
+        "device_count": 8,
+        "device_type": "H100"
+      },
+      "parallelism": {
+        "type": "pp_tp",
+        "pp_stages": [
+          {
+            "layer_range": [0, 8],
+            "tp_size": 2,
+            "dp_size": 1
+          },
+          {
+            "layer_range": [8, 16],
+            "tp_size": 2,
+            "dp_size": 1
+          },
+          {
+            "layer_range": [16, 24],
+            "tp_size": 2,
+            "dp_size": 1
+          },
+          {
+            "layer_range": [24, 32],
+            "tp_size": 2,
+            "dp_size": 1
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 1,
+        "text_seq_len": 512
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [30, 120],
+        "expected_p2p_communication_ms": [5, 30],
+        "expected_pipeline_overhead_ms": [10, 40],
+        "notes": "More PP stages = more P2P communication but better memory distribution"
+      }
+    },
+    {
+      "experiment_id": "exp_006",
+      "name": "A100 4-Device Mixed Parallelism",
+      "description": "4 A100 devices with PP+TP - validates different hardware (A100 vs H100)",
+      "hardware_config": {
+        "config_path": "device_configs/template.json",
+        "device_count": 4,
+        "device_type": "A100",
+        "note": "Using template.json as A100 config (modify frequency_Hz to 1410e6 for A100)"
+      },
+      "parallelism": {
+        "type": "pp_tp",
+        "pp_stages": [
+          {
+            "layer_range": [0, 16],
+            "tp_size": 2,
+            "dp_size": 1
+          },
+          {
+            "layer_range": [16, 32],
+            "tp_size": 2,
+            "dp_size": 1
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 2,
+        "text_seq_len": 512
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [40, 150],
+        "notes": "A100 has lower compute than H100, should show higher latency"
+      }
+    },
+    {
+      "experiment_id": "exp_007",
+      "name": "H100 Pipeline + Data Parallelism",
+      "description": "8 H100 devices with PP+TP+DP - validates data parallelism with pipeline",
+      "hardware_config": {
+        "config_path": "device_configs/H100.json",
+        "device_count": 8,
+        "device_type": "H100"
+      },
+      "parallelism": {
+        "type": "pp_tp_dp",
+        "pp_stages": [
+          {
+            "layer_range": [0, 16],
+            "tp_size": 2,
+            "dp_size": 2
+          },
+          {
+            "layer_range": [16, 32],
+            "tp_size": 2,
+            "dp_size": 2
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 4,
+        "text_seq_len": 512
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [50, 180],
+        "expected_throughput_samples_per_sec": [20, 80],
+        "notes": "DP=2 means 2 replicas per stage, improves throughput for batch processing"
+      }
+    },
+    {
+      "experiment_id": "exp_008",
+      "name": "H100 Asymmetric Pipeline Stages",
+      "description": "8 H100 devices with asymmetric PP stages - validates uneven layer distribution",
+      "hardware_config": {
+        "config_path": "device_configs/H100.json",
+        "device_count": 8,
+        "device_type": "H100"
+      },
+      "parallelism": {
+        "type": "pp_tp",
+        "pp_stages": [
+          {
+            "layer_range": [0, 12],
+            "tp_size": 4,
+            "dp_size": 1
+          },
+          {
+            "layer_range": [12, 20],
+            "tp_size": 2,
+            "dp_size": 1
+          },
+          {
+            "layer_range": [20, 32],
+            "tp_size": 2,
+            "dp_size": 1
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 1,
+        "text_seq_len": 512
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [30, 120],
+        "expected_stage_imbalance": "Stage 0 should be slowest (12 layers), stages 1-2 faster",
+        "notes": "Asymmetric stages test load balancing and pipeline bubble effects"
+      }
+    },
+    {
+      "experiment_id": "exp_009",
+      "name": "Jetson AGX Orin Edge Device",
+      "description": "Single Jetson AGX Orin - validates model on edge/mobile hardware",
+      "hardware_config": {
+        "config_path": "device_configs/Jetson-AGX-Orin.json",
+        "device_count": 1,
+        "device_type": "Jetson-AGX-Orin"
+      },
+      "parallelism": {
+        "type": "none",
+        "pp_stages": [
+          {
+            "layer_range": [0, 32],
+            "tp_size": 1,
+            "dp_size": 1
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 1,
+        "text_seq_len": 256,
+        "note": "Reduced text_seq_len for edge device constraints"
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [500, 2000],
+        "expected_memory_usage_GB": [10, 20],
+        "notes": "Edge device has lower compute and memory bandwidth, much higher latency"
+      }
+    },
+    {
+      "experiment_id": "exp_010",
+      "name": "H100 Large Batch Throughput Test",
+      "description": "8 H100 devices with PP+TP, large batch size - validates throughput scaling",
+      "hardware_config": {
+        "config_path": "device_configs/H100.json",
+        "device_count": 8,
+        "device_type": "H100"
+      },
+      "parallelism": {
+        "type": "pp_tp",
+        "pp_stages": [
+          {
+            "layer_range": [0, 16],
+            "tp_size": 4,
+            "dp_size": 1
+          },
+          {
+            "layer_range": [16, 32],
+            "tp_size": 4,
+            "dp_size": 1
+          }
+        ],
+        "vision_stage_idx": 0
+      },
+      "workload": {
+        "batch_size": 8,
+        "text_seq_len": 512
+      },
+      "validation_metrics": {
+        "expected_latency_range_ms": [80, 300],
+        "expected_throughput_samples_per_sec": [25, 100],
+        "notes": "Large batch size improves throughput utilization, tests memory bandwidth limits"
+      }
+    }
+  ],
+  "validation_guidelines": {
+    "latency_validation": {
+      "description": "Compare simulated latency against expected ranges",
+      "tolerance_percent": 20,
+      "notes": "Allow 20% tolerance for modeling approximations"
+    },
+    "communication_validation": {
+      "description": "Validate AllReduce and P2P communication overhead",
+      "allreduce_overhead": "Should scale with TP size and tensor dimensions",
+      "p2p_overhead": "Should scale with activation size and bandwidth"
+    },
+    "memory_validation": {
+      "description": "Validate memory usage per device",
+      "per_device_memory": "Should decrease with TP size, increase with batch size"
+    },
+    "scaling_validation": {
+      "description": "Validate scaling behavior",
+      "tp_scaling": "More TP should reduce latency but increase communication",
+      "pp_scaling": "More PP stages should reduce per-stage memory but increase P2P overhead",
+      "batch_scaling": "Larger batches should improve throughput but increase latency"
+    }
+  },
+  "notes": {
+    "hardware_configs": {
+      "H100": "High-end datacenter GPU with NVLink4 interconnect",
+      "A100": "Previous generation datacenter GPU with NVLink3",
+      "Jetson-AGX-Orin": "Edge/mobile device with PCIe interconnect"
+    },
+    "parallelism_types": {
+      "none": "Single device, no parallelism",
+      "tp": "Tensor Parallelism only",
+      "pp_tp": "Pipeline Parallelism + Tensor Parallelism",
+      "pp_tp_dp": "Pipeline + Tensor + Data Parallelism"
+    },
+    "usage": "These experiments can be used to cross-validate the VLA model's performance predictions against real hardware measurements"
+  }
+}

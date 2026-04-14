@@ -1,0 +1,41 @@
+{
+  "model": "Llama-3.1-8B-Instruct",
+  "method": "isolated_layer",
+  "results": [
+    {
+      "batch_size": 1,
+      "seq_len": 96,
+      "latency_ms": 1.0076160430908203
+    },
+    {
+      "batch_size": 1,
+      "seq_len": 192,
+      "latency_ms": 1.227776050567627
+    },
+    {
+      "batch_size": 1,
+      "seq_len": 384,
+      "latency_ms": 1.2856320142745972
+    },
+    {
+      "batch_size": 1,
+      "seq_len": 768,
+      "latency_ms": 2.145279884338379
+    },
+    {
+      "batch_size": 3,
+      "seq_len": 96,
+      "latency_ms": 1.225216031074524
+    },
+    {
+      "batch_size": 3,
+      "seq_len": 192,
+      "latency_ms": 1.6460800170898438
+    },
+    {
+      "batch_size": 3,
+      "seq_len": 384,
+      "latency_ms": 2.8037118911743164
+    }
+  ]
+}
