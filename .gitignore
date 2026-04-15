@@ -15,3 +15,5 @@ mobile_sys/__pycache__/*.pkl
 # Benchmark results stored in Cloudflare R2 (run scripts/download-results.sh)
 inference-benchmark/results/
 __pycache__/
+llm_predict/profiling/data/**/*.pkl
+llm_predict/profiling/data/**/trained/
