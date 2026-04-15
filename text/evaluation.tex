@@ -30,11 +30,40 @@ We benchmark 6 LLMs , with parameters spanning from 8B to 120B. We covered dense
      \bottomrule
      \end{tabular}
      \end{table}
-Figure 1  reports time to first token at saturation (TTFT) for 6 models across multiple tasks, short chats, agentic and artificial prefill heavy workloads. LLama 3.1-8B serves short chats at a median time for 282ms. This rises to 598 ms (2.1x) under agentic coding use, with synthetic prefill workloads reaching 85,242ms (293x). Larger dense models reveal similar patterns. Qwen 3.5 - 9B and Qwen 3.5 - 27B show 3.0 x and 3.3 x increased TTFT in agentic coding use compared to chats.  Latency increases to 129 x and 190 x respectively under artificial loads. Mixture of experts (MoE) architectures activate a fraction of total parameters per token, show smaller synthetic gaps. Gpt-oss -20B reaches 1.8 x and  26 x  for agentic coding and synthetic prefill use when compared to short chats respectively. Yet,  Mixtral -8x7B shows the largest capacity reduction at 23 x , serving  1.5 req/s under synthetic prefill workloads compared to 35.3 req/s in short chats. (maybe add req/s into table).
+Table \ref{tab:ttft-saturation}  reports time to first token at saturation (TTFT) for 6 models across multiple tasks, short chats, agentic and artificial prefill heavy workloads. LLama 3.1-8B serves short chats at a median time for 282ms. This rises to 598 ms (2.1x) under agentic coding use, with synthetic prefill workloads reaching 85,242ms (293x). Larger dense models reveal similar patterns. Qwen 3.5 - 9B and Qwen 3.5 - 27B show 3.0 x and 3.3 x increased TTFT in agentic coding use compared to chats.  Latency increases to 129 x and 190 x respectively under artificial loads. Mixture of experts (MoE) architectures activate a fraction of total parameters per token, show smaller synthetic gaps. Gpt-oss -20B reaches 1.8 x and  26 x  for agentic coding and synthetic prefill use when compared to short chats respectively. Yet,  Mixtral -8x7B shows the largest capacity reduction at 23 x , serving  1.5 req/s under synthetic prefill workloads compared to 35.3 req/s in short chats. (maybe add req/s into table).
 
-Table 2 reports TTFT and TPOT across concurrency levels 1 to 320 for Llama-3.1-8B on A100. TTFT grows 6× under load, from 33 ms at concurrency 1 to 200 ms at concurrency 120. TPOT, by contrast, remains flat: 12.8 ms at concurrency 1 and 16.0 ms at concurrency 120 — a 1.25× increase over a 120× increase in concurrent requests. Throughput saturates between concurrency 40 and 120 at approximately 1,650 output tok/s for chat-short.
-
-\subsection{Latency Under Load}
+Table \ref{tab:concurrency-sweep} reports TTFT and time per output token (TPOT) across concurrency levels 1 to 320 for Llama 3.1-8B on H    100. TTFT grows 6× under load, from 33 ms at concurrency 1 to 200 ms at concurrency 120. TPOT, by contrast, remains flat: 12.8 ms at concurrency 1 and 16.0 ms at concurrency 120 — a 1.25× increase over a 120× increase in concurrent requests. Throughput saturates between concurrency 40 and 120 at approximately 1,650 output tok/s for chat-short.
+ \begin{table}[t]
+     \caption{Latency and throughput under increasing concurrency for Llama-3.1-8B (TP\,=\,1) on H100-SXM5-80GB using vLLM v0.19 in bf16 precision. Each row reports median (p50) and 99th-percentile (p99)
+     TTFT, median TPOT, median end-to-end latency (E2EL), output token throughput, and request throughput. \texttt{chat-short}: ShareGPT conversations (ISL\,$\leq$\,500, OSL\,$\leq$\,300).
+     \texttt{coding-agent}: real SWE-Bench coding traces (ISL\,$\approx$\,17{,}000, OSL\,$\approx$\,800). Concurrency denotes simultaneous in-flight requests.}
+     \label{tab:concurrency-sweep}
+     \centering
+     \small
+     \setlength{\tabcolsep}{3.5pt}
+     \begin{tabular}{@{}l r rr r r r r@{}}
+     \toprule
+      & & \multicolumn{2}{c}{\textbf{TTFT (ms)}} & & & & \\
+     \cmidrule(lr){3-4}
+     \textbf{Profile} & \textbf{Conc} & \textbf{p50} & \textbf{p99} & \textbf{TPOT (ms)} & \textbf{E2EL (ms)} & \textbf{Tput (tok/s)} & \textbf{Req/s} \\
+     \midrule
+     chat-short  &   1 &  27.5 &    61.6 &  6.2 &    973 &    143 &  0.94 \\
+     chat-short  &  10 &  28.9 &   182.6 &  6.6 &  1{,}223 &  1{,}200 &  7.20 \\
+     chat-short  &  40 &  42.7 &   132.8 &  7.2 &  1{,}348 &  2{,}804 & 16.62 \\
+     chat-short  &  80 &  50.9 &   270.7 &  8.0 &  1{,}487 &  3{,}729 & 22.22 \\
+     chat-short  & 120 & 243.2 &   347.2 &  8.8 &  1{,}666 &  4{,}039 & 23.92 \\
+     chat-short  & 320 & 281.8 &   589.3 & 15.2 &  2{,}792 &  9{,}327 & 55.15 \\
+     \midrule
+     coding-agent &   1 &  74.4 &   281.2 &  6.5 &  2{,}272 &    148 &  0.46 \\
+     coding-agent &  10 &  80.5 &   248.0 &  8.7 &  2{,}972 &  1{,}071 &  3.20 \\
+     coding-agent &  40 & 104.6 &   736.3 & 12.6 &  4{,}187 &  2{,}702 &  8.31 \\
+     coding-agent &  80 & 164.4 & 1{,}153.0 & 18.1 &  5{,}862 &  3{,}562 & 11.12 \\
+     coding-agent & 120 & 823.1 & 1{,}773.6 & 24.1 &  7{,}832 &  3{,}929 & 11.78 \\
+     coding-agent & 320 & 597.8 & 4{,}750.5 & 56.9 & 18{,}046 &  4{,}904 & 15.03 \\
+     \bottomrule
+     \end{tabular}
+     \end{table}
+\subsection{Kernel }
 \label{sec:latency}
 
 At concurrency 1 on H100, Llama-8B (TP=1) achieves TTFT=26.4\,ms and TPOT=6.26\,ms on the chat-medium profile. On A100 at the same concurrency, TPOT is 12.84\,ms for chat-short---a 2.05$\times$ ratio consistent with the H100's 1.6$\times$ HBM bandwidth advantage (3{,}352 vs 2{,}039 GB/s) for memory-bound decode.
