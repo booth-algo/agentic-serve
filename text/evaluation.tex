@@ -63,7 +63,7 @@ Table \ref{tab:concurrency-sweep} reports TTFT and time per output token (TPOT) 
      \bottomrule
      \end{tabular}
      \end{table}
-\subsection{Kernel }
+\subsection{Kernel Lev}
 \label{sec:latency}
 
 At concurrency 1 on H100, Llama-8B (TP=1) achieves TTFT=26.4\,ms and TPOT=6.26\,ms on the chat-medium profile. On A100 at the same concurrency, TPOT is 12.84\,ms for chat-short---a 2.05$\times$ ratio consistent with the H100's 1.6$\times$ HBM bandwidth advantage (3{,}352 vs 2{,}039 GB/s) for memory-bound decode.
