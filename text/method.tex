@@ -80,9 +80,47 @@ We collect two complementary datasets. \textbf{2-layer model passes}: Llama-3.1-
 
 To estimate latency without a fresh GPU run for every new model or shape, we train two XGBoost regressors at complementary granularities.
 
-\paragraph{Level 1 -- per-kernel.} 2{,}811 ncu-profiled kernels, log-transformed latency target. 41 features: ncu launch config (block/grid, registers, shared memory, waves, occupancy, threads), memory traffic (DRAM r/w bytes, L1TEX/LTS hit rate), throughput (SM\%, DRAM\%), cycle counts, plus arithmetic intensity, total/log DRAM bytes, active-cycle ratio, bytes/thread, write/read ratio, bytes/cycle, grid volume, and a one-hot of 10 kernel families (gemm, flash\_attn, reduce, elementwise, copy, compact, topk, cast, index, random). Hyperparameters: \texttt{n\_estimators=500}, \texttt{max\_depth=6}, \texttt{lr=0.03}.
+\paragraph{Level 1 -- per-kernel predictor.} Trained on 2{,}811 ncu-profiled kernels with a log-transformed latency target. The 41 features (Table~\ref{tab:features_l1}) combine raw ncu counters with derived quantities and a one-hot kernel-family encoding. Hyperparameters: \texttt{n\_estimators=500}, \texttt{max\_depth=6}, \texttt{lr=0.03}.
 
-\paragraph{Level 2 -- per-operator.} 13{,}144 CUDA-event timing samples from end-to-end forward passes of all 6 evaluated models. The pre-hook skips \texttt{cuda.synchronize} to avoid pipeline serialization; only the post-hook syncs. 26 analytical features: \{tok, log\_tok, FLOPs, log\_FLOPs, weight\_bytes, log\_wt, AI, log\_AI, op-type one-hot (attn/ffn/norm), $d_\text{model}$, $d_\text{ffn}$, num\_experts, top-$k$, $d^2$, $d{\cdot}d_\text{ffn}$, effective\_tok, active\_experts, total\_weight, batch\_size, seq\_len, log\_bs, log\_seq, attn\_quadratic, log\_attn\_quad\}. Target: raw per-op latency in $\mu$s. Hyperparameters: \texttt{n\_estimators=200}, \texttt{max\_depth=6}, \texttt{lr=0.1}.
+\begin{table}[h]
+\caption{Per-kernel predictor features (41 total), grouped by source.}
+\label{tab:features_l1}
+\centering
+\small
+\begin{tabular}{@{}lp{0.72\linewidth}@{}}
+\toprule
+\textbf{Group} & \textbf{Features} \\
+\midrule
+Launch config (ncu) & block size, grid size, registers, shared memory, waves, occupancy, thread count \\
+Memory traffic (ncu) & DRAM read/write bytes, L1TEX hit rate, LTS hit rate \\
+Throughput (ncu) & SM\%, DRAM\%, active cycles, elapsed cycles \\
+Compute peaks (ncu) & FFMA peak, DFMA peak \\
+Derived & arithmetic intensity, total/log DRAM bytes, log DRAM r/w, active-cycle ratio, bytes per thread, write/read ratio, bytes per cycle, grid volume, log grid volume \\
+Kernel family (1-hot, 10) & gemm, flash\_attn, reduce, elementwise, copy, compact, topk, cast, index, random \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Level 2 -- per-operator predictor.} Trained on 13{,}144 CUDA-event timing samples from end-to-end forward passes of all 6 evaluated models, predicting raw per-op latency in $\mu$s. To avoid pipeline serialization, the pre-hook skips \texttt{cuda.synchronize}; only the post-hook syncs. The 26 analytical features (Table~\ref{tab:features_l2}) encode token and FLOPs scaling, model architecture, and op type. Hyperparameters: \texttt{n\_estimators=200}, \texttt{max\_depth=6}, \texttt{lr=0.1}.
+
+\begin{table}[h]
+\caption{Per-operator predictor features (26 total), grouped by role.}
+\label{tab:features_l2}
+\centering
+\small
+\begin{tabular}{@{}lp{0.72\linewidth}@{}}
+\toprule
+\textbf{Group} & \textbf{Features} \\
+\midrule
+Workload scale & tok, log\_tok, batch\_size, seq\_len, log\_bs, log\_seq \\
+Compute / memory & FLOPs, log\_FLOPs, weight\_bytes, log\_wt, AI, log\_AI \\
+Model architecture & $d_\text{model}$, $d_\text{ffn}$, $d^2$, $d{\cdot}d_\text{ffn}$, total\_weight \\
+MoE & num\_experts, top-$k$, active\_experts, effective\_tok \\
+Attention & attn\_quadratic, log\_attn\_quad \\
+Op type (1-hot, 3) & attn, ffn, norm \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Validation.} Leave-one-source-out (per-kernel) and leave-one-model-out (per-op) cross-validation, plus held-out evaluation on Qwen-2.5-72B and Llama-3.3-70B (excluded from training). Accuracy is reported in Section~\ref{sec:results}.
 
