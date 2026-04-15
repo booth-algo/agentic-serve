@@ -1,23 +1,23 @@
 \section{Methodology}
 \label{sec:method}
 
+We benchmark 6 LLMs spanning 8B--120B parameters across dense (Llama-3.1-8B/70B, Qwen-2.5-72B) and mixture-of-expert (Mixtral-8$\times$7B, gpt-oss-20b, gpt-oss-120b) architectures. Inference is served on H100-SXM5-80GB and A100-SXM4-40GB GPUs (plus RTX~3090 for the small models) using vLLM v0.19.0 and SGLang in bfloat16 precision. Concurrency sweeps 1--320 simultaneous requests across 20 workload profiles, with $N{\geq}50$ requests after 3 warmup requests per configuration. Section~\ref{sec:taxonomy} defines the workload profiles, \ref{sec:framework} the benchmarking framework, \ref{sec:ncu_method} the kernel-level profiling, \ref{sec:perop_method} the per-operator and per-kernel predictors, and \ref{sec:setup} the full experimental setup.
+
 \subsection{Workload Taxonomy}
 \label{sec:taxonomy}
 
-We organize inference workloads into three tiers (Table~\ref{tab:profiles}). Tier~1 (agentic) and the multi-turn variants of Tier~2 are the primary contribution; Tier~2 single-turn and Tier~3 act as controls.
+Workloads fall into three tiers (Table~\ref{tab:profiles}).
 
-\begin{itemize}
-    \item \textbf{Tier~1: Agentic traces.} Real request logs from SWE-Bench~\citep{swebench} coding agents, TerminalBench CLI agents, and OSWorld computer-use agents. SWE-Bench sessions span 13--320 turns (median 85, $n{=}165$); TerminalBench sessions span 2--876 turns (median 61, $n{=}267$); OSWorld covers 60 sessions of WebArena traces. Each multi-turn variant (\texttt{short}/\texttt{medium}/\texttt{long}/\texttt{xl}) is bucketed by turn count and capped at a maximum context window of 32K, 65K, or 131K tokens. We also include a single-turn \texttt{coding-agent} profile (per-request ISL$\approx$17K, OSL$\approx$800) as the agentic single-turn baseline.
+\paragraph{Tier 1: Agentic traces.} Real request logs from SWE-Bench~\citep{swebench} coding agents (165 sessions, 13--320 turns, median 85), TerminalBench CLI agents (267 sessions, 2--876 turns, median 61), and OSWorld computer-use agents (60 sessions). Multi-turn variants are bucketed by turn count (\texttt{short}/\texttt{medium}/\texttt{long}/\texttt{xl}) and capped at 32K, 65K, or 131K tokens of accumulated context. A single-turn \texttt{coding-agent} profile (ISL$\approx$17K, OSL$\approx$800) acts as the agentic baseline.
 
-    \item \textbf{Tier~2: Chat baselines.} ShareGPT-derived conversations at three single-turn scales (chat-short/medium/long: ISL 500/2K/8K, OSL 300/1K/2K) and three multi-turn scales (3--20 turns, max context 8K--32K). Source: \texttt{Aeala/ShareGPT\_Vicuna\_unfiltered}; conversations are filtered by an approximate token count (word\_count $\times 1.35$) so the listed ISL acts as an upper-bound filter rather than an exact per-request length.
+\paragraph{Tier 2: Chat baselines.} ShareGPT conversations at three single-turn scales (ISL 500/2K/8K, OSL 300/1K/2K) and three multi-turn scales (3--20 turns, max context 8K--32K). Source: \texttt{Aeala/ShareGPT\_Vicuna\_unfiltered}, filtered by an approximate token count (word\_count$\times$1.35); the listed ISL is an upper-bound filter, not an exact per-request length.
 
-    \item \textbf{Tier~3: Synthetic stress tests.} Random-token workloads isolating specific bottlenecks: \texttt{decode-heavy} (ISL=256, OSL=4{,}096) for memory-bandwidth stress, \texttt{prefill-heavy} (ISL=8{,}192, OSL=256) for compute stress, and \texttt{random-1k} (ISL=1{,}024, OSL=1{,}024).
-\end{itemize}
+\paragraph{Tier 3: Synthetic stress tests.} Random-token workloads isolating specific bottlenecks: \texttt{decode-heavy} (ISL=256, OSL=4{,}096) for memory-bandwidth stress, \texttt{prefill-heavy} (ISL=8{,}192, OSL=256) for compute stress, and \texttt{random-1k} (ISL=1{,}024, OSL=1{,}024) as a balanced reference.
 
-\paragraph{Single-turn vs.\ multi-turn semantics.} For single-turn profiles the ISL column is the (approximate) per-request input length. For multi-turn profiles, the ISL column is the \emph{maximum context window cap} for the session: turn~1 starts with the system prompt plus the first user message ($\sim$2K tokens), and the context grows by user/assistant pairs each turn until it hits the cap or the session ends.
+\paragraph{Single-turn vs.\ multi-turn semantics.} For single-turn profiles, ISL is the (approximate) per-request input length. For multi-turn profiles, ISL is the \emph{maximum context window cap}: turn~1 starts with system + first user message ($\sim$2K tokens), and context grows by user/assistant pairs each turn until the cap or session end.
 
 \begin{table}[t]
-\caption{Workload profiles. For single-turn profiles, ISL/OSL are approximate per-request input/output sequence lengths. For multi-turn profiles, ISL is the \emph{maximum context window cap} (context grows across turns) and OSL is the per-turn output cap. The \texttt{coding-agent} single-turn ratio (21$\times$) is 12$\times$ that of \texttt{chat-short}; the longest multi-turn profiles reach 65--131$\times$ at session end.}
+\caption{Workload profiles. For single-turn profiles, ISL/OSL are approximate per-request input/output sequence lengths. For multi-turn profiles, ISL is the \emph{maximum context window cap} (context grows across turns) and OSL is the per-turn output cap. The \texttt{coding-agent} ratio (21$\times$) is 12$\times$ that of \texttt{chat-short}; the longest multi-turn profiles reach 65--131$\times$ at session end.}
 \label{tab:profiles}
 \centering
 \small
@@ -56,44 +56,35 @@ We organize inference workloads into three tiers (Table~\ref{tab:profiles}). Tie
 \subsection{Benchmarking Framework}
 \label{sec:framework}
 
-We build on an open-source asynchronous benchmarking tool that sends concurrent requests to OpenAI-compatible serving endpoints. For each (model, profile, concurrency) configuration, we record per-request metrics from the streamed response: time-to-first-token (TTFT), inter-token latency (ITL), time-per-output-token (TPOT), end-to-end latency, and input/output token counts. We report median and p90 percentiles for latency metrics and aggregate throughput in output tokens per second. Three requests are issued as warmup and discarded before measurement.
+We extend an open-source asynchronous benchmark client that targets OpenAI-compatible endpoints (\texttt{/v1/chat/completions}). For each (model, profile, concurrency) cell, we record per-request TTFT, ITL, TPOT, end-to-end latency, and input/output token counts from the streamed response. We report median and p90; throughput is aggregate output tokens per second. Three warmup requests per cell are discarded.
 
-\paragraph{Arrival pattern and concurrency.} The framework uses a \emph{closed-loop, steady-concurrency} arrival pattern implemented as an \texttt{asyncio.Semaphore(concurrency)}: all $N$ requests are submitted at $t{=}0$ but at most \texttt{concurrency} are in flight at any moment, with the next request firing immediately upon completion of an in-flight one. Unlike open-loop \texttt{--request-rate inf} runs (which inflate TTFT with queue-wait time), our TTFT reflects actual scheduler behavior at a stable in-flight load. We sweep concurrency over $\{1, 10, 20, 40, 80, 120, 160, 200, 256, 320\}$ on A100 and H100, and over $\{1, 10, 20, 40, 80\}$ on RTX~3090 (memory-limited). The number of measured requests scales with concurrency: $N{=}50$ at conc.\ 1, $N{=}200$ at conc.\ 5--80, and $N{=}\max(200, 2\cdot\text{conc.})$ at conc.\ ${\geq}120$, ensuring the system reaches steady state at every operating point.
+\paragraph{Closed-loop arrival.} Concurrency is enforced via \texttt{asyncio.Semaphore(concurrency)}: all $N$ requests fire at $t{=}0$ but at most \texttt{concurrency} are in flight, with the next request launched the instant one completes. Open-loop \texttt{--request-rate inf} runs (used by InferenceX) inflate TTFT with queue-wait time; our TTFT reflects scheduler behavior at a stable in-flight load.
 
-\paragraph{Statistical caveat.} Each (model, profile, concurrency) cell is run once with the $N$ requests above; percentiles are computed across those requests rather than across multiple repeats. We do not report p99 because $N{=}50$ at concurrency~1 makes p99 a single-sample estimate; p50 and p90 are the headline statistics throughout.
+\paragraph{Concurrency and request budget.} We sweep $\{1, 10, 20, 40, 80, 120, 160, 200, 256, 320\}$ on A100/H100 and $\{1, 10, 20, 40, 80\}$ on RTX~3090. Request count scales with concurrency: $N{=}50$ at conc.\ 1, $N{=}200$ at conc.\ 5--80, $N{=}\max(200, 2\cdot\text{conc.})$ at conc.\ ${\geq}120$. This keeps the system at steady state across operating points.
+
+\paragraph{Statistical caveat.} Each cell runs once with the $N$ requests above. Percentiles are over those requests, not multiple repeats. We omit p99: at $N{=}50$ it reduces to a single sample.
 
 \subsection{Kernel-Level Profiling}
 \label{sec:ncu_method}
 
-To explain \emph{why} different workload profiles produce different throughput characteristics, we profile the CUDA kernels executed during model forward passes using NVIDIA Nsight Compute (ncu, v2024.3.2) with the \texttt{--set full} flag, which collects the full counter set per kernel:
-\begin{itemize}
-    \item \textbf{Compute throughput}: SM active cycles, tensor core utilization, achieved TFLOPS
-    \item \textbf{Memory throughput}: DRAM bytes read/written, L2 cache hit rate, achieved HBM bandwidth
-    \item \textbf{Kernel duration}: wall-clock execution time in microseconds
-\end{itemize}
+To explain \emph{why} workloads diverge, we profile the CUDA kernels of model forward passes with NVIDIA Nsight Compute (ncu, v2024.3.2, \texttt{--set full}). Each kernel reports compute throughput (SM active cycles, tensor-core utilization, achieved TFLOPS), memory throughput (DRAM bytes, L2 hit rate, achieved HBM bandwidth), and wall-clock duration.
 
-We profile two complementary datasets used for predictor training (Section~\ref{sec:perop_method}) and roofline analysis (Section~\ref{sec:roofline}):
-\begin{itemize}
-    \item \textbf{2-layer model forward passes.} Llama-3.1-8B (417 kernels), Mixtral-8$\times$7B (1{,}525 kernels), and two held-out unseen models (Qwen-2.5-72B, Llama-3.3-70B; 421 kernels each) at batch size~1 and sequence length~128, capturing the full kernel mix (flash attention, RMSNorm, SiLU, residual additions, MoE expert routing).
-    \item \textbf{GEMM shape sweeps.} 56 isolated GEMM shapes spanning $M \in \{1,2,4,\ldots,8192\}$ and $N,K \in \{4096,8192,14336\}$ (372 kernels), plus a wider hidden-size sweep (451 kernels) covering hidden $\in \{2048,\ldots,28672\}$.
-\end{itemize}
-This yields 2{,}811 profiled kernels in total, with 842 reserved as held-out validation.
+We collect two complementary datasets. \textbf{2-layer model passes}: Llama-3.1-8B (417 kernels), Mixtral-8$\times$7B (1{,}525), and two unseen held-out models, Qwen-2.5-72B and Llama-3.3-70B (421 each). \textbf{GEMM shape sweeps}: 56 isolated GEMMs at $M \in \{1,\ldots,8192\}$, $N,K \in \{4096,8192,14336\}$ (372 kernels), plus a wider hidden-size sweep covering $\{2048,\ldots,28672\}$ (451 kernels). Total: 2{,}811 profiled kernels, 842 held out for validation. All profiles run at batch~1, sequence length 128.
 
-\paragraph{Why 2 layers suffice.} The kernel mix is identical across all transformer blocks: each layer issues the same operators with the same tensor shapes. Only the KV-cache size grows with layer index, but our ncu profiles capture prefill at sequence length~128 with no accumulated cache. We verify experimentally that summing 2-layer kernel times and scaling by $n_{\text{layers}}/2$ matches a full-model forward pass within $+0.1$--$0.2\%$ error.
+\paragraph{Why 2 layers suffice.} The kernel mix is identical across transformer blocks: same operators, same shapes. Only KV-cache size grows with depth, but our prefill-only profiles carry no accumulated cache. Summing 2-layer kernel times and scaling by $n_\text{layers}/2$ matches a full forward pass within $+0.1$--$0.2\%$.
 
-\paragraph{Roofline classification.}
-From the ncu data we compute each kernel's \emph{arithmetic intensity} (AI = FLOPs / bytes transferred) and plot it against achieved throughput. We use the A100's \emph{dense} bf16 tensor core peak: 312 TFLOPS / 2{,}039 GB/s HBM2e $\Rightarrow$ ridge AI $= 153$ FLOPs/byte. Kernels with AI $> 153$ are compute-bound; AI $< 153$ are memory-bound. (At our profiling configuration of bs=1, seq=128, all profiled kernels lie in the memory-bound region; the AI distribution shifts right as $M$ grows under continuous batching, which is exactly the regime studied in Section~\ref{sec:roofline}.)
+\paragraph{Roofline classification.} For each kernel we compute arithmetic intensity (AI = FLOPs / bytes) and plot it against achieved throughput. The A100 dense bf16 ridge sits at 312~TFLOPS / 2{,}039~GB/s $=$ \textbf{153 FLOPs/byte}; AI $> 153$ is compute-bound, AI $< 153$ memory-bound. At our profiling configuration (bs=1, seq=128) every kernel is memory-bound. The AI distribution shifts right as $M$ grows under continuous batching --- the regime studied in Section~\ref{sec:roofline}.
 
 \subsection{Per-Operator and Per-Kernel Latency Predictors}
 \label{sec:perop_method}
 
-To enable latency estimation without re-running GPU experiments for every new model or shape, we train two complementary XGBoost regressors operating at different granularities.
+To estimate latency without a fresh GPU run for every new model or shape, we train two XGBoost regressors at complementary granularities.
 
-\paragraph{Level~1: per-kernel predictor.} Trained on the 2{,}811 ncu-profiled kernels with a log-transformed latency target. Features (41 total) combine raw ncu counters and derived quantities: launch configuration (block/grid size, registers, shared memory, waves, occupancy, thread count); memory traffic (DRAM read/write bytes, L1TEX/LTS hit rate); throughput (SM\%, DRAM\%); cycle counts (active, elapsed); plus arithmetic intensity, total/log DRAM bytes, active-cycle ratio, bytes-per-thread, write/read ratio, bytes-per-cycle, grid volume, and a one-hot encoding of 10 kernel families (gemm, flash\_attn, reduce, elementwise, copy, compact, topk, cast, index, random). Hyperparameters: \texttt{n\_estimators=500}, \texttt{max\_depth=6}, \texttt{lr=0.03}.
+\paragraph{Level 1 -- per-kernel.} 2{,}811 ncu-profiled kernels, log-transformed latency target. 41 features: ncu launch config (block/grid, registers, shared memory, waves, occupancy, threads), memory traffic (DRAM r/w bytes, L1TEX/LTS hit rate), throughput (SM\%, DRAM\%), cycle counts, plus arithmetic intensity, total/log DRAM bytes, active-cycle ratio, bytes/thread, write/read ratio, bytes/cycle, grid volume, and a one-hot of 10 kernel families (gemm, flash\_attn, reduce, elementwise, copy, compact, topk, cast, index, random). Hyperparameters: \texttt{n\_estimators=500}, \texttt{max\_depth=6}, \texttt{lr=0.03}.
 
-\paragraph{Level~2: per-operator predictor.} Trained on 13{,}144 CUDA-event timing samples collected from end-to-end forward passes of the 6 evaluated models (Llama-3.1-8B/70B, Mixtral-8$\times$7B, Qwen-2.5-72B, gpt-oss-20b/120b). To avoid pipeline serialization, the timing pre-hook does not call \texttt{cuda.synchronize}; only the post-hook does. The model uses 26 analytical features---\{tok, log\_tok, FLOPs, log\_FLOPs, weight\_bytes, log\_wt, AI, log\_AI, op-type one-hot (attn/ffn/norm), $d_\text{model}$, $d_\text{ffn}$, num\_experts, top-$k$, $d^2$, $d \cdot d_\text{ffn}$, effective\_tok, active\_experts, total\_weight, batch\_size, seq\_len, log\_bs, log\_seq, attn\_quadratic, log\_attn\_quad\}---predicting raw per-op latency in microseconds. Hyperparameters: \texttt{n\_estimators=200}, \texttt{max\_depth=6}, \texttt{lr=0.1}.
+\paragraph{Level 2 -- per-operator.} 13{,}144 CUDA-event timing samples from end-to-end forward passes of all 6 evaluated models. The pre-hook skips \texttt{cuda.synchronize} to avoid pipeline serialization; only the post-hook syncs. 26 analytical features: \{tok, log\_tok, FLOPs, log\_FLOPs, weight\_bytes, log\_wt, AI, log\_AI, op-type one-hot (attn/ffn/norm), $d_\text{model}$, $d_\text{ffn}$, num\_experts, top-$k$, $d^2$, $d{\cdot}d_\text{ffn}$, effective\_tok, active\_experts, total\_weight, batch\_size, seq\_len, log\_bs, log\_seq, attn\_quadratic, log\_attn\_quad\}. Target: raw per-op latency in $\mu$s. Hyperparameters: \texttt{n\_estimators=200}, \texttt{max\_depth=6}, \texttt{lr=0.1}.
 
-\paragraph{Validation protocol.} We use leave-one-source-out (per-kernel) and leave-one-model-out (per-op) cross-validation, plus held-out evaluation on two models excluded from training (Qwen-2.5-72B and Llama-3.3-70B). Accuracy results are reported in Section~\ref{sec:results}.
+\paragraph{Validation.} Leave-one-source-out (per-kernel) and leave-one-model-out (per-op) cross-validation, plus held-out evaluation on Qwen-2.5-72B and Llama-3.3-70B (excluded from training). Accuracy is reported in Section~\ref{sec:results}.
 
 \subsection{Multi-Node Serving}
 \label{sec:multinode}
@@ -103,20 +94,15 @@ TBD.
 \subsection{Experimental Setup}
 \label{sec:setup}
 
-\paragraph{Hardware.}
-We evaluate on three GPU platforms: (1)~8$\times$ NVIDIA A100-SXM4-40GB on-premise (NVSwitch fabric, \texttt{nvidia-fabricmanager}); (2)~2--4$\times$ NVIDIA H100-SXM5-80GB cloud (RunPod, NVLink); and (3)~8$\times$ NVIDIA RTX~3090 24GB on-premise (PCIe, no NVLink). The A100 provides 312 TFLOPS bf16 / 2{,}039 GB/s HBM2e; the H100 provides 989 TFLOPS bf16 / 3{,}352 GB/s HBM3. Each benchmark run uses the subset of GPUs required by the TP degree (e.g., TP=4 uses GPUs 0--3) and runs in isolation (no co-location).
+\paragraph{Hardware.} 8$\times$ NVIDIA A100-SXM4-40GB on-premise (NVSwitch, \texttt{nvidia-fabricmanager}); 2--4$\times$ NVIDIA H100-SXM5-80GB on RunPod (NVLink); 8$\times$ NVIDIA RTX~3090 24GB on-premise (PCIe, no NVLink). A100: 312 TFLOPS bf16, 2{,}039 GB/s HBM2e. H100: 989 TFLOPS bf16, 3{,}352 GB/s HBM3 (1.6$\times$ bandwidth, 3.2$\times$ compute over A100). Each run uses the GPU subset required by its TP degree and runs in isolation.
 
-\paragraph{Software.}
-vLLM v0.19.0; SGLang as a secondary comparison on H100; CUDA~12.6 (A100, ncu profiling) / 13.0 (RTX~3090); NVIDIA driver 580.126.09 on the 3090 cluster; PyTorch~2.10; XGBoost~3.2.0; ncu (Nsight Compute) v2024.3.2; Python~3.12 (conda environment).
+\paragraph{Software.} vLLM v0.19.0; SGLang as a secondary comparison on H100; CUDA 12.6 (A100, ncu) / 13.0 (RTX 3090); NVIDIA driver 580.126.09; PyTorch 2.10; XGBoost 3.2.0; ncu v2024.3.2; Python 3.12.
 
-\paragraph{Serving flags.}
-On A100 we launch vLLM with \texttt{--enforce-eager --disable-custom-all-reduce --no-enable-log-requests --dtype bfloat16 --gpu-memory-utilization 0.95}; \texttt{--enforce-eager} is required because CUDA-graph capture OOMs at our memory budget, and the custom all-reduce kernel was unstable on A100-SXM4. \texttt{--max-model-len} is set to 4096 for gpt-oss-20b and 2048 for the larger models. On H100 we use vLLM defaults (CUDA graphs enabled, \texttt{--dtype bfloat16}). Prefix caching is disabled; chunked prefill is on by default in vLLM~0.19. All models are served in bfloat16 except gpt-oss-20b and gpt-oss-120b, which use the released MXFP4 weights.
+\paragraph{Serving flags.} On A100 we launch vLLM with \texttt{--enforce-eager --disable-custom-all-reduce --no-enable-log-requests --dtype bfloat16 --gpu-memory-utilization 0.95}; CUDA-graph capture OOMs at our memory budget, and the custom all-reduce kernel is unstable on A100-SXM4. \texttt{--max-model-len} is 4096 for gpt-oss-20b, 2048 for the larger models. On H100 we use vLLM defaults (CUDA graphs on, \texttt{--dtype bfloat16}). Prefix caching is off; chunked prefill is on by default in vLLM 0.19. All bf16 except gpt-oss-20b/120b, which use the released MXFP4 weights.
 
-\paragraph{Tokenization.}
-Requests are sent as chat messages over the OpenAI-compatible API; tokenization and chat templating are handled by the serving engine using each model's native tokenizer. For ShareGPT and agent traces, the ISL value listed in Table~\ref{tab:profiles} is an \emph{upper-bound filter} (word\_count $\times 1.35$), not an exact per-request token count. Random/synthetic profiles sample tokens uniformly from the vocabulary.
+\paragraph{Tokenization.} Requests go over the OpenAI-compatible chat API; the engine handles tokenization and chat templating with each model's native tokenizer. ShareGPT and agent traces are filtered to an upper bound of word\_count$\times$1.35 tokens, so the ISL in Table~\ref{tab:profiles} is a filter cap, not an exact per-request count. Synthetic profiles sample tokens uniformly from the vocabulary.
 
-\paragraph{Models.}
-Table~\ref{tab:models} summarizes the 6 model architectures evaluated, spanning dense transformers (Llama-3.1-8B/70B, Qwen-2.5-72B) and mixture-of-experts (Mixtral-8$\times$7B; gpt-oss-20b with 16 experts top-4; gpt-oss-120b with 128 experts top-4). Each model is run at the TP degrees feasible for its memory footprint on each platform (Table~\ref{tab:tp_configs}).
+\paragraph{Models.} Table~\ref{tab:models} summarizes the 6 architectures evaluated; Table~\ref{tab:tp_configs} lists the TP degrees actually run on each platform.
 
 \begin{table}[t]
 \caption{Model configurations evaluated. Dense models use grouped-query attention (GQA); MoE models use top-$k$ expert routing.}
@@ -138,7 +124,7 @@ gpt-oss-120b        & MoE   & 120B & 6{,}144 & 96 & 48 & 8 & 16{,}384 & 128  & 4
 \end{table}
 
 \begin{table}[t]
-\caption{Tensor-parallel configurations actually run on each platform. gpt-oss models use MXFP4 weights (released format); all others are bfloat16. Llama-70B/Qwen-72B require TP=4 on A100-40GB because the bf16 weights ($\sim$140\,GB) do not fit on 2$\times$40\,GB.}
+\caption{Tensor-parallel configurations actually run. gpt-oss models use MXFP4 weights; all others bfloat16. Llama-70B and Qwen-72B require TP=4 on A100-40GB because the bf16 weights ($\sim$140\,GB) do not fit on 2$\times$40\,GB.}
 \label{tab:tp_configs}
 \centering
 \small
