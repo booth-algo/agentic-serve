@@ -71,6 +71,22 @@ function detectHardware(filename: string, dirPath: string): string {
   if (fp.includes('h100_tcp') || dir.includes('h100_tcp')) return 'H100-TCP';
   if (fp.includes('a6000') || dir.includes('a6000')) return 'A6000';
 
+  // A100 detection (directories prefixed with a100_)
+  if (dir.startsWith('a100_') || dir.includes('/a100_') || fp.includes('a100')) {
+    if (/_tp8_/.test(dir)) return 'A100x8';
+    if (/_tp4_/.test(dir)) return 'A100x4';
+    if (/_tp2_/.test(dir)) return 'A100x2';
+    return 'A100';
+  }
+
+  // 3090 detection
+  if (dir.startsWith('3090_') || dir.includes('/3090_') || fp.includes('3090')) {
+    if (/_tp8_/.test(dir)) return '3090x8';
+    if (/_tp4_/.test(dir)) return '3090x4';
+    if (/_tp2_/.test(dir)) return '3090x2';
+    return '3090';
+  }
+
   // Infer from directory name
   if (dir.includes('h100_70b_fp8')) return 'H100';
 
