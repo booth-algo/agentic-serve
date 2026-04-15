@@ -20,7 +20,7 @@ export function useData() {
 
   useEffect(() => {
     // Cache-bust with build-time hash so deploys always serve fresh data
-    fetch(import.meta.env.BASE_URL + `data.json?v=${__BUILD_HASH__}`)
+    fetch(`https://pub-38e30ed030784867856634f1625c7130.r2.dev/data.json?v=${__BUILD_HASH__}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

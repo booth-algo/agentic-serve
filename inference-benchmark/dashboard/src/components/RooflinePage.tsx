@@ -284,7 +284,7 @@ export function RooflinePage() {
 
   // Load data
   useEffect(() => {
-    fetch(import.meta.env.BASE_URL + `roofline-quadrant.json?v=${__BUILD_HASH__}`)
+    fetch(`https://pub-38e30ed030784867856634f1625c7130.r2.dev/roofline-quadrant.json?v=${__BUILD_HASH__}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<RooflineQuadrantData>;
