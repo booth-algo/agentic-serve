@@ -1,5 +1,7 @@
 \section{Results}
 \label{sec:results}
+We benchmark 6 LLMs , with parameters spanning from 8B to 120B. We covered dense (Llama3.1-8B, Qwen3.5-9B,Qwen3.5-27B) and mixture of expert architectures (Mixtral-8x7B, gpt-oss-20b, gpt-oss-120b). Inference was served on H100-SXM5-80GB GPUs and A100-SXM4-40GB GPUs using vLLM v0.19 and SGlang in bf16 precision with prefix caching. Concurrency was swept across 1 - 320 simultaneous requests across 16 workload profiles, issuing 50 requests after 3 warmup requests per configuration. We collect data on 3 different types of workloads : agent traces from SWE-Bench coding sessions (ISL = 17,000, OSL = 800), ShareGPT chat baselines (ISL <= 500, OSL <= 300), and synthetic stress tests isolating prefill workloads (ISL = 8192, OSL = 256). [Table] 4.1 reports on inference across these workloads, 4.2 traces kernel-level regime shifts, and 4.3 - 4.4 validate the prediction pipeline.
+
 
 \subsection{Saturation Behavior Across Workload Profiles}
 \label{sec:workload_gap}
