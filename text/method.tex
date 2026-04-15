@@ -1,7 +1,7 @@
 \section{Methodology}
 \label{sec:method}
 
-We benchmark 6 LLMs spanning 8B--120B parameters across dense (Llama-3.1-8B/70B, Qwen-2.5-72B) and mixture-of-expert (Mixtral-8$\times$7B, gpt-oss-20b, gpt-oss-120b) architectures. Inference is served on H100-SXM5-80GB and A100-SXM4-40GB GPUs (plus RTX~3090 for the small models) using vLLM v0.19.0 and SGLang in bfloat16 precision. Concurrency sweeps 1--320 simultaneous requests across 20 workload profiles, with $N{\geq}50$ requests after 3 warmup requests per configuration. Section~\ref{sec:taxonomy} defines the workload profiles, \ref{sec:framework} the benchmarking framework, \ref{sec:ncu_method} the kernel-level profiling, \ref{sec:perop_method} the per-operator and per-kernel predictors, and \ref{sec:setup} the full experimental setup.
+We benchmark 8 LLMs spanning 8B--120B parameters across dense (Llama-3.1-8B, Llama-3.1-70B, Qwen-2.5-72B, Qwen3.5-9B, Qwen3.5-27B) and mixture-of-expert (Mixtral-8$\times$7B, gpt-oss-20b, gpt-oss-120b) architectures. Inference is served on H100-SXM5-80GB and A100-SXM4-40GB GPUs (plus RTX~3090 for the small models) using vLLM v0.19.0 and SGLang in bfloat16 precision. Concurrency sweeps 1--320 simultaneous requests across 20 workload profiles, with $N{\geq}50$ requests after 3 warmup requests per configuration. Section~\ref{sec:taxonomy} defines the workload profiles, \ref{sec:framework} the benchmarking framework, \ref{sec:ncu_method} the kernel-level profiling, \ref{sec:perop_method} the per-operator and per-kernel predictors, and \ref{sec:setup} the full experimental setup.
 
 \subsection{Workload Taxonomy}
 \label{sec:taxonomy}
@@ -73,7 +73,7 @@ We collect two complementary datasets. \textbf{2-layer model passes}: Llama-3.1-
 
 \paragraph{Why 2 layers suffice.} The kernel mix is identical across transformer blocks: same operators, same shapes. Only KV-cache size grows with depth, but our prefill-only profiles carry no accumulated cache. Summing 2-layer kernel times and scaling by $n_\text{layers}/2$ matches a full forward pass within $+0.1$--$0.2\%$.
 
-\paragraph{Roofline classification.} For each kernel we compute arithmetic intensity (AI = FLOPs / bytes) and plot it against achieved throughput. The A100 dense bf16 ridge sits at 312~TFLOPS / 2{,}039~GB/s $=$ \textbf{153 FLOPs/byte}; AI $> 153$ is compute-bound, AI $< 153$ memory-bound. At our profiling configuration (bs=1, seq=128) every kernel is memory-bound. The AI distribution shifts right as $M$ grows under continuous batching --- the regime studied in Section~\ref{sec:roofline}.
+\paragraph{Roofline classification.} For each kernel we compute arithmetic intensity (AI = FLOPs / bytes) and plot it against achieved throughput. The A100 dense bf16 ridge sits at 312~TFLOPS / 2{,}039~GB/s $=$ \textbf{153 FLOPs/byte}; AI $> 153$ is compute-bound, AI $< 153$ memory-bound. At our profiling configuration (bs=1, seq=128) every kernel is memory-bound. The AI distribution shifts right as $M$ grows under continuous batching --- the regime studied in Section~\ref{sec:kernel_roofline}.
 
 \subsection{Per-Operator and Per-Kernel Latency Predictors}
 \label{sec:perop_method}
@@ -154,7 +154,7 @@ HBM bandwidth & 2{,}039 GB/s (HBM2e)    & 3{,}352 GB/s (HBM3)    & 936 GB/s (GDD
 
 \paragraph{Software.} vLLM v0.19.0; SGLang as a secondary comparison on H100; CUDA 12.6 (A100, ncu) / 13.0 (RTX 3090); NVIDIA driver 580.126.09; PyTorch 2.10; XGBoost 3.2.0; ncu v2024.3.2; Python 3.12.
 
-\paragraph{Serving flags.} Flags per platform are summarized in Table~\ref{tab:serving_flags}. On A100, CUDA-graph capture OOMs at our memory budget and the custom all-reduce kernel is unstable on SXM4, forcing \texttt{--enforce-eager} and \texttt{--disable-custom-all-reduce}. On H100 we use vLLM defaults with CUDA graphs on. Prefix caching is off on both; chunked prefill is on by default in vLLM 0.19. All models are served in bfloat16, except gpt-oss-20b and gpt-oss-120b, which use the released MXFP4 weights.
+\paragraph{Serving flags.} Flags per platform are summarized in Table~\ref{tab:serving_flags}. On A100, CUDA-graph capture OOMs at our memory budget and the custom all-reduce kernel is unstable on SXM4, forcing \texttt{--enforce-eager} and \texttt{--disable-custom-all-reduce}. On H100 we use vLLM defaults with CUDA graphs on. Prefix caching is enabled for single-turn and multi-turn benchmarks and disabled for stress tests; chunked prefill is on by default in vLLM 0.19. All models are served in bfloat16, except gpt-oss-20b and gpt-oss-120b, which use the released MXFP4 weights.
 
 \begin{table}[h]
 \caption{vLLM serving flags per platform. \texttt{--max-model-len} is 4096 for gpt-oss-20b and 2048 for the larger dense / MoE models.}
@@ -170,7 +170,7 @@ HBM bandwidth & 2{,}039 GB/s (HBM2e)    & 3{,}352 GB/s (HBM3)    & 936 GB/s (GDD
 \texttt{--enforce-eager}             & yes        & no (CUDA graphs on) \\
 \texttt{--disable-custom-all-reduce} & yes        & no         \\
 \texttt{--no-enable-log-requests}    & yes        & default    \\
-\texttt{--enable-prefix-caching}     & off        & off        \\
+\texttt{--enable-prefix-caching}     & on (single/multi-turn) & on (single/multi-turn) \\
 \texttt{--enable-chunked-prefill}    & on (default) & on (default) \\
 \texttt{--max-model-len}             & 2048 / 4096 & 2048 / 4096 \\
 \bottomrule
@@ -179,7 +179,7 @@ HBM bandwidth & 2{,}039 GB/s (HBM2e)    & 3{,}352 GB/s (HBM3)    & 936 GB/s (GDD
 
 \paragraph{Tokenization.} Requests go over the OpenAI-compatible chat API; the engine handles tokenization and chat templating with each model's native tokenizer. ShareGPT and agent traces are filtered to an upper bound of word\_count$\times$1.35 tokens, so the ISL in Table~\ref{tab:profiles} is a filter cap, not an exact per-request count. Synthetic profiles sample tokens uniformly from the vocabulary.
 
-\paragraph{Models.} Table~\ref{tab:models} summarizes the 6 architectures evaluated; Table~\ref{tab:tp_configs} lists the TP degrees actually run on each platform.
+\paragraph{Models.} Table~\ref{tab:models} summarizes the 8 architectures evaluated; Table~\ref{tab:tp_configs} lists the TP degrees actually run on each platform.
 
 \begin{table}[t]
 \caption{Model configurations evaluated. Dense models use grouped-query attention (GQA); MoE models use top-$k$ expert routing.}
@@ -193,6 +193,8 @@ HBM bandwidth & 2{,}039 GB/s (HBM2e)    & 3{,}352 GB/s (HBM3)    & 936 GB/s (GDD
 Llama-3.1-8B        & Dense & 8B   & 4{,}096 & 32 & 32 & 8 & 14{,}336 & ---  & --- \\
 Llama-3.1-70B       & Dense & 70B  & 8{,}192 & 80 & 64 & 8 & 28{,}672 & ---  & --- \\
 Qwen-2.5-72B        & Dense & 72B  & 8{,}192 & 80 & 64 & 8 & 29{,}568 & ---  & --- \\
+Qwen3.5-9B          & Dense & 9B   & 3{,}584 & 36 & 28 & 4 & 18{,}944 & ---  & --- \\
+Qwen3.5-27B         & Dense & 27B  & 4{,}096 & 36 & 32 & 8 & 18{,}944 & ---  & --- \\
 Mixtral-8$\times$7B & MoE   & 47B  & 4{,}096 & 32 & 32 & 8 & 14{,}336 & 8    & 2 \\
 gpt-oss-20b         & MoE   & 20B  & 6{,}144 & 52 & 48 & 8 & 16{,}384 & 16   & 4 \\
 gpt-oss-120b        & MoE   & 120B & 6{,}144 & 96 & 48 & 8 & 16{,}384 & 128  & 4 \\
@@ -213,6 +215,8 @@ Llama-3.1-8B        & TP=1            & TP=1            & TP=1, 2 \\
 Llama-3.1-70B       & TP=4            & TP=2, TP=4      & --- \\
 Qwen-2.5-72B        & TP=4            & TP=2, TP=4      & --- \\
 Mixtral-8$\times$7B & TP=4            & TP=2            & --- \\
+Qwen3.5-9B          & ---              & TP=1, TP=2      & --- \\
+Qwen3.5-27B         & ---              & TP=2            & --- \\
 gpt-oss-20b         & TP=2 (MXFP4)    & TP=1, TP=2      & TP=1 \\
 gpt-oss-120b        & TP=8 (MXFP4)    & TP=2 (MXFP4)    & --- \\
 \bottomrule

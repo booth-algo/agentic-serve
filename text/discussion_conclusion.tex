@@ -11,7 +11,7 @@ TP decisions interact with workload profile. For decode-heavy chat workloads, in
 Agent sessions accumulate context across turns, growing KV cache and prefill cost. This makes KV cache-aware scheduling and context-length-dependent routing increasingly important as agents move from single-turn to session-based interaction patterns.
 
 \paragraph{Why kernel-level analysis.}
-The roofline analysis in Section~\ref{sec:roofline} makes the throughput gap actionable: the bottleneck for agentic workloads is prefill GEMM throughput, not decode batching efficiency. This points to chunked prefill, speculative prefill, or dedicated prefill GPUs as the high-leverage optimizations for agentic serving.
+The roofline analysis in Section~\ref{sec:kernel_roofline} makes the throughput gap actionable: the bottleneck for agentic workloads is prefill GEMM throughput, not decode batching efficiency. This points to chunked prefill, speculative prefill, or dedicated prefill GPUs as the high-leverage optimizations for agentic serving.
 
 \paragraph{Limitations.}
 (1)~We evaluate two GPU generations (A100, H100); newer hardware (B200, MI300X) may shift the compute--memory balance.

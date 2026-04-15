@@ -121,8 +121,32 @@ Together, these contributions quantify the chat-to-agentic gap in current infere
 
 \appendix
 
-\section{Additional results}
+\section{Additional Results}
 \label{app:results}
+
+\subsection{A100 and SGLang Comparisons}
+\label{sec:appendix_hw}
+% TODO: Fill from data_r2.json — A100 chat profiles (133 runs) and SGLang comparisons on H100.
+
+\subsection{Concurrency Sweeps for All Models}
+\label{sec:appendix_sweeps}
+% TODO: Fill from data_r2.json — concurrency sweeps for Qwen3.5-9B, Qwen3.5-27B, Mixtral, gpt-oss-20b, gpt-oss-120b.
+
+\subsection{Multi-Turn and Agentic Profiles}
+\label{sec:appendix_multiturn}
+% TODO: Fill from data_r2.json perTurn data — TerminalBench, OSWorld, swebench-multiturn.
+% Llama-8B swebench-mt: 41ms (turn 0) -> 1,877ms (turn 60). gpt-oss-20b: 27ms -> 283ms.
+
+\subsection{Kernel Profiling Across Batch Sizes}
+\label{sec:appendix_scaling}
+% TODO: Fill from parsed roofline data — 48 files across 5 models × 2 phases × 5 batch sizes.
+% Shows how arithmetic intensity shifts with batch size (decode becomes compute-bound at bs>=64).
+
+\subsection{Llama-3.1-70B and Qwen-2.5-72B Results}
+\label{sec:appendix_70b}
+% TODO: Fill from data_r2.json — Llama-70B (258 runs) and Qwen-72B (213 runs).
+% These models appear in the method section model table but are deferred to appendix
+% because Table 1 focuses on a representative subset spanning 8B-120B.
 
 \newpage
 % \input{checklist}
