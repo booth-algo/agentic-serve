@@ -166,6 +166,6 @@ print(f"\nFeature importance:")
 for f, imp in sorted(zip(feat_names, best.feature_importances_), key=lambda x: -x[1])[:10]:
     print(f"  {f:<20}: {imp:.3f}")
 
-with open("llmcompass/profiler/profiles/A100/perop_analytical_v3.pkl", "wb") as f:
+with open("llm_predict/profiling/data/A100/perop_analytical_v3.pkl", "wb") as f:
     pickle.dump({"model": best, "features": feat_names, "compute_fn": "compute_analytical_features"}, f)
 print("\nSaved")

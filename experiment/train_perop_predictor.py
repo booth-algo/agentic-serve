@@ -71,11 +71,11 @@ MODULE_NORM_PRE_OPS   = {"input_layernorm"}
 MODULE_NORM_POST_OPS  = {"post_attention_layernorm"}
 
 ISOLATED_LAYER_PATH = (
-    "/home/kevinlau/llmserve/llmcompass/profiler/profiles/A100/"
+    "/home/kevinlau/llmserve/llm_predict/profiling/data/A100/"
     "layer_latency_training_data.json"
 )
 SAVE_MODEL_PATH = (
-    "/home/kevinlau/llmserve/llmcompass/profiler/profiles/A100/"
+    "/home/kevinlau/llmserve/llm_predict/profiling/data/A100/"
     "perop_predictor.pkl"
 )
 

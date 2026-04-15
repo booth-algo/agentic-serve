@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Path setup — adjust to wherever llmcompass lives relative to this script
+# Path setup — adjust to wherever llm_predict lives relative to this script
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent  # ~/llmserve
@@ -67,12 +67,12 @@ MEASURE_ITERS = 20
 def load_a100_predictor():
     """Load ML predictor pointed at A100 profiles. Falls back to analytical if unavailable."""
     try:
-        import llmcompass.software_model.transformer as transformer_mod
-        from llmcompass.profiler.ml_predictor import KernelPredictor
+        import llm_predict.models.software.transformer as transformer_mod
+        from llm_predict.predictors.per_kernel.predictor import KernelPredictor
 
         # Use relative path (matching how the predictor was trained) for cache key consistency
         # Must be called from REPO_ROOT working directory
-        profiles_dir = "llmcompass/profiler/profiles/A100"
+        profiles_dir = "llm_predict/profiling/data/A100"
         abs_profiles = os.path.join(str(REPO_ROOT), profiles_dir)
         if not os.path.isdir(abs_profiles):
             profiles_dir = abs_profiles  # fall back to absolute
@@ -92,10 +92,10 @@ def load_a100_predictor():
         return False, "analytical"
 
 
-def build_llmcompass_block(tp_size: int, use_ml_predictor: bool):
+def build_predictor_block(tp_size: int, use_ml_predictor: bool):
     """Instantiate TransformerBlockMoETP for gpt-oss-20b."""
-    from llmcompass.software_model.transformer import TransformerBlockMoETP
-    from llmcompass.software_model.utils import data_type_dict
+    from llm_predict.models.software.transformer import TransformerBlockMoETP
+    from llm_predict.models.software.utils import data_type_dict
 
     cfg = MODEL_CONFIG
     block = TransformerBlockMoETP(
@@ -116,7 +116,7 @@ def build_llmcompass_block(tp_size: int, use_ml_predictor: bool):
     return block
 
 
-def run_llmcompass_predictions(tp_size: int):
+def run_predictions(tp_size: int):
     """
     Run LLMCompass predictions for all (phase, batch_size) combos.
     Returns dict: {(phase, bs): latency_ms}
@@ -124,8 +124,8 @@ def run_llmcompass_predictions(tp_size: int):
     print("\n[LLMCompass] Running predictions...")
 
     try:
-        from llmcompass.software_model.utils import data_type_dict, Tensor
-        from llmcompass.design_space_exploration.dse import template_to_system, read_architecture_template
+        from llm_predict.models.software.utils import data_type_dict, Tensor
+        from llm_predict.dse.dse import template_to_system, read_architecture_template
     except ImportError as e:
         print(f"[LLMCompass] ERROR: Could not import LLMCompass: {e}")
         return {}, "unavailable"
@@ -133,10 +133,10 @@ def run_llmcompass_predictions(tp_size: int):
     ml_available, predictor_mode = load_a100_predictor()
 
     # Force-load A100 predictor directly (bypass caching issues)
-    import llmcompass.software_model.transformer as _tmod
-    from llmcompass.profiler.ml_predictor import KernelPredictor as _KP
+    import llm_predict.models.software.transformer as _tmod
+    from llm_predict.predictors.per_kernel.predictor import KernelPredictor as _KP
     _tmod._kernel_predictor = None
-    _a100_pred = _KP("llmcompass/profiler/profiles/A100")
+    _a100_pred = _KP("llm_predict/profiling/data/A100")
     _a100_pred.train_all(force_retrain=False)
     _tmod._kernel_predictor = _a100_pred
     ml_available = True
@@ -145,12 +145,12 @@ def run_llmcompass_predictions(tp_size: int):
     # Try a few common locations for the device config
     config_candidates = [
         os.path.join(str(REPO_ROOT), "device_configs", "GA100.json"),
-        os.path.join(str(REPO_ROOT), "llmcompass", "device_configs", "GA100.json"),
+        os.path.join(str(REPO_ROOT), "device_configs", "GA100.json"),
     ]
     try:
-        import llmcompass
+        import llm_predict
         config_candidates.append(
-            os.path.join(os.path.dirname(llmcompass.__file__), "device_configs", "GA100.json")
+            os.path.join(os.path.dirname(llm_predict.__file__), "device_configs", "GA100.json")
         )
     except Exception:
         pass
@@ -170,7 +170,7 @@ def run_llmcompass_predictions(tp_size: int):
     system = template_to_system(arch_specs)
 
     # Store predictor reference to force-set before each simulation
-    import llmcompass.software_model.transformer as _tmod
+    import llm_predict.models.software.transformer as _tmod
     _a100_predictor = _tmod._kernel_predictor
 
     results = {}
@@ -178,13 +178,13 @@ def run_llmcompass_predictions(tp_size: int):
     for bs in BATCH_SIZES:
         # --- Prefill ---
         try:
-            import llmcompass.software_model.transformer as _tcheck
+            import llm_predict.models.software.transformer as _tcheck
             if _tcheck._kernel_predictor is not None:
                 _pd = getattr(_tcheck._kernel_predictor, 'profiles_dir', 'unknown')
                 if 'A100' not in _pd:
                     print(f"  WARNING: predictor is {_pd}, forcing A100")
                     load_a100_predictor()
-            block = build_llmcompass_block(tp_size, ml_available)
+            block = build_predictor_block(tp_size, ml_available)
             X = Tensor([bs, PREFILL_SEQ_LEN, MODEL_CONFIG["hidden_size"]], data_type_dict["fp16"])
             _ = block(X)
             _tmod._kernel_predictor = _a100_predictor  # ensure A100 predictor
@@ -198,7 +198,7 @@ def run_llmcompass_predictions(tp_size: int):
 
         # --- Decode (seq_len=1) ---
         try:
-            block = build_llmcompass_block(tp_size, ml_available)
+            block = build_predictor_block(tp_size, ml_available)
             X = Tensor([bs, 1, MODEL_CONFIG["hidden_size"]], data_type_dict["fp16"])
             _ = block(X)
             _tmod._kernel_predictor = _a100_predictor  # ensure A100 predictor
@@ -451,7 +451,7 @@ def main():
     measurements = {}
 
     if not args.skip_predict:
-        predictions, predictor_mode = run_llmcompass_predictions(args.tp_size)
+        predictions, predictor_mode = run_predictions(args.tp_size)
 
     if not args.skip_real:
         measurements = run_real_measurements(args.model_path, args.device)

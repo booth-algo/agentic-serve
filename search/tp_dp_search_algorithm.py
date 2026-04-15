@@ -6,9 +6,9 @@ and tensor parallelism arrangement given a fixed number of devices.
 """
 
 from typing import Dict, Tuple, List, Optional, Callable
-from llmcompass.design_space_exploration.dse import template_to_system, read_architecture_template
-from llmcompass.software_model.utils import DataType, data_type_dict
-from llmcompass.hardware_model.system import System
+from llm_predict.dse.dse import template_to_system, read_architecture_template
+from llm_predict.models.software.utils import DataType, data_type_dict
+from llm_predict.models.hardware.system import System
 from search.search_tools import (
     evaluate_dp_tp_config,
     compare_configurations,

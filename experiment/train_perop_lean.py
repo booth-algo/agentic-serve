@@ -133,6 +133,6 @@ feat_names = ["tok","log_tok","d","h","kv","ffn","E","k","is_moe","is_attn","is_
 for f, imp in sorted(zip(feat_names, best.feature_importances_), key=lambda x: -x[1])[:8]:
     print(f"  {f:<15}: {imp:.3f}")
 
-with open("llmcompass/profiler/profiles/A100/perop_predictor_v3.pkl", "wb") as f:
+with open("llm_predict/profiling/data/A100/perop_predictor_v3.pkl", "wb") as f:
     pickle.dump({"model": best, "features": feat_names}, f)
 print("\nSaved model")

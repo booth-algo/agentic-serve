@@ -193,7 +193,7 @@ def main():
                 except: pass
     
     # Save
-    output_path = "/home/kevinlau/llmserve/llmcompass/profiler/profiles/A100/layer_latency_training_data.json"
+    output_path = "/home/kevinlau/llmserve/llm_predict/profiling/data/A100/layer_latency_training_data.json"
     with open(output_path, "w") as f:
         json.dump(all_results, f, indent=2)
     print(f"\nSaved {len(all_results)} data points to {output_path}")

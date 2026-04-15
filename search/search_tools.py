@@ -8,15 +8,15 @@ This module provides functions to:
 """
 
 from typing import Dict, Tuple, List, Optional
-from llmcompass.software_model.parallel_compute_graph import (
+from llm_predict.models.software.parallel_compute_graph import (
     ParallelComputeGraph,
     ParallelismConfig,
     DeviceGroup,
     ParallelismType,
 )
-from llmcompass.software_model.transformer import TransformerBlockInitComputationTP
-from llmcompass.software_model.utils import Tensor, DataType, data_type_dict
-from llmcompass.hardware_model.system import System
+from llm_predict.models.software.transformer import TransformerBlockInitComputationTP
+from llm_predict.models.software.utils import Tensor, DataType, data_type_dict
+from llm_predict.models.hardware.system import System
 
 
 def evaluate_dp_tp_config(

@@ -16,7 +16,7 @@ model_name = os.path.basename(MODEL_PATH)
 WARMUP = 5; REPEAT = 15
 
 # Load predictor
-with open("llmcompass/profiler/profiles/A100/perop_analytical_v4.pkl", "rb") as f:
+with open("llm_predict/profiling/data/A100/perop_analytical_v4.pkl", "rb") as f:
     pred_data = pickle.load(f)
 xgb_model = pred_data["model"]
 

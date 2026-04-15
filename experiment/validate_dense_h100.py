@@ -39,20 +39,20 @@ REPEAT = 20
 
 
 def load_h100_predictor():
-    import llmcompass.software_model.transformer as tmod
-    from llmcompass.profiler.ml_predictor import KernelPredictor
+    import llm_predict.models.software.transformer as tmod
+    from llm_predict.predictors.per_kernel.predictor import KernelPredictor
     tmod._kernel_predictor = None
-    p = KernelPredictor("llmcompass/profiler/profiles/H100")
+    p = KernelPredictor("llm_predict/profiling/data/H100")
     p.train_all(force_retrain=False)
     tmod._kernel_predictor = p
     return p
 
 
 def run_predictions(cfg):
-    from llmcompass.software_model.transformer import TransformerBlockInitComputationTP
-    from llmcompass.software_model.utils import data_type_dict, Tensor
-    from llmcompass.design_space_exploration.dse import template_to_system, read_architecture_template
-    import llmcompass.software_model.transformer as tmod
+    from llm_predict.models.software.transformer import TransformerBlockInitComputationTP
+    from llm_predict.models.software.utils import data_type_dict, Tensor
+    from llm_predict.dse.dse import template_to_system, read_architecture_template
+    import llm_predict.models.software.transformer as tmod
 
     predictor = load_h100_predictor()
     arch = read_architecture_template(os.path.join(str(REPO_ROOT), "device_configs", "GH100.json"))

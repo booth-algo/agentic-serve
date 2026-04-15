@@ -30,17 +30,17 @@ sys.path.insert(0, str(REPO_ROOT))
 # ---------------------------------------------------------------------------
 # LLMCompass imports (must come after sys.path setup)
 # ---------------------------------------------------------------------------
-from llmcompass.software_model.transformer import (
+from llm_predict.models.software.transformer import (
     TransformerBlockAutoRegressionTP,
     TransformerBlockInitComputationTP,
 )
-from llmcompass.software_model.utils import Tensor, data_type_dict
-import llmcompass.software_model.transformer as tmod
-from llmcompass.design_space_exploration.dse import (
+from llm_predict.models.software.utils import Tensor, data_type_dict
+import llm_predict.models.software.transformer as tmod
+from llm_predict.dse.dse import (
     read_architecture_template,
     template_to_system,
 )
-from llmcompass.profiler.ml_predictor import KernelPredictor
+from llm_predict.predictors.per_kernel.predictor import KernelPredictor
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ def _load_predictor() -> tuple:
     global _PREDICTOR, _SYSTEM, _ARCH
     if _PREDICTOR is None:
         # Use relative path so the profiler's cache keys are stable
-        profile_dir = "llmcompass/profiler/profiles/A100"
+        profile_dir = "llm_predict/profiling/data/A100"
         tmod._kernel_predictor = None
         _PREDICTOR = KernelPredictor(profile_dir)
         _PREDICTOR.train_all()

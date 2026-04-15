@@ -75,9 +75,9 @@ print(f"  Per-layer decode:  {statistics.median(tpots)/n_layers:.3f} ms")
 
 # Compare with XGBoost per-layer prediction
 sys.path.insert(0, "/home/kevinlau/llmserve"); os.chdir("/home/kevinlau/llmserve")
-from llmcompass.software_model.utils import data_type_dict, Tensor
-from llmcompass.software_model.transformer import TransformerBlockInitComputationTP, TransformerBlockAutoRegressionTP
-from llmcompass.design_space_exploration.dse import template_to_system, read_architecture_template
+from llm_predict.models.software.utils import data_type_dict, Tensor
+from llm_predict.models.software.transformer import TransformerBlockInitComputationTP, TransformerBlockAutoRegressionTP
+from llm_predict.dse.dse import template_to_system, read_architecture_template
 arch = read_architecture_template("device_configs/GA100.json"); system = template_to_system(arch)
 
 d = config.hidden_size; h = config.num_attention_heads

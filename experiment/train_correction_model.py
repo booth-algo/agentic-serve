@@ -14,20 +14,20 @@ sys.path.insert(0, "/home/kevinlau/llmserve")
 os.chdir("/home/kevinlau/llmserve")
 
 # Load training data
-with open("llmcompass/profiler/profiles/A100/layer_latency_training_data.json") as f:
+with open("llm_predict/profiling/data/A100/layer_latency_training_data.json") as f:
     data = json.load(f)
 df = pd.DataFrame(data)
 
 # Get LLMCompass predictions for each data point
-import llmcompass.software_model.transformer as tmod
+import llm_predict.models.software.transformer as tmod
 tmod._kernel_predictor = None
-from llmcompass.profiler.ml_predictor import KernelPredictor
-p = KernelPredictor("llmcompass/profiler/profiles/A100")
+from llm_predict.predictors.per_kernel.predictor import KernelPredictor
+p = KernelPredictor("llm_predict/profiling/data/A100")
 p.train_all()
 tmod._kernel_predictor = p
-from llmcompass.software_model.transformer import TransformerBlockInitComputationTP, TransformerBlockAutoRegressionTP
-from llmcompass.software_model.utils import data_type_dict, Tensor
-from llmcompass.design_space_exploration.dse import template_to_system, read_architecture_template
+from llm_predict.models.software.transformer import TransformerBlockInitComputationTP, TransformerBlockAutoRegressionTP
+from llm_predict.models.software.utils import data_type_dict, Tensor
+from llm_predict.dse.dse import template_to_system, read_architecture_template
 tmod._kernel_predictor = p
 arch = read_architecture_template("device_configs/GA100.json")
 system = template_to_system(arch)
@@ -57,8 +57,8 @@ for i, row in df.iterrows():
     pred = block.compile_and_simulate(system, "heuristic-GPU") * 1e3
     predictions.append(pred)
 
-df["llmcompass_pred_ms"] = predictions
-df["correction_factor"] = df["latency_ms"] / df["llmcompass_pred_ms"]
+df["predictor_pred_ms"] = predictions
+df["correction_factor"] = df["latency_ms"] / df["predictor_pred_ms"]
 
 print(f"Correction factor stats:")
 print(f"  Mean: {df['correction_factor'].mean():.2f}")
@@ -67,14 +67,14 @@ print(f"  Min:  {df['correction_factor'].min():.2f}")
 print(f"  Max:  {df['correction_factor'].max():.2f}")
 
 # Features: LLMCompass prediction + architecture context
-df["log_pred"] = np.log2(df["llmcompass_pred_ms"] + 0.01)
+df["log_pred"] = np.log2(df["predictor_pred_ms"] + 0.01)
 df["is_decode"] = (df["phase"] == "decode").astype(int)
 df["log_n_tokens"] = np.log2(df["n_tokens"] + 1)
 df["ffn_ratio"] = df["intermediate_size"] / df["d_model"]
 df["gqa_ratio"] = df["n_kv_heads"] / df["n_heads"]
 
 feature_cols = [
-    "llmcompass_pred_ms", "log_pred",
+    "predictor_pred_ms", "log_pred",
     "d_model", "intermediate_size", "n_heads", "n_kv_heads",
     "num_experts", "top_k", "is_decode",
     "batch_size", "seq_len", "n_tokens", "log_n_tokens",
@@ -105,7 +105,7 @@ for name, model in models.items():
     cf_mape = mape_cf(y, train_preds)
     
     # End-to-end latency accuracy
-    corrected_latency = df["llmcompass_pred_ms"].values * train_preds
+    corrected_latency = df["predictor_pred_ms"].values * train_preds
     latency_mape = np.mean(np.abs((df["latency_ms"].values - corrected_latency) / df["latency_ms"].values)) * 100
     
     # CV
@@ -119,7 +119,7 @@ for name, model in models.items():
     for tr, te in logo.split(X, y, groups):
         model.fit(X[tr], y[tr])
         lomo_preds[te] = model.predict(X[te])
-    lomo_corrected = df["llmcompass_pred_ms"].values * lomo_preds
+    lomo_corrected = df["predictor_pred_ms"].values * lomo_preds
     lomo_latency_mape = np.mean(np.abs((df["latency_ms"].values - lomo_corrected) / df["latency_ms"].values)) * 100
     
     # Refit on all data
@@ -132,7 +132,7 @@ for name, model in models.items():
     print(f"  LOMO latency MAPE: {lomo_latency_mape:.1f}% (unseen model generalization)")
 
 # Compare: raw LLMCompass vs corrected
-raw_mape = np.mean(np.abs((df["latency_ms"].values - df["llmcompass_pred_ms"].values) / df["latency_ms"].values)) * 100
+raw_mape = np.mean(np.abs((df["latency_ms"].values - df["predictor_pred_ms"].values) / df["latency_ms"].values)) * 100
 print(f"\n{'='*70}")
 print(f"Raw LLMCompass MAPE: {raw_mape:.1f}%")
 print(f"(This is WITHOUT the 1.45x calibration — using per-kernel ML predictions)")
@@ -141,7 +141,7 @@ print(f"(This is WITHOUT the 1.45x calibration — using per-kernel ML predictio
 best = models["RF"]
 best.fit(X, y)
 final_preds = best.predict(X)
-corrected = df["llmcompass_pred_ms"].values * final_preds
+corrected = df["predictor_pred_ms"].values * final_preds
 
 print(f"\n{'='*70}")
 print(f"Detailed: RF-corrected predictions")
@@ -149,9 +149,9 @@ print(f"{'='*70}")
 print(f"{'Model':>20s} {'Phase':>7s} {'BS':>3s} {'Seq':>5s} {'Meas':>8s} {'Raw':>8s} {'Corr':>8s} {'RawE%':>7s} {'CorrE%':>7s}")
 print("-" * 80)
 for i, row in df.iterrows():
-    raw_err = abs(row["llmcompass_pred_ms"] / row["latency_ms"] - 1) * 100
+    raw_err = abs(row["predictor_pred_ms"] / row["latency_ms"] - 1) * 100
     corr_err = abs(corrected[i] / row["latency_ms"] - 1) * 100
-    print(f"{row['model_name']:>20s} {row['phase']:>7s} {row['batch_size']:>3d} {row['seq_len']:>5d} {row['latency_ms']:>8.3f} {row['llmcompass_pred_ms']:>8.3f} {corrected[i]:>8.3f} {raw_err:>6.1f}% {corr_err:>6.1f}%")
+    print(f"{row['model_name']:>20s} {row['phase']:>7s} {row['batch_size']:>3d} {row['seq_len']:>5d} {row['latency_ms']:>8.3f} {row['predictor_pred_ms']:>8.3f} {corrected[i]:>8.3f} {raw_err:>6.1f}% {corr_err:>6.1f}%")
 
 # Feature importance
 print(f"\nFeature importance (RF correction model):")
@@ -160,6 +160,6 @@ for feat, imp in sorted(zip(feature_cols, best.feature_importances_), key=lambda
         print(f"  {feat:<25s}: {imp:.3f}")
 
 # Save
-with open("llmcompass/profiler/profiles/A100/layer_correction_model.pkl", "wb") as f:
+with open("llm_predict/profiling/data/A100/layer_correction_model.pkl", "wb") as f:
     pickle.dump({"model": best, "features": feature_cols, "type": "correction_factor"}, f)
 print(f"\nSaved correction model")

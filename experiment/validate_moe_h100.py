@@ -67,11 +67,11 @@ MEASURE_ITERS = 20
 
 def load_h100_predictor():
     """Load ML predictor from H100 profiles."""
-    import llmcompass.software_model.transformer as transformer_mod
-    from llmcompass.profiler.ml_predictor import KernelPredictor
+    import llm_predict.models.software.transformer as transformer_mod
+    from llm_predict.predictors.per_kernel.predictor import KernelPredictor
 
-    profiles_dir = "llmcompass/profiler/profiles/H100"
-    print(f"[LLMCompass] Loading H100 ML predictor from {profiles_dir}")
+    profiles_dir = "llm_predict/profiling/data/H100"
+    print(f"[Predict] Loading H100 ML predictor from {profiles_dir}")
     transformer_mod._kernel_predictor = None
     predictor = KernelPredictor(profiles_dir)
     predictor.train_all(force_retrain=False)
@@ -79,10 +79,10 @@ def load_h100_predictor():
     return predictor
 
 
-def build_llmcompass_block(cfg, tp_size=1):
+def build_predictor_block(cfg, tp_size=1):
     """Build TransformerBlockMoETP for a given model config."""
-    from llmcompass.software_model.transformer import TransformerBlockMoETP
-    from llmcompass.software_model.utils import data_type_dict
+    from llm_predict.models.software.transformer import TransformerBlockMoETP
+    from llm_predict.models.software.utils import data_type_dict
 
     block = TransformerBlockMoETP(
         d_model=cfg["hidden_size"],
@@ -104,16 +104,16 @@ def build_llmcompass_block(cfg, tp_size=1):
 
 def run_predictions(cfg, tp_size=1):
     """Run LLMCompass predictions for all (phase, bs, seq) combos."""
-    from llmcompass.software_model.utils import data_type_dict, Tensor
-    from llmcompass.design_space_exploration.dse import template_to_system, read_architecture_template
-    import llmcompass.software_model.transformer as _tmod
+    from llm_predict.models.software.utils import data_type_dict, Tensor
+    from llm_predict.dse.dse import template_to_system, read_architecture_template
+    import llm_predict.models.software.transformer as _tmod
 
     predictor = load_h100_predictor()
 
     # Load H100 system config
     system_config = os.path.join(str(REPO_ROOT), "device_configs", "GH100.json")
     if not os.path.isfile(system_config):
-        print(f"[LLMCompass] ERROR: GH100.json not found")
+        print(f"[Predict] ERROR: GH100.json not found")
         return {}
 
     arch_specs = read_architecture_template(system_config)
@@ -125,7 +125,7 @@ def run_predictions(cfg, tp_size=1):
     for bs in BATCH_SIZES:
         for seq in PREFILL_SEQ_LENS:
             try:
-                block = build_llmcompass_block(cfg, tp_size)
+                block = build_predictor_block(cfg, tp_size)
                 X = Tensor([bs, seq, cfg["hidden_size"]], data_type_dict["fp16"])
                 _ = block(X)
                 _tmod._kernel_predictor = predictor
@@ -140,7 +140,7 @@ def run_predictions(cfg, tp_size=1):
     for bs in BATCH_SIZES:
         for kv_len in DECODE_KV_LENS:
             try:
-                block = build_llmcompass_block(cfg, tp_size)
+                block = build_predictor_block(cfg, tp_size)
                 X = Tensor([bs, 1, cfg["hidden_size"]], data_type_dict["fp16"])
                 _ = block(X)
                 _tmod._kernel_predictor = predictor

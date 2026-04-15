@@ -1,5 +1,5 @@
 """Patch transformer.py: add post-prediction correction for MoE decode and small-seq."""
-filepath = "/home/kevinlau/llmserve/llmcompass/software_model/transformer.py"
+filepath = "llm_predict/models/software/transformer.py"
 with open(filepath, "r") as f:
     content = f.read()
 

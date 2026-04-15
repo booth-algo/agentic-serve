@@ -223,7 +223,7 @@ def main():
         print("  %20s: %.4f" % (f, i))
 
     # Save
-    save_path = "llmcompass/profiler/profiles/A100/perop_analytical_v4.pkl"
+    save_path = "llm_predict/profiling/data/A100/perop_analytical_v4.pkl"
     with open(save_path, "wb") as f:
         pickle.dump({
             "model": xgb, "features": FEAT_NAMES, "version": "v4",

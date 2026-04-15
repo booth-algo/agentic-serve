@@ -8,7 +8,7 @@ Usage:
     python calibrate_dense.py --model-path /data/models/Llama-3.1-8B-Instruct \
         --model-path /data/models/Qwen2.5-72B-Instruct \
         --device cuda:0 \
-        --output llmcompass/profiler/profiles/A100/dense_calibration.json
+        --output llm_predict/profiling/data/A100/dense_calibration.json
 """
 
 import argparse
@@ -23,7 +23,7 @@ import numpy as np
 import torch
 
 # ---------------------------------------------------------------------------
-# Path setup — must happen before any llmcompass imports
+# Path setup — must happen before any llm_predict imports
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
@@ -112,10 +112,10 @@ def measure_isolated_layer(
 # LLMCompass prediction helpers
 # ---------------------------------------------------------------------------
 
-def _init_predictor(profiles_dir: str = "llmcompass/profiler/profiles/A100"):
+def _init_predictor(profiles_dir: str = "llm_predict/profiling/data/A100"):
     """Train and return the ML predictor. Call once."""
-    import llmcompass.software_model.transformer as tmod
-    from llmcompass.profiler.ml_predictor import KernelPredictor
+    import llm_predict.models.software.transformer as tmod
+    from llm_predict.predictors.per_kernel.predictor import KernelPredictor
 
     tmod._kernel_predictor = None
     p = KernelPredictor(profiles_dir)
@@ -141,8 +141,8 @@ def predict_prefill(
     seq: int,
 ) -> float:
     """Return LLMCompass prefill prediction in ms."""
-    from llmcompass.software_model.transformer import TransformerBlockInitComputationTP
-    from llmcompass.software_model.utils import Tensor, data_type_dict
+    from llm_predict.models.software.transformer import TransformerBlockInitComputationTP
+    from llm_predict.models.software.utils import Tensor, data_type_dict
 
     _force_predictor(p, tmod)
     block = TransformerBlockInitComputationTP(
@@ -176,8 +176,8 @@ def predict_decode(
     kv_len: int,
 ) -> float:
     """Return LLMCompass decode prediction in ms."""
-    from llmcompass.software_model.transformer import TransformerBlockAutoRegressionTP
-    from llmcompass.software_model.utils import Tensor, data_type_dict
+    from llm_predict.models.software.transformer import TransformerBlockAutoRegressionTP
+    from llm_predict.models.software.utils import Tensor, data_type_dict
 
     _force_predictor(p, tmod)
     dblock = TransformerBlockAutoRegressionTP(
@@ -534,13 +534,13 @@ def parse_args():
     )
     parser.add_argument(
         "--output",
-        default="llmcompass/profiler/profiles/A100/dense_calibration.json",
+        default="llm_predict/profiling/data/A100/dense_calibration.json",
         help="Output JSON path for calibration constants.",
     )
     parser.add_argument(
         "--profiles-dir",
-        default="llmcompass/profiler/profiles/A100",
-        help="LLMCompass profiles directory (default: llmcompass/profiler/profiles/A100)",
+        default="llm_predict/profiling/data/A100",
+        help="LLMCompass profiles directory (default: llm_predict/profiling/data/A100)",
     )
     parser.add_argument(
         "--warmup",
@@ -573,10 +573,10 @@ def main():
 
     # Initialise LLMCompass predictor once
     print(f"\nInitialising LLMCompass predictor from: {args.profiles_dir}")
-    import llmcompass.software_model.transformer as tmod
+    import llm_predict.models.software.transformer as tmod
     p = _init_predictor(args.profiles_dir)
 
-    from llmcompass.design_space_exploration.dse import (
+    from llm_predict.dse.dse import (
         read_architecture_template,
         template_to_system,
     )
