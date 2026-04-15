@@ -3,9 +3,10 @@ Usage: python validate_model.py <cuda_device> <model_path> [--decode-only] [--pr
 """
 import torch, os, sys, csv, json, statistics, pickle, math
 import numpy as np
-sys.path.insert(0, "/data/kevinlau/python-packages")
-sys.path.insert(0, "/home/kevinlau/llmserve")
-os.chdir("/home/kevinlau/llmserve")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+sys.path.insert(0, REPO_ROOT)
+os.chdir(REPO_ROOT)
 from transformers import AutoConfig, AutoModelForCausalLM
 
 DEVICE = sys.argv[1] if len(sys.argv) > 1 else "cuda:0"

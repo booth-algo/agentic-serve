@@ -1,0 +1,44 @@
+{
+  "model": "gpt-oss-20b",
+  "device": "cuda:0",
+  "hardware": "H100-SXM5-80GB",
+  "arch": {
+    "d": 2880,
+    "h": 64,
+    "kv": 8,
+    "ffn": 2880,
+    "E": 32,
+    "k": 4,
+    "n_layers": 24
+  },
+  "sub_modules": [
+    "self_attn",
+    "mlp",
+    "input_layernorm",
+    "post_attention_layernorm"
+  ],
+  "tok_range": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    32,
+    64,
+    128,
+    256
+  ],
+  "warmup": 5,
+  "repeat": 20
+}

@@ -1,0 +1,236 @@
+{
+  "model": "llama-8b",
+  "hardware": "H100-SXM5-80GB",
+  "arch": {
+    "path": "/workspace/models/Llama-3.1-8B-Instruct",
+    "d": 4096,
+    "h": 32,
+    "kv": 8,
+    "ffn": 14336,
+    "layers": 32
+  },
+  "results": [
+    {
+      "phase": "prefill",
+      "bs": 1,
+      "seq_kv": 64,
+      "pred_ms": 0.656,
+      "meas_ms": 0.566,
+      "ratio": 1.159,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 1,
+      "seq_kv": 128,
+      "pred_ms": 0.631,
+      "meas_ms": 0.58,
+      "ratio": 1.088,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 1,
+      "seq_kv": 256,
+      "pred_ms": 0.689,
+      "meas_ms": 0.586,
+      "ratio": 1.176,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 1,
+      "seq_kv": 512,
+      "pred_ms": 0.866,
+      "meas_ms": 0.693,
+      "ratio": 1.249,
+      "rating": "OK"
+    },
+    {
+      "phase": "prefill",
+      "bs": 1,
+      "seq_kv": 1024,
+      "pred_ms": 1.272,
+      "meas_ms": 0.96,
+      "ratio": 1.325,
+      "rating": "BAD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 4,
+      "seq_kv": 64,
+      "pred_ms": 0.688,
+      "meas_ms": 0.58,
+      "ratio": 1.186,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 4,
+      "seq_kv": 128,
+      "pred_ms": 0.86,
+      "meas_ms": 0.696,
+      "ratio": 1.235,
+      "rating": "OK"
+    },
+    {
+      "phase": "prefill",
+      "bs": 4,
+      "seq_kv": 256,
+      "pred_ms": 1.245,
+      "meas_ms": 0.935,
+      "ratio": 1.332,
+      "rating": "BAD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 4,
+      "seq_kv": 512,
+      "pred_ms": 2.021,
+      "meas_ms": 1.844,
+      "ratio": 1.096,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 4,
+      "seq_kv": 1024,
+      "pred_ms": 3.801,
+      "meas_ms": 3.697,
+      "ratio": 1.028,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 8,
+      "seq_kv": 64,
+      "pred_ms": 0.858,
+      "meas_ms": 0.694,
+      "ratio": 1.236,
+      "rating": "OK"
+    },
+    {
+      "phase": "prefill",
+      "bs": 8,
+      "seq_kv": 128,
+      "pred_ms": 1.24,
+      "meas_ms": 0.936,
+      "ratio": 1.324,
+      "rating": "BAD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 8,
+      "seq_kv": 256,
+      "pred_ms": 2.009,
+      "meas_ms": 1.832,
+      "ratio": 1.096,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 8,
+      "seq_kv": 512,
+      "pred_ms": 3.727,
+      "meas_ms": 3.695,
+      "ratio": 1.009,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "prefill",
+      "bs": 8,
+      "seq_kv": 1024,
+      "pred_ms": 7.181,
+      "meas_ms": 7.424,
+      "ratio": 0.967,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "decode",
+      "bs": 1,
+      "seq_kv": 256,
+      "pred_ms": 0.643,
+      "meas_ms": 0.577,
+      "ratio": 1.115,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "decode",
+      "bs": 1,
+      "seq_kv": 512,
+      "pred_ms": 0.643,
+      "meas_ms": 0.579,
+      "ratio": 1.11,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "decode",
+      "bs": 1,
+      "seq_kv": 1024,
+      "pred_ms": 0.643,
+      "meas_ms": 0.575,
+      "ratio": 1.117,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "decode",
+      "bs": 4,
+      "seq_kv": 256,
+      "pred_ms": 0.64,
+      "meas_ms": 0.581,
+      "ratio": 1.102,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "decode",
+      "bs": 4,
+      "seq_kv": 512,
+      "pred_ms": 0.64,
+      "meas_ms": 0.579,
+      "ratio": 1.105,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "decode",
+      "bs": 4,
+      "seq_kv": 1024,
+      "pred_ms": 0.64,
+      "meas_ms": 0.581,
+      "ratio": 1.101,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "decode",
+      "bs": 8,
+      "seq_kv": 256,
+      "pred_ms": 0.639,
+      "meas_ms": 0.582,
+      "ratio": 1.098,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "decode",
+      "bs": 8,
+      "seq_kv": 512,
+      "pred_ms": 0.639,
+      "meas_ms": 0.58,
+      "ratio": 1.102,
+      "rating": "GOOD"
+    },
+    {
+      "phase": "decode",
+      "bs": 8,
+      "seq_kv": 1024,
+      "pred_ms": 0.639,
+      "meas_ms": 0.582,
+      "ratio": 1.098,
+      "rating": "GOOD"
+    }
+  ],
+  "summary": {
+    "good": 18,
+    "ok": 3,
+    "bad": 3,
+    "total": 24
+  }
+}

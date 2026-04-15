@@ -47,7 +47,7 @@
                 "SRAM_KB": 256
             }
         },
-        "memory_protocol": "HBM2e",
+        "memory_protocol": "HBM3",
         "_memory_protocol_list": [
             "HBM2e",
             "HBM3",
@@ -64,7 +64,7 @@
             "memory_channel_physical_count": 6,
             "memory_channel_active_count": 5,
             "pin_count_per_channel": 1024,
-            "bandwidth_per_pin_bit": 3.2e9
+            "bandwidth_per_pin_bit": 5.24e9
         },
         "memory": {
             "total_capacity_GB": 80
