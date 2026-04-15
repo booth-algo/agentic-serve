@@ -5,8 +5,32 @@ We benchmark 6 LLMs , with parameters spanning from 8B to 120B. We covered dense
 
 \subsection{Serving Performance Across Workload Profiles}
 \label{sec:workload_gap}
-
-Figure 1  reports time to first token at saturation (TTFT) for 6 models across multiple tasks, short chats, agentic and artificial prefill heavy workloads. LLama 3.1-8B serves short chats at a median time for 282ms. This rises to 598 ms (2.1x) under agentic coding use, with synthetic prefill workloads reaching 85,242ms (293x). Larger dense models reveal similar patterns. Qwen 3.5 - 9B and Qwen 3.5 - 27B show 3.0 x and 3.3 x increased TTFT in agentic coding use compared to chats.  Latency increases to 129 x and 190 x respectively under artificial loads. Mixture of experts (MoE) architectures activate a are visible with gpt-oss -20B reaching 1.8 x and  26 x  for agentic coding and synthetic prefill use when compared to short chats respectively. Yet,  Mixtral -8x7B shows the largest capacity reduction at 23 x , serving  1.5 req/s under synthetic prefill workloads compared to 35.3 req/s in short chats. (maybe add req/s into table).
+\begin{table}[t]
+     \caption{Time to first token (TTFT) and request throughput at saturation for single-turn workloads on H100-SXM5-80GB GPUs using vLLM v0.19 in bf16 precision with prefix caching enabled.
+     \textit{Saturation} denotes the concurrency level at which output token throughput peaks. Workload profiles: \texttt{chat-short} uses ShareGPT conversations (ISL\,$\leq$\,500, OSL\,$\leq$\,300);
+     \texttt{coding-agent} uses real SWE-Bench coding traces (ISL\,$\approx$\,17{,}000, OSL\,$\approx$\,800); \texttt{pf-heavy} is a synthetic prefill stress test (ISL\,=\,8{,}192, OSL\,=\,256).
+     Gap\textsubscript{C} and Gap\textsubscript{P} report the TTFT ratio relative to \texttt{chat-short}. Cap$\downarrow$ reports the serving capacity reduction (chat-short req/s\,$\div$\,pf-heavy req/s).}
+     \label{tab:ttft-saturation}
+     \centering
+     \small
+     \setlength{\tabcolsep}{3.5pt}
+     \begin{tabular}{@{}llc rrr cc rr c@{}}
+     \toprule
+      & & & \multicolumn{3}{c}{\textbf{TTFT at Saturation (ms)}} & \multicolumn{2}{c}{\textbf{Gap}} & \multicolumn{2}{c}{\textbf{Capacity (req/s)}} & \\
+     \cmidrule(lr){4-6} \cmidrule(lr){7-8} \cmidrule(lr){9-10}
+     \textbf{Model} & \textbf{Arch} & \textbf{TP} & \texttt{chat} & \texttt{code} & \texttt{pf} & \textbf{C} & \textbf{P} & \texttt{chat} & \texttt{pf} & \textbf{Cap$\downarrow$} \\
+     \midrule
+     Llama-3.1-8B   & Dense & 1 &    282 &     598 &  82{,}542 & 2.1$\times$ & 293$\times$ & 55.1 & 3.0 & 18$\times$ \\
+     Qwen3.5-9B     & Dense & 1 &    533 &   1{,}583 &  68{,}615 & 3.0$\times$ & 129$\times$ & 23.8 & 2.7 &  9$\times$ \\
+     Qwen3.5-27B    & Dense & 2 &    876 &   2{,}926 & 166{,}389 & 3.3$\times$ & 190$\times$ & 16.4 & 1.6 & 10$\times$ \\
+     \midrule
+     Mixtral-8$\times$7B & MoE & 2 &    400 & \textemdash & 187{,}183 & \textemdash & 467$\times$ & 35.3 & 1.5 & 23$\times$ \\
+     gpt-oss-20b    & MoE   & 1 &  1{,}247 &   2{,}272 &  31{,}950 & 1.8$\times$ &  26$\times$ & 46.6 & 4.5 & 10$\times$ \\
+     gpt-oss-120b   & MoE   & 2 &    519 &   2{,}905 &  38{,}307 & 5.6$\times$ &  74$\times$ & 33.7 & 4.3 &  8$\times$ \\
+     \bottomrule
+     \end{tabular}
+     \end{table}
+Figure 1  reports time to first token at saturation (TTFT) for 6 models across multiple tasks, short chats, agentic and artificial prefill heavy workloads. LLama 3.1-8B serves short chats at a median time for 282ms. This rises to 598 ms (2.1x) under agentic coding use, with synthetic prefill workloads reaching 85,242ms (293x). Larger dense models reveal similar patterns. Qwen 3.5 - 9B and Qwen 3.5 - 27B show 3.0 x and 3.3 x increased TTFT in agentic coding use compared to chats.  Latency increases to 129 x and 190 x respectively under artificial loads. Mixture of experts (MoE) architectures activate a fraction of total parameters per token, show smaller synthetic gaps. Gpt-oss -20B reaches 1.8 x and  26 x  for agentic coding and synthetic prefill use when compared to short chats respectively. Yet,  Mixtral -8x7B shows the largest capacity reduction at 23 x , serving  1.5 req/s under synthetic prefill workloads compared to 35.3 req/s in short chats. (maybe add req/s into table).
 
 Table 2 reports TTFT and TPOT across concurrency levels 1 to 320 for Llama-3.1-8B on A100. TTFT grows 6× under load, from 33 ms at concurrency 1 to 200 ms at concurrency 120. TPOT, by contrast, remains flat: 12.8 ms at concurrency 1 and 16.0 ms at concurrency 120 — a 1.25× increase over a 120× increase in concurrent requests. Throughput saturates between concurrency 40 and 120 at approximately 1,650 output tok/s for chat-short.
 
