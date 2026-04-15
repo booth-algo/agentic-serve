@@ -30,7 +30,7 @@ gpt-oss-120b   & MoE   & 2 &    519 &   2{,}905 &  38{,}307 & 5.6$\times$ &  74$
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:ttft-saturation} reports time to first token at saturation for six models across chat, agentic, and synthetic prefill-heavy workloads. Llama-3.1-8B serves chat-short with a median TTFT of 282\,ms, rising to 598\,ms under real coding-agent traces (2.1$\times$) and 82{,}542\,ms under synthetic prefill-heavy load (293$\times$). Dense models at larger scale show 3.0$\times$ and 3.3$\times$ gaps under real traces, and 129$\times$ and 190$\times$ under synthetic load. MoE models show a smaller synthetic gap---gpt-oss-20b reaches 26$\times$---but gpt-oss-120b exhibits the largest coding-agent gap at 5.6$\times$. Mixtral-8$\times$7B shows the largest capacity reduction at 23$\times$, serving 1.5\,req/s under prefill-heavy compared to 35.3\,req/s under chat. Across all architectures, prefill-heavy workloads reduce serving capacity by 8--23$\times$.
+Table~\ref{tab:ttft-saturation} reports time to first token at saturation for six models across chat, agentic, and synthetic prefill-heavy workloads. Llama-3.1-8B serves chat-short with a median TTFT of 282\,ms, rising to 598\,ms under real coding-agent traces (2.1$\times$) and 82{,}542\,ms under synthetic prefill-heavy load (293$\times$). Dense models at larger scale show 3.0$\times$ and 3.3$\times$ gaps under real traces, and 129$\times$ and 190$\times$ under synthetic load. MoE models show a smaller synthetic gap; gpt-oss-20b reaches 26$\times$, while gpt-oss-120b exhibits the largest coding-agent gap at 5.6$\times$. Mixtral-8$\times$7B shows the largest capacity reduction at 23$\times$, serving 1.5\,req/s under prefill-heavy compared to 35.3\,req/s under chat. Across all architectures, prefill-heavy workloads reduce serving capacity by 8--23$\times$.
 
 \begin{table}[t]
 \caption{Latency and throughput under increasing concurrency for Llama-3.1-8B (TP\,=\,1) on H100-SXM5-80GB using vLLM v0.19 in bf16 precision. Each row reports median (p50) and 99th-percentile (p99) TTFT, median TPOT, median end-to-end latency (E2EL), output token throughput, and request throughput. \texttt{chat-short}: ShareGPT conversations (ISL\,$\leq$\,500, OSL\,$\leq$\,300). \texttt{coding-agent}: real SWE-Bench coding traces (ISL\,$\approx$\,17{,}000, OSL\,$\approx$\,800). Concurrency denotes simultaneous in-flight requests. Concurrency sweeps for all six models are reported in Appendix~\ref{sec:appendix_sweeps}.}
@@ -61,13 +61,15 @@ coding-agent & 320 & 597.8 & 4{,}750.5 & 56.9 & 18{,}046 &  4{,}904 & 15.03 \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:concurrency-sweep} reports latency and throughput across concurrency levels 1 to 320 for Llama-3.1-8B on H100 under chat-short and coding-agent workloads. Chat-short TTFT remains under 300\,ms across the full sweep; coding-agent reaches 823\,ms by concurrency 120. TPOT is identical at concurrency 1 (6.2\,ms vs 6.5\,ms) but diverges to 2.3$\times$ at concurrency 80 (8.0\,ms vs 18.1\,ms). Coding-agent throughput plateaus at 4{,}904\,tok/s---1.9$\times$ below chat-short's 9{,}327\,tok/s ceiling---serving 3.7$\times$ fewer requests at saturation.
+Table~\ref{tab:concurrency-sweep} reports latency and throughput across concurrency levels 1 to 320 for Llama-3.1-8B on H100 under chat-short and coding-agent workloads. Chat-short TTFT remains under 300\,ms across the full sweep; coding-agent reaches 823\,ms by concurrency 120. TPOT is identical at concurrency 1 (6.2\,ms vs 6.5\,ms) but diverges to 2.3$\times$ at concurrency 80 (8.0\,ms vs 18.1\,ms). Coding-agent throughput plateaus at 4{,}904\,tok/s, 1.9$\times$ below chat-short's 9{,}327\,tok/s ceiling, serving 3.7$\times$ fewer requests at saturation.
 
 
 \subsection{Kernel-Level Roofline Analysis}
 \label{sec:kernel_roofline}
 
-\begin{table}[t]
+Table~\ref{tab:kernel-roofline} reports per-kernel time and arithmetic intensity for two-layer forward passes of Llama-3.1-8B and gpt-oss-20b at batch size 1 and sequence length 512. Prefill GEMMs in Llama-8B reach AI\,=\,1{,}764 and achieve 785\,TFLOPS, 6$\times$ above the H100 ridge point. Decode GEMMs on the same weights sit at AI\,=\,4.0 and 2.9\,TFLOPS; every kernel category in decode is memory-bound. gpt-oss-20b generates 63\% more kernels per forward pass (83 vs 51), with elementwise operations accounting for 52.4\% of prefill time compared to 35.8\% in the dense model. Prefill operates in the compute-bound regime; decode operates in the memory-bound regime. The serving-level gap reported in Table~\ref{tab:ttft-saturation} corresponds to the time each request spends in each regime. Figure~\ref{fig:roofline} visualises this separation across all five profiled models.
+
+\begin{table}[H]
 \caption{Per-kernel profiling of two-layer forward passes for Llama-3.1-8B (dense, 51 kernels) and gpt-oss-20b (MoE, 83 kernels) on H100-SXM5-80GB at batch size 1 and sequence length 512, collected with PyTorch Profiler. Arithmetic intensity (AI) is FLOPs per byte of memory traffic. The H100 bf16 ridge point is AI\,=\,295 (989\,TFLOPS\,$\div$\,3{,}352\,GB/s); kernels above this threshold are compute-bound. Batch size 1 at sequence length 512 represents the per-request prefill regime; scaling across batch sizes is reported in Appendix~\ref{sec:appendix_scaling}. Minor categories ($<$3\% each: reduce, indexing, rope) are omitted; displayed percentages are computed against the full total.}
 \label{tab:kernel-roofline}
 \centering
@@ -108,12 +110,10 @@ gpt-oss-20b & other       &   109   &  6.6 &  \textemdash & \textemdash & memory
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:kernel-roofline} reports per-kernel time and arithmetic intensity for two-layer forward passes of Llama-3.1-8B and gpt-oss-20b at batch size 1 and sequence length 512. Prefill GEMMs in Llama-8B reach AI\,=\,1{,}764 and achieve 785\,TFLOPS---6$\times$ above the H100 ridge point. Decode GEMMs on the same weights sit at AI\,=\,4.0 and 2.9\,TFLOPS; every kernel category in decode is memory-bound. gpt-oss-20b generates 63\% more kernels per forward pass (83 vs 51), with elementwise operations accounting for 52.4\% of prefill time compared to 35.8\% in the dense model. Prefill operates in the compute-bound regime; decode operates in the memory-bound regime. The serving-level gap reported in Table~\ref{tab:ttft-saturation} corresponds to the time each request spends in each regime.
-
 \begin{figure}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/roofline_h100.pdf}
-    \caption{Roofline analysis of LLM inference kernels on H100-SXM5-80GB (bf16) at batch size 1, sequence length 512. Prefill GEMMs (red) cluster above the ridge point (AI\,$>$\,295, compute-bound, achieving 650--785\,TFLOPS). Decode GEMMs (blue) cluster below (AI\,$<$\,10, memory-bound, achieving 1--3\,TFLOPS). Each dot represents one kernel invocation; 420 kernels across five models (Llama-8B, Llama-70B, Qwen-72B, Qwen3-32B, gpt-oss-20b) are plotted. Table~\ref{tab:kernel-roofline} reports detailed breakdowns for two representative models.}
+    \caption{Roofline analysis of LLM inference kernels on H100-SXM5-80GB (bf16) at batch size 1, sequence length 512. Prefill GEMMs (red) cluster above the ridge point (AI\,$>$\,295, compute-bound, achieving 650--785\,TFLOPS). Decode GEMMs (blue) cluster below (AI\,$<$\,10, memory-bound, achieving 1--3\,TFLOPS). 420 kernels across five models (Llama-8B, Llama-70B, Qwen-72B, Qwen3-32B, gpt-oss-20b) are plotted. Table~\ref{tab:kernel-roofline} reports detailed breakdowns for two representative models.}
     \label{fig:roofline}
 \end{figure}
 
@@ -121,17 +121,10 @@ Table~\ref{tab:kernel-roofline} reports per-kernel time and arithmetic intensity
 \subsection{Per-Kernel Latency Prediction}
 \label{sec:predictor}
 
-% BLOCKED: Awaiting per-kernel predictor validation results from code audit.
-% Table 4 will report: per-kernel XGBoost predictor accuracy (MAE, MAPE, R^2)
-% by kernel type and GPU, validated on held-out shapes.
-% Data source: experiment/ directory in the main repo (booth-algo/agentic-serve).
+The per-kernel and per-operator XGBoost predictors described in Section~\ref{sec:perop_method} are trained on the profiling data from Section~\ref{sec:kernel_roofline}. Validation results (held-out shape accuracy, MAE, MAPE, $R^2$ by kernel type) are pending a code audit of the predictor pipeline and will be reported in a subsequent revision.
 
 
 \subsection{End-to-End Prediction and Generalisation}
 \label{sec:e2e_prediction}
 
-% BLOCKED: Awaiting composed E2E prediction results from predictor pipeline.
-% Table 5 will report: predicted vs measured E2E latency (TTFT, TPOT, throughput)
-% with error percentages for training models and unseen models.
-% Table 6 will report: TP prediction accuracy.
-% Figure 3 (headline): predicted-vs-measured scatter plot across models and configurations.
+Composed end-to-end predictions (analytical summation of per-kernel estimates over a model's layer graph) and generalisation to unseen models and tensor-parallel configurations depend on the validated predictors from Section~\ref{sec:predictor}. The predicted-vs-measured scatter plot and per-model error breakdown will be reported once the predictor pipeline is verified.
