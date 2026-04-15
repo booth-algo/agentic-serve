@@ -1,0 +1,99 @@
+name: Rebuild Dashboard Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Also deploy dashboard after rebuild'
+        type: boolean
+        default: true
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    env:
+      R2_ENDPOINT: https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dashboard dependencies
+        working-directory: inference-benchmark/dashboard
+        run: npm ci
+
+      - name: Download results from R2
+        working-directory: inference-benchmark
+        run: |
+          pip install -q awscli
+          mkdir -p results
+          aws s3 sync s3://agent-bench/results/ results/ \
+            --endpoint-url $R2_ENDPOINT
+          echo "Downloaded $(find results -name '*.json' | wc -l) result files"
+
+      - name: Build data.json
+        working-directory: inference-benchmark
+        run: npx tsx dashboard/scripts/build-data.ts
+
+      - name: Upload data.json to R2
+        working-directory: inference-benchmark
+        run: |
+          aws s3 cp dashboard/public/data.json s3://agent-bench/data.json \
+            --endpoint-url $R2_ENDPOINT
+          echo "Uploaded data.json ($(du -h dashboard/public/data.json | cut -f1))"
+
+      - name: Upload roofline-quadrant.json to R2
+        working-directory: inference-benchmark
+        run: |
+          if [ -f dashboard/public/roofline-quadrant.json ]; then
+            aws s3 cp dashboard/public/roofline-quadrant.json s3://agent-bench/roofline-quadrant.json \
+              --endpoint-url $R2_ENDPOINT
+            echo "Uploaded roofline-quadrant.json"
+          fi
+
+  deploy:
+    needs: rebuild
+    if: ${{ inputs.deploy }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: inference-benchmark/dashboard
+        run: npm ci
+
+      - name: Build dashboard
+        working-directory: inference-benchmark/dashboard
+        run: npm run build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: inference-benchmark/dashboard/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
