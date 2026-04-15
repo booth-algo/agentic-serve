@@ -66,48 +66,47 @@ Table~\ref{tab:concurrency-sweep} reports latency and throughput across concurre
 \subsection{Kernel Level Roofline Analysis}
 \label{sec:latency}
 \begin{table}[t]
-     \caption{Per-kernel profiling of two-layer forward passes for Llama-3.1-8B (dense) and gpt-oss-20b (MoE) on H100-SXM5-80GB at batch size 1 and sequence length 512, collected with PyTorch Profiler.
-     Arithmetic intensity (AI) is FLOPs per byte of memory traffic. The H100 bf16 ridge point is AI\,=\,295 (989\,TFLOPS\,$\div$\,3{,}352\,GB/s); kernels above this threshold are compute-bound.
-     \texttt{moe-routing} is unique to the MoE architecture.}
-     \label{tab:kernel-roofline}
-     \centering
-     \small
-     \setlength{\tabcolsep}{3.5pt}
-     \begin{tabular}{@{}ll rr rr l@{}}
-     \toprule
-     \textbf{Model} & \textbf{Category} & \textbf{Time ($\mu$s)} & \textbf{\% Total} & \textbf{Peak AI} & \textbf{Peak TFLOPS} & \textbf{Regime} \\
-     \midrule
-     \multicolumn{7}{@{}l}{\textit{Prefill}} \\
-     \midrule
-     Llama-8B    & gemm        &   679 & 44.4 & 1{,}764 & 785 & compute \\
-     Llama-8B    & elementwise &   548 & 35.8 &     0.5 & 1.7 & memory  \\
-     Llama-8B    & attention   &    87 &  5.7 &     256 &  99 & compute \\
-     Llama-8B    & memory      &   120 &  7.8 &  \textemdash & \textemdash & memory  \\
-     Llama-8B    & other       &    96 &  6.3 &  \textemdash & \textemdash & memory  \\
-     \cmidrule(lr){1-7}
-     gpt-oss-20b & gemm        & 2{,}395 & 25.6 & 3{,}437 & 756 & compute \\
-     gpt-oss-20b & elementwise & 4{,}896 & 52.4 &     0.5 & 1.7 & memory  \\
-     gpt-oss-20b & memory      &   706   &  7.5 &  \textemdash & \textemdash & memory  \\
-     gpt-oss-20b & other       &   853   &  9.1 &  \textemdash & \textemdash & memory  \\
-     gpt-oss-20b & softmax     &   173   &  1.9 &  \textemdash & \textemdash & memory  \\
-     \midrule
-     \multicolumn{7}{@{}l}{\textit{Decode}} \\
-     \midrule
-     Llama-8B    & gemm        &   349 & 54.7 &     4.0 & 2.9 & memory  \\
-     Llama-8B    & elementwise &   195 & 30.6 &     0.5 & 1.7 & memory  \\
-     Llama-8B    & attention   &    21 &  3.3 &     1.0 & 0.8 & memory  \\
-     Llama-8B    & memory      &    43 &  6.7 &  \textemdash & \textemdash & memory  \\
-     Llama-8B    & other       &    30 &  4.7 &  \textemdash & \textemdash & memory  \\
-     \cmidrule(lr){1-7}
-     gpt-oss-20b & gemm        & 1{,}124 & 68.7 &   150 & 3.1 & memory  \\
-     gpt-oss-20b & elementwise &   317   & 19.4 &   0.5 & 1.7 & memory  \\
-     gpt-oss-20b & moe-routing &    27   &  1.7 &  \textemdash & \textemdash & memory  \\
-     gpt-oss-20b & memory      &    59   &  3.6 &  \textemdash & \textemdash & memory  \\
-     gpt-oss-20b & other       &   109   &  6.6 &  \textemdash & \textemdash & memory  \\
-     \bottomrule
-     \end{tabular}
-     \end{table}
-     
+\caption{Per-kernel profiling of two-layer forward passes for Llama-3.1-8B (dense) and gpt-oss-20b (MoE) on H100-SXM5-80GB at batch size 1 and sequence length 512, collected with PyTorch Profiler.
+Arithmetic intensity (AI) is FLOPs per byte of memory traffic. The H100 bf16 ridge point is AI\,=\,295 (989\,TFLOPS\,$\div$\,3{,}352\,GB/s); kernels above this threshold are compute-bound.
+\texttt{moe-routing} is unique to the MoE architecture.}
+\label{tab:kernel-roofline}
+\centering
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}ll rr rr l@{}}
+\toprule
+\textbf{Model} & \textbf{Category} & \textbf{Time ($\mu$s)} & \textbf{\% Total} & \textbf{Peak AI} & \textbf{Peak TFLOPS} & \textbf{Regime} \\
+\midrule
+\multicolumn{7}{@{}l}{\textit{Prefill}} \\
+\midrule
+Llama-8B    & gemm        &   679 & 44.4 & 1{,}764 & 785 & compute \\
+Llama-8B    & elementwise &   548 & 35.8 &     0.5 & 1.7 & memory  \\
+Llama-8B    & attention   &    87 &  5.7 &     256 &  99 & compute \\
+Llama-8B    & memory      &   120 &  7.8 &  \textemdash & \textemdash & memory  \\
+Llama-8B    & other       &    96 &  6.3 &  \textemdash & \textemdash & memory  \\
+\cmidrule(lr){1-7}
+gpt-oss-20b & gemm        & 2{,}395 & 25.6 & 3{,}437 & 756 & compute \\
+gpt-oss-20b & elementwise & 4{,}896 & 52.4 &     0.5 & 1.7 & memory  \\
+gpt-oss-20b & memory      &   706   &  7.5 &  \textemdash & \textemdash & memory  \\
+gpt-oss-20b & other       &   853   &  9.1 &  \textemdash & \textemdash & memory  \\
+gpt-oss-20b & softmax     &   173   &  1.9 &  \textemdash & \textemdash & memory  \\
+\midrule
+\multicolumn{7}{@{}l}{\textit{Decode}} \\
+\midrule
+Llama-8B    & gemm        &   349 & 54.7 &     4.0 & 2.9 & memory  \\
+Llama-8B    & elementwise &   195 & 30.6 &     0.5 & 1.7 & memory  \\
+Llama-8B    & attention   &    21 &  3.3 &     1.0 & 0.8 & memory  \\
+Llama-8B    & memory      &    43 &  6.7 &  \textemdash & \textemdash & memory  \\
+Llama-8B    & other       &    30 &  4.7 &  \textemdash & \textemdash & memory  \\
+\cmidrule(lr){1-7}
+gpt-oss-20b & gemm        & 1{,}124 & 68.7 &   150 & 3.1 & memory  \\
+gpt-oss-20b & elementwise &   317   & 19.4 &   0.5 & 1.7 & memory  \\
+gpt-oss-20b & moe-routing &    27   &  1.7 &  \textemdash & \textemdash & memory  \\
+gpt-oss-20b & memory      &    59   &  3.6 &  \textemdash & \textemdash & memory  \\
+gpt-oss-20b & other       &   109   &  6.6 &  \textemdash & \textemdash & memory  \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Tensor Parallelism}
 \label{sec:tp_scaling}
