@@ -1,6 +1,6 @@
 """Calibration layer: cross-cutting corrections applied to any predictor tier.
 
-Unlike the per-tier predictors (per_op, per_category, per_kernel) which estimate
+Unlike the per-tier predictors (per_op, per_kernel) which estimate
 raw kernel/op latencies, the calibration layer models *second-order* effects that
 apply regardless of tier:
 

@@ -1,16 +1,12 @@
 """
-PredictorDispatch: tries per-kernel XGBoost first, falls back to per-category
-RandomForest, then to analytical roofline.
+PredictorDispatch: tries per-kernel XGBoost first, falls back to analytical
+roofline.
 
 Tiers from finest to coarsest:
   1. Per-kernel (XGBoost, shape-only, ncu ground truth) — trained in Phase A
      of the NeurIPS 2026 submission; held-out aggregate layer MAPE ~4%
-  2. Per-category (RandomForest, isolated kernel benchmarks) — gemm +
-     attn_prefill + attn_decode + elementwise RFs per GPU
-  3. Analytical roofline — always available, least accurate
+  2. Analytical roofline — always available, least accurate
 """
-
-import os
 
 
 class PredictorDispatch:
@@ -26,7 +22,6 @@ class PredictorDispatch:
         """
         self.gpu = gpu
         self._per_kernel_predictor = None
-        self._category_predictor = None
         self._perop_predictor = None
 
     # ------------------------------------------------------------------
@@ -41,25 +36,6 @@ class PredictorDispatch:
         if p.load():
             self._per_kernel_predictor = p
         return self._per_kernel_predictor
-
-    def _load_category_predictor(self):
-        if self._category_predictor is not None:
-            return self._category_predictor
-        from llm_predict.predictors.per_category.predictor import CategoryPredictor
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        profiles_dir = os.path.join(base, 'profiling', 'data', self.gpu)
-        if not os.path.isdir(profiles_dir):
-            return None
-        predictor = CategoryPredictor(
-            profiles_dir=profiles_dir,
-            cache_dir=os.path.join(profiles_dir, 'trained'),
-        )
-        try:
-            predictor.train_all()
-            self._category_predictor = predictor
-        except Exception:
-            pass
-        return self._category_predictor
 
     def _load_perop_predictor(self):
         if self._perop_predictor is not None:
@@ -84,14 +60,7 @@ class PredictorDispatch:
             if result_ms >= 0:
                 return result_ms / 1e3
 
-        # Tier 2: per-category (returns ns)
-        cp = self._load_category_predictor()
-        if cp is not None and cp.is_trained():
-            result_ns = cp.predict_gemm(M, N, K)
-            if result_ns >= 0:
-                return result_ns / 1e9
-
-        # Tier 3: Analytical roofline (already seconds)
+        # Tier 2: Analytical roofline (already seconds)
         if hbm_bandwidth and peak_flops:
             return _roofline_gemm(M, N, K, hbm_bandwidth, peak_flops)
         return -1.0
@@ -107,12 +76,6 @@ class PredictorDispatch:
             if result_ms >= 0:
                 return result_ms / 1e3
 
-        cp = self._load_category_predictor()
-        if cp is not None and cp.is_trained():
-            result_ns = cp.predict_attention_prefill(batch, seq_len, n_heads, head_dim)
-            if result_ns >= 0:
-                return result_ns / 1e9
-
         if hbm_bandwidth and peak_flops:
             return _roofline_attn_prefill(batch, seq_len, n_heads, head_dim,
                                           hbm_bandwidth, peak_flops)
@@ -125,14 +88,8 @@ class PredictorDispatch:
         """Predict decode attention latency in seconds.
 
         Note: per-kernel predictor has no decode-attention family yet (training
-        data was all prefill); falls through to per-category decode RF.
+        data was all prefill); falls straight through to analytical roofline.
         """
-        cp = self._load_category_predictor()
-        if cp is not None and cp.is_trained():
-            result_ns = cp.predict_attention_decode(batch, kv_len, n_heads, head_dim)
-            if result_ns >= 0:
-                return result_ns / 1e9
-
         if hbm_bandwidth and peak_flops:
             return _roofline_attn_decode(batch, kv_len, n_heads, head_dim,
                                          hbm_bandwidth, peak_flops)
@@ -153,10 +110,6 @@ class PredictorDispatch:
 
     def per_kernel_predictor_available(self) -> bool:
         return self._load_per_kernel_predictor() is not None
-
-    def category_predictor_available(self) -> bool:
-        cp = self._load_category_predictor()
-        return cp is not None and cp.is_trained()
 
     def perop_predictor_available(self) -> bool:
         return self._load_perop_predictor() is not None

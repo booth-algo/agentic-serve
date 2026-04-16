@@ -9,20 +9,14 @@ Finest-grained predictor in the hierarchy:
 | Granularity | Class / Module | What it predicts |
 |-------------|----------------|------------------|
 | per-op | `PerOpPredictor` | 4 ops per layer: attn, ffn, norm_pre, norm_post |
-| per-category | `CategoryPredictor` | 4 kernel families: gemm, attn_prefill, attn_decode, elementwise |
-| **per-kernel (this)** | *to be added* | **1 predictor per individual CUDA kernel invocation, keyed on shape** |
+| **per-kernel (this)** | `PerKernelPredictor` | **1 predictor per individual CUDA kernel invocation, keyed on shape** |
 
-## Why it's distinct from per-category
+## Design
 
-`per_category` has a single GEMM RF that handles all (M, N, K) for all GEMM
-kernels regardless of which cuBLAS tile/dispatch was chosen. That aggregates
-across many actual CUDA kernel variants (e.g.,
-`ampere_bf16_s16816gemm_128x128_f2f_stages_64x3_nn` vs
-`ampere_bf16_s16816gemm_64x64_f2f_stages_32x6_nn`).
-
-`per_kernel` will be shape-only features predicting latency at the
-individual kernel-variant level, trained on ncu ground-truth per
-(kernel_name, shape, GPU, backend). Paper Step 3 design.
+`per_kernel` uses shape-only features predicting latency at the individual
+kernel-variant level, trained on ncu ground-truth per
+(kernel_name, shape, GPU, backend). One XGBoost model per family
+(gemm, flash_attn, elementwise, misc). Paper Step 3 design.
 
 ## Required training data
 
@@ -42,8 +36,8 @@ individual kernel-variant level, trained on ncu ground-truth per
    (Llama-8B, Mixtral, etc. at bs=1, seq=128)
 2. Validate leave-one-model-out CV ≤10% MAPE per kernel family
 3. Add separate predictors for flash_attn, elementwise (not just GEMM)
-4. Write a `predictor.py` with the same `train_all/is_trained/predict_*`
-   interface as `CategoryPredictor` for drop-in use by `dispatch.py`
+4. Write a `predictor.py` exposing `load/predict_*` for drop-in use by
+   `dispatch.py`
 5. Per-GPU pinning: train separate A100 and H100 predictors
 6. Move trained pickles to R2 `profiling-data/{GPU}/trained/per_kernel/`
 

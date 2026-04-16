@@ -5,12 +5,9 @@ One XGBoost model per kernel family (gemm, flash_attn, elementwise, misc),
 trained on ncu ground-truth latency with strictly shape-derivable features.
 No runtime counters (cycles, throughput %) in the feature set.
 
-Distinction from CategoryPredictor in per_category/:
-  - CategoryPredictor: RandomForest trained on isolated kernel benchmarks
-    timed via torch.cuda.Event (includes launch overhead)
-  - PerKernelPredictor: XGBoost trained on kernels profiled via ncu during
-    real model forward passes (pure kernel time, fuses matched to real
-    cuBLAS dispatch behavior)
+Training data comes from kernels profiled via ncu during real model forward
+passes, giving pure kernel time with fuses matched to real cuBLAS dispatch
+behavior.
 
 See also: llm_predict/predictors/per_kernel/README.md
 
@@ -193,7 +190,7 @@ class PerKernelPredictor:
 
 
 # --------------------------------------------------------------------------
-# Module-level singleton accessor (parallels per_op / per_category patterns)
+# Module-level singleton accessor (parallels per_op pattern)
 # --------------------------------------------------------------------------
 
 _cache: dict = {}

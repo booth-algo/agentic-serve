@@ -8,9 +8,8 @@ An analytical multi-node communication model replacing ASTRA-Sim's event-driven 
 
 ### New Files / Modules
 
-1. **`llm_predict/profiling/category_profiler.py`** — Real GPU per-category profiler (GEMM, attention, elementwise)
-2. **`llm_predict/predictors/per_category/predictor.py`** — RandomForest CategoryPredictor trained on profile data
-3. **`llm_predict/profiling/data/H100/`** — profiled data points + trained .pkl models (stored on R2)
+1. **`llm_predict/predictors/per_kernel/predictor.py`** — Shape-only XGBoost per-kernel predictor (gemm / flash_attn / elementwise / misc) trained on ncu ground truth
+2. **`llm_predict/profiling/data/{A100,H100}/`** — trained .pkl models (stored on R2)
 
 ### Modified Files
 
@@ -25,12 +24,12 @@ An analytical multi-node communication model replacing ASTRA-Sim's event-driven 
 
 6. **`llmcompass/software_model/transformer.py`** — Added:
    - `use_ml_predictor` flag for hybrid ML+analytical prediction
-   - ML path: RF for GEMMs + attention, analytical for elementwise, 15us/kernel overhead
+   - ML path: per-op XGBoost (PerOpPredictor) for 4 ops/layer, analytical fallback otherwise
 
 ## Architecture
 
 ```
-Per-Layer Prediction = ML(GEMM) + ML(Attention) + Analytical(Elementwise) + Kernel_Overhead + Communication
+Per-Layer Prediction = ML(per-op XGBoost) + Analytical(Elementwise) + Kernel_Overhead + Communication
 
 Communication (single-node) = AllReduceMultiPCB with NVLink bandwidth
 Communication (multi-node)  = AllReduceHierarchical:

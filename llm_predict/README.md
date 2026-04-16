@@ -28,16 +28,14 @@ llm_predict/
 ├── predictors/
 │   ├── dispatch.py       # PredictorDispatch: tier-based routing
 │   ├── per_op/           # PerOpPredictor: 4 ops/layer (XGBoost, 26 shape features)
-│   ├── per_category/     # CategoryPredictor: 4 kernel families (gemm, attn_prefill,
-│   │                     #   attn_decode, elementwise) — RandomForest per GPU
-│   ├── per_kernel/       # placeholder for true per-CUDA-kernel predictor (WIP)
+│   ├── per_kernel/       # PerKernelPredictor: per-CUDA-kernel (XGBoost, ncu
+│   │                     #   ground truth) — gemm/flash_attn/elementwise/misc
 │   └── calibration/      # cross-cutting corrections:
 │                         #   - moe.py: MoE dispatch overhead
 │                         #   - allreduce.py: NCCL empirical table (per GPU)
 │                         #   - framework.py: vLLM/SGLang framework overhead
 ├── profiling/
-│   ├── category_profiler.py     # torch.cuda.Event shape-sweep for per-category
-│   └── data/{A100,H100}/        # profiles + trained .pkl models (stored on R2)
+│   └── data/{A100,H100}/        # trained .pkl models (stored on R2)
 ├── search/                      # TP/DP search algorithms (in ../search at repo root)
 ├── dse/                         # design-space exploration
 ├── systolic_array_model/        # (upstream LLMCompass)
@@ -49,8 +47,7 @@ llm_predict/
 | Tier | What it predicts | Features | Model | Training data |
 |------|------------------|----------|-------|---------------|
 | **per-op** | 4 ops/layer: attn, ffn, norm_pre, norm_post | 26 shape features (tok, d, h, kv, ffn, E, k, bs, seq + derived) | XGBoost | CUDA events on isolated layers, 13k rows, 6 models |
-| **per-category** | 4 kernel families per GPU | `(M,N,K)` for gemm; `(bs, seq/kv_len, heads, head_dim)` for attn; `(numel, op)` for elementwise | RandomForest per family × per GPU | isolated kernel benchmarks, 4640 gemm + 210 attn + 39 elementwise per GPU |
-| **per-kernel** (WIP) | individual CUDA kernel invocations | shape + kernel_type + dtype | *TBD* | ncu ground truth |
+| **per-kernel** | individual CUDA kernel invocations (gemm, flash_attn, elementwise, misc) | shape-only (no runtime counters) | XGBoost per family | ncu ground truth on real model forward passes |
 | **roofline (fallback)** | analytical upper bound | `(M,N,K)` + HW peak FLOPS/BW | closed-form | none |
 
 ## Quick usage
@@ -111,5 +108,5 @@ Derived from LLMCompass (ISCA 2024):
 The original LLMCompass artifact-evaluation harness is preserved under
 `ae/` for reproducing Figures 5-12 of the upstream paper. AgentServe-Bench
 adds: agentic-trace benchmarks, the analytical transformer composer,
-per-op/per-category/per-kernel predictor hierarchy, the calibration layer,
-and cross-GPU generalization validation.
+per-op/per-kernel predictor hierarchy, the calibration layer, and
+cross-GPU generalization validation.
