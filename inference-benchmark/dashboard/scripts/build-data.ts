@@ -243,6 +243,16 @@ function main() {
         continue;
       }
 
+      // Skip runs with >50% failure rate — garbage metrics from OOM/timeouts/crashes.
+      // Keep the file for evidence, just don't plot it.
+      const okReqs = raw.summary.successful_requests ?? 0;
+      const failReqs = raw.summary.failed_requests ?? 0;
+      const totalReqs = okReqs + failReqs;
+      if (totalReqs > 0 && failReqs / totalReqs > 0.5) {
+        skipped++;
+        continue;
+      }
+
       const seriesKey = `${hardware} / ${modelShort} ${quant} / ${backend} / ${profile}`;
 
       // Extract scatter data from per_request (multi-turn results with turn_index)
