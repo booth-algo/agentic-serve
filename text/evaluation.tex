@@ -227,25 +227,8 @@ Mean $|$error$|$ &  &  & 4.07\% \\
 \end{tabular}
 \end{table}
 
-\paragraph{Cross-GPU generalisation (A100 $\to$ H100).}
-The per-kernel predictor is A100-only (H100 ncu collection was blocked by per-pod counter-access permissions). To test cross-GPU generalisation we fall back to the per-category Level-0 predictor (four RandomForest models per GPU, trained on isolated kernel benchmarks), using its A100-trained and H100-trained variants to predict A100 and H100 TTFT respectively. Table~\ref{tab:xgpu_h100} reports per-model held-out aggregate error on H100 at concurrency 1, broken down by input sequence length. For 70B-class dense models the predictor reaches 4--6\% aggregate error at ISL\,$>$\,512 --- the compute-dominated regime --- while at ISL\,$\leq$\,128 measured TTFT is dominated by vLLM framework overhead (request scheduling, tokenisation, kernel-launch latency) that the kernel-only model does not account for.
-
-\begin{table}[!htbp]
-\caption{H100 aggregate forward-pass error at concurrency 1 by ISL bin, using per-category RandomForest predictors trained on H100 isolated kernel benchmarks. At compute-dominated ISL ($>$\,512), 70B-class dense models generalise to 4--6\% error. At short ISL ($\leq$\,128), measured TTFT is framework-overhead-dominated and kernel-level prediction underestimates; this is a known gap between raw kernel time and end-user-observed TTFT. Mixtral at ISL\,$>$\,512 shows a separate anomaly (measured TTFT $\sim$10$\times$ higher than A100 at matched configuration) that we attribute to a vLLM MoE-kernel regression and treat as a data-quality issue rather than a prediction failure.}
-\label{tab:xgpu_h100}
-\centering
-\small
-\begin{tabular}{@{}llrrr@{}}
-\toprule
-\textbf{Model} & \textbf{TP} & \textbf{ISL $\leq$ 128 $|$err$|$} & \textbf{ISL $>$ 512 $|$err$|$} & \textbf{ratio at long ISL} \\
-\midrule
-Llama-3.1-70B & 4 & 25.9\% & \textbf{6.3\%}  & 0.95$\times$ \\
-Qwen-2.5-72B  & 2 & 20.5\% & \textbf{4.4\%}  & 1.02$\times$ \\
-Llama-3.1-8B  & 1 & 43.5\% & 28.6\% & 0.74$\times$ (overhead-dominated) \\
-Mixtral-8$\times$7B & 2 & 38.1\% & 74.7\% & 0.07$\times$ (vLLM MoE measurement anomaly) \\
-\bottomrule
-\end{tabular}
-\end{table}
+\paragraph{Cross-GPU generalisation.}
+The present per-kernel predictor is trained on A100 ncu data only. H100 ncu profiling was blocked during the submission window by per-pod counter-access permissions on the cloud GPU provider we used, so an H100-specific per-kernel predictor is deferred to a subsequent revision. The A100-only numbers above are not expected to transfer unchanged to other GPUs --- cuBLAS dispatches different kernel variants, FlashAttention backends differ (Hopper TMA vs Ampere), and launch overhead scales differently. Fitting a separate per-(kernel\_family, GPU, backend) predictor, as Section~\ref{sec:perop_method} outlines, is the intended path.
 
 \begin{center}\textcolor{red}{\small\textbf{---- END AI-GENERATED (\S\ref{sec:e2e_prediction}) ----}}\end{center}
 
