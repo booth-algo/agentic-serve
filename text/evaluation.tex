@@ -1,7 +1,7 @@
 \section{Results}
 \label{sec:results}
 
-We benchmark six LLMs with total parameters spanning 8B to 120B: three dense (Llama-3.1-8B, Qwen3.5-9B, Qwen3.5-27B) and three mixture-of-experts (Mixtral-8$\times$7B, gpt-oss-20b, gpt-oss-120b). All models are served on (insert additional gpu)H100-SXM5-80GB GPUs using vLLM v0.19 in bf16 precision with prefix caching enabled; A100 and SGLang comparisons are in Appendix~\ref{sec:appendix_hw}. We sweep concurrency from 1 to 320, issuing 50 requests after a 3-request warmup per configuration. Section~\ref{sec:chat_vs_agentic} compares Tier~2 chat and Tier~1 agentic workloads, Section~\ref{sec:single_vs_multi} examines single-turn and multi-turn sessions, and Section~\ref{sec:kernel_roofline} traces performance differences to kernel-level regime shifts.
+We benchmark six LLMs with total parameters spanning 8B to 120B: three dense (Llama-3.1-8B, Qwen3.5-9B, Qwen3.5-27B) and three mixture-of-experts (Mixtral-8$\times$7B, gpt-oss-20b, gpt-oss-120b). All models are served on H100-SXM5-80GB (1$\times$, 2$\times$, and 4$\times$ GPU configurations) and A100-SXM4-40GB (1$\times$, 2$\times$, 4$\times$, and 8$\times$) GPUs using vLLM v0.19 in bf16 precision with prefix caching enabled; A100 and SGLang comparisons are in Appendix~\ref{sec:appendix_hw}. We sweep concurrency from 1 to 320, issuing 50 requests after a 3-request warmup per configuration. Section~\ref{sec:chat_vs_agentic} compares Tier~2 chat and Tier~1 agentic workloads, Section~\ref{sec:single_vs_multi} examines single-turn and multi-turn sessions, and Section~\ref{sec:kernel_roofline} traces performance differences to kernel-level regime shifts.
 
 
 \subsection{Chat vs Agentic Workloads}
