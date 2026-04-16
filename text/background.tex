@@ -14,9 +14,9 @@ None of these benchmarks profile per-kernel execution or predict latency for uns
 Zhang et al.'s LLMCompass~\citep{llmcompass} uses analytical tile-by-tile simulation for hardware design exploration, achieving 4.1\% end-to-end inference error (0.69\% prefill, 7.5\% decode) on A100, but requires 15--16 minutes per configuration and does not model serving features (continuous batching, CUDA graphs).
 Agrawal et al.'s Vidur~\citep{vidur} uses Random Forest interpolation on profiling data, achieving ${<}$9\% latency error across four models with five scheduling policies; Vidur-Search found the optimal configuration for LLaMA2-70B in 1 hour on CPU (\$9.93) versus 42K GPU hours (\$218K).
 Zhong et al.'s DistServe~\citep{distserve} disaggregates prefill and decoding onto separate GPUs, achieving 7.4$\times$ higher goodput than colocated serving with ${<}$2\% simulator error, but only supports dense architectures and tests ISL up to 2K tokens.
-Agrawal et al.'s Sarathi-Serve~\citep{sarathi} addresses the prefill-decode throughput-latency tradeoff via chunked prefill scheduling.
-Patel et al.'s Splitwise~\citep{splitwise} similarly disaggregates inference phases at the cluster level.
-Cho et al.'s LLMServingSim~v2~\citep{llmservingsim} achieves 0.97--1.54\% error with runtime-loop simulation and supports MoE but uses lookup tables rather than generalizable ML predictors.
+Agrawal et al.'s Sarathi-Serve~\citep{sarathi} introduces chunked prefills and stall-free scheduling, achieving up to 2.6$\times$ higher serving capacity on Llama-13B and 3.7$\times$ on Yi-34B compared to Orca-style batching, but does not benchmark agentic workloads or provide kernel-level profiling.
+Patel et al.'s Splitwise~\citep{splitwise} disaggregates inference phases at the cluster level, delivering 1.4$\times$ higher throughput at 20\% lower cost, but evaluates only single-turn chat traces.
+Cho et al.'s LLMServingSim~v2~\citep{llmservingsim} achieves 1.9\% error for GPU-based LLM serving with runtime-loop simulation and supports MoE, but uses lookup tables rather than generalizable ML predictors.
 To our knowledge, no existing simulator combines agentic workload benchmarking with per-kernel profiling validated against hardware counters.
 
 \definecolor{okgreen}{RGB}{0,140,54}
@@ -36,7 +36,7 @@ To our knowledge, no existing simulator combines agentic workload benchmarking w
 \begin{tabular}{l ccccccc}
 \toprule
 \textbf{Feature} & \textbf{LLMCompass} & \textbf{Vidur} & \textbf{LLMServSim\,2} & \textbf{DistServe} & \textbf{MLPerf} & \textbf{ML.ENERGY} & \textbf{Ours} \\
- & \scriptsize ISCA'24 & \scriptsize MLSys'24 & \scriptsize arXiv'26 & \scriptsize OSDI'24 & \scriptsize MLSys & \scriptsize NeurIPS'25 & \\
+ & \scriptsize ISCA'24 & \scriptsize MLSys'24 & \scriptsize CAL'25 & \scriptsize OSDI'24 & \scriptsize MLSys & \scriptsize NeurIPS'25 & \\
 \midrule
 \multicolumn{8}{l}{\emph{Prediction \& measurement}} \\
 \quad Predicts per-request latency (TTFT/ITL) & \cmark & \cmark & \cmark & \cmark & \xmark & \xmark & \cmark \\
@@ -55,7 +55,7 @@ To our knowledge, no existing simulator combines agentic workload benchmarking w
 \quad Saturation curves                       & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
 \midrule
 \multicolumn{8}{l}{\emph{Validation \& availability}} \\
-\quad Reported latency error                  & 4.1\% & ${<}$9\% & 0.97\% & ${<}$2\% & --- & --- & 4.1\% \\
+\quad Reported latency error                  & 4.1\% & ${<}$9\% & 1.9\% & ${<}$2\% & --- & --- & 4.1\% \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
