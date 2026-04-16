@@ -9,8 +9,6 @@ The practical consequence is severe. On an H100 GPU, Llama-3.1-8B sustains XXX o
 
 We present \textsc{AgentServe}, a benchmark suite and analysis framework for LLM inference under agentic workloads. Our contributions are:
 
--- Anything below is not properly proofread and is AI generated --
-
 \begin{enumerate}
     \item \textbf{Saturation benchmarks on agentic workloads.} We benchmark 8 models across 3 families (Llama-3, Qwen, GPT-OSS; dense and MoE, 8B--120B parameters) on A100 and H100 GPUs using both vLLM and SGLang, sweeping concurrency from 1 to 320 with continuous batching (Section~\ref{sec:results}). We produce 2{,}400+ result configurations. Agentic workloads saturate at 2--4$\times$ lower throughput than chat workloads across all model--hardware combinations and exhibit steeper TTFT degradation under load.
 
