@@ -1,6 +1,5 @@
 from llm_predict.models.hardware.device import Device, device_dict
 from llm_predict.models.hardware.interconnect import InterConnectModule, interconnect_module_dict
-from typing import List
 
 
 class System:

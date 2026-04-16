@@ -1,5 +1,5 @@
 """Fill profiling gaps: decode for Qwen/gpt-oss + large ntok for Llama/Mixtral."""
-import torch, os, sys, json, csv, statistics
+import torch, os, sys, csv
 sys.path.insert(0, "/data/kevinlau/python-packages")
 from transformers import AutoConfig, AutoModelForCausalLM
 

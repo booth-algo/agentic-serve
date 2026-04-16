@@ -1,7 +1,7 @@
 """Validate v4 predictor against a model: profile prefill+decode, compare predictions.
 Usage: python validate_model.py <cuda_device> <model_path> [--decode-only] [--prefill-only]
 """
-import torch, os, sys, csv, json, statistics, pickle, math
+import torch, os, sys, json, pickle, math
 import numpy as np
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)

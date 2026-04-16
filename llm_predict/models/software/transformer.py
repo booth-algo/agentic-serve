@@ -22,8 +22,7 @@ def _make_allreduce(data_type, use_hierarchical: bool = False):
     if use_hierarchical:
         return AllReduceHierarchical(data_type)
     return AllReduceMultiPCB(data_type)
-from math import ceil
-from typing import List, Optional
+from typing import List
 from llm_predict.models.hardware.system import System
 
 
@@ -2698,138 +2697,9 @@ class TransformerBlockMLATP(Operator):
 
 
 
-# E2E serving correction: per-layer prediction × n_layers overestimates real E2E
-# because real inference benefits from:
-# 1. Pipeline overlap (layer N+1 compute starts while N writeback finishes)
-# 2. L2 cache warmth across consecutive layers
-# 3. Isolated layer measurement includes per-iteration overhead
-# Empirically measured: ~1.35x gap on A100 for Llama-8B/70B
-_SERVING_EFFICIENCY = {
-    "prefill": 0.74,   # 1/1.35 — pipeline overlap helps prefill significantly
-    "decode": 0.85,    # decode is memory-bound, less pipeline benefit
-}
-
-def e2e_latency_from_layer(per_layer_s: float, n_layers: int, phase: str = "prefill") -> float:
-    """Convert per-layer prediction to E2E latency with serving efficiency correction.
-    
-    Args:
-        per_layer_s: Per-layer latency in seconds
-        n_layers: Number of transformer layers
-        phase: prefill or decode
-    Returns:
-        E2E latency in seconds
-    """
-    efficiency = _SERVING_EFFICIENCY.get(phase, 0.74)
-    return per_layer_s * n_layers * efficiency
-
-
-def _apply_smallseq_correction(pred_us, n_tokens, d_model, num_experts):
-    """Apply minimum latency floor for small token counts.
-    
-    At very small n_tokens (<128), kernel launch overhead (~200us) and 
-    MoE routing overhead (fixed cost) dominate over compute/memory.
-    The per-op predictor underestimates these fixed costs.
-    """
-    if n_tokens >= 128:
-        return pred_us  # no correction needed for larger sequences
-    
-    # Minimum layer latency based on model size and type
-    # Empirically: ~900us for Llama-8B, ~1800us for Qwen-72B, ~2500us for MoE models
-    base_floor_us = 200.0  # kernel launch overhead per op
-    weight_floor_us = d_model * 0.15  # ~0.15us per hidden dim (weight loading floor)
-    moe_floor_us = 500.0 * min(num_experts, 1)  # MoE routing overhead
-    floor_us = base_floor_us + weight_floor_us + moe_floor_us
-    
-    return max(pred_us, floor_us)
-
-
 # NOTE: post_prediction_correction, get_allreduce_calibration, and
 # calibrated_allreduce_latency moved to llm_predict.predictors.calibration.
 # See imports at top of file.
-
-
-def kv_cache_memory_bytes(
-    batch_size: int,
-    seq_len: int,
-    n_layers: int,
-    n_kv_heads: int,
-    head_dim: int,
-    bytes_per_element: int = 2,
-    device_count: int = 1,
-) -> int:
-    """
-    Compute KV cache memory usage in bytes.
-
-    The KV cache stores key and value tensors for all previous tokens across all layers.
-    For GQA models, n_kv_heads < n_heads, significantly reducing cache size.
-
-    Args:
-        batch_size: Number of sequences in the batch
-        seq_len: Sequence length (number of cached tokens)
-        n_layers: Number of transformer layers
-        n_kv_heads: Number of KV heads (may differ from Q heads in GQA)
-        head_dim: Dimension per attention head (d_model // n_heads)
-        bytes_per_element: Bytes per element (2 for fp16, 1 for int8)
-        device_count: Number of TP devices (KV heads are sharded across devices)
-
-    Returns:
-        Total KV cache memory in bytes (per device if device_count > 1)
-    """
-    kv_heads_per_device = n_kv_heads // device_count
-    # Per-layer: 2 (K + V) * batch_size * seq_len * kv_heads_per_device * head_dim * bytes
-    per_layer = 2 * batch_size * seq_len * kv_heads_per_device * head_dim * bytes_per_element
-    return per_layer * n_layers
-
-
-def fits_in_memory(
-    device_memory_bytes: int,
-    model_params_bytes: int,
-    kv_cache_bytes: int,
-) -> bool:
-    """
-    Check whether model parameters and KV cache fit in device HBM.
-
-    Args:
-        device_memory_bytes: Total device memory in bytes (e.g., 80GB for H100)
-        model_params_bytes: Model parameter memory in bytes
-        kv_cache_bytes: KV cache memory in bytes
-
-    Returns:
-        True if everything fits, False otherwise
-    """
-    return (model_params_bytes + kv_cache_bytes) <= device_memory_bytes
-
-
-def memory_pressure_bandwidth_factor(
-    device_memory_bytes: int,
-    model_params_bytes: int,
-    kv_cache_bytes: int,
-) -> float:
-    """
-    Compute effective bandwidth degradation factor due to HBM memory pressure.
-
-    When HBM utilization exceeds 90%, effective memory bandwidth degrades linearly.
-    At 100% utilization, bandwidth drops to ~50% of peak (empirical approximation).
-
-    Args:
-        device_memory_bytes: Total device memory in bytes
-        model_params_bytes: Model parameter memory in bytes
-        kv_cache_bytes: KV cache memory in bytes
-
-    Returns:
-        Bandwidth factor in [0.5, 1.0]. Multiply effective bandwidth by this factor.
-        Returns 1.0 if utilization < 90%.
-    """
-    total_used = model_params_bytes + kv_cache_bytes
-    utilization = total_used / device_memory_bytes if device_memory_bytes > 0 else 0.0
-
-    if utilization <= 0.9:
-        return 1.0
-    elif utilization >= 1.0:
-        return 0.5
-    else:
-        # Linear degradation from 1.0 at 90% to 0.5 at 100%
-        return 1.0 - 5.0 * (utilization - 0.9)
 
 
 def pp_bubble_fraction(pp_stages: int, num_microbatches: int) -> float:
@@ -2850,22 +2720,6 @@ def pp_bubble_fraction(pp_stages: int, num_microbatches: int) -> float:
     if pp_stages <= 1:
         return 0.0
     return (pp_stages - 1) / (num_microbatches + pp_stages - 1)
-
-
-def pp_adjusted_throughput(raw_throughput: float, pp_stages: int, num_microbatches: int) -> float:
-    """
-    Adjust raw throughput for pipeline parallelism bubble overhead.
-
-    Args:
-        raw_throughput: Throughput without bubble overhead (e.g., tokens/sec)
-        pp_stages: Number of pipeline parallel stages
-        num_microbatches: Number of microbatches in the pipeline
-
-    Returns:
-        Effective throughput after accounting for pipeline bubbles.
-    """
-    bubble = pp_bubble_fraction(pp_stages, num_microbatches)
-    return raw_throughput * (1.0 - bubble)
 
 
 class LLMInitComputationTP:

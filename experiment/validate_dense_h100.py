@@ -6,7 +6,7 @@ Usage:
     python experiment/validate_dense_h100.py --model llama-8b --device cuda:0
     python experiment/validate_dense_h100.py --model all --device cuda:0
 """
-import argparse, json, os, sys, time
+import argparse, json, os, sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent

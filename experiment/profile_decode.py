@@ -1,6 +1,6 @@
 """Profile decode phase: single token with variable KV cache lengths.
 Uses CUDA events on isolated layer for accurate sub-module timing."""
-import torch, os, sys, json, csv, statistics
+import torch, os, sys, csv
 sys.path.insert(0, "/data/kevinlau/python-packages")
 from transformers import AutoConfig, AutoModelForCausalLM
 

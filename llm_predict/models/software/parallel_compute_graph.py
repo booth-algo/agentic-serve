@@ -8,7 +8,7 @@ utilities to run and return sane results for testing the PP search flow.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 class ParallelismType(str, Enum):

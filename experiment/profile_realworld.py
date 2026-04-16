@@ -1,5 +1,5 @@
 """Profile real-world serving configs: high-BS decode + long-seq prefill."""
-import torch, os, sys, csv, statistics
+import torch, os, sys, csv
 sys.path.insert(0, "/data/kevinlau/python-packages")
 from transformers import AutoConfig, AutoModelForCausalLM
 

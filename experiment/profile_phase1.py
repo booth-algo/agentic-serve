@@ -1,7 +1,7 @@
 """Phase 1: Profile sub-modules at long sequences AND BS>1 for per-op predictor training.
 Combines Phase 1.1 (long seq) and Phase 1.2 (BS>1) into one script.
 Uses v4-style CUDA events (no sync in pre-hook)."""
-import torch, csv, os, sys, statistics, json
+import torch, csv, os, sys, json
 from transformers import AutoConfig, AutoModelForCausalLM
 
 DEVICE = sys.argv[1] if len(sys.argv) > 1 else "cuda:0"

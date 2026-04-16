@@ -5,13 +5,12 @@ This module implements brute force search to find the best data parallelism
 and tensor parallelism arrangement given a fixed number of devices.
 """
 
-from typing import Dict, Tuple, List, Optional, Callable
+from typing import Dict, Tuple, List, Optional
 from llm_predict.dse.dse import template_to_system, read_architecture_template
 from llm_predict.models.software.utils import DataType, data_type_dict
 from llm_predict.models.hardware.system import System
 from search.search_tools import (
     evaluate_dp_tp_config,
-    compare_configurations,
     find_best_configuration,
     print_configuration_summary,
 )
@@ -183,59 +182,6 @@ class DPTPBruteForceSearch:
         
         return (best_dp, best_tp, best_result, all_results)
     
-    def search_multiple_device_counts(
-        self,
-        device_counts: List[int],
-        metric: str = "throughput",
-        output_file: Optional[str] = None,
-        verbose: bool = True,
-    ) -> Dict[int, Tuple[int, int, Dict[str, float]]]:
-        """
-        Search for best configuration across multiple device counts.
-        
-        Args:
-            device_counts: List of device counts to search
-            metric: Metric to optimize
-            output_file: Optional file to save results (JSON)
-            verbose: Whether to print progress
-        
-        Returns:
-            Dictionary mapping device_count -> (best_dp, best_tp, best_result)
-        """
-        results = {}
-        
-        for device_count in device_counts:
-            if verbose:
-                print(f"\n{'#' * 80}")
-                print(f"Searching for {device_count} devices...")
-                print(f"{'#' * 80}")
-            
-            best_dp, best_tp, best_result, _ = self.search(
-                total_devices=device_count,
-                metric=metric,
-                verbose=verbose,
-            )
-            
-            results[device_count] = (best_dp, best_tp, best_result)
-        
-        if output_file:
-            # Save results to JSON
-            output_data = {}
-            for device_count, (dp, tp, result) in results.items():
-                output_data[device_count] = {
-                    'dp_size': dp,
-                    'tp_size': tp,
-                    'metrics': result,
-                }
-            
-            with open(output_file, 'w') as f:
-                json.dump(output_data, f, indent=2)
-            
-            if verbose:
-                print(f"\nResults saved to {output_file}")
-        
-        return results
-
 
 def main():
     """Example usage of the brute force search."""

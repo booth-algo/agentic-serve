@@ -1,6 +1,6 @@
 """Re-profile specific models at tok ranges where v3 data was garbage.
 Uses v4 CUDA events profiler (no sync in pre-hook)."""
-import torch, csv, os, sys, statistics
+import torch, csv, os, sys
 sys.path.insert(0, "/data/kevinlau/python-packages")
 from transformers import AutoConfig, AutoModelForCausalLM
 

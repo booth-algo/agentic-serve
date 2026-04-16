@@ -11,7 +11,6 @@ import argparse
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -222,7 +221,7 @@ def load_model_2layers(model_path: str, device: str):
     Load gpt-oss-20b with only 2 decoder layers to save GPU memory.
     Returns (model, tokenizer_or_None).
     """
-    from transformers import AutoModelForCausalLM, AutoConfig, AutoTokenizer
+    from transformers import AutoModelForCausalLM, AutoConfig
 
     print(f"\n[Measure] Loading 2-layer model from {model_path} ...")
     config = AutoConfig.from_pretrained(model_path)

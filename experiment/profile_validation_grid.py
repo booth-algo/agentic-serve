@@ -1,5 +1,5 @@
 """Profile models at seq lengths NOT in training data to validate XGBoost generalization."""
-import torch, time, sys, os, json
+import torch, time, sys, json
 sys.path.insert(0, "/data/kevinlau/python-packages")
 sys.path.insert(0, "/home/kevinlau/llmserve")
 

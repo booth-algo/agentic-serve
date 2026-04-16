@@ -12,7 +12,6 @@ import argparse
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -21,7 +20,6 @@ sys.path.insert(0, str(REPO_ROOT))
 os.chdir(str(REPO_ROOT))
 
 import torch
-import numpy as np
 
 # ---------------------------------------------------------------------------
 # Model configs

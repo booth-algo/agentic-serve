@@ -16,7 +16,7 @@ from llm_predict.models.software.transformer import (
     TransformerBlockAutoRegressionTP,
 )
 from llm_predict.models.software.utils import data_type_dict, Tensor
-# from cost_model.cost_model import calc_compute_chiplet_area_mm2, calc_io_die_area_mm2
+from llm_predict.models.cost.cost_model import calc_compute_chiplet_area_mm2, calc_io_die_area_mm2
 from math import ceil
 
 def read_architecture_template(file_path):

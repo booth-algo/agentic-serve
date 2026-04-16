@@ -2,7 +2,6 @@
 # Date started: 12 October 2023
 # This file is the cost model for Naivesim
 
-import numpy as np
 import math
 # import supply_chain.supply_chain_model as scm
 import cost_model.supply_chain.supply_chain_model as scm

@@ -17,7 +17,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -216,8 +216,6 @@ def collect_measurements(
     decode_grid: Tuple[List[int], List[int]],
 ) -> List[DataPoint]:
     """Load model, measure isolated layers, collect LLMCompass predictions."""
-    from transformers import AutoConfig
-
     model_name = Path(model_path).name
     print(f"\n{'='*70}")
     print(f"Collecting data for: {model_name}")

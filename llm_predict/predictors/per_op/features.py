@@ -6,7 +6,6 @@ that are fed into the per-op XGBoost model.
 """
 
 import math
-import numpy as np
 
 
 def compute_perop_features(n_tokens, op, d_model, n_heads, n_kv_heads, intermediate_size, num_experts, top_k, batch_size=1, seq_len=None, kv_cache_len=0):

@@ -8,7 +8,7 @@ from llm_predict.models.software.transformer import (
     TransformerBlockAutoRegressionTP,
     pp_bubble_fraction,
 )
-from llm_predict.models.software.utils import Tensor, data_type_dict
+from llm_predict.models.software.utils import Tensor
 from llm_predict.models.hardware.system import System
 
 

@@ -1,12 +1,10 @@
 from llm_predict.utils import size
-from typing import List, Tuple
 from llm_predict.models.hardware.device import Device
 from llm_predict.models.software.operators import Operator
 from llm_predict.models.software.utils import Tensor, DataType
-from math import ceil, log2, log
+from math import ceil
 import time
 import statistics
-import numpy as np
 import torch
 
 

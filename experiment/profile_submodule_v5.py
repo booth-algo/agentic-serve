@@ -1,6 +1,6 @@
 """v5: Profile sub-modules using CUDA events only — no sync between modules.
 Sync ONCE at end of forward pass, then read all event timestamps."""
-import torch, csv, os, sys, statistics
+import torch, csv, os, sys
 from transformers import AutoConfig, AutoModelForCausalLM
 
 MODEL_PATH = sys.argv[1]

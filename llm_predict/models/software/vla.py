@@ -46,9 +46,7 @@ from llm_predict.models.software.transformer import (
 
 from llm_predict.models.software.utils import Tensor, DataType
 from llm_predict.models.software.communication_primitives import AllReduceMultiPCB, P2P as P2PPrimitive
-from llm_predict.models.hardware.interconnect import InterConnectModule
-from math import ceil
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Optional
 from llm_predict.models.hardware.system import System
 
 

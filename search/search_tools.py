@@ -7,7 +7,7 @@ This module provides functions to:
 - Compare configurations
 """
 
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, Tuple, List
 from llm_predict.models.software.parallel_compute_graph import (
     ParallelComputeGraph,
     ParallelismConfig,

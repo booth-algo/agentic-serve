@@ -1,6 +1,5 @@
-from llm_predict.utils import size, closest_factors
-from typing import List, Tuple, Union
-from llm_predict.models.hardware.device import Device
+from llm_predict.utils import size
+from typing import List
 from llm_predict.models.software.utils import Tensor, DataType
 
 

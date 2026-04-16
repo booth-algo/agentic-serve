@@ -1,5 +1,5 @@
 from math import ceil
-from llm_predict.models.software.utils import DataType, data_type_dict
+from llm_predict.models.software.utils import data_type_dict
 
 
 class VectorUnit:
