@@ -170,12 +170,7 @@ Table~\ref{tab:kernel-roofline} reports per-kernel time and arithmetic intensity
 
 Figure~\ref{fig:quadrant} maps 1{,}466 of the 2{,}527 total benchmark configurations (H100 subset) onto the operational intensity (OI) vs capacity footprint (CF) plane. OI measures FLOPs per byte of DRAM traffic for a full request; CF measures peak memory required per request including KV cache and model weights. Tier~1 agentic workloads cluster at median OI\,=\,4{,}774 (IQR 3{,}903--6{,}269). Tier~2 chat workloads cluster at median OI\,=\,85 (IQR 48--159). The two tiers are separated by 56$\times$ in median OI with no overlap in interquartile ranges. Coding-agent and SWE-Bench sessions land above the H100 ridge point (OI\,=\,295) at all concurrency levels; chat-short and chat-medium land below it at all concurrency levels.
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=\textwidth]{figures/quadrant_h100.pdf}
-    \caption{System-level operational intensity (OI) vs capacity footprint (CF) across 1{,}466 H100 benchmark configurations (of 2{,}527 total). Tier~1 agentic workloads (red) cluster in the high-OI, high-CF quadrant. Tier~2 chat workloads (blue) cluster in the low-OI quadrant. Dashed lines: H100 ridge point (OI\,=\,295) and HBM capacity (80\,GB).}
-    \label{fig:quadrant}
-\end{figure}
+% Figure~\ref{fig:quadrant} is placed in introduction.tex
 
 
 \subsection{Per-Kernel Latency Prediction}
