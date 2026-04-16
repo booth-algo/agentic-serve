@@ -47,7 +47,7 @@ Table~\ref{tab:single-turn} reports TTFT, TPOT, and request throughput at satura
 
 Qwen3.5-9B and Qwen3.5-27B follow the same ordering: chat-short at 533\,ms and 876\,ms, coding-agent at 1{,}583\,ms and 2{,}926\,ms, pf-heavy at 68{,}615\,ms and 166{,}389\,ms. (no gpt oss models) gpt-oss-20b shows the smallest TTFT increase from chat to coding-agent (1{,}247\,ms to 2{,}272\,ms), with req/s dropping from 46.58 to 41.10. gpt-oss-120b shows the largest TTFT increase (519\,ms to 2{,}905\,ms), with req/s dropping from 33.67 to 21.48.
 
-TPOT does not follow a consistent pattern across profiles. Llama-3.1-8B TPOT rises from 15.2\,ms (chat) to 56.9\,ms (coding-agent); Qwen3.5-9B drops from 55.3\,ms to 26.0\,ms. The two profiles saturate at different concurrency levels, producing different batch compositions at the measurement point.
+TPOT does not follow the same ordering as TTFT: Llama-3.1-8B rises from 15.2\,ms (chat) to 56.9\,ms (coding-agent); Qwen3.5-9B drops from 55.3\,ms to 26.0\,ms.
 
 \begin{table}[t]
 \caption{Latency scaling under concurrency for Llama-3.1-8B (TP\,=\,1) on H100-SXM5-80GB, vLLM v0.19. \texttt{chat-short}: ISL\,$\leq$\,500. \texttt{coding-agent}: ISL\,$\approx$\,17{,}000. Sweeps for all six models are in Appendix~\ref{sec:appendix_sweeps}.}
@@ -116,7 +116,7 @@ Table~\ref{tab:multi-turn} reports multi-turn serving performance for three dens
 \label{sec:kernel_roofline}
 
 \begin{table}[H]
-\caption{Per-kernel profiling of two-layer forward passes for Llama-3.1-8B (dense, 51 kernels) and gpt-oss-20b (MoE, 83 kernels) on H100-SXM5-80GB at batch size 1, sequence length 512, via PyTorch Profiler. Arithmetic intensity (AI) = FLOPs per byte of memory traffic. H100 bf16 ridge point: AI\,=\,295 (989\,TFLOPS\,$\div$\,3{,}352\,GB/s). Scaling across batch sizes is in Appendix~\ref{sec:appendix_scaling}. Minor categories ($<$3\%) omitted; percentages computed against full total.}
+\caption{Per-kernel profiling of two-layer forward passes for Llama-3.1-8B (dense, 51 kernels) and gpt-oss-20b (MoE, 83 kernels) on H100-SXM5-80GB at batch size 1, sequence length 512, via PyTorch Profiler. Arithmetic intensity (AI) = FLOPs per byte of memory traffic. H100 bf16 ridge point: AI\,=\,295 (989\,TFLOPS\,$\div$\,3{,}352\,GB/s). Scaling across batch sizes is in Appendix~\ref{sec:appendix_scaling}. Minor categories ($<$1\%: reduce, indexing, rope) omitted; MoE-specific categories (softmax, moe-routing) retained regardless of percentage. Percentages computed against full total.}
 \label{tab:kernel-roofline}
 \centering
 \small
@@ -158,7 +158,7 @@ gpt-oss-20b & other       &   109   &  6.6 &  \textemdash & \textemdash & memory
 
 Table~\ref{tab:kernel-roofline} reports per-kernel time and arithmetic intensity for Llama-3.1-8B and gpt-oss-20b. Prefill GEMMs in Llama-8B reach AI\,=\,1{,}764 and 785\,TFLOPS, 6$\times$ above the H100 ridge point. Decode GEMMs sit at AI\,=\,4.0 and 2.9\,TFLOPS. Every kernel category in decode is memory-bound. gpt-oss-20b executes 63\% more kernels per forward pass (83 vs 51), with elementwise operations at 52.4\% of prefill time (vs 35.8\% for Llama-8B). In decode, gpt-oss-20b GEMMs sit at AI\,=\,150, 37.5$\times$ higher than Llama-8B decode GEMMs (AI\,=\,4.0).
 
-Figure~\ref{fig:quadrant} maps 1{,}466 benchmark configurations onto the OI--CF plane. Tier~1 agentic workloads cluster at median OI\,=\,4{,}774; Tier~2 chat workloads cluster at median OI\,=\,85, a 56$\times$ separation with no overlap in interquartile ranges.
+Figure~\ref{fig:quadrant} maps 1{,}466 of the 2{,}527 total benchmark configurations (H100 subset) onto the operational intensity (OI) vs capacity footprint (CF) plane. OI measures FLOPs per byte of DRAM traffic for a full request; CF measures peak memory required per request including KV cache and model weights. Tier~1 agentic workloads cluster in the high-OI, high-CF quadrant at median OI\,=\,4{,}774 (IQR 3{,}903--6{,}269). Tier~2 chat workloads cluster in the low-OI quadrant at median OI\,=\,85 (IQR 48--159). The two tiers are separated by 56$\times$ in median OI with no overlap in interquartile ranges. Coding-agent and SWE-Bench sessions land above the H100 ridge point (OI\,=\,295) at all concurrency levels; chat-short and chat-medium land below it at all concurrency levels.
 
 \begin{figure}[t]
     \centering
