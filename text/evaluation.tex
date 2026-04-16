@@ -1,52 +1,56 @@
 \section{Results}
 \label{sec:results}
 
-We benchmark six LLMs with total parameters spanning 8B to 120B: three dense (Llama-3.1-8B, Qwen3.5-9B, Qwen3.5-27B) and three mixture-of-experts (Mixtral-8$\times$7B, gpt-oss-20b, gpt-oss-120b). All models are served on (insert additional gpu)H100-SXM5-80GB GPUs using vLLM v0.19 in bf16 precision with prefix caching enabled; A100 and SGLang comparisons are reported in Appendix~\ref{sec:appendix_hw}. We sweep concurrency from 1 to 320 simultaneous requests, issuing 50 requests after a 3-request warmup per configuration. Workloads span two tiers: Tier~1 agentic traces from SWE-Bench coding agents and TerminalBench CLI agents, and Tier~2 ShareGPT chat baselines at three input-length scales. Section~\ref{sec:single_turn} reports single-turn serving performance, Section~\ref{sec:multi_turn_results} examines multi-turn sessions, Section~\ref{sec:kernel_roofline} traces performance differences to kernel-level regime shifts, and Sections~\ref{sec:predictor}--\ref{sec:e2e_prediction} validate the prediction pipeline.
+We benchmark six LLMs with total parameters spanning 8B to 120B: three dense (Llama-3.1-8B, Qwen3.5-9B, Qwen3.5-27B) and three mixture-of-experts (Mixtral-8$\times$7B, gpt-oss-20b, gpt-oss-120b). All models are served on (insert additional gpu)H100-SXM5-80GB GPUs using vLLM v0.19 in bf16 precision with prefix caching enabled; A100 and SGLang comparisons are in Appendix~\ref{sec:appendix_hw}. We sweep concurrency from 1 to 320, issuing 50 requests after a 3-request warmup per configuration. Section~\ref{sec:single_turn} reports single-turn serving performance, Section~\ref{sec:multi_turn_results} examines multi-turn sessions, and Section~\ref{sec:kernel_roofline} traces performance differences to kernel-level regime shifts.
 
 
 \subsection{Single-Turn Serving Performance}
 \label{sec:single_turn}
 
 \begin{table}[t]
-\caption{Single-turn serving performance at saturation on H100-SXM5-80GB using vLLM v0.19 in bf16 precision with prefix caching enabled. \textit{Saturation} denotes the concurrency level at which output token throughput peaks. For each model, we report two workload profiles: \texttt{chat-short} (Tier~2 ShareGPT, ISL\,$\leq$\,500, OSL\,$\leq$\,300) and \texttt{coding-agent} (Tier~1 SWE-Bench traces, ISL\,$\approx$\,17{,}000, OSL\,$\approx$\,800). Coding-agent is a single-turn profile: each request contains the full coding context in one prompt. Mixtral-8$\times$7B coding-agent is omitted because its 32{,}768-token context window cannot accommodate the SWE-Bench prompt under TP\,=\,2.}
+\caption{Single-turn serving performance at saturation on H100-SXM5-80GB, vLLM v0.19, bf16, prefix caching on. \textit{Saturation}: concurrency at which output token throughput peaks. Three workload profiles: \texttt{chat-short} (Tier~2 ShareGPT, ISL\,$\leq$\,500, OSL\,$\leq$\,300); \texttt{coding-agent} (Tier~1 SWE-Bench, ISL\,$\approx$\,17{,}000, OSL\,$\approx$\,800); \texttt{pf-heavy} (synthetic, ISL\,=\,8{,}192, OSL\,=\,256). Mixtral coding-agent is omitted: its 32{,}768-token context window cannot accommodate the SWE-Bench prompt under TP\,=\,2.}
 \label{tab:single-turn}
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}llc l rr r@{}}
+\begin{tabular}{@{}llc l rrr@{}}
 \toprule
 \textbf{Model} & \textbf{Arch} & \textbf{TP} & \textbf{Profile} & \textbf{TTFT (ms)} & \textbf{TPOT (ms)} & \textbf{Req/s} \\
 \midrule
-Llama-3.1-8B   & Dense & 1 & chat-short    &    282 &  15.2 & 55.15 \\
-               &       &   & coding-agent  &    598 &  56.9 & 15.03 \\
+Llama-3.1-8B   & Dense & 1 & chat-short    &       282 &  15.2 & 55.15 \\
+               &       &   & coding-agent  &       598 &  56.9 & 15.03 \\
+               &       &   & pf-heavy      &  82{,}542 &  82.1 &  3.00 \\
 \cmidrule(lr){1-7}
-Qwen3.5-9B     & Dense & 1 & chat-short    &    533 &  55.3 & 23.78 \\
-               &       &   & coding-agent  &  1{,}583 &  26.0 & 14.39 \\
+Qwen3.5-9B     & Dense & 1 & chat-short    &       533 &  55.3 & 23.78 \\
+               &       &   & coding-agent  &   1{,}583 &  26.0 & 14.39 \\
+               &       &   & pf-heavy      &  68{,}615 & 151.7 &  2.74 \\
 \cmidrule(lr){1-7}
-Qwen3.5-27B    & Dense & 2 & chat-short    &    876 & 109.4 & 16.45 \\
-               &       &   & coding-agent  &  2{,}926 &  52.3 &  7.23 \\
+Qwen3.5-27B    & Dense & 2 & chat-short    &       876 & 109.4 & 16.45 \\
+               &       &   & coding-agent  &   2{,}926 &  52.3 &  7.23 \\
+               &       &   & pf-heavy      & 166{,}389 & 248.6 &  1.62 \\
 \midrule
-Mixtral-8$\times$7B & MoE & 2 & chat-short &    400 &  26.1 & 35.33 \\
+Mixtral-8$\times$7B & MoE & 2 & chat-short &       400 &  26.1 & 35.33 \\
+               &       &   & pf-heavy      & 187{,}183 & 118.9 &  1.51 \\
 \cmidrule(lr){1-7}
-gpt-oss-20b    & MoE   & 1 & chat-short    &  1{,}247 &  17.2 & 46.58 \\
-               &       &   & coding-agent  &  2{,}272 &  24.5 & 41.10 \\
+gpt-oss-20b    & MoE   & 1 & chat-short    &   1{,}247 &  17.2 & 46.58 \\
+               &       &   & coding-agent  &   2{,}272 &  24.5 & 41.10 \\
+               &       &   & pf-heavy      &  31{,}950 & 151.0 &  4.47 \\
 \cmidrule(lr){1-7}
-gpt-oss-120b   & MoE   & 2 & chat-short    &    519 &  29.4 & 33.67 \\
-               &       &   & coding-agent  &  2{,}905 &  35.5 & 21.48 \\
+gpt-oss-120b   & MoE   & 2 & chat-short    &       519 &  29.4 & 33.67 \\
+               &       &   & coding-agent  &   2{,}905 &  35.5 & 21.48 \\
+               &       &   & pf-heavy      &  38{,}307 & 155.0 &  4.26 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:single-turn} reports TTFT, TPOT, and request throughput at saturation for six models under Tier~2 chat and Tier~1 agentic workloads.
+Table~\ref{tab:single-turn} reports TTFT, TPOT, and request throughput at saturation for six models under three workload profiles. Llama-3.1-8B serves chat-short at 282\,ms TTFT and 55.15\,req/s. Under coding-agent, TTFT rises to 598\,ms and req/s drops to 15.03. Under synthetic prefill-heavy, TTFT reaches 82{,}542\,ms and req/s drops to 3.00.
 
-Llama-3.1-8B serves chat-short at 282\,ms TTFT and 55.15\,req/s; under coding-agent the same model reaches 598\,ms TTFT and 15.03\,req/s, a 3.7$\times$ reduction in request throughput. Qwen3.5-9B shows a similar pattern: chat-short at 533\,ms and 23.78\,req/s, coding-agent at 1{,}583\,ms and 14.39\,req/s. Qwen3.5-27B reaches 2{,}926\,ms TTFT under coding-agent, with req/s dropping from 16.45 to 7.23. Mixtral-8$\times$7B serves chat-short at 400\,ms and 35.33\,req/s but lacks coding-agent data.
+Qwen3.5-9B and Qwen3.5-27B follow the same ordering: chat-short at 533\,ms and 876\,ms, coding-agent at 1{,}583\,ms and 2{,}926\,ms, pf-heavy at 68{,}615\,ms and 166{,}389\,ms. (no gpt oss models) gpt-oss-20b shows the smallest TTFT increase from chat to coding-agent (1{,}247\,ms to 2{,}272\,ms), with req/s dropping from 46.58 to 41.10. gpt-oss-120b shows the largest TTFT increase (519\,ms to 2{,}905\,ms), with req/s dropping from 33.67 to 21.48.
 
-(no gpt oss models) MoE models show a different throughput pattern. gpt-oss-20b drops from 46.58 to 41.10\,req/s under coding-agent (1.1$\times$), while gpt-oss-120b drops from 33.67 to 21.48\,req/s (1.6$\times$). gpt-oss-20b shows the smallest TTFT increase (1{,}247\,ms to 2{,}272\,ms, 1.8$\times$); gpt-oss-120b the largest (519\,ms to 2{,}905\,ms, 5.6$\times$).
-
-TPOT at saturation does not consistently increase from chat to coding-agent. Llama-3.1-8B rises from 15.2 to 56.9\,ms. Qwen3.5-9B drops from 55.3 to 26.0\,ms; the two profiles saturate at different concurrency levels, producing different batch sizes and scheduling dynamics at the measurement point.
+TPOT does not follow a consistent pattern across profiles. Llama-3.1-8B TPOT rises from 15.2\,ms (chat) to 56.9\,ms (coding-agent); Qwen3.5-9B drops from 55.3\,ms to 26.0\,ms. The two profiles saturate at different concurrency levels, producing different batch compositions at the measurement point.
 
 \begin{table}[t]
-\caption{Latency scaling under concurrency for Llama-3.1-8B (TP\,=\,1) on H100-SXM5-80GB using vLLM v0.19. \texttt{chat-short}: ISL\,$\leq$\,500. \texttt{coding-agent}: ISL\,$\approx$\,17{,}000. TTFT increases with concurrency; TPOT increases gradually. Concurrency sweeps for all six models are in Appendix~\ref{sec:appendix_sweeps}.}
+\caption{Latency scaling under concurrency for Llama-3.1-8B (TP\,=\,1) on H100-SXM5-80GB, vLLM v0.19. \texttt{chat-short}: ISL\,$\leq$\,500. \texttt{coding-agent}: ISL\,$\approx$\,17{,}000. Sweeps for all six models are in Appendix~\ref{sec:appendix_sweeps}.}
 \label{tab:concurrency-sweep}
 \centering
 \small
@@ -72,14 +76,16 @@ coding-agent & 320 & 597.8 & 4{,}750.5 & 56.9 & 15.03 \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:concurrency-sweep} reports latency scaling under concurrency for Llama-3.1-8B on H100. At concurrency 1, TPOT is nearly identical across workloads (6.2\,ms chat-short, 6.5\,ms coding-agent); at concurrency 320 it diverges to 15.2\,ms and 56.9\,ms respectively. TTFT p50 follows a different pattern: chat-short remains under 300\,ms across the full sweep, while coding-agent reaches 823\,ms at concurrency 120 with p99 exceeding 4{,}750\,ms at concurrency 320. Coding-agent TTFT p50 drops from 823\,ms at concurrency 120 to 598\,ms at concurrency 320 while p99 continues rising; this non-monotonicity is consistent with scheduling variance at high concurrency in a single-trial measurement. Request throughput saturates at 55.15\,req/s for chat-short and 15.03\,req/s for coding-agent.
+Table~\ref{tab:concurrency-sweep} reports latency scaling for Llama-3.1-8B. At concurrency 1, TPOT is 6.2\,ms for chat-short and 6.5\,ms for coding-agent. At concurrency 320, TPOT reaches 15.2\,ms and 56.9\,ms. Chat-short TTFT p50 stays under 300\,ms across the full sweep; coding-agent TTFT p50 reaches 823\,ms at concurrency 120 with p99 exceeding 4{,}750\,ms at concurrency 320. Request throughput saturates at 55.15\,req/s for chat-short and 15.03\,req/s for coding-agent.
 
 
 \subsection{Multi-Turn Serving Performance}
 \label{sec:multi_turn_results}
 
+Single-turn benchmarks issue one request per session. Multi-turn benchmarks simulate agent sessions that accumulate context across turns: each turn appends the model's response and the next user message to the conversation history, growing the input sequence length with every turn.
+
 \begin{table}[t]
-\caption{Multi-turn serving performance at saturation on H100-SXM5-80GB using vLLM v0.19 in bf16 precision. Each session accumulates context across turns; ISL grows with turn number. \texttt{chat-mt-short}: Tier~2 ShareGPT multi-turn (3--5 turns, max context 8{,}192 tokens). \texttt{swebench-mt}: Tier~1 SWE-Bench coding agent sessions (up to 30 turns, max context 32{,}768 tokens). \texttt{terminal-mt}: Tier~1 TerminalBench CLI agent sessions (up to 30 turns). check KEVIN (TerminalBench, OSWorld) additional profiles in Appendix~\ref{sec:appendix_multiturn}. MoE models are omitted from this table; their multi-turn results are in Appendix~\ref{sec:appendix_multiturn}.}
+\caption{Multi-turn serving performance at saturation on H100-SXM5-80GB, vLLM v0.19, bf16. Context accumulates across turns. \texttt{chat-mt}: Tier~2 ShareGPT (3--5 turns, max 8{,}192 tokens). \texttt{swebench-mt}: Tier~1 SWE-Bench coding agent (up to 30 turns, max 32{,}768 tokens). \texttt{terminal-mt}: Tier~1 TerminalBench CLI agent (up to 30 turns). MoE multi-turn data was not collected for this configuration. check KEVIN (TerminalBench, OSWorld) additional profiles in Appendix~\ref{sec:appendix_multiturn}.}
 \label{tab:multi-turn}
 \centering
 \small
@@ -88,35 +94,29 @@ Table~\ref{tab:concurrency-sweep} reports latency scaling under concurrency for 
 \toprule
 \textbf{Model} & \textbf{HW} & \textbf{Profile} & \textbf{TTFT (ms)} & \textbf{TPOT (ms)} & \textbf{Req/s} \\
 \midrule
-Llama-3.1-8B  & H100 & chat-mt-short    &    498 &  12.1 & 19.37 \\
+Llama-3.1-8B  & H100 & chat-mt    &    498 &  12.1 & 19.37 \\
               &      & swebench-mt      &  2{,}375 & 136.0 &  4.74 \\
               &      & terminal-mt      &  1{,}411 &  53.7 &  9.11 \\
 \cmidrule(lr){1-6}
-Qwen3.5-9B    & H100 & chat-mt-short    &  1{,}072 &  19.0 & 13.62 \\
+Qwen3.5-9B    & H100 & chat-mt    &  1{,}072 &  19.0 & 13.62 \\
               &      & swebench-mt      &  1{,}408 &  39.9 &  5.29 \\
               &      & terminal-mt      &  1{,}856 &  32.0 & 12.09 \\
 \cmidrule(lr){1-6}
-Qwen3.5-27B   & H100$\times$2 & chat-mt-short &  1{,}705 &  36.2 &  7.39 \\
+Qwen3.5-27B   & H100$\times$2 & chat-mt &  1{,}705 &  36.2 &  7.39 \\
               &               & swebench-mt   &  1{,}084 &  61.7 &  9.28 \\
               &               & terminal-mt   &  2{,}735 &  64.8 &  6.71 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:multi-turn} reports multi-turn serving performance for three dense models under Tier~2 chat and Tier~1 agentic sessions. Llama-3.1-8B serves chat multi-turn at 498\,ms TTFT and 19.37\,req/s; under SWE-Bench multi-turn the same model reaches 2{,}375\,ms TTFT and 4.74\,req/s, a 4.1$\times$ reduction in request throughput. TerminalBench multi-turn sits between the two for Llama-3.1-8B: 1{,}411\,ms TTFT and 9.11\,req/s. Qwen3.5-9B follows the same ordering: 1{,}072\,ms (chat), 1{,}408\,ms (swebench), 1{,}856\,ms (terminal). TPOT increases from 12.1\,ms to 136.0\,ms between chat and SWE-Bench multi-turn for Llama-3.1-8B; Qwen3.5-9B and Qwen3.5-27B show smaller increases (19.0 to 39.9\,ms and 36.2 to 61.7\,ms). Qwen3.5-27B terminal-mt reaches the highest TTFT in the table at 2{,}735\,ms with 6.71\,req/s. Qwen3.5-27B is also an exception: its swebench-mt TTFT (1{,}084\,ms) is lower than chat-mt-short (1{,}705\,ms), and its swebench-mt req/s (9.28) is higher than chat-mt-short (7.39).
+Table~\ref{tab:multi-turn} reports multi-turn serving performance for three dense models. Llama-3.1-8B serves chat multi-turn at 498\,ms TTFT and 19.37\,req/s. Under SWE-Bench multi-turn, TTFT rises to 2{,}375\,ms and req/s drops to 4.74. TerminalBench sits between: 1{,}411\,ms TTFT and 9.11\,req/s. Qwen3.5-9B follows the same ordering: 1{,}072\,ms (chat), 1{,}408\,ms (swebench), 1{,}856\,ms (terminal). Qwen3.5-27B terminal-mt reaches the highest TTFT in the table at 2{,}735\,ms. Qwen3.5-27B swebench-mt TTFT (1{,}084\,ms) is lower than its chat-mt (1{,}705\,ms), with higher req/s (9.28 vs 7.39).
 
 
-\subsection{Kernel-Level Roofline Analysis}
+\subsection{Kernel-Level Analysis}
 \label{sec:kernel_roofline}
 
-Table~\ref{tab:kernel-roofline} reports per-kernel time and arithmetic intensity for two-layer forward passes of Llama-3.1-8B and gpt-oss-20b at batch size 1 and sequence length 512. Prefill GEMMs in Llama-8B reach AI\,=\,1{,}764 and achieve 785\,TFLOPS, 6$\times$ above the H100 ridge point (AI\,=\,295). Decode GEMMs on the same weights sit at AI\,=\,4.0 and 2.9\,TFLOPS; every kernel category in decode is memory-bound. gpt-oss-20b executes 63\% more kernels per forward pass (83 vs 51), with elementwise operations accounting for 52.4\% of prefill time compared to 35.8\% in the dense model. In decode, gpt-oss-20b GEMMs sit at AI\,=\,150, 37.5$\times$ higher than Llama-8B's AI\,=\,4.0, placing MoE decode closer to the ridge point than dense decode. Prefill operates in the compute-bound regime; decode operates in the memory-bound regime.
-
-Figure~\ref{fig:roofline} plots 420 kernels from five profiled models on the H100 roofline. Prefill GEMMs (red) cluster above the ridge point at AI\,=\,882--3{,}437 and 650--785\,TFLOPS; decode GEMMs (blue) cluster below at AI\,=\,2--4 and 1--3\,TFLOPS. The two clusters are separated by two orders of magnitude in arithmetic intensity. gpt-oss-20b prefill GEMMs reach the highest AI in the dataset (3{,}437), while gpt-oss-20b decode GEMMs sit at AI\,=\,150, closer to the ridge point than any dense model's decode kernels (AI\,=\,4.0).
-
-Figure~\ref{fig:quadrant} shows the system-level view across 1{,}466 benchmark configurations. Tier~1 agentic workloads (red, $n$\,=\,215) cluster at median OI\,=\,4{,}774; Tier~2 chat workloads (blue, $n$\,=\,758) cluster at median OI\,=\,85. The two tiers are separated by 56$\times$ in median operational intensity, with no overlap in their interquartile ranges.
-
 \begin{table}[H]
-\caption{Per-kernel profiling of two-layer forward passes for Llama-3.1-8B (dense, 51 kernels) and gpt-oss-20b (MoE, 83 kernels) on H100-SXM5-80GB at batch size 1, sequence length 512, collected with PyTorch Profiler. Arithmetic intensity (AI) is FLOPs per byte of memory traffic. The H100 bf16 ridge point is AI\,=\,295 (989\,TFLOPS\,$\div$\,3{,}352\,GB/s); kernels above this threshold are compute-bound. Scaling across batch sizes is in Appendix~\ref{sec:appendix_scaling}. Minor categories ($<$3\%: reduce, indexing, rope) are omitted; percentages are computed against the full total.}
+\caption{Per-kernel profiling of two-layer forward passes for Llama-3.1-8B (dense, 51 kernels) and gpt-oss-20b (MoE, 83 kernels) on H100-SXM5-80GB at batch size 1, sequence length 512, via PyTorch Profiler. Arithmetic intensity (AI) = FLOPs per byte of memory traffic. H100 bf16 ridge point: AI\,=\,295 (989\,TFLOPS\,$\div$\,3{,}352\,GB/s). Scaling across batch sizes is in Appendix~\ref{sec:appendix_scaling}. Minor categories ($<$3\%) omitted; percentages computed against full total.}
 \label{tab:kernel-roofline}
 \centering
 \small
@@ -156,17 +156,14 @@ gpt-oss-20b & other       &   109   &  6.6 &  \textemdash & \textemdash & memory
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=\textwidth]{figures/roofline_h100.pdf}
-    \caption{Roofline analysis of LLM inference kernels on H100-SXM5-80GB (bf16) at batch size 1, sequence length 512. Prefill GEMMs (red) cluster above the ridge point (AI\,$>$\,295, compute-bound, 650--785\,TFLOPS). Decode GEMMs (blue) cluster below (AI\,$<$\,10, memory-bound, 1--3\,TFLOPS). 420 kernels across five profiled models (Llama-3.1-8B, Llama-3.1-70B, Qwen-2.5-72B, Qwen3-32B, gpt-oss-20b) are plotted; the profiled set includes models used for predictor training (Section~\ref{sec:predictor}) and overlaps partially with the six models benchmarked in Tables~\ref{tab:single-turn}--\ref{tab:multi-turn}. Detailed breakdowns for two representative models are in Table~\ref{tab:kernel-roofline}.}
-    \label{fig:roofline}
-\end{figure}
+Table~\ref{tab:kernel-roofline} reports per-kernel time and arithmetic intensity for Llama-3.1-8B and gpt-oss-20b. Prefill GEMMs in Llama-8B reach AI\,=\,1{,}764 and 785\,TFLOPS, 6$\times$ above the H100 ridge point. Decode GEMMs sit at AI\,=\,4.0 and 2.9\,TFLOPS. Every kernel category in decode is memory-bound. gpt-oss-20b executes 63\% more kernels per forward pass (83 vs 51), with elementwise operations at 52.4\% of prefill time (vs 35.8\% for Llama-8B). In decode, gpt-oss-20b GEMMs sit at AI\,=\,150, 37.5$\times$ higher than Llama-8B decode GEMMs (AI\,=\,4.0).
+
+Figure~\ref{fig:quadrant} maps 1{,}466 benchmark configurations onto the OI--CF plane. Tier~1 agentic workloads cluster at median OI\,=\,4{,}774; Tier~2 chat workloads cluster at median OI\,=\,85, a 56$\times$ separation with no overlap in interquartile ranges.
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/quadrant_h100.pdf}
-    \caption{System-level operational intensity (OI) vs capacity footprint (CF) across 1{,}466 benchmark configurations on H100-SXM5-80GB. Each point is one (model, profile, concurrency, engine) configuration. Tier~1 agentic workloads (red) cluster in the high-OI, high-CF quadrant (compute-bound with large memory footprint). Tier~2 chat workloads (blue) cluster in the low-OI quadrant (bandwidth-bound). The vertical dashed line marks the H100 ridge point (OI\,=\,295); the horizontal line marks HBM capacity (80\,GB).}
+    \caption{System-level operational intensity (OI) vs capacity footprint (CF) across 1{,}466 benchmark configurations on H100-SXM5-80GB. Tier~1 agentic workloads (red) cluster in the high-OI, high-CF quadrant (compute-bound, large memory footprint). Tier~2 chat workloads (blue) cluster in the low-OI quadrant (bandwidth-bound). Dashed lines: H100 ridge point (OI\,=\,295) and HBM capacity (80\,GB).}
     \label{fig:quadrant}
 \end{figure}
 
@@ -174,10 +171,10 @@ gpt-oss-20b & other       &   109   &  6.6 &  \textemdash & \textemdash & memory
 \subsection{Per-Kernel Latency Prediction}
 \label{sec:predictor}
 
-The per-kernel and per-operator XGBoost predictors described in Section~\ref{sec:perop_method} are trained on the profiling data from Section~\ref{sec:kernel_roofline}. Validation results (held-out shape accuracy, MAE, MAPE, $R^2$ by kernel type) are pending a code audit of the predictor pipeline and will be reported in a subsequent revision.
+The per-kernel and per-operator XGBoost predictors described in Section~\ref{sec:perop_method} are trained on the profiling data from Section~\ref{sec:kernel_roofline}. Validation results are pending a code audit and will be reported in a subsequent revision.
 
 
 \subsection{End-to-End Prediction and Generalisation}
 \label{sec:e2e_prediction}
 
-Composed end-to-end predictions (analytical summation of per-kernel estimates over a model's layer graph) and generalisation to unseen models and tensor-parallel configurations depend on the validated predictors from Section~\ref{sec:predictor}. The predicted-vs-measured scatter plot and per-model error breakdown will be reported once the predictor pipeline is verified.
+Composed end-to-end predictions and generalisation to unseen models depend on the validated predictors from Section~\ref{sec:predictor}. Results will be reported once the predictor pipeline is verified.
