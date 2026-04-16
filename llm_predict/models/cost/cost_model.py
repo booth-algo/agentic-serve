@@ -3,8 +3,19 @@
 # This file is the cost model for Naivesim
 
 import math
-# import supply_chain.supply_chain_model as scm
-import cost_model.supply_chain.supply_chain_model as scm
+try:
+    import cost_model.supply_chain.supply_chain_model as scm
+except ModuleNotFoundError:
+    # Upstream LLMCompass supply-chain submodule (transistor density constants,
+    # used only by chiplet-area cost calc). Falls back to public-source values
+    # so the rest of llm_predict (predictors, calibration, transformer) loads
+    # without the cost submodule.
+    class _SCMStub:
+        PN_7_INDEX = 0
+        PN_5_INDEX = 1
+        PN_90_INDEX = 2
+        transistor_density_arr = [96.5, 138.2, 1.5]  # TSMC N7, N5, 90nm (Mt/mm^2)
+    scm = _SCMStub()
 
 # lots of parameters required for calculating silicon die area cost
 

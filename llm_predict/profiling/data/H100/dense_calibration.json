@@ -1,0 +1,17 @@
+{
+    "hardware": "NVIDIA H100 80GB HBM3",
+    "calibration_models": [
+        "Llama-3.1-8B-Instruct",
+        "Qwen2.5-72B-Instruct"
+    ],
+    "framework_overhead_us": 0.0,
+    "kernel_overhead_us": 0.0,
+    "elementwise_scale": 0.1,
+    "n_kernels_dense": 14,
+    "n_data_points": 48,
+    "mean_error_pct": 115.81,
+    "max_error_pct": 177.36,
+    "raw_mean_error_pct": 137.16,
+    "raw_max_error_pct": 204.8,
+    "timestamp": "2026-04-16"
+}
