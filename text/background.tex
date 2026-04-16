@@ -1,22 +1,23 @@
 \section{Background}
 \label{sec:background}
 
-We categorize prior work into \emph{inference benchmarks} that measure serving performance and \emph{inference simulators} that predict it. Table~\ref{tab:comparison} provides a unified feature comparison.
+We categorize prior work into \emph{inference benchmarks} that measure serving performance and \emph{inference simulators} that predict it. Table~\ref{tab:comparison} provides a feature comparison.
 
 \paragraph{Inference benchmarks.}
-MLPerf Inference~\citep{mlperf} provides standardized throughput and latency measurements with SLO enforcement but uses fixed reference datasets and does not support agentic or multi-turn workloads.
-SGLang~\cite{sglang} includes a benchmark suite with ShareGPT traces but focuses on single-turn chat.
-InferenceX~\citep{inferencex} provides a public dashboard of hardware comparisons but uses random tokens with arbitrary input/output lengths that do not reflect real-world agentic workloads.
-ML.ENERGY~\cite{mlenergy} benchmarks energy consumption across 46 models but does not measure latency or provide kernel-level analysis.
-None of these tools provide per-kernel profiling or latency prediction capabilities.
+Reddi et al.'s MLPerf Inference~\citep{mlperf} provides standardized throughput and latency measurements across four scenarios (single-stream, multistream, server, offline) with 99\% confidence intervals over 270K queries, but uses fixed reference datasets and does not support agentic or multi-turn workloads.
+Zheng et al.'s SGLang~\citep{sglang} includes a benchmark suite with ShareGPT traces but does not include multi-turn session replay, agentic traces, or concurrency sweeps to saturation.
+InferenceX~\citep{inferencex} provides a public dashboard of hardware comparisons but uses fixed-length synthetic tokens that do not match agentic trace distributions.
+Chung et al.'s ML.ENERGY~\citep{mlenergy} benchmarks energy consumption across 40 models and 6 tasks, achieving up to 44\% energy savings via Pareto optimization, but does not measure TTFT or provide kernel-level analysis.
+None of these benchmarks profile per-kernel execution or predict latency for unseen configurations.
 
 \paragraph{Inference simulators.}
-LLMCompass~\cite{llmcompass} uses analytical tile-by-tile simulation for hardware design exploration, achieving 4.1\% end-to-end error but does not model serving features (continuous batching, CUDA graphs) or validate against hardware counters.
-Vidur~\cite{vidur} uses Random Forest interpolation with profiling data, supporting five scheduling policies with ${<}5\%$ error at 85\% capacity, but lacks per-kernel validation and MoE support.
-LLMServingSim~v2~\cite{llmservingsim} achieves 0.97--1.54\% error with runtime-loop simulation and supports MoE, but uses lookup tables rather than generalizable ML and does not validate against ncu hardware counters.
-DistServe~\cite{distserve} models SLO attainment for prefill-decode disaggregation with ${<}2\%$ error using queueing theory but only supports dense architectures.
-Frontier~\cite{frontier} uses per-operator Random Forest prediction for MoE and disaggregated systems but reports 19--23\% end-to-end error.
-No existing simulator validates per-kernel predictions against ncu hardware counter ground truth or links kernel-level resource utilization to serving-level performance.
+Zhang et al.'s LLMCompass~\citep{llmcompass} uses analytical tile-by-tile simulation for hardware design exploration, achieving 4.1\% end-to-end inference error (0.69\% prefill, 7.5\% decode) on A100, but requires 15--16 minutes per configuration and does not model serving features (continuous batching, CUDA graphs).
+Agrawal et al.'s Vidur~\citep{vidur} uses Random Forest interpolation on profiling data, achieving ${<}$9\% latency error across four models with five scheduling policies; Vidur-Search found the optimal configuration for LLaMA2-70B in 1 hour on CPU (\$9.93) versus 42K GPU hours (\$218K).
+Zhong et al.'s DistServe~\citep{distserve} disaggregates prefill and decoding onto separate GPUs, achieving 7.4$\times$ higher goodput than colocated serving with ${<}$2\% simulator error, but only supports dense architectures and tests ISL up to 2K tokens.
+Agrawal et al.'s Sarathi-Serve~\citep{sarathi} addresses the prefill-decode throughput-latency tradeoff via chunked prefill scheduling.
+Patel et al.'s Splitwise~\citep{splitwise} similarly disaggregates inference phases at the cluster level.
+LLMServingSim~v2~\citep{llmservingsim} achieves 0.97--1.54\% error with runtime-loop simulation and supports MoE but uses lookup tables rather than generalizable ML predictors.
+To our knowledge, no existing simulator combines agentic workload benchmarking with per-kernel profiling validated against hardware counters.
 
 \definecolor{okgreen}{RGB}{0,140,54}
 \definecolor{nored}{RGB}{200,30,30}
@@ -25,7 +26,7 @@ No existing simulator validates per-kernel predictions against ncu hardware coun
 \newcommand{\xmark}{\textcolor{nored}{\texttimes}}
 \newcommand{\pmark}{\textcolor{partialorange}{$\sim$}}
 \begin{table}[t]
-\caption{Feature comparison of representative LLM inference simulators and benchmarks against our work. \cmark\ denotes full support, \xmark\ no support, and \pmark\ partial support. Reported accuracy is the end-to-end latency error stated by each system on its own validation setup (lower is better; ``---'' indicates the system does not predict latency). To our knowledge, ours is the first framework to unify agentic trace benchmarking with per-kernel roofline validation against hardware counters.}
+\caption{Feature comparison of representative LLM inference simulators and benchmarks against our work. \cmark\ denotes full support, \xmark\ no support, and \pmark\ partial support. Reported accuracy is the end-to-end latency error stated by each system on its own validation setup (lower is better; ``---'' indicates the system does not predict latency).}
 \label{tab:comparison}
 \centering
 \small
@@ -40,7 +41,7 @@ No existing simulator validates per-kernel predictions against ncu hardware coun
 \multicolumn{8}{l}{\emph{Prediction \& measurement}} \\
 \quad Predicts per-request latency (TTFT/ITL) & \cmark & \cmark & \cmark & \cmark & \xmark & \xmark & \cmark \\
 \quad Predicts throughput (TP)                & \cmark & \cmark & \cmark & \pmark & \xmark & \xmark & \cmark \\
-\quad Per-kernel \texttt{ncu} validation      & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
+\quad Per-kernel profiling                    & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
 \quad Agentic workload profiles               & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
 \quad Multi-turn                              & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
 \midrule
@@ -54,7 +55,7 @@ No existing simulator validates per-kernel predictions against ncu hardware coun
 \quad Saturation curves                       & \xmark & \xmark & \xmark & \xmark & \xmark & \xmark & \textbf{\cmark} \\
 \midrule
 \multicolumn{8}{l}{\emph{Validation \& availability}} \\
-\quad Reported latency error                  & 4.1\% & ${<}5\%$ & 0.97\% & ${<}2\%$ & --- & --- & \textbf{2\%} \\
+\quad Reported latency error                  & 4.1\% & ${<}$9\% & 0.97\% & ${<}$2\% & --- & --- & 4.1\% \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
