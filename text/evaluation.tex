@@ -8,7 +8,7 @@ We benchmark six LLMs with total parameters spanning 8B to 120B: three dense (Ll
 \label{sec:chat_vs_agentic}
 
 \begin{table}[t]
-\caption{Serving performance at saturation on H100-SXM5-80GB, vLLM v0.19, bf16, prefix caching on. \textit{Saturation}: concurrency at peak output token throughput. Three profiles: \texttt{chat-short} (Tier~2 ShareGPT, ISL\,$\leq$\,500, OSL\,$\leq$\,300); \texttt{coding-agent} (Tier~1 SWE-Bench, ISL\,$\approx$\,17{,}000, OSL\,$\approx$\,800); \texttt{pf-heavy} (synthetic, ISL\,=\,8{,}192, OSL\,=\,256). Mixtral coding-agent omitted: 32{,}768-token context window cannot accommodate SWE-Bench prompts under TP\,=\,2.}
+\caption{Single-turn serving performance at saturation on H100-SXM5-80GB, vLLM v0.19, bf16, prefix caching on. Each request is independent (no accumulated context). \textit{Saturation}: concurrency at peak output token throughput. Three profiles: \texttt{chat-short} (Tier~2 ShareGPT, ISL\,$\leq$\,500, OSL\,$\leq$\,300); \texttt{coding-agent} (Tier~1 SWE-Bench, ISL\,$\approx$\,17{,}000, OSL\,$\approx$\,800); \texttt{pf-heavy} (synthetic, ISL\,=\,8{,}192, OSL\,=\,256). Mixtral coding-agent omitted: 32{,}768-token context window cannot accommodate SWE-Bench prompts under TP\,=\,2.}
 \label{tab:serving-perf}
 \centering
 \small
@@ -116,6 +116,8 @@ gpt-oss-120b & MoE & 2 & chat-mt    &     71 &  21.3 & 12.57 \\
 \end{table}
 
 Table~\ref{tab:multi-turn} reports multi-turn serving performance for five of the six models (Mixtral excluded; see Table~\ref{tab:serving-perf} caption). Llama-3.1-8B serves chat multi-turn at 498\,ms TTFT and 19.37\,req/s. Under SWE-Bench multi-turn, TTFT rises to 2{,}375\,ms and req/s drops to 4.74. TerminalBench sits between: 1{,}411\,ms and 9.11\,req/s. gpt-oss-20b serves chat multi-turn at 54\,ms and 18.46\,req/s; under SWE-Bench multi-turn, TTFT rises to 1{,}489\,ms with req/s increasing to 26.49 (higher throughput at longer context due to more output tokens per session). gpt-oss-120b follows a similar pattern: 71\,ms chat, 1{,}405\,ms swebench. Qwen3.5-27B swebench-mt TTFT (1{,}084\,ms) is lower than its chat-mt (1{,}705\,ms), with higher req/s (9.28 vs 7.39).
+
+Comparing Tables~\ref{tab:serving-perf} and~\ref{tab:multi-turn} for Llama-3.1-8B: single-turn chat TTFT is 282\,ms at 55.15\,req/s; multi-turn chat rises to 498\,ms at 19.37\,req/s. Single-turn coding-agent TTFT is 598\,ms at 15.03\,req/s; multi-turn swebench reaches 2{,}375\,ms at 4.74\,req/s. Context accumulation across turns increases TTFT and reduces throughput beyond the single-turn baseline for both workload tiers.
 
 Per-turn metrics for Llama-3.1-8B under swebench-mt at concurrency 5 show TTFT growing from 41\,ms at turn 0 (1{,}585 input tokens) to 274\,ms at turn 10 (6{,}336 tokens) and 1{,}181\,ms at turn 40 (16{,}874 tokens). TTFT growth is sub-linear in accumulated context length. Full per-turn breakdowns are in Appendix~\ref{sec:appendix_multiturn}.
 
