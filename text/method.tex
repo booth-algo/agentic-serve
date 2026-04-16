@@ -82,7 +82,7 @@ To estimate latency without a fresh GPU run for every new model or shape, we tra
 
 \paragraph{Level 1 -- per-kernel predictor.} Trained on 2{,}040 ncu-profiled kernels (after back-annotating shape labels to raw ncu rows from model forward passes and GEMM sweeps), with a log-transformed latency target. We train one XGBoost per kernel family to specialise feature sets, avoiding a common trap: early iterations of this predictor included runtime ncu counters (\texttt{sm\_\_cycles\_elapsed.avg}, throughput percentages) as inputs and achieved $<$3\% MAPE, but the apparent accuracy was near-tautological since $\text{cycles}/\text{clock\_rate} \approx \text{latency}$. The production predictor uses only shape-derivable features (Table~\ref{tab:features_l1}) so that at predict-time, the caller supplies only model configuration and batch/sequence shape, not a fresh ncu run. Hyperparameters: \texttt{n\_estimators=500}, \texttt{max\_depth=6}, \texttt{lr=0.03}, log-target.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \caption{Per-kernel predictor features by family. All features are analytically derivable from (shape, dtype); no runtime counters (cycles, SM/DRAM throughput percentages, cache hit rates) are used at training or inference time.}
 \label{tab:features_l1}
 \centering
