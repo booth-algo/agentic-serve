@@ -10,7 +10,6 @@ llmcompass/systolic_array_model/temp/
 llmcompass/design_space_exploration/__pycache__/
 search/__pycache__/
 mobile_sys/__pycache__/*.pkl
-!llmcompass/profiler/profiles/A100/layer_predictor_bsseq.pkl
 
 # Benchmark results stored in Cloudflare R2 (run scripts/download-results.sh)
 inference-benchmark/results/

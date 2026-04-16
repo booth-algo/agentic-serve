@@ -1,10 +1,13 @@
 """
-kernel_profiler.py — Real GPU kernel latency profiler for LLMCompass.
+category_profiler.py — Real GPU per-category latency profiler for LLMCompass.
 
 Profiles three categories of operations that dominate transformer inference:
   1. GEMM         — matrix multiplications (Linear layers)
   2. Attention    — scaled dot-product attention (prefill and decode)
   3. Elementwise  — RMSNorm, SiLU activation, residual add
+
+Produces CSV files consumed by the CategoryPredictor (see
+llm_predict/predictors/per_category/predictor.py), one RF per category.
 
 Results are written to CSV files in the specified output directory and are
 consumed by the LLMCompass analytical cost model to provide data-driven
@@ -488,13 +491,13 @@ def main() -> None:
     Command-line entry point.  Example usage:
 
         # Full profile run on the default H100 system
-        python -m llm_predict.profiling.kernel_profiler --device cuda:0
+        python -m llm_predict.profiling.category_profiler --device cuda:0
 
         # Quick smoke-test with a reduced grid (useful in CI or on smaller GPUs)
-        python -m llm_predict.profiling.kernel_profiler --quick --device cuda:0
+        python -m llm_predict.profiling.category_profiler --quick --device cuda:0
 
         # Custom output directory
-        python -m llm_predict.profiling.kernel_profiler --output-dir profiling/data/A100
+        python -m llm_predict.profiling.category_profiler --output-dir profiling/data/A100
     """
     parser = argparse.ArgumentParser(
         description="Profile GPU kernel latencies and save CSV lookup tables.",
@@ -524,7 +527,7 @@ def main() -> None:
 
     if not torch.cuda.is_available():
         raise RuntimeError(
-            "CUDA is not available.  kernel_profiler requires a CUDA-capable GPU."
+            "CUDA is not available.  category_profiler requires a CUDA-capable GPU."
         )
 
     print("=" * 70)

@@ -50,34 +50,3 @@ def compute_perop_features(n_tokens, op, d_model, n_heads, n_kv_heads, intermedi
             d*d, d*ffn, tpe if E > 0 else tok, aexp if E > 0 else 1, wt,
             bs_f, seq_f, math.log2(bs_f+1), math.log2(seq_f+1),
             attn_quad, math.log2(attn_quad+1) if attn_quad > 0 else 0]
-
-
-def compute_bsseq_features(bs, seq, d_model, n_heads, n_kv_heads, intermediate_size, num_experts, top_k):
-    """Compute features for the bs×seq layer predictor."""
-    bs = float(bs); seq = float(seq); ntok = bs * seq
-    d = float(d_model); h = float(n_heads); kv = float(n_kv_heads)
-    ffn = float(intermediate_size); E = float(num_experts); k = float(top_k)
-    d_h = d / h
-    is_moe = 1.0 if E > 0 else 0.0
-
-    # Attention FLOPs: QKV proj + attention + output proj
-    attn_flops = 2*ntok*d*(d + 2*kv*d_h) + 4*bs*seq*seq*h*d_h + 2*ntok*d*d
-    # FFN FLOPs
-    if E > 0:
-        tpe = max(1, ntok * k / max(E, 1))
-        aexp = min(ntok * k, E)
-        ffn_flops = 2 * tpe * d * ffn * 3 * aexp
-    else:
-        ffn_flops = 2 * ntok * d * ffn * 3
-    total_flops = attn_flops + ffn_flops
-
-    # Weight bytes
-    attn_wt = d * (d + 2*kv*d_h + d) * 2
-    ffn_wt = (E * d * ffn * 3 * 2) if E > 0 else (d * ffn * 3 * 2)
-
-    return [bs, seq, ntok, math.log2(ntok+1), math.log2(bs+1), math.log2(seq+1),
-            d, h, kv, ffn, E, k,
-            total_flops, math.log2(total_flops+1),
-            attn_flops, math.log2(attn_flops+1),
-            ffn_flops, math.log2(ffn_flops+1),
-            attn_wt, ffn_wt, d*d, d*ffn, seq*seq, is_moe]

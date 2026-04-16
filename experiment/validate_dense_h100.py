@@ -40,9 +40,9 @@ REPEAT = 20
 
 def load_h100_predictor():
     import llm_predict.models.software.transformer as tmod
-    from llm_predict.predictors.per_kernel.predictor import KernelPredictor
+    from llm_predict.predictors.per_category.predictor import CategoryPredictor
     tmod._kernel_predictor = None
-    p = KernelPredictor("llm_predict/profiling/data/H100")
+    p = CategoryPredictor("llm_predict/profiling/data/H100")
     p.train_all(force_retrain=False)
     tmod._kernel_predictor = p
     return p

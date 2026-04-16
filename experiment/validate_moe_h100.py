@@ -68,12 +68,12 @@ MEASURE_ITERS = 20
 def load_h100_predictor():
     """Load ML predictor from H100 profiles."""
     import llm_predict.models.software.transformer as transformer_mod
-    from llm_predict.predictors.per_kernel.predictor import KernelPredictor
+    from llm_predict.predictors.per_category.predictor import CategoryPredictor
 
     profiles_dir = "llm_predict/profiling/data/H100"
     print(f"[Predict] Loading H100 ML predictor from {profiles_dir}")
     transformer_mod._kernel_predictor = None
-    predictor = KernelPredictor(profiles_dir)
+    predictor = CategoryPredictor(profiles_dir)
     predictor.train_all(force_retrain=False)
     transformer_mod._kernel_predictor = predictor
     return predictor

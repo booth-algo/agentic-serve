@@ -68,7 +68,7 @@ def load_a100_predictor():
     """Load ML predictor pointed at A100 profiles. Falls back to analytical if unavailable."""
     try:
         import llm_predict.models.software.transformer as transformer_mod
-        from llm_predict.predictors.per_kernel.predictor import KernelPredictor
+        from llm_predict.predictors.per_category.predictor import CategoryPredictor
 
         # Use relative path (matching how the predictor was trained) for cache key consistency
         # Must be called from REPO_ROOT working directory
@@ -80,7 +80,7 @@ def load_a100_predictor():
         if os.path.isdir(profiles_dir) or os.path.isdir(abs_profiles):
             print(f"[LLMCompass] Loading A100 ML predictor from {profiles_dir}")
             transformer_mod._kernel_predictor = None  # clear any stale singleton
-            predictor = KernelPredictor(profiles_dir)
+            predictor = CategoryPredictor(profiles_dir)
             predictor.train_all(force_retrain=False)
             transformer_mod._kernel_predictor = predictor
             return True, "ml"
@@ -134,7 +134,7 @@ def run_predictions(tp_size: int):
 
     # Force-load A100 predictor directly (bypass caching issues)
     import llm_predict.models.software.transformer as _tmod
-    from llm_predict.predictors.per_kernel.predictor import KernelPredictor as _KP
+    from llm_predict.predictors.per_category.predictor import CategoryPredictor as _KP
     _tmod._kernel_predictor = None
     _a100_pred = _KP("llm_predict/profiling/data/A100")
     _a100_pred.train_all(force_retrain=False)

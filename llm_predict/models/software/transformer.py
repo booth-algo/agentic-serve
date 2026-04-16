@@ -26,14 +26,14 @@ from llm_predict.models.hardware.system import System
 
 
 # Lazy import to avoid circular deps — only loaded when ml_predictor is used
-_kernel_predictor = None
+_category_predictor = None
 
-def _get_kernel_predictor(profiles_dir: str = None):
+def _get_category_predictor(profiles_dir: str = None):
     """Lazy-load the ML kernel predictor singleton."""
-    global _kernel_predictor
-    if _kernel_predictor is not None:
-        return _kernel_predictor
-    from llm_predict.predictors.per_kernel.predictor import KernelPredictor
+    global _category_predictor
+    if _category_predictor is not None:
+        return _category_predictor
+    from llm_predict.predictors.per_category.predictor import CategoryPredictor
     import os
     if profiles_dir is None:
         # Default: look for profiles in the profiler directory
@@ -41,11 +41,11 @@ def _get_kernel_predictor(profiles_dir: str = None):
         profiles_dir = os.path.join(base, 'profiling', 'data', 'H100')
     if not os.path.isdir(profiles_dir):
         return None
-    predictor = KernelPredictor(profiles_dir)
+    predictor = CategoryPredictor(profiles_dir)
     try:
         predictor.train_all()
-        _kernel_predictor = predictor
-        return _kernel_predictor
+        _category_predictor = predictor
+        return _category_predictor
     except Exception:
         return None
 
@@ -265,57 +265,6 @@ def compute_perop_features(n_tokens, op, d_model, n_heads, n_kv_heads, intermedi
             bs_f, seq_f, math.log2(bs_f+1), math.log2(seq_f+1),
             attn_quad, math.log2(attn_quad+1) if attn_quad > 0 else 0]
 
-
-
-
-_bsseq_predictor_cache = None
-def get_bsseq_predictor():
-    """Lazy-load the bs×seq layer predictor (for BS>1 predictions)."""
-    global _bsseq_predictor_cache
-    if _bsseq_predictor_cache is not None:
-        return _bsseq_predictor_cache
-    import pickle, os
-    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    pkl_path = os.path.join(base, 'profiling', 'data', 'A100', 'trained', 'layer_predictor_bsseq.pkl')
-    if not os.path.isfile(pkl_path):
-        return None
-    with open(pkl_path, "rb") as f:
-        data = pickle.load(f)
-    _bsseq_predictor_cache = data["model"]
-    return _bsseq_predictor_cache
-
-
-def _compute_bsseq_features(bs, seq, d_model, n_heads, n_kv_heads, intermediate_size, num_experts, top_k):
-    """Compute features for the bs×seq layer predictor."""
-    import math
-    import numpy as np
-    bs = float(bs); seq = float(seq); ntok = bs * seq
-    d = float(d_model); h = float(n_heads); kv = float(n_kv_heads)
-    ffn = float(intermediate_size); E = float(num_experts); k = float(top_k)
-    d_h = d / h
-    is_moe = 1.0 if E > 0 else 0.0
-
-    # Attention FLOPs: QKV proj + attention + output proj
-    attn_flops = 2*ntok*d*(d + 2*kv*d_h) + 4*bs*seq*seq*h*d_h + 2*ntok*d*d
-    # FFN FLOPs
-    if E > 0:
-        tpe = max(1, ntok * k / max(E, 1))
-        aexp = min(ntok * k, E)
-        ffn_flops = 2 * tpe * d * ffn * 3 * aexp
-    else:
-        ffn_flops = 2 * ntok * d * ffn * 3
-    total_flops = attn_flops + ffn_flops
-
-    # Weight bytes
-    attn_wt = d * (d + 2*kv*d_h + d) * 2
-    ffn_wt = (E * d * ffn * 3 * 2) if E > 0 else (d * ffn * 3 * 2)
-
-    return [bs, seq, ntok, math.log2(ntok+1), math.log2(bs+1), math.log2(seq+1),
-            d, h, kv, ffn, E, k,
-            total_flops, math.log2(total_flops+1),
-            attn_flops, math.log2(attn_flops+1),
-            ffn_flops, math.log2(ffn_flops+1),
-            attn_wt, ffn_wt, d*d, d*ffn, seq*seq, is_moe]
 
 class TransformerBlockInitComputationTP(Operator):
     """
@@ -674,7 +623,7 @@ class TransformerBlockInitComputationTP(Operator):
         _ALLREDUCE_OVERLAP_FACTOR = 0.95  # A100 NVLink: nearly full overlap (validated)  # fraction of allreduce that overlaps with compute
 
         if self.use_ml_predictor:
-            predictor = _get_kernel_predictor()
+            predictor = _get_category_predictor()
             if predictor is not None and predictor.is_trained():
                 # GEMM predictions
                 # Fuse QKV/gate+up only when GEMMs are small (launch overhead dominates)
@@ -1246,7 +1195,7 @@ class TransformerBlockAutoRegressionTP(Operator):
         _ALLREDUCE_OVERLAP_FACTOR = 0.95  # A100 NVLink: nearly full overlap (validated)  # NCCL overlaps allreduce with compute
 
         if self.use_ml_predictor:
-            predictor = _get_kernel_predictor()
+            predictor = _get_category_predictor()
             if predictor is not None and predictor.is_trained():
                 # GEMM predictions — decode has M=b (single token, seq_len=1)
                 use_cuda_graph = getattr(self, 'use_cuda_graph', False)
@@ -2188,7 +2137,7 @@ class TransformerBlockMoETP(Operator):
         _ALLREDUCE_OVERLAP_FACTOR = 0.95  # A100 NVLink: nearly full overlap (validated)
 
         if self.use_ml_predictor:
-            predictor = _get_kernel_predictor()
+            predictor = _get_category_predictor()
             if predictor is not None and predictor.is_trained():
                 use_cuda_graph = getattr(self, 'use_cuda_graph', False)
                 kv_dim_per_dev = (d * n_kv // h) // dev_cnt

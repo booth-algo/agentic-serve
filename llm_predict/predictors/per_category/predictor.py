@@ -113,10 +113,10 @@ def _save_cache(cache_path: str, model) -> None:
 
 
 # ---------------------------------------------------------------------------
-# KernelPredictor
+# CategoryPredictor
 # ---------------------------------------------------------------------------
 
-class KernelPredictor:
+class CategoryPredictor:
     """Manages trained ML models for different GPU kernel types.
 
     Attributes
@@ -163,7 +163,7 @@ class KernelPredictor:
         if not force_retrain:
             model = _load_cache(pkl_path)
             if model is not None:
-                print(f"[KernelPredictor] Loaded GEMM model from cache: {pkl_path}")
+                print(f"[CategoryPredictor] Loaded GEMM model from cache: {pkl_path}")
                 self.models["gemm"] = model
                 return model
 
@@ -175,7 +175,7 @@ class KernelPredictor:
         X = df[feature_cols].values
         y = df["latency_ns"].values
 
-        print(f"[KernelPredictor] Training GEMM model on {len(X)} datapoints...")
+        print(f"[CategoryPredictor] Training GEMM model on {len(X)} datapoints...")
 
         param_grid = {
             "n_estimators": [250, 500],
@@ -192,7 +192,7 @@ class KernelPredictor:
         )
         gs.fit(X, y)
         model = gs.best_estimator_
-        print(f"[KernelPredictor] GEMM best params: {gs.best_params_}")
+        print(f"[CategoryPredictor] GEMM best params: {gs.best_params_}")
 
         _save_cache(pkl_path, model)
         self.models["gemm"] = model
@@ -218,7 +218,7 @@ class KernelPredictor:
         if not force_retrain:
             model = _load_cache(pkl_path)
             if model is not None:
-                print(f"[KernelPredictor] Loaded attn_{phase} model from cache: {pkl_path}")
+                print(f"[CategoryPredictor] Loaded attn_{phase} model from cache: {pkl_path}")
                 self.models[cache_key] = model
                 return model
 
@@ -235,7 +235,7 @@ class KernelPredictor:
         y = df["latency_ns"].values
 
         print(
-            f"[KernelPredictor] Training attn_{phase} model on {len(X)} datapoints..."
+            f"[CategoryPredictor] Training attn_{phase} model on {len(X)} datapoints..."
         )
 
         param_grid = {
@@ -253,7 +253,7 @@ class KernelPredictor:
         )
         gs.fit(X, y)
         model = gs.best_estimator_
-        print(f"[KernelPredictor] attn_{phase} best params: {gs.best_params_}")
+        print(f"[CategoryPredictor] attn_{phase} best params: {gs.best_params_}")
 
         _save_cache(pkl_path, model)
         self.models[cache_key] = model
@@ -272,7 +272,7 @@ class KernelPredictor:
         if not force_retrain:
             model = _load_cache(pkl_path)
             if model is not None:
-                print(f"[KernelPredictor] Loaded elementwise model from cache: {pkl_path}")
+                print(f"[CategoryPredictor] Loaded elementwise model from cache: {pkl_path}")
                 self.models["elementwise"] = model
                 return model
 
@@ -289,7 +289,7 @@ class KernelPredictor:
         X = df[feature_cols].values
         y = df["latency_ns"].values
 
-        print(f"[KernelPredictor] Training elementwise model on {len(X)} datapoints...")
+        print(f"[CategoryPredictor] Training elementwise model on {len(X)} datapoints...")
 
         param_grid = {
             "n_estimators": [250, 500],
@@ -308,7 +308,7 @@ class KernelPredictor:
         model = gs.best_estimator_
         # Stash the op-type mapping inside the model object for portability
         model._elementwise_op_types = op_types
-        print(f"[KernelPredictor] elementwise best params: {gs.best_params_}")
+        print(f"[CategoryPredictor] elementwise best params: {gs.best_params_}")
 
         _save_cache(pkl_path, model)
         self.models["elementwise"] = model
@@ -421,7 +421,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    predictor = KernelPredictor(profiles_dir=args.profiles_dir)
+    predictor = CategoryPredictor(profiles_dir=args.profiles_dir)
     predictor.train_all(force_retrain=args.force_retrain)
 
     # Accuracy report on held-out 20% test set

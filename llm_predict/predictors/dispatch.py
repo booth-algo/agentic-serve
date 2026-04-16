@@ -1,5 +1,5 @@
 """
-PredictorDispatch: tries per-kernel RandomForest first, falls back to
+PredictorDispatch: tries per-category RandomForest first, falls back to
 per-op XGBoost, then to analytical roofline.
 """
 
@@ -10,8 +10,9 @@ class PredictorDispatch:
     """Dispatch latency predictions across available predictor tiers.
 
     Priority:
-      1. Per-kernel RandomForest (paper direction — trained on real GPU profiles)
-      2. Per-op XGBoost (trained on analytical features)
+      1. Per-category RandomForest (paper direction — trained on real GPU profiles)
+         One RF per kernel family: gemm, attn_prefill, attn_decode, elementwise
+      2. Per-op XGBoost (trained on analytical shape features)
       3. Analytical roofline (always available, least accurate)
     """
 
@@ -21,31 +22,31 @@ class PredictorDispatch:
             gpu: GPU name for selecting the profiles directory ('A100' or 'H100').
         """
         self.gpu = gpu
-        self._kernel_predictor = None
+        self._category_predictor = None
         self._perop_predictor = None
 
     # ------------------------------------------------------------------
     # Lazy loaders
     # ------------------------------------------------------------------
 
-    def _load_kernel_predictor(self):
-        if self._kernel_predictor is not None:
-            return self._kernel_predictor
-        from llm_predict.predictors.per_kernel.predictor import KernelPredictor
+    def _load_category_predictor(self):
+        if self._category_predictor is not None:
+            return self._category_predictor
+        from llm_predict.predictors.per_category.predictor import CategoryPredictor
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         profiles_dir = os.path.join(base, 'profiling', 'data', self.gpu)
         if not os.path.isdir(profiles_dir):
             return None
-        predictor = KernelPredictor(
+        predictor = CategoryPredictor(
             profiles_dir=profiles_dir,
             cache_dir=os.path.join(profiles_dir, 'trained'),
         )
         try:
             predictor.train_all()
-            self._kernel_predictor = predictor
+            self._category_predictor = predictor
         except Exception:
             pass
-        return self._kernel_predictor
+        return self._category_predictor
 
     def _load_perop_predictor(self):
         if self._perop_predictor is not None:
@@ -63,9 +64,9 @@ class PredictorDispatch:
     def predict_gemm(self, M: int, N: int, K: int,
                      hbm_bandwidth: float = None, peak_flops: float = None) -> float:
         """Predict GEMM latency in seconds."""
-        kp = self._load_kernel_predictor()
-        if kp is not None and kp.is_trained():
-            result = kp.predict_gemm(M, N, K)
+        cp = self._load_category_predictor()
+        if cp is not None and cp.is_trained():
+            result = cp.predict_gemm(M, N, K)
             if result >= 0:
                 return result
 
@@ -79,9 +80,9 @@ class PredictorDispatch:
                                    hbm_bandwidth: float = None,
                                    peak_flops: float = None) -> float:
         """Predict prefill attention latency in seconds."""
-        kp = self._load_kernel_predictor()
-        if kp is not None and kp.is_trained():
-            result = kp.predict_attention_prefill(batch, seq_len, n_heads, head_dim)
+        cp = self._load_category_predictor()
+        if cp is not None and cp.is_trained():
+            result = cp.predict_attention_prefill(batch, seq_len, n_heads, head_dim)
             if result >= 0:
                 return result
 
@@ -95,9 +96,9 @@ class PredictorDispatch:
                                   hbm_bandwidth: float = None,
                                   peak_flops: float = None) -> float:
         """Predict decode attention latency in seconds."""
-        kp = self._load_kernel_predictor()
-        if kp is not None and kp.is_trained():
-            result = kp.predict_attention_decode(batch, kv_len, n_heads, head_dim)
+        cp = self._load_category_predictor()
+        if cp is not None and cp.is_trained():
+            result = cp.predict_attention_decode(batch, kv_len, n_heads, head_dim)
             if result >= 0:
                 return result
 
@@ -106,9 +107,9 @@ class PredictorDispatch:
                                          hbm_bandwidth, peak_flops)
         return -1.0
 
-    def kernel_predictor_available(self) -> bool:
-        kp = self._load_kernel_predictor()
-        return kp is not None and kp.is_trained()
+    def category_predictor_available(self) -> bool:
+        cp = self._load_category_predictor()
+        return cp is not None and cp.is_trained()
 
     def perop_predictor_available(self) -> bool:
         return self._load_perop_predictor() is not None

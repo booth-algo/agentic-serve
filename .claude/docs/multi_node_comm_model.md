@@ -8,9 +8,9 @@ An analytical multi-node communication model replacing ASTRA-Sim's event-driven 
 
 ### New Files / Modules
 
-1. **`llmcompass/profiler/kernel_profiler.py`** — Real GPU kernel profiler (GEMM, attention, elementwise)
-2. **`llmcompass/profiler/ml_predictor.py`** — RandomForest ML predictor trained on profile data
-3. **`llmcompass/profiler/profiles/H100/`** — 3,988 profiled data points + trained .pkl models
+1. **`llm_predict/profiling/category_profiler.py`** — Real GPU per-category profiler (GEMM, attention, elementwise)
+2. **`llm_predict/predictors/per_category/predictor.py`** — RandomForest CategoryPredictor trained on profile data
+3. **`llm_predict/profiling/data/H100/`** — profiled data points + trained .pkl models (stored on R2)
 
 ### Modified Files
 

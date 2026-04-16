@@ -21,8 +21,8 @@ df = pd.DataFrame(data)
 # Get LLMCompass predictions for each data point
 import llm_predict.models.software.transformer as tmod
 tmod._kernel_predictor = None
-from llm_predict.predictors.per_kernel.predictor import KernelPredictor
-p = KernelPredictor("llm_predict/profiling/data/A100")
+from llm_predict.predictors.per_category.predictor import CategoryPredictor
+p = CategoryPredictor("llm_predict/profiling/data/A100")
 p.train_all()
 tmod._kernel_predictor = p
 from llm_predict.models.software.transformer import TransformerBlockInitComputationTP, TransformerBlockAutoRegressionTP

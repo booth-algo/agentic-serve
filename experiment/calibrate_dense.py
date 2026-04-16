@@ -115,10 +115,10 @@ def measure_isolated_layer(
 def _init_predictor(profiles_dir: str = "llm_predict/profiling/data/A100"):
     """Train and return the ML predictor. Call once."""
     import llm_predict.models.software.transformer as tmod
-    from llm_predict.predictors.per_kernel.predictor import KernelPredictor
+    from llm_predict.predictors.per_category.predictor import CategoryPredictor
 
     tmod._kernel_predictor = None
-    p = KernelPredictor(profiles_dir)
+    p = CategoryPredictor(profiles_dir)
     p.train_all()
     tmod._kernel_predictor = p
     return p

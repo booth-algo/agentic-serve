@@ -40,7 +40,7 @@ from llm_predict.dse.dse import (
     read_architecture_template,
     template_to_system,
 )
-from llm_predict.predictors.per_kernel.predictor import KernelPredictor
+from llm_predict.predictors.per_category.predictor import CategoryPredictor
 
 
 # ---------------------------------------------------------------------------
@@ -56,19 +56,19 @@ REPEAT_ITERS = 20
 # ---------------------------------------------------------------------------
 # A100 predictor (module-level singleton with explicit reload helper)
 # ---------------------------------------------------------------------------
-_PREDICTOR: KernelPredictor | None = None
+_PREDICTOR: CategoryPredictor | None = None
 _SYSTEM = None
 _ARCH = None
 
 
 def _load_predictor() -> tuple:
-    """Load (or reload) the A100 KernelPredictor and associated system."""
+    """Load (or reload) the A100 CategoryPredictor and associated system."""
     global _PREDICTOR, _SYSTEM, _ARCH
     if _PREDICTOR is None:
         # Use relative path so the profiler's cache keys are stable
         profile_dir = "llm_predict/profiling/data/A100"
         tmod._kernel_predictor = None
-        _PREDICTOR = KernelPredictor(profile_dir)
+        _PREDICTOR = CategoryPredictor(profile_dir)
         _PREDICTOR.train_all()
         _ARCH = read_architecture_template("device_configs/GA100.json")
         _SYSTEM = template_to_system(_ARCH)
