@@ -80,23 +80,21 @@ We collect two complementary datasets. \textbf{2-layer model passes}: Llama-3.1-
 
 To estimate latency without a fresh GPU run for every new model or shape, we train two XGBoost regressors at complementary granularities. We pick XGBoost because the feature sets are low-dimensional, mixed continuous/categorical, and strongly non-linear (e.g., memory-bound vs.\ compute-bound regimes); gradient-boosted trees fit this shape in seconds, generalize well on small samples, and predict in microseconds at inference time, unlike neural surrogates that would dominate the cost of the serving simulator they feed.
 
-\paragraph{Level 1 -- per-kernel predictor.} Trained on 2{,}811 ncu-profiled kernels with a log-transformed latency target. The 41 features (Table~\ref{tab:features_l1}) combine raw ncu counters with derived quantities and a one-hot kernel-family encoding. Hyperparameters: \texttt{n\_estimators=500}, \texttt{max\_depth=6}, \texttt{lr=0.03}.
+\paragraph{Level 1 -- per-kernel predictor.} Trained on 2{,}040 ncu-profiled kernels (after back-annotating shape labels to raw ncu rows from model forward passes and GEMM sweeps), with a log-transformed latency target. We train one XGBoost per kernel family to specialise feature sets, avoiding a common trap: early iterations of this predictor included runtime ncu counters (\texttt{sm\_\_cycles\_elapsed.avg}, throughput percentages) as inputs and achieved $<$3\% MAPE, but the apparent accuracy was near-tautological since $\text{cycles}/\text{clock\_rate} \approx \text{latency}$. The production predictor uses only shape-derivable features (Table~\ref{tab:features_l1}) so that at predict-time, the caller supplies only model configuration and batch/sequence shape, not a fresh ncu run. Hyperparameters: \texttt{n\_estimators=500}, \texttt{max\_depth=6}, \texttt{lr=0.03}, log-target.
 
 \begin{table}[h]
-\caption{Per-kernel predictor features (41 total), grouped by source.}
+\caption{Per-kernel predictor features by family. All features are analytically derivable from (shape, dtype); no runtime counters (cycles, SM/DRAM throughput percentages, cache hit rates) are used at training or inference time.}
 \label{tab:features_l1}
 \centering
 \small
-\begin{tabular}{@{}lp{0.72\linewidth}@{}}
+\begin{tabular}{@{}lp{0.60\linewidth}l@{}}
 \toprule
-\textbf{Group} & \textbf{Features} \\
+\textbf{Family} & \textbf{Features} & \textbf{$n_\text{train}$} \\
 \midrule
-Launch config (ncu) & block size, grid size, registers, shared memory, waves, occupancy, thread count \\
-Memory traffic (ncu) & DRAM read/write bytes, L1TEX hit rate, LTS hit rate \\
-Throughput (ncu) & SM\%, DRAM\%, active cycles, elapsed cycles \\
-Compute peaks (ncu) & FFMA peak, DFMA peak \\
-Derived & arithmetic intensity, total/log DRAM bytes, log DRAM r/w, active-cycle ratio, bytes per thread, write/read ratio, bytes per cycle, grid volume, log grid volume \\
-Kernel family (1-hot, 10) & gemm, flash\_attn, reduce, elementwise, copy, compact, topk, cast, index, random \\
+gemm        & $M, N, K, \log(1{+}M), \log(1{+}N), \log(1{+}K)$, FLOPs ($2MNK$), bytes ($(MK{+}NK{+}MN)\cdot\text{dtype}$), arithmetic intensity, $\log(1{+}$FLOPs$)$, $\log(1{+}$bytes$)$, dtype$_{\text{bf16}}$ one-hot & 694 \\
+flash\_attn & $\text{bs}, \text{seq}, h, d_h, k_v$, total FLOPs ($4 \cdot \text{bs} \cdot h \cdot \text{seq}^2 \cdot d_h$), $\log(1{+}\text{seq})$, $\log(1{+}h)$ & 16 \\
+elementwise & numel, $\log(1{+}$numel$)$, op-type one-hot over \{rmsnorm, silu, mul, residual, rope, neg, fill, compare, other\} & 645 \\
+misc (reduce / splitk-reduce / cast / copy) & numel or aggregate shape size, $\log(\cdot)$, optional size\_m/n/k (for splitk-reduce), family one-hot & 677 \\
 \bottomrule
 \end{tabular}
 \end{table}
