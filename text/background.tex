@@ -16,7 +16,7 @@ Agrawal et al.'s Vidur~\citep{vidur} uses Random Forest interpolation on profili
 Zhong et al.'s DistServe~\citep{distserve} disaggregates prefill and decoding onto separate GPUs, achieving 7.4$\times$ higher goodput than colocated serving with ${<}$2\% simulator error, but only supports dense architectures and tests ISL up to 2K tokens.
 Agrawal et al.'s Sarathi-Serve~\citep{sarathi} addresses the prefill-decode throughput-latency tradeoff via chunked prefill scheduling.
 Patel et al.'s Splitwise~\citep{splitwise} similarly disaggregates inference phases at the cluster level.
-LLMServingSim~v2~\citep{llmservingsim} achieves 0.97--1.54\% error with runtime-loop simulation and supports MoE but uses lookup tables rather than generalizable ML predictors.
+Cho et al.'s LLMServingSim~v2~\citep{llmservingsim} achieves 0.97--1.54\% error with runtime-loop simulation and supports MoE but uses lookup tables rather than generalizable ML predictors.
 To our knowledge, no existing simulator combines agentic workload benchmarking with per-kernel profiling validated against hardware counters.
 
 \definecolor{okgreen}{RGB}{0,140,54}
