@@ -176,6 +176,10 @@ Figure~\ref{fig:quadrant} maps 1{,}466 of the 2{,}527 total benchmark configurat
 \subsection{Per-Kernel Latency Prediction}
 \label{sec:predictor}
 
+\noindent\rule{\linewidth}{1pt}
+\begin{center}\textbf{\textcolor{red}{--- AI-GENERATED --- PROOFREADING REQUIRED ---}}\end{center}
+\noindent\rule{\linewidth}{1pt}
+
 Table~\ref{tab:perkernel_mape} reports per-kernel-family MAPE on two held-out models (Qwen-2.5-72B, Llama-3.3-70B; 832 kernels), evaluated after training the four family-specific XGBoost predictors described in Section~\ref{sec:perop_method} on 2{,}040 ncu-profiled kernels from Llama-3.1-8B, Mixtral-8$\times$7B, and a GEMM/roofline shape sweep. A feature audit confirms that no runtime ncu counters appear in any of the four feature sets, so the reported numbers reflect genuine shape$\to$latency generalisation rather than the near-tautological fit obtainable when cycles or throughput percentages are fed in as inputs.
 
 \begin{table}[h]
@@ -197,9 +201,18 @@ misc (reduce, splitk, cast, copy) & 677 & 264 & 45.8\% \\
 
 Per-family MAPEs are noisy because shape coverage in the training set is thin (e.g., only $M{=}128$ at $K{\in}\{4{,}096, 14{,}336\}$, so Llama-70B attention-output GEMMs at $K{=}8{,}192$ are an extrapolation), but per-kernel errors are approximately unbiased around the true latency. When summed across all $\sim$200 kernels of a single-layer forward pass, over- and under-predictions cancel, yielding the aggregate results in Table~\ref{tab:e2e_layer_mape} below.
 
+\FloatBarrier
+\noindent\rule{\linewidth}{1pt}
+\begin{center}\textbf{\textcolor{red}{--- END AI-GENERATED (\S\ref{sec:predictor}) ---}}\end{center}
+\noindent\rule{\linewidth}{1pt}
+
 
 \subsection{End-to-End Prediction and Generalisation}
 \label{sec:e2e_prediction}
+
+\noindent\rule{\linewidth}{1pt}
+\begin{center}\textbf{\textcolor{red}{--- AI-GENERATED --- PROOFREADING REQUIRED ---}}\end{center}
+\noindent\rule{\linewidth}{1pt}
 
 \paragraph{Single-GPU aggregate (A100).}
 We reconstruct each held-out model's layer latency by summing the per-family predictions for every ncu-profiled kernel of a single forward-pass layer and compare against the measured sum from the same ncu run. Table~\ref{tab:e2e_layer_mape} reports the paper-grade number.
@@ -240,3 +253,8 @@ Mixtral-8$\times$7B & 2 & 38.1\% & 74.7\% & 0.07$\times$ (vLLM MoE measurement a
 \bottomrule
 \end{tabular}
 \end{table}
+
+\FloatBarrier
+\noindent\rule{\linewidth}{1pt}
+\begin{center}\textbf{\textcolor{red}{--- END AI-GENERATED (\S\ref{sec:e2e_prediction}) ---}}\end{center}
+\noindent\rule{\linewidth}{1pt}
