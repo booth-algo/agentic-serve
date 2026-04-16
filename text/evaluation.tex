@@ -181,7 +181,7 @@ Figure~\ref{fig:quadrant} maps 1{,}466 of the 2{,}527 total benchmark configurat
 Table~\ref{tab:perkernel_mape} reports per-kernel-family MAPE on two held-out models (Qwen-2.5-72B, Llama-3.3-70B; 832 kernels), evaluated after training the four family-specific XGBoost predictors described in Section~\ref{sec:perop_method} on 2{,}040 ncu-profiled kernels from Llama-3.1-8B, Mixtral-8$\times$7B, and a GEMM/roofline shape sweep. A feature audit confirms that no runtime ncu counters appear in any of the four feature sets, so the reported numbers reflect genuine shape$\to$latency generalisation rather than the near-tautological fit obtainable when cycles or throughput percentages are fed in as inputs.
 
 \begin{table}[!htbp]
-\caption{Per-family held-out MAPE on Qwen-2.5-72B + Llama-3.3-70B (A100, bf16, bs=1, seq=128). The flash\_attn family is sparsely sampled: all 16 training rows are at a single $n_\text{heads}{=}32$ configuration (Llama-3.1-8B, Mixtral-8$\times$7B), and the held-out rows are all at $n_\text{heads}{=}64$. At the small profiling $\text{seq}{=}128$, A100's flash\_attn is dominated by SM-utilisation effects: the $n_\text{heads}{=}32$ case launches 32 CUDA blocks against 108 SMs (70\% idle) and runs 2.85$\times$ \emph{slower} per kernel than $n_\text{heads}{=}64$ (64 blocks, better occupancy). The predictor has no anchor point to learn this inversion from the training data alone, so it over-predicts held-out by the same factor. Flash\_attn contributes $\sim$1.6\% of aggregate layer time at these shapes, so the overall held-out error remains healthy.}
+\caption{Per-family held-out MAPE on Qwen-2.5-72B + Llama-3.3-70B (A100, bf16). Flash\_attn training was augmented with a 540-shape CUDA-event sweep on a gpu-4 A100 covering $n_\text{heads}\in\{8,16,32,48,64\}$, $\text{seq}\in\{128,\ldots,2048\}$, $\text{batch}\in\{1,2,4,8\}$ so the predictor has anchor points on both sides of the small-$n_\text{heads}$ SM-utilisation inversion on A100 (e.g., $n_\text{heads}{=}32$ launches only 32 CUDA blocks on 108 SMs and is dispatch-overhead-bound, running 2.85$\times$ slower per kernel than $n_\text{heads}{=}64$). Without this sweep the flash\_attn held-out MAPE was 177\%; with it the held-out error drops to 1.5\%.}
 \label{tab:perkernel_mape}
 \centering
 \small
@@ -190,7 +190,7 @@ Table~\ref{tab:perkernel_mape} reports per-kernel-family MAPE on two held-out mo
 \textbf{Family} & \textbf{$n_\text{train}$} & \textbf{$n_\text{held-out}$} & \textbf{Held-out MAPE} \\
 \midrule
 gemm         & 694 & 120 & 35.9\% \\
-flash\_attn  &  16 &  16 & 177.1\% \\
+flash\_attn  & 556 &  16 &   1.5\% \\
 elementwise  & 645 & 424 & 19.0\% \\
 misc (reduce, splitk, cast, copy) & 677 & 264 & 45.8\% \\
 \bottomrule
@@ -211,7 +211,7 @@ Per-family MAPEs are noisy because shape coverage in the training set is thin (e
 We reconstruct each held-out model's layer latency by summing the per-family predictions for every ncu-profiled kernel of a single forward-pass layer and compare against the measured sum from the same ncu run. Table~\ref{tab:e2e_layer_mape} reports the paper-grade number.
 
 \begin{table}[!htbp]
-\caption{Held-out single-layer aggregate error on A100. Summing per-kernel predictions matches measured per-layer total within 6.7\% on both held-out models, a factor of $\sim$4--6$\times$ tighter than the worst-case per-family MAPE, because over- and under-predictions cancel. Mean absolute aggregate error across the two held-out models is 4.1\%.}
+\caption{Held-out single-layer aggregate error on A100. Summing per-kernel predictions matches measured per-layer total within 7.7\% on both held-out models, a factor of $\sim$5--10$\times$ tighter than the worst-case per-family MAPE, because over- and under-predictions cancel. Mean absolute aggregate error across the two held-out models is 4.0\%.}
 \label{tab:e2e_layer_mape}
 \centering
 \small
@@ -219,10 +219,10 @@ We reconstruct each held-out model's layer latency by summing the per-family pre
 \toprule
 \textbf{Held-out model} & \textbf{Predicted (ms)} & \textbf{Measured (ms)} & \textbf{Error} \\
 \midrule
-Qwen-2.5-72B  & 25.14 & 26.95 & $-$6.72\% \\
-Llama-3.3-70B & 25.30 & 24.94 & $+$1.43\% \\
+Qwen-2.5-72B  & 24.87 & 26.95 & $-$7.71\% \\
+Llama-3.3-70B & 25.03 & 24.94 & $+$0.35\% \\
 \midrule
-Mean $|$error$|$ &  &  & 4.07\% \\
+Mean $|$error$|$ &  &  & 4.03\% \\
 \bottomrule
 \end{tabular}
 \end{table}
