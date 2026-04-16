@@ -120,8 +120,8 @@ function shortenModel(model: string): string {
   short = short.replace(/^meta-llama\//i, '');
   short = short.replace(/^neuralmagic\/(Meta-)?/i, '');
   short = short.replace(/^Qwen\//i, '');
-  // Remove -Instruct suffix
-  short = short.replace(/-Instruct$/i, '');
+  // Remove -Instruct suffix (with optional version suffix like -v0.1)
+  short = short.replace(/-Instruct(-v[\d.]+)?$/i, '');
   // Remove -FP8 suffix (captured separately in quant)
   short = short.replace(/-FP8$/i, '');
   return short;
