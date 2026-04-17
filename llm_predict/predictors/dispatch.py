@@ -15,10 +15,12 @@ class PredictorDispatch:
     All public methods return latency in seconds.
     """
 
-    def __init__(self, gpu: str = "H100"):
+    def __init__(self, gpu: str = "A100"):
         """
         Args:
-            gpu: GPU name for selecting the profiles directory ('A100' or 'H100').
+            gpu: GPU arch for selecting trained pkls. Currently supported:
+                'A100', 'RTX3090', 'RTX2080Ti'. 'H100' recognized but pkls
+                pending (blocked on runpod ncu perms).
         """
         self.gpu = gpu
         self._per_kernel_predictor = None

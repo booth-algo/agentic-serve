@@ -46,6 +46,9 @@ class PerKernelPredictor:
         self.models: dict = {}
         self.feature_cols: dict = {}
         self.metadata: dict = {}
+        # For misc: optional per-subfamily submodels (reduce, splitk_reduce,
+        # cast, copy). When present, predict_misc routes by subfamily.
+        self.misc_submodels: dict = {}
 
     def _pkl_dir(self) -> str:
         base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -70,6 +73,9 @@ class PerKernelPredictor:
                 'version': data.get('version'),
                 'target': data.get('target', 'log_gpu_time_duration_ms'),
             }
+            if family == 'misc' and isinstance(data.get('models'), dict):
+                # Per-subfamily misc predictors override the single `model`.
+                self.misc_submodels = dict(data['models'])
         return len(self.models) > 0
 
     def is_loaded(self) -> bool:
@@ -159,7 +165,7 @@ class PerKernelPredictor:
         numel: for reduce/cast/copy (element count)
         M, N, K: for splitk_reduce (3D shape)
         """
-        if 'misc' not in self.models:
+        if 'misc' not in self.models and not self.misc_submodels:
             return -1.0
         numel_f = float(numel) if numel > 0 else float(max(M * N, M * K, N * K, 1))
         Mf, Nf, Kf = float(M), float(N), float(K)
@@ -174,6 +180,11 @@ class PerKernelPredictor:
         known_families = ('reduce', 'splitk_reduce', 'cast', 'copy')
         for fam in known_families:
             feats[f'kernel_family_onehot_{fam}'] = 1.0 if fam == family else 0.0
+        # Submodels trained on per-subfamily splits exist in pkl but have
+        # fewer samples each and ended up worse on composition MAPE than the
+        # monolithic model (2026-04-17 iter 6 regression). Always use the
+        # monolithic model; keep `misc_submodels` loaded for future
+        # experimentation.
         return self._predict('misc', feats)
 
     # ------------------------------------------------------------------

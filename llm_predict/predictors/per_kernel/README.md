@@ -1,49 +1,53 @@
-# per_kernel — True per-CUDA-kernel latency predictor
+# per_kernel — per-CUDA-kernel latency predictor (inference API)
 
-**Status: WIP (not yet in repo — lives on runpod at `~/per-kernel-rebuild/`)**
+Runtime-side predictor consumed by `PredictorDispatch`. One XGBoost model per kernel family, shape-only features, trained on ncu ground-truth `gpu__time_duration`.
 
-## Scope
-
-Finest-grained predictor in the hierarchy:
+**Hierarchy:**
 
 | Granularity | Class / Module | What it predicts |
-|-------------|----------------|------------------|
+|---|---|---|
+| **per-kernel (this)** | `PerKernelPredictor` | Single-kernel latency per op, keyed on shape |
 | per-op | `PerOpPredictor` | 4 ops per layer: attn, ffn, norm_pre, norm_post |
-| **per-kernel (this)** | `PerKernelPredictor` | **1 predictor per individual CUDA kernel invocation, keyed on shape** |
+| e2e | analytical composition | Σ per-op × n_layers + overhead (no ML) |
 
-## Design
+## API
 
-`per_kernel` uses shape-only features predicting latency at the individual
-kernel-variant level, trained on ncu ground-truth per
-(kernel_name, shape, GPU, backend). One XGBoost model per family
-(gemm, flash_attn, elementwise, misc). Paper Step 3 design.
+```python
+from llm_predict.predictors.per_kernel.predictor import PerKernelPredictor
 
-## Required training data
+p = PerKernelPredictor(gpu='A100')   # or 'RTX3090', 'RTX2080Ti'
+if p.load():
+    t_ms = p.predict_gemm(M=512, N=4096, K=4096, dtype='bf16')
+    t_ms = p.predict_attention_prefill(bs=1, seq=512, n_heads=32, head_dim=128)
+    t_ms = p.predict_elementwise('rmsnorm', numel=512*4096)
+    t_ms = p.predict_misc('reduce', numel=65536)
+```
 
-- ncu CSVs with `Kernel Name`, `dram__bytes_read.sum`, `dram__bytes_write.sum`,
-  `launch__*`, `gpu__time_duration.avg`
-- Back-annotated with (M, N, K, dtype) via iteration-order mapping
-  (see `/root/per-kernel-rebuild/extract_shapes.py` on runpod)
+All predict methods return ms, or `-1.0` if the family pkl isn't on disk. `load()` is idempotent and returns `True` if any family loaded.
 
-## Current WIP state (runpod, not in repo)
+## Pkl layout
 
-- `perkernel_gemm_shape_v1.pkl` — GEMM-only, 224 roofline kernels, 0.69% train MAPE
-- Known issues: sparse (only 56 unique shapes), extrapolates poorly to unseen M
+```
+llm_predict/profiling/data/{A100,RTX3090,RTX2080Ti}/trained/per_kernel/
+    perkernel_gemm_shape_v2.pkl
+    perkernel_flash_attn_shape_v2.pkl
+    perkernel_elementwise_shape_v2.pkl
+    perkernel_misc_shape_v2.pkl
+```
 
-## Next steps to graduate into repo
+Each pkl payload: `{model, feature_cols, target, kernel_family, gpu, dtype, n_training, heldout_mape, version}`. `target` is always `log_gpu_time_duration_ms`.
 
-1. Expand training set by back-annotating model-prefill ncu CSVs
-   (Llama-8B, Mixtral, etc. at bs=1, seq=128)
-2. Validate leave-one-model-out CV ≤10% MAPE per kernel family
-3. Add separate predictors for flash_attn, elementwise (not just GEMM)
-4. Write a `predictor.py` exposing `load/predict_*` for drop-in use by
-   `dispatch.py`
-5. Per-GPU pinning: train separate A100 and H100 predictors
-6. Move trained pickles to R2 `profiling-data/{GPU}/trained/per_kernel/`
+## Training
 
-## Blockers
+See `llm_predict/training/per_kernel/README.md` for the labeling + training + validation pipeline. Pkls are produced there and either committed under `llm_predict/profiling/data/…` or pulled from R2 via `llm_predict/training/per_kernel/pull_pkls.sh`.
 
-- ncu access on runpod currently fails with `ERR_NVGPUCTRPERM`. Options:
-  - Run ncu collection on gpu-4 (A100, works) when available
-  - Request RunPod pod variant with `NVreg_RestrictProfilingToAdminUsers=0`
-- Need to fix shape back-annotation for `ncu_gemm_sweep_raw.csv` (script origin unknown)
+## Composition
+
+`PerKernelPredictor` alone is a point-estimate per op. To predict end-to-end TTFT, callers enumerate ops per layer, call the right `predict_*` per op, and sum. Reference implementation: `llm_predict/training/per_kernel/composer.py` (ported from `compose_percat.py`).
+
+## Known limitations
+
+- **flash_attn** training pool is small (tens of rows per GPU). Per-kernel MAPE on held-out GQA configs is high; aggregate-layer error stays low because flash_attn is a small fraction of total time.
+- **RTX 2080Ti** lacks FA2 (sm_75); `flash_attn` family may be absent — `load()` skips it silently and `predict_attention_prefill()` returns `-1.0`.
+- **H100** recognized but no pkls yet (blocked by runpod container profiling perms).
+- Decode-phase kernels are not modeled — training data is prefill-only.

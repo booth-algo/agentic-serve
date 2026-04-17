@@ -1,0 +1,462 @@
+"""Phase A2+A3 trainer — per-(GPU × family) shape-only XGBoost.
+
+Port of `/root/per-kernel-rebuild/train_shape_v2.py`. Changes:
+- Outer loop over GPUs (A100 / RTX3090 / RTX2080Ti); one pkl per
+  (GPU × family) lands at `llm_predict/profiling/data/{gpu}/trained/per_kernel/`.
+- Held-out model list driven by `model_specs.HELD_OUT_BY_GPU`.
+- Feature columns match `llm_predict/predictors/per_kernel/predictor.py` so the
+  runtime API loads the trained pkls without adaptation.
+- Skip-family guard for sparse training pools (e.g. 2080Ti misc).
+
+CLI
+---
+    python -m llm_predict.training.per_kernel.trainer \\
+        --data    llm_predict/training/per_kernel/data/kernels_labeled.csv \\
+        --out-dir llm_predict/profiling/data \\
+        --gpus    A100 RTX3090 RTX2080Ti
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import pickle
+import warnings
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import xgboost as xgb
+
+from . import model_specs  # noqa: F401  (kept for parity with labeler; used indirectly)
+
+warnings.filterwarnings("ignore")
+
+
+DTYPE_BYTES = {"bf16": 2, "fp16": 2, "fp32": 4, "fp8": 1}
+
+XGB_PARAMS: dict[str, Any] = dict(
+    n_estimators=800, max_depth=8, learning_rate=0.03,
+    subsample=0.8, colsample_bytree=0.8, min_child_weight=3,
+    reg_alpha=0.1, reg_lambda=1.0, random_state=42, n_jobs=4,
+    tree_method="hist", verbosity=0,
+)
+
+FORBIDDEN_SUBSTRINGS = [
+    "cycles", "throughput", "launch_", "dram_bytes_sum", "dram_bytes_read",
+    "dram_bytes_write", "register", "occupancy", "sm_active",
+    "compute_throughput", "memory_throughput",
+]
+
+
+def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    mask = y_true > 0
+    if mask.sum() == 0:
+        return float("nan")
+    return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100.0)
+
+
+# ───────── Feature builders (MUST match predictor.py) ─────────
+
+def build_gemm_features(df: pd.DataFrame) -> pd.DataFrame:
+    sub = df[df["M"].notna() & df["N"].notna() & df["K"].notna()].copy()
+    sub["dtype_bytes"] = sub["dtype"].map(DTYPE_BYTES).fillna(2.0)
+    sub["log_M"] = np.log1p(sub["M"])
+    sub["log_N"] = np.log1p(sub["N"])
+    sub["log_K"] = np.log1p(sub["K"])
+    sub["analytical_flops"] = 2.0 * sub["M"] * sub["N"] * sub["K"]
+    sub["analytical_bytes"] = (sub["M"] * sub["K"] + sub["N"] * sub["K"] + sub["M"] * sub["N"]) * sub["dtype_bytes"]
+    sub["analytical_ai"] = sub["analytical_flops"] / np.maximum(sub["analytical_bytes"], 1.0)
+    sub["log_flops"] = np.log1p(sub["analytical_flops"])
+    sub["log_bytes"] = np.log1p(sub["analytical_bytes"])
+    sub["dtype_onehot_bf16"] = (sub["dtype"] == "bf16").astype(int)
+    return sub
+
+
+GEMM_FEATURES = [
+    "M", "N", "K", "log_M", "log_N", "log_K",
+    "analytical_flops", "analytical_bytes", "analytical_ai",
+    "log_flops", "log_bytes", "dtype_onehot_bf16",
+]
+
+
+def build_flash_attn_features(df: pd.DataFrame) -> pd.DataFrame:
+    sub = df.copy()
+    sub["total_flops"] = 4.0 * sub["bs"] * sub["n_heads"] * (sub["seq"] ** 2) * sub["head_dim"]
+    sub["log_seq"] = np.log1p(sub["seq"])
+    sub["log_heads"] = np.log1p(sub["n_heads"])
+    return sub
+
+
+FLASH_ATTN_FEATURES = [
+    "bs", "seq", "n_heads", "head_dim", "kv_heads",
+    "total_flops", "log_seq", "log_heads",
+]
+
+
+ELEM_OPS = ["rmsnorm", "silu", "mul", "residual", "rope", "neg", "fill", "compare", "other"]
+
+
+def build_elementwise_features(df: pd.DataFrame) -> pd.DataFrame:
+    sub = df.copy()
+    sub["log_numel"] = np.log1p(sub["numel"].fillna(0))
+    for op in ELEM_OPS:
+        sub[f"op_type_onehot_{op}"] = (sub["op_type"] == op).astype(int)
+    known = set(ELEM_OPS)
+    sub.loc[~sub["op_type"].isin(known), "op_type_onehot_other"] = 1
+    return sub
+
+
+ELEMENTWISE_FEATURES = ["numel", "log_numel"] + [f"op_type_onehot_{op}" for op in ELEM_OPS]
+
+
+MISC_FAMILIES = ["reduce", "splitk_reduce", "cast", "copy"]
+
+
+def build_misc_features(df: pd.DataFrame) -> pd.DataFrame:
+    sub = df.copy()
+    m = sub["M"].fillna(0.0); n = sub["N"].fillna(0.0); k = sub["K"].fillna(0.0)
+    nn = sub["numel"].fillna(0.0)
+    size_proxy = np.where(nn > 0, nn, m * n)
+    sub["numel_or_shape_total"] = size_proxy
+    sub["log_numel_or_shape"] = np.log1p(size_proxy)
+    sub["size_m"] = m
+    sub["size_n"] = n
+    sub["size_k"] = k
+    sub["log_size_m"] = np.log1p(m)
+    sub["log_size_n"] = np.log1p(n)
+    sub["log_size_k"] = np.log1p(k)
+    for fam in MISC_FAMILIES:
+        sub[f"kernel_family_onehot_{fam}"] = (sub["kernel_family"] == fam).astype(int)
+    return sub
+
+
+MISC_FEATURES = (
+    ["numel_or_shape_total", "log_numel_or_shape",
+     "size_m", "size_n", "size_k",
+     "log_size_m", "log_size_n", "log_size_k"]
+    + [f"kernel_family_onehot_{fam}" for fam in MISC_FAMILIES]
+)
+
+
+FAMILY_CONFIG: dict[str, dict[str, Any]] = {
+    "gemm":        {"families": ["gemm"],         "builder": build_gemm_features,        "cols": GEMM_FEATURES},
+    "flash_attn":  {"families": ["flash_attn"],   "builder": build_flash_attn_features,  "cols": FLASH_ATTN_FEATURES},
+    "elementwise": {"families": ["elementwise"],  "builder": build_elementwise_features, "cols": ELEMENTWISE_FEATURES},
+    "misc":        {"families": MISC_FAMILIES,    "builder": build_misc_features,        "cols": MISC_FEATURES},
+}
+
+
+# ───────── Core train / predict ─────────
+
+FAMILY_XGB_OVERRIDES: dict[str, dict[str, Any]] = {
+    # misc is heterogeneous (4 subfamilies) and has 24K rows — more capacity.
+    "misc": dict(n_estimators=1200, max_depth=10),
+    # flash_attn is data-poor (~112 rows) — smaller model to avoid overfit.
+    "flash_attn": dict(n_estimators=400, max_depth=5),
+}
+
+
+def train_one(X: pd.DataFrame, y: np.ndarray, feature_cols: list[str],
+                family: str | None = None) -> xgb.XGBRegressor:
+    y_log = np.log(np.maximum(y, 1e-6))
+    params = dict(XGB_PARAMS)
+    if family and family in FAMILY_XGB_OVERRIDES:
+        params.update(FAMILY_XGB_OVERRIDES[family])
+    model = xgb.XGBRegressor(**params)
+    model.fit(X[feature_cols].values, y_log)
+    return model
+
+
+def predict_ms(model: xgb.XGBRegressor, X: pd.DataFrame, feature_cols: list[str]) -> np.ndarray:
+    y_log_pred = model.predict(X[feature_cols].values)
+    return np.exp(y_log_pred)
+
+
+def audit_features(feature_cols: list[str]) -> list[tuple[str, str]]:
+    leaks = []
+    for feat in feature_cols:
+        for bad in FORBIDDEN_SUBSTRINGS:
+            if bad in feat.lower():
+                leaks.append((feat, bad))
+    return leaks
+
+
+MIN_TRAIN_ROWS = 5
+
+
+# ───────── Per-GPU orchestrator ─────────
+
+def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
+    """Train 4 pkls for a single GPU. Returns a report dict."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dtype_for_pkl = "fp16" if gpu == "RTX2080Ti" else "bf16"
+
+    family_frames: dict[str, pd.DataFrame] = {}
+    for fam, cfg in FAMILY_CONFIG.items():
+        sub = df[df["kernel_family"].isin(cfg["families"])].copy()
+        family_frames[fam] = cfg["builder"](sub)
+
+    training_models = sorted(set(df[~df["held_out"].astype(bool)]["model"].unique()))
+    cv_results: dict[str, dict[str, Any]] = {}
+    if len(training_models) >= 2:
+        for hold_mdl in training_models:
+            cv_results[hold_mdl] = {}
+            for fam, cfg in FAMILY_CONFIG.items():
+                data = family_frames[fam]
+                train_data = data[(~data["held_out"].astype(bool)) & (data["model"] != hold_mdl)].copy()
+                test_data  = data[(~data["held_out"].astype(bool)) & (data["model"] == hold_mdl)].copy()
+                n_tr, n_te = len(train_data), len(test_data)
+                if n_tr < MIN_TRAIN_ROWS or n_te == 0:
+                    cv_results[hold_mdl][fam] = {"mape": float("nan"), "n_train": n_tr, "n_test": n_te}
+                    continue
+                m = train_one(train_data, train_data["gpu_time_duration_ms"].values, cfg["cols"], family=fam)
+                y_pred = predict_ms(m, test_data, cfg["cols"])
+                cv_results[hold_mdl][fam] = {"mape": mape(test_data["gpu_time_duration_ms"].values, y_pred),
+                                              "n_train": n_tr, "n_test": n_te}
+
+    final_models: dict[str, xgb.XGBRegressor] = {}
+    heldout: dict[str, dict[str, Any]] = {}
+    heldout_per_model: dict[str, dict[str, float]] = {}
+    heldout_list = sorted(set(df[df["held_out"].astype(bool)]["model"].unique()))
+
+    for fam, cfg in FAMILY_CONFIG.items():
+        data = family_frames[fam]
+        train_data = data[~data["held_out"].astype(bool)].copy()
+        test_data  = data[data["held_out"].astype(bool)].copy()
+        n_tr, n_te = len(train_data), len(test_data)
+        if n_tr < MIN_TRAIN_ROWS:
+            heldout[fam] = {"skipped": True, "reason": f"n_train={n_tr} < {MIN_TRAIN_ROWS}",
+                            "n_train": n_tr, "n_test": n_te}
+            continue
+        model = train_one(train_data, train_data["gpu_time_duration_ms"].values, cfg["cols"], family=fam)
+        final_models[fam] = model
+
+        if n_te > 0:
+            y_pred = predict_ms(model, test_data, cfg["cols"])
+            heldout[fam] = {"mape": mape(test_data["gpu_time_duration_ms"].values, y_pred),
+                            "n_train": n_tr, "n_test": n_te,
+                            "y_test_sum": float(test_data["gpu_time_duration_ms"].sum()),
+                            "y_pred_sum": float(y_pred.sum())}
+            per_m = {}
+            for mdl in heldout_list:
+                mask = (test_data["model"] == mdl).values
+                if mask.sum() == 0:
+                    per_m[mdl] = float("nan")
+                    continue
+                per_m[mdl] = mape(test_data["gpu_time_duration_ms"].values[mask], y_pred[mask])
+            heldout_per_model[fam] = per_m
+        else:
+            heldout[fam] = {"mape": float("nan"), "n_train": n_tr, "n_test": 0, "no_holdout": True}
+
+    saved: list[str] = []
+    for fam, model in final_models.items():
+        cfg = FAMILY_CONFIG[fam]
+        pkl_path = out_dir / f"perkernel_{fam}_shape_v2.pkl"
+
+        if fam == "misc":
+            # Train one sub-model per misc subfamily for more accurate per-shape
+            # predictions. Payload shape: `{models: {subfamily: xgb}, ...}`.
+            sub_models: dict[str, xgb.XGBRegressor] = {}
+            sub_train_counts: dict[str, int] = {}
+            data = family_frames[fam]
+            sub_train_data = data[~data["held_out"].astype(bool)]
+            for sub in MISC_FAMILIES:
+                sub_df = sub_train_data[sub_train_data["kernel_family"] == sub]
+                if len(sub_df) < MIN_TRAIN_ROWS:
+                    continue
+                sub_m = train_one(sub_df,
+                                    sub_df["gpu_time_duration_ms"].values,
+                                    cfg["cols"], family="misc")
+                sub_models[sub] = sub_m
+                sub_train_counts[sub] = len(sub_df)
+            payload = {
+                "model": model,                          # back-compat
+                "models": sub_models,                    # per-subfamily
+                "per_subfamily_n_training": sub_train_counts,
+                "feature_cols": list(cfg["cols"]),
+                "target": "log_gpu_time_duration_ms",
+                "kernel_family": fam,
+                "gpu": gpu,
+                "dtype": dtype_for_pkl,
+                "n_training": heldout[fam].get("n_train", 0),
+                "heldout_mape": heldout[fam].get("mape"),
+                "version": "shape_v3_per_subfamily",
+            }
+        else:
+            payload = {
+                "model": model,
+                "feature_cols": list(cfg["cols"]),
+                "target": "log_gpu_time_duration_ms",
+                "kernel_family": fam,
+                "gpu": gpu,
+                "dtype": dtype_for_pkl,
+                "n_training": heldout[fam].get("n_train", 0),
+                "heldout_mape": heldout[fam].get("mape"),
+                "version": "shape_v2",
+            }
+        with open(pkl_path, "wb") as f:
+            pickle.dump(payload, f)
+        saved.append(str(pkl_path))
+
+    agg_rows: list[tuple] = []
+    for mdl in heldout_list:
+        total_pred = 0.0
+        total_meas = 0.0
+        per_fam_detail: dict[str, Any] = {}
+        for fam, cfg in FAMILY_CONFIG.items():
+            data = family_frames[fam]
+            test = data[(data["held_out"].astype(bool)) & (data["model"] == mdl)].copy()
+            if len(test) == 0:
+                continue
+            model = final_models.get(fam)
+            if model is None:
+                continue
+            y_pred = predict_ms(model, test, cfg["cols"])
+            y_meas = test["gpu_time_duration_ms"].values
+            total_pred += y_pred.sum()
+            total_meas += y_meas.sum()
+            per_fam_detail[fam] = (float(y_pred.sum()), float(y_meas.sum()), len(test))
+        err_pct = abs(total_pred - total_meas) / max(total_meas, 1e-9) * 100.0
+        agg_rows.append((mdl, total_pred, total_meas, err_pct, per_fam_detail))
+
+    return {
+        "gpu": gpu,
+        "cv_results": cv_results,
+        "heldout": heldout,
+        "heldout_per_model": heldout_per_model,
+        "agg": agg_rows,
+        "saved_pkls": saved,
+        "feature_audit": {fam: audit_features(cfg["cols"]) for fam, cfg in FAMILY_CONFIG.items()},
+        "training_models": training_models,
+        "heldout_list": heldout_list,
+    }
+
+
+# ───────── Report writer ─────────
+
+def write_report(results: list[dict], report_path: Path) -> None:
+    lines: list[str] = ["# Phase A3 Training Report (shape_v2)", ""]
+
+    for fam in FAMILY_CONFIG:
+        feats = FAMILY_CONFIG[fam]["cols"]
+        leaks_any = any(r["feature_audit"].get(fam) for r in results)
+        lines.append(f"- **{fam}** features ({len(feats)}): " +
+                     (", ".join(f"`{f}`" for f in feats)) +
+                     (" **LEAK**" if leaks_any else " ✓"))
+    lines.append("")
+
+    lines.append("## Headline: aggregate layer-total error per (GPU × held-out model)")
+    lines.append("")
+    lines.append("| GPU | held-out model | sum(pred ms) | sum(meas ms) | abs err % |")
+    lines.append("|---|---|---:|---:|---:|")
+    for r in results:
+        for mdl, tp, tm, ep, _ in r["agg"]:
+            lines.append(f"| {r['gpu']} | {mdl} | {tp:.2f} | {tm:.2f} | {ep:.2f}% |")
+    lines.append("")
+
+    lines.append("## Held-out per-family MAPE (full-train)")
+    lines.append("")
+    lines.append("| GPU | family | n_train | n_test | MAPE |")
+    lines.append("|---|---|---:|---:|---:|")
+    for r in results:
+        for fam in FAMILY_CONFIG:
+            entry = r["heldout"].get(fam, {})
+            if entry.get("skipped"):
+                lines.append(f"| {r['gpu']} | {fam} | {entry.get('n_train',0)} | {entry.get('n_test',0)} | skipped ({entry.get('reason','')}) |")
+            elif entry.get("no_holdout"):
+                lines.append(f"| {r['gpu']} | {fam} | {entry.get('n_train',0)} | 0 | no-heldout (train only) |")
+            else:
+                lines.append(f"| {r['gpu']} | {fam} | {entry.get('n_train',0)} | {entry.get('n_test',0)} | {entry.get('mape', float('nan')):.2f}% |")
+    lines.append("")
+
+    lines.append("## Leave-one-model-out CV")
+    lines.append("")
+    for r in results:
+        if not r["cv_results"]:
+            lines.append(f"### {r['gpu']} — skipped (<2 training models)")
+            lines.append("")
+            continue
+        lines.append(f"### {r['gpu']}")
+        lines.append("")
+        lines.append("| held-out | gemm | flash_attn | elementwise | misc |")
+        lines.append("|---|---:|---:|---:|---:|")
+        for hold_mdl, per_fam in r["cv_results"].items():
+            row = f"| {hold_mdl} |"
+            for fam in FAMILY_CONFIG:
+                entry = per_fam.get(fam, {})
+                v = entry.get("mape", float("nan"))
+                if np.isnan(v):
+                    row += " n/a |"
+                else:
+                    row += f" {v:.1f}% (n={entry.get('n_test', 0)}) |"
+            lines.append(row)
+        lines.append("")
+
+    lines.append("## Saved pkls")
+    for r in results:
+        lines.append(f"- **{r['gpu']}**")
+        for p in r["saved_pkls"]:
+            lines.append(f"  - `{p}`")
+    lines.append("")
+
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("\n".join(lines))
+
+
+def run(data_csv: Path, out_dir: Path, report_path: Path, gpus: list[str]) -> list[dict]:
+    print(f"[*] Loading {data_csv}")
+    df = pd.read_csv(data_csv)
+    print(f"[*] {len(df)} rows; GPUs present = {sorted(df['gpu'].unique())}")
+
+    results: list[dict] = []
+    for gpu in gpus:
+        sub = df[df["gpu"] == gpu].copy()
+        if len(sub) == 0:
+            print(f"[-] {gpu}: no rows, skipping")
+            continue
+        print(f"[*] {gpu}: {len(sub)} rows — training...")
+        gpu_out_dir = out_dir / gpu / "trained" / "per_kernel"
+        r = train_one_gpu(sub, gpu, gpu_out_dir)
+        for fam, entry in r["heldout"].items():
+            if entry.get("skipped"):
+                print(f"    [skip] {fam}: {entry.get('reason')}")
+            else:
+                mape_val = entry.get("mape", float("nan"))
+                print(f"    {fam}: n_train={entry.get('n_train',0)} n_test={entry.get('n_test',0)} MAPE={mape_val:.2f}%")
+        results.append(r)
+
+    write_report(results, report_path)
+    summary_path = report_path.with_suffix(".json")
+    with open(summary_path, "w") as f:
+        json.dump({r["gpu"]: {
+            "heldout_mape": {fam: entry.get("mape") for fam, entry in r["heldout"].items()},
+            "aggregate_err_pct": {mdl: ep for mdl, _, _, ep, _ in r["agg"]},
+            "saved_pkls": r["saved_pkls"],
+        } for r in results}, f, indent=2, default=str)
+    print(f"[*] Report: {report_path}")
+    print(f"[*] Summary: {summary_path}")
+    return results
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", default=None)
+    ap.add_argument("--out-dir", default=None)
+    ap.add_argument("--report", default=None)
+    ap.add_argument("--gpus", nargs="+", default=["A100", "RTX3090", "RTX2080Ti"])
+    args = ap.parse_args()
+
+    pkg_dir = Path(__file__).resolve().parent
+    llm_predict_dir = pkg_dir.parents[1]   # llm_predict/ — matches PerKernelPredictor._pkl_dir()
+    data_csv = Path(args.data) if args.data else pkg_dir / "data" / "kernels_labeled.csv"
+    out_dir  = Path(args.out_dir) if args.out_dir else llm_predict_dir / "profiling" / "data"
+    report   = Path(args.report) if args.report else pkg_dir / "reports" / "training_report.md"
+
+    run(data_csv, out_dir, report, args.gpus)
+
+
+if __name__ == "__main__":
+    main()
