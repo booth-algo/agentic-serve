@@ -87,6 +87,15 @@ function detectHardware(filename: string, dirPath: string): string {
     return '3090';
   }
 
+  // 2080Ti detection
+  if (dir.startsWith('2080ti_') || dir.includes('/2080ti_') || fp.includes('2080ti') ||
+      dir.startsWith('rtx2080_') || dir.includes('/rtx2080_')) {
+    if (/_tp8_/.test(dir)) return '2080Tix8';
+    if (/_tp4_/.test(dir)) return '2080Tix4';
+    if (/_tp2_/.test(dir)) return '2080Tix2';
+    return '2080Ti';
+  }
+
   // Infer from directory name
   if (dir.includes('h100_70b_fp8')) return 'H100';
 
