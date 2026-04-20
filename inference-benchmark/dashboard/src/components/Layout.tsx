@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-type PageId = 'benchmark' | 'roofline';
+type PageId = 'benchmark' | 'roofline' | 'coverage';
 
 interface LayoutProps {
   children: ReactNode;
@@ -27,6 +27,18 @@ const NAV_PAGES: Array<{ id: PageId; label: string; icon: ReactNode }> = [
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="3 17 9 11 13 15 21 7" />
         <line x1="3" y1="17" x2="21" y2="17" />
+      </svg>
+    ),
+  },
+  {
+    id: 'coverage',
+    label: 'Coverage',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" />
+        <rect x="14" y="3" width="7" height="7" />
+        <rect x="3" y="14" width="7" height="7" />
+        <rect x="14" y="14" width="7" height="7" />
       </svg>
     ),
   },

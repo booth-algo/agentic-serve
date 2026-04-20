@@ -10,10 +10,11 @@ import { ComparisonChart } from './components/charts/ComparisonChart';
 import { PerTurnChart } from './components/charts/PerTurnChart';
 import { DataTable } from './components/DataTable';
 import { RooflinePage } from './components/RooflinePage';
+import { CoveragePage } from './components/CoveragePage';
 import type { TabId } from './types';
 import './index.css';
 
-type PageId = 'benchmark' | 'roofline';
+type PageId = 'benchmark' | 'roofline' | 'coverage';
 
 function App() {
   const {
@@ -51,6 +52,8 @@ function App() {
     <Layout totalRuns={allData.length} loading={loading} activePage={activePage} onPageChange={setActivePage}>
       {activePage === 'roofline' ? (
         <RooflinePage />
+      ) : activePage === 'coverage' ? (
+        <CoveragePage allData={allData} loading={loading} />
       ) : loading ? (
         <div className="flex h-64 items-center justify-center">
           <div className="text-[#8b949e]">Loading benchmark data...</div>
