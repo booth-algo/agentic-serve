@@ -71,12 +71,14 @@ function detectHardware(filename: string, dirPath: string): string {
   if (fp.includes('h100_tcp') || dir.includes('h100_tcp')) return 'H100-TCP';
   if (fp.includes('a6000') || dir.includes('a6000')) return 'A6000';
 
-  // A100 detection (directories prefixed with a100_)
+  // A100 detection (directories prefixed with a100_).
+  // All our on-prem A100s are SXM4-40GB; label explicitly so they
+  // don't get conflated with the A100-80GB variant.
   if (dir.startsWith('a100_') || dir.includes('/a100_') || fp.includes('a100')) {
-    if (/_tp8_/.test(dir)) return 'A100x8';
-    if (/_tp4_/.test(dir)) return 'A100x4';
-    if (/_tp2_/.test(dir)) return 'A100x2';
-    return 'A100';
+    if (/_tp8_/.test(dir)) return 'A100-40GBx8';
+    if (/_tp4_/.test(dir)) return 'A100-40GBx4';
+    if (/_tp2_/.test(dir)) return 'A100-40GBx2';
+    return 'A100-40GB';
   }
 
   // 3090 detection

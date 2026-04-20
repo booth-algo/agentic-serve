@@ -33,9 +33,11 @@ const ALL_MULTI_PROFILES = [
 
 // Canonical hardware list — show every TP variant we physically have
 // so 3090x4 / 3090x8 / 2080Tix4 untested combos are visible too.
+// "A100-40GB" labels match build-data.ts so data from the a100_*
+// result dirs (all SXM4-40GB in our cluster) lines up.
 const EXPECTED_HARDWARE = [
   'H100', 'H100x2', 'H100x4', 'H100x8',
-  'A100', 'A100x2', 'A100x4', 'A100x8',
+  'A100-40GB', 'A100-40GBx2', 'A100-40GBx4', 'A100-40GBx8',
   '3090', '3090x2', '3090x4', '3090x8',
   '2080Ti', '2080Tix2', '2080Tix4', '2080Tix8',
 ];
@@ -45,7 +47,7 @@ const HARDWARE_ORDER = EXPECTED_HARDWARE.concat(['A6000']);
 // Total VRAM per hardware config (GB, rounded).
 const HARDWARE_VRAM_GB: Record<string, number> = {
   'H100': 80, 'H100x2': 160, 'H100x4': 320, 'H100x8': 640,
-  'A100': 40, 'A100x2': 80, 'A100x4': 160, 'A100x8': 320,
+  'A100-40GB': 40, 'A100-40GBx2': 80, 'A100-40GBx4': 160, 'A100-40GBx8': 320,
   '3090': 24, '3090x2': 48, '3090x4': 96, '3090x8': 192,
   '2080Ti': 22, '2080Tix2': 44, '2080Tix4': 88, '2080Tix8': 176,
   'A6000': 48,
@@ -83,7 +85,7 @@ const ALL_MODELS = [
 // Reserved for things that fail after a real attempt, not for things
 // that are obviously too large (those are caught by checkFeasibility).
 const KNOWN_OOM: Record<string, string> = {
-  'A100x4|Qwen3.5-27B': 'hybrid-attn triton (both TP=2 & TP=4)',
+  'A100-40GBx4|Qwen3.5-27B': 'hybrid-attn triton (both TP=2 & TP=4)',
   '3090x4|Qwen3.5-27B': 'hybrid-attn triton',
 };
 
