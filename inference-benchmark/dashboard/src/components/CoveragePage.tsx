@@ -27,6 +27,30 @@ const HARDWARE_ORDER = [
   'A6000',
 ];
 
+// Every model we care about benchmarking — shown under each hardware
+// group even if no runs exist, so gaps are visible at a glance.
+const ALL_MODELS = [
+  'Llama-3.1-8B',
+  'Llama-3.1-70B',
+  'Llama-3.3-70B',
+  'Mixtral-8x7B',
+  'Qwen2.5-72B',
+  'Qwen3.5-9B',
+  'Qwen3.5-27B',
+  'gpt-oss-20b',
+  'gpt-oss-120b',
+];
+
+// Known-structural failures: (hardware|model) → short reason.
+// Keep this list to things that genuinely can't run at the current
+// vLLM / torch / kernel stack — not to cases that would succeed with
+// tuning (e.g. gpu_memory_utilization bump). Flip a row to OOM only
+// after a targeted retry has already failed.
+const KNOWN_OOM: Record<string, string> = {
+  'A100x4|Qwen3.5-27B': 'hybrid-attn triton (both TP=2 & TP=4)',
+  '3090x4|Qwen3.5-27B': 'hybrid-attn triton',
+};
+
 function sortHardware(a: string, b: string): number {
   const ai = HARDWARE_ORDER.indexOf(a);
   const bi = HARDWARE_ORDER.indexOf(b);
@@ -45,6 +69,16 @@ interface Row {
   present: Set<number>;
 }
 
+interface StatusRow {
+  kind: 'status';
+  hardware: string;
+  model: string;
+  status: 'oom' | 'untested';
+  reason?: string;
+}
+
+type AnyRow = (Row & { kind: 'data' }) | StatusRow;
+
 export function CoveragePage({ allData, loading }: CoveragePageProps) {
   const { rows, hardwareSet } = useMemo(() => {
     const bucket = new Map<string, Set<number>>();
@@ -60,14 +94,37 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
       modelByHw.get(r.hardware)!.add(r.modelShort);
     }
 
-    const out: Row[] = [];
+    const out: AnyRow[] = [];
     const sortedHw = Array.from(hwSet).sort(sortHardware);
     for (const hw of sortedHw) {
-      const models = Array.from(modelByHw.get(hw) ?? []).sort();
-      for (const model of models) {
+      const modelsWithData = modelByHw.get(hw) ?? new Set();
+      // Union of ALL_MODELS and any models that appear in data but aren't
+      // in the canonical list (so we don't drop unexpected finds).
+      const extras = Array.from(modelsWithData).filter((m) => !ALL_MODELS.includes(m));
+      const modelList = [...ALL_MODELS, ...extras.sort()];
+
+      for (const model of modelList) {
+        const hasData = modelsWithData.has(model);
+        const oomReason = KNOWN_OOM[`${hw}|${model}`];
+
+        if (!hasData) {
+          out.push({
+            kind: 'status',
+            hardware: hw,
+            model,
+            status: oomReason ? 'oom' : 'untested',
+            reason: oomReason,
+          });
+          continue;
+        }
+
+        // Has data — emit normal single-turn rows and any multi-turn rows
+        // that have at least one run. Also flag OOM as a separate notice
+        // row if both OOM is known AND partial data exists (edge case).
         for (const profile of SINGLE_PROFILES) {
           const key = `${hw}|${model}|${profile}`;
           out.push({
+            kind: 'data',
             hardware: hw,
             model,
             profile,
@@ -81,6 +138,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
           const present = bucket.get(key) ?? new Set();
           if (present.size === 0) continue;
           out.push({
+            kind: 'data',
             hardware: hw,
             model,
             profile,
@@ -108,6 +166,11 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
 
   const summary = rows.reduce(
     (acc, r) => {
+      if (r.kind === 'status') {
+        if (r.status === 'oom') acc.oom += 1;
+        else acc.untested += 1;
+        return acc;
+      }
       const have = [...r.present].filter((c) => r.expected.includes(c)).length;
       const need = r.expected.length;
       if (have === 0) acc.empty += 1;
@@ -117,7 +180,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
       acc.totalNeed += need;
       return acc;
     },
-    { complete: 0, partial: 0, empty: 0, totalHave: 0, totalNeed: 0 }
+    { complete: 0, partial: 0, empty: 0, oom: 0, untested: 0, totalHave: 0, totalNeed: 0 }
   );
 
   const pct = summary.totalNeed > 0
@@ -126,17 +189,21 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <SummaryCell label="Overall" value={`${pct}%`} sub={`${summary.totalHave}/${summary.totalNeed} cells`} color="#00bcd4" />
-        <SummaryCell label="Complete rows" value={`${summary.complete}`} sub="all concs present" color="#3fb950" />
-        <SummaryCell label="Partial rows" value={`${summary.partial}`} sub="some missing" color="#ff9800" />
-        <SummaryCell label="Empty rows" value={`${summary.empty}`} sub="profile untested" color="#f97583" />
+        <SummaryCell label="Complete" value={`${summary.complete}`} sub="all concs present" color="#3fb950" />
+        <SummaryCell label="Partial" value={`${summary.partial}`} sub="some missing" color="#ff9800" />
+        <SummaryCell label="Empty" value={`${summary.empty}`} sub="profile tried, 0 results" color="#f97583" />
+        <SummaryCell label="OOM" value={`${summary.oom}`} sub="structurally blocked" color="#e040fb" />
+        <SummaryCell label="Untested" value={`${summary.untested}`} sub="not yet attempted" color="#8b949e" />
       </div>
 
       <div className="flex flex-wrap items-center gap-4 rounded-md border border-[#21262d] bg-[#161b22] px-4 py-2 text-xs text-[#8b949e]">
         <span className="flex items-center gap-1.5"><Cell state="present" />present</span>
         <span className="flex items-center gap-1.5"><Cell state="missing" />expected &amp; missing</span>
         <span className="flex items-center gap-1.5"><Cell state="na" />not expected</span>
+        <span className="flex items-center gap-1.5"><StatusBadge kind="oom" />OOM / structural</span>
+        <span className="flex items-center gap-1.5"><StatusBadge kind="untested" />untested</span>
         <span className="ml-auto font-mono">
           rows: {rows.length} · hardware: {hardwareSet.length}
         </span>
@@ -157,13 +224,49 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
           </thead>
           <tbody>
             {rows.map((r, i) => {
-              const have = [...r.present].filter((c) => r.expected.includes(c)).length;
-              const need = r.expected.length;
-              const rowPct = need > 0 ? Math.round((have / need) * 100) : 0;
               const prevHw = i > 0 ? rows[i - 1].hardware : null;
               const prevModel = i > 0 ? rows[i - 1].model : null;
               const hwChange = r.hardware !== prevHw;
               const modelChange = r.model !== prevModel || hwChange;
+
+              if (r.kind === 'status') {
+                const bg = r.status === 'oom' ? 'bg-[#e040fb]/5' : '';
+                return (
+                  <tr
+                    key={`${r.hardware}|${r.model}|__${r.status}`}
+                    className={`border-b border-[#21262d]/50 ${bg} ${hwChange ? 'border-t-2 border-t-[#30363d]' : ''}`}
+                  >
+                    <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[#c9d1d9]">
+                      {hwChange ? r.hardware : ''}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-1.5 text-[#c9d1d9]">
+                      {modelChange ? r.model : ''}
+                    </td>
+                    <td
+                      colSpan={allConcs.length + 1}
+                      className="whitespace-nowrap px-3 py-1.5 text-[#8b949e]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <StatusBadge kind={r.status} />
+                        {r.status === 'oom' ? (
+                          <span className="text-[#e040fb]">
+                            OOM{r.reason ? <span className="ml-1 text-[#8b949e]">— {r.reason}</span> : null}
+                          </span>
+                        ) : (
+                          <span>untested</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono text-[#8b949e]">
+                      {r.status === 'oom' ? '—' : '0/—'}
+                    </td>
+                  </tr>
+                );
+              }
+
+              const have = [...r.present].filter((c) => r.expected.includes(c)).length;
+              const need = r.expected.length;
+              const rowPct = need > 0 ? Math.round((have / need) * 100) : 0;
               return (
                 <tr
                   key={`${r.hardware}|${r.model}|${r.profile}`}
@@ -236,4 +339,17 @@ function Cell({ state }: { state: 'present' | 'missing' | 'na' }) {
     state === 'missing' ? 'bg-transparent border-[#30363d]' :
     'bg-[#21262d]/50 border-transparent';
   return <span className={`inline-block h-3 w-3 rounded-sm border ${cls}`} />;
+}
+
+function StatusBadge({ kind }: { kind: 'oom' | 'untested' }) {
+  const cls =
+    kind === 'oom'
+      ? 'bg-[#e040fb]/15 text-[#e040fb] border-[#e040fb]/40'
+      : 'bg-[#21262d] text-[#8b949e] border-[#30363d]';
+  const label = kind === 'oom' ? 'OOM' : '—';
+  return (
+    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>
+      {label}
+    </span>
+  );
 }
