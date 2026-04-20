@@ -9,9 +9,9 @@ gpu-4|/data/models/Llama-3.1-8B-Instruct|1|Llama-3.1-8B|single|32768|0.85|1 10 2
 gpu-4|/data/models/Llama-3.1-8B-Instruct|1|Llama-3.1-8B|multi|32768|0.85|5 10 20 40 80 120 160|chat-multiturn-short chat-multiturn-medium chat-multiturn-long terminalbench-multiturn-short|
 gpu-4|/data/models/Mixtral-8x7B-Instruct|4|Mixtral-8x7B|single|8192|0.85|1 10 20 40 80 120 160 200 256 320 500|chat-short chat-medium chat-long|
 gpu-4|/data/models/Mixtral-8x7B-Instruct|4|Mixtral-8x7B|multi|8192|0.85|5 10 20 40 80 120 160|chat-multiturn-short chat-multiturn-medium chat-multiturn-long terminalbench-multiturn-short|
-gpu-4|/data/models/Llama-3.1-70B-Instruct|4|Llama-3.1-70B|single|8192|0.90|1 10 20 40 80 120 160 200|chat-short chat-medium chat-long|
-gpu-4|/data/models/Llama-3.3-70B-Instruct|4|Llama-3.3-70B|single|8192|0.90|1 10 20 40 80 120 160 200|chat-short chat-medium chat-long|
-gpu-4|/data/models/Qwen2.5-72B-Instruct|4|Qwen2.5-72B|single|4096|0.90|1 10 20 40 80 120 160|chat-short chat-medium|
+gpu-4|/data/models/Llama-3.1-70B-Instruct|4|Llama-3.1-70B|single|8192|0.95|1 10 20 40 80 120 160 200|chat-short chat-medium chat-long|
+gpu-4|/data/models/Llama-3.3-70B-Instruct|4|Llama-3.3-70B|single|8192|0.95|1 10 20 40 80 120 160 200|chat-short chat-medium chat-long|
+gpu-4|/data/models/Qwen2.5-72B-Instruct|4|Qwen2.5-72B|single|4096|0.95|1 10 20 40 80 120 160|chat-short chat-medium|
 gpu-4|/data/models/Qwen3.5-9B|1|Qwen3.5-9B|single|4096|0.90|1 10 20 40 80 120 160 200 256|chat-short chat-medium chat-long|
 gpu-4|/data/models/Qwen3.5-27B|2|Qwen3.5-27B|single|8192|0.90|1 10 20 40 80 120 160 200|chat-short chat-medium chat-long|
 gpu-4|/data/models/gpt-oss-20b|1|gpt-oss-20b|single|8192|0.85|1 10 20 40 80 120 160 200 256|chat-short chat-medium chat-long|

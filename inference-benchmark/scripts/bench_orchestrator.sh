@@ -80,6 +80,21 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE MAX_LEN GPU_MEM CONCS PROFIL
                 log "$JID: still running on $HOST"
                 continue
             fi
+            # Grace period: 70B/72B weight-load takes 3-5 min. If the
+            # status file was written <10 min ago, the job is probably
+            # still coming up (port 8089 not yet listening). Don't
+            # finalize prematurely.
+            STATUS_FILE="$STATE_DIR/${JID}.status"
+            if [[ -f "$STATUS_FILE" ]]; then
+                AGE=$(( $(date +%s) - $(stat -c %Y "$STATUS_FILE") ))
+                if [[ "$AGE" -lt 600 ]]; then
+                    log "$JID: dispatched ${AGE}s ago (<10min), still warming up"
+                    # Treat host as busy so the next pending job on it
+                    # doesn't get dispatched on top of a warming vllm.
+                    HOST_BUSY[$HOST]=1
+                    continue
+                fi
+            fi
             log "$JID: host idle — finalizing"
             COUNT=$(ssh "$HOST" "ls $OUT_DIR_REMOTE 2>/dev/null | wc -l")
             if [[ "$COUNT" -gt 0 ]]; then
@@ -90,7 +105,11 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE MAX_LEN GPU_MEM CONCS PROFIL
                 write_status "$JID" done
                 log "$JID: DONE ($COUNT files uploaded)"
             else
-                OOM=$(ssh "$HOST" "grep -l 'OutOfMemoryError\\|out of memory' /tmp/vllm_8089.log 2>/dev/null" || true)
+                # Widen detection to include vLLM's KV-cache budget failure
+                # ("Available KV cache memory: -...", "No available memory for
+                # the cache blocks") so model+cudagraph oversubscription also
+                # triggers the halved-max_len retry path.
+                OOM=$(ssh "$HOST" "grep -l 'OutOfMemoryError\\|out of memory\\|No available memory for the cache blocks\\|Available KV cache memory: -' /tmp/vllm_8089.log 2>/dev/null" || true)
                 ATT=$(read_attempt "$JID")
                 if [[ -n "$OOM" && "$ATT" -lt 1 ]]; then
                     bump_attempt "$JID"
