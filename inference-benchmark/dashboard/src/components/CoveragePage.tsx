@@ -11,24 +11,62 @@ interface CoveragePageProps {
 const SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
 const MULTI_CONCS = [5, 10, 20, 40, 80, 120, 160];
 
-const SINGLE_PROFILES = ['chat-short', 'chat-medium', 'chat-long'];
-const MULTI_PROFILES = [
+// All single-turn profiles benchmark runner knows about (see
+// inference-benchmark/src/workloads/profiles.py). Shown in the
+// table whenever the (hardware, model) has at least one result.
+const ALL_SINGLE_PROFILES = [
+  'chat-short',
+  'chat-medium',
+  'chat-long',
+  'coding-agent',
+  'prefill-heavy',
+  'decode-heavy',
+  'random-1k',
+];
+
+const ALL_MULTI_PROFILES = [
   'chat-multiturn-short',
   'chat-multiturn-medium',
   'chat-multiturn-long',
   'terminalbench-multiturn-short',
 ];
 
-const HARDWARE_ORDER = [
+// Canonical hardware list — show every TP variant we physically have
+// so 3090x4 / 3090x8 / 2080Tix4 untested combos are visible too.
+const EXPECTED_HARDWARE = [
   'H100', 'H100x2', 'H100x4', 'H100x8',
   'A100', 'A100x2', 'A100x4', 'A100x8',
   '3090', '3090x2', '3090x4', '3090x8',
-  '2080Ti', '2080Tix2', '2080Tix4',
-  'A6000',
+  '2080Ti', '2080Tix2', '2080Tix4', '2080Tix8',
 ];
 
-// Every model we care about benchmarking — shown under each hardware
-// group even if no runs exist, so gaps are visible at a glance.
+const HARDWARE_ORDER = EXPECTED_HARDWARE.concat(['A6000']);
+
+// Total VRAM per hardware config (GB, rounded).
+const HARDWARE_VRAM_GB: Record<string, number> = {
+  'H100': 80, 'H100x2': 160, 'H100x4': 320, 'H100x8': 640,
+  'A100': 40, 'A100x2': 80, 'A100x4': 160, 'A100x8': 320,
+  '3090': 24, '3090x2': 48, '3090x4': 96, '3090x8': 192,
+  '2080Ti': 22, '2080Tix2': 44, '2080Tix4': 88, '2080Tix8': 176,
+  'A6000': 48,
+};
+
+// Model weight sizes in GB at bf16 (2 bytes per param). For MoE
+// models this is the all-experts-resident figure; vLLM needs all
+// experts in memory regardless of activation sparsity.
+const MODEL_WEIGHTS_GB: Record<string, number> = {
+  'Llama-3.1-8B': 16,
+  'Llama-3.1-70B': 140,
+  'Llama-3.3-70B': 140,
+  'Mixtral-8x7B': 94,
+  'Qwen2.5-72B': 144,
+  'Qwen3.5-9B': 18,
+  'Qwen3.5-27B': 54,
+  'gpt-oss-20b': 40,
+  'gpt-oss-120b': 240,
+};
+
+// Every model we care about benchmarking.
 const ALL_MODELS = [
   'Llama-3.1-8B',
   'Llama-3.1-70B',
@@ -42,14 +80,26 @@ const ALL_MODELS = [
 ];
 
 // Known-structural failures: (hardware|model) → short reason.
-// Keep this list to things that genuinely can't run at the current
-// vLLM / torch / kernel stack — not to cases that would succeed with
-// tuning (e.g. gpu_memory_utilization bump). Flip a row to OOM only
-// after a targeted retry has already failed.
+// Reserved for things that fail after a real attempt, not for things
+// that are obviously too large (those are caught by checkFeasibility).
 const KNOWN_OOM: Record<string, string> = {
   'A100x4|Qwen3.5-27B': 'hybrid-attn triton (both TP=2 & TP=4)',
   '3090x4|Qwen3.5-27B': 'hybrid-attn triton',
 };
+
+// Infeasible if weights don't leave at least 15% headroom for KV cache
+// + activations + cuda graphs. Returns a human-readable reason when the
+// combo can't realistically fit, null otherwise.
+function checkFeasibility(hw: string, model: string): string | null {
+  const vram = HARDWARE_VRAM_GB[hw];
+  const weights = MODEL_WEIGHTS_GB[model];
+  if (!vram || !weights) return null;
+  if (weights > vram * 0.85) {
+    const minGb = Math.ceil(weights / 0.85);
+    return `needs ≥${minGb} GB VRAM (weights ${weights} GB); this config has ${vram} GB`;
+  }
+  return null;
+}
 
 function sortHardware(a: string, b: string): number {
   const ai = HARDWARE_ORDER.indexOf(a);
@@ -60,7 +110,8 @@ function sortHardware(a: string, b: string): number {
   return ai - bi;
 }
 
-interface Row {
+interface DataRow {
+  kind: 'data';
   hardware: string;
   model: string;
   profile: string;
@@ -73,11 +124,11 @@ interface StatusRow {
   kind: 'status';
   hardware: string;
   model: string;
-  status: 'oom' | 'untested';
+  status: 'oom' | 'untested' | 'infeasible';
   reason?: string;
 }
 
-type AnyRow = (Row & { kind: 'data' }) | StatusRow;
+type AnyRow = DataRow | StatusRow;
 
 export function CoveragePage({ allData, loading }: CoveragePageProps) {
   const { rows, hardwareSet } = useMemo(() => {
@@ -95,33 +146,41 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
     }
 
     const out: AnyRow[] = [];
-    const sortedHw = Array.from(hwSet).sort(sortHardware);
+    const fullHwSet = new Set<string>([...EXPECTED_HARDWARE, ...hwSet]);
+    const sortedHw = Array.from(fullHwSet).sort(sortHardware);
+
     for (const hw of sortedHw) {
       const modelsWithData = modelByHw.get(hw) ?? new Set();
-      // Union of ALL_MODELS and any models that appear in data but aren't
-      // in the canonical list (so we don't drop unexpected finds).
       const extras = Array.from(modelsWithData).filter((m) => !ALL_MODELS.includes(m));
       const modelList = [...ALL_MODELS, ...extras.sort()];
 
       for (const model of modelList) {
         const hasData = modelsWithData.has(model);
         const oomReason = KNOWN_OOM[`${hw}|${model}`];
+        const infeasReason = checkFeasibility(hw, model);
 
+        // OOM takes priority (confirmed via real run). Then infeasibility
+        // (static rule). Then untested if no data. If data exists, emit
+        // a full profile grid regardless.
         if (!hasData) {
-          out.push({
-            kind: 'status',
-            hardware: hw,
-            model,
-            status: oomReason ? 'oom' : 'untested',
-            reason: oomReason,
-          });
+          let status: StatusRow['status'];
+          let reason: string | undefined;
+          if (oomReason) {
+            status = 'oom';
+            reason = oomReason;
+          } else if (infeasReason) {
+            status = 'infeasible';
+            reason = infeasReason;
+          } else {
+            status = 'untested';
+          }
+          out.push({ kind: 'status', hardware: hw, model, status, reason });
           continue;
         }
 
-        // Has data — emit normal single-turn rows and any multi-turn rows
-        // that have at least one run. Also flag OOM as a separate notice
-        // row if both OOM is known AND partial data exists (edge case).
-        for (const profile of SINGLE_PROFILES) {
+        // Has data → list ALL profiles (single + multi), even profiles
+        // with zero runs, so gaps are explicit.
+        for (const profile of ALL_SINGLE_PROFILES) {
           const key = `${hw}|${model}|${profile}`;
           out.push({
             kind: 'data',
@@ -133,10 +192,8 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
             present: bucket.get(key) ?? new Set(),
           });
         }
-        for (const profile of MULTI_PROFILES) {
+        for (const profile of ALL_MULTI_PROFILES) {
           const key = `${hw}|${model}|${profile}`;
-          const present = bucket.get(key) ?? new Set();
-          if (present.size === 0) continue;
           out.push({
             kind: 'data',
             hardware: hw,
@@ -144,7 +201,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
             profile,
             isMultiTurn: true,
             expected: MULTI_CONCS,
-            present,
+            present: bucket.get(key) ?? new Set(),
           });
         }
       }
@@ -168,6 +225,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
     (acc, r) => {
       if (r.kind === 'status') {
         if (r.status === 'oom') acc.oom += 1;
+        else if (r.status === 'infeasible') acc.infeasible += 1;
         else acc.untested += 1;
         return acc;
       }
@@ -180,7 +238,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
       acc.totalNeed += need;
       return acc;
     },
-    { complete: 0, partial: 0, empty: 0, oom: 0, untested: 0, totalHave: 0, totalNeed: 0 }
+    { complete: 0, partial: 0, empty: 0, oom: 0, infeasible: 0, untested: 0, totalHave: 0, totalNeed: 0 }
   );
 
   const pct = summary.totalNeed > 0
@@ -189,12 +247,13 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <SummaryCell label="Overall" value={`${pct}%`} sub={`${summary.totalHave}/${summary.totalNeed} cells`} color="#00bcd4" />
         <SummaryCell label="Complete" value={`${summary.complete}`} sub="all concs present" color="#3fb950" />
         <SummaryCell label="Partial" value={`${summary.partial}`} sub="some missing" color="#ff9800" />
         <SummaryCell label="Empty" value={`${summary.empty}`} sub="profile tried, 0 results" color="#f97583" />
         <SummaryCell label="OOM" value={`${summary.oom}`} sub="structurally blocked" color="#e040fb" />
+        <SummaryCell label="Infeasible" value={`${summary.infeasible}`} sub="VRAM too small" color="#64b5f6" />
         <SummaryCell label="Untested" value={`${summary.untested}`} sub="not yet attempted" color="#8b949e" />
       </div>
 
@@ -203,6 +262,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
         <span className="flex items-center gap-1.5"><Cell state="missing" />expected &amp; missing</span>
         <span className="flex items-center gap-1.5"><Cell state="na" />not expected</span>
         <span className="flex items-center gap-1.5"><StatusBadge kind="oom" />OOM / structural</span>
+        <span className="flex items-center gap-1.5"><StatusBadge kind="infeasible" />infeasible (VRAM)</span>
         <span className="flex items-center gap-1.5"><StatusBadge kind="untested" />untested</span>
         <span className="ml-auto font-mono">
           rows: {rows.length} · hardware: {hardwareSet.length}
@@ -230,7 +290,18 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
               const modelChange = r.model !== prevModel || hwChange;
 
               if (r.kind === 'status') {
-                const bg = r.status === 'oom' ? 'bg-[#e040fb]/5' : '';
+                const bg =
+                  r.status === 'oom' ? 'bg-[#e040fb]/5' :
+                  r.status === 'infeasible' ? 'bg-[#64b5f6]/5' :
+                  '';
+                const txtColor =
+                  r.status === 'oom' ? 'text-[#e040fb]' :
+                  r.status === 'infeasible' ? 'text-[#64b5f6]' :
+                  'text-[#8b949e]';
+                const label =
+                  r.status === 'oom' ? 'OOM' :
+                  r.status === 'infeasible' ? 'infeasible' :
+                  'untested';
                 return (
                   <tr
                     key={`${r.hardware}|${r.model}|__${r.status}`}
@@ -244,22 +315,17 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
                     </td>
                     <td
                       colSpan={allConcs.length + 1}
-                      className="whitespace-nowrap px-3 py-1.5 text-[#8b949e]"
+                      className="whitespace-nowrap px-3 py-1.5"
                     >
                       <div className="flex items-center gap-2">
                         <StatusBadge kind={r.status} />
-                        {r.status === 'oom' ? (
-                          <span className="text-[#e040fb]">
-                            OOM{r.reason ? <span className="ml-1 text-[#8b949e]">— {r.reason}</span> : null}
-                          </span>
-                        ) : (
-                          <span>untested</span>
-                        )}
+                        <span className={txtColor}>
+                          {label}
+                          {r.reason ? <span className="ml-1 text-[#8b949e]">— {r.reason}</span> : null}
+                        </span>
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono text-[#8b949e]">
-                      {r.status === 'oom' ? '—' : '0/—'}
-                    </td>
+                    <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono text-[#8b949e]">—</td>
                   </tr>
                 );
               }
@@ -267,6 +333,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
               const have = [...r.present].filter((c) => r.expected.includes(c)).length;
               const need = r.expected.length;
               const rowPct = need > 0 ? Math.round((have / need) * 100) : 0;
+              const profileUntested = have === 0;
               return (
                 <tr
                   key={`${r.hardware}|${r.model}|${r.profile}`}
@@ -281,11 +348,16 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
                   <td className="whitespace-nowrap px-3 py-1.5 text-[#8b949e]">
                     {r.profile}
                     {r.isMultiTurn && <span className="ml-1 rounded bg-[#8b5cf6]/20 px-1 text-[10px] text-[#8b5cf6]">mt</span>}
+                    {profileUntested && <span className="ml-1 rounded border border-[#30363d] bg-[#21262d] px-1 text-[10px] text-[#8b949e] uppercase">untested</span>}
                   </td>
                   {allConcs.map((c) => {
                     const expected = r.expected.includes(c);
                     const present = r.present.has(c);
-                    const state = !expected ? 'na' : present ? 'present' : 'missing';
+                    let state: 'present' | 'missing' | 'na';
+                    if (!expected) state = 'na';
+                    else if (present) state = 'present';
+                    else if (profileUntested) state = 'na';  // mute cells when profile fully untested
+                    else state = 'missing';
                     return (
                       <td key={c} className="px-1 py-1.5 text-center">
                         <Cell state={state} />
@@ -296,7 +368,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
                     <span
                       className={
                         rowPct === 100 ? 'text-[#3fb950]' :
-                        rowPct === 0 ? 'text-[#f97583]' :
+                        rowPct === 0 ? 'text-[#8b949e]' :
                         'text-[#ff9800]'
                       }
                     >
@@ -310,13 +382,15 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
         </table>
       </div>
 
-      <div className="text-xs text-[#8b949e]">
+      <div className="space-y-1 text-xs text-[#8b949e]">
         <p>
-          Expected matrix is the sweep defaults in{' '}
-          <code className="rounded bg-[#21262d] px-1">inference-benchmark/scripts/bench_jobs.txt</code>
-          {' '}(single-turn concurrencies 1–500, multi-turn 5–160). Multi-turn rows only appear when
-          at least one run exists for that (hardware, model, profile); unseen multi-turn profiles
-          are not plotted as gaps since many jobs in the matrix skip them.
+          Expected sweep matrix: single-turn concurrencies {SINGLE_CONCS.join(', ')}; multi-turn {MULTI_CONCS.join(', ')}.
+          Single-turn profiles: {ALL_SINGLE_PROFILES.length}. Multi-turn profiles: {ALL_MULTI_PROFILES.length}.
+        </p>
+        <p>
+          <span className="text-[#64b5f6]">Infeasible</span> is auto-computed from hardware VRAM vs. model weights (bf16),
+          using a 0.85 fit ratio. <span className="text-[#e040fb]">OOM</span> is reserved for confirmed run-time failures that
+          need a specific stack-level fix.
         </p>
       </div>
     </div>
@@ -341,12 +415,19 @@ function Cell({ state }: { state: 'present' | 'missing' | 'na' }) {
   return <span className={`inline-block h-3 w-3 rounded-sm border ${cls}`} />;
 }
 
-function StatusBadge({ kind }: { kind: 'oom' | 'untested' }) {
-  const cls =
-    kind === 'oom'
-      ? 'bg-[#e040fb]/15 text-[#e040fb] border-[#e040fb]/40'
-      : 'bg-[#21262d] text-[#8b949e] border-[#30363d]';
-  const label = kind === 'oom' ? 'OOM' : '—';
+function StatusBadge({ kind }: { kind: 'oom' | 'untested' | 'infeasible' }) {
+  let cls: string;
+  let label: string;
+  if (kind === 'oom') {
+    cls = 'bg-[#e040fb]/15 text-[#e040fb] border-[#e040fb]/40';
+    label = 'OOM';
+  } else if (kind === 'infeasible') {
+    cls = 'bg-[#64b5f6]/15 text-[#64b5f6] border-[#64b5f6]/40';
+    label = 'N/A';
+  } else {
+    cls = 'bg-[#21262d] text-[#8b949e] border-[#30363d]';
+    label = '—';
+  }
   return (
     <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>
       {label}
