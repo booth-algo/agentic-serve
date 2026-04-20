@@ -2,7 +2,7 @@
 
 Inference benchmarking and GPU performance prediction for agentic LLM workloads.
 
-**[Dashboard](https://booth-algo.github.io/agentic-serve/)** | **[Paper (NeurIPS 2026 E&D)]()** | **[Dataset]()**
+**Dashboard** (link withheld for anonymous review) · **Paper** (under review) · **Dataset** (released with paper)
 
 ## Overview
 
@@ -25,8 +25,9 @@ AgentServe-Bench provides:
 
 ### Hardware
 
-- 8× NVIDIA A100-SXM4-40GB (on-premise)
-- 2× NVIDIA H100-SXM5-80GB (cloud)
+- NVIDIA A100-SXM4-40GB nodes
+- NVIDIA H100-SXM5-80GB nodes
+- NVIDIA RTX 3090 and RTX 2080 Ti nodes
 
 ### Models
 
@@ -106,14 +107,8 @@ ncu --set full --target-processes all \
 
 ## Citation
 
-```bibtex
-@inproceedings{agentservebench2026,
-  title={Inference Benchmarking in the Era of Agentic LLMs},
-  author={},
-  booktitle={NeurIPS 2026 Evaluations \& Datasets Track},
-  year={2026}
-}
-```
+Author list and venue withheld for anonymous review. Citation metadata
+will be added on acceptance.
 
 ## License
 

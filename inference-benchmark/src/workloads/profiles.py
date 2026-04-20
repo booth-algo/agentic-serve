@@ -52,13 +52,13 @@ PROFILES: dict[str, WorkloadProfile] = {
     # Group 1: Real Agent Data
     # ===================================================================
 
-    # Single-turn PLLM planning call — real SWEBench prompts (~6K ISL)
+    # Single-turn planning-model call — real SWE-Bench prompts (~17K ISL)
     "coding-agent": WorkloadProfile(
         name="coding-agent",
         isl_tokens=17000,
         osl_tokens=800,
         isl_stddev=0.0,
-        description="Real coding-agent prompts from Sequrity SWEBench runs (PLLM planning calls, ~17K ISL, ~800 OSL)",
+        description="Real coding-agent prompts captured from SWE-Bench runs (planning-model calls, ~17K ISL, ~800 OSL)",
         dataset="jsonl",
         file_path="data/coding_agent_prompts.jsonl",
         system_prompt="",  # system prompt is embedded in the JSONL

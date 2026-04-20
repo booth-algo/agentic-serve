@@ -11,7 +11,7 @@ export interface ProfileMeta {
 export const PROFILE_META: Record<string, ProfileMeta> = {
 
   // Tier 1: Real Agent Data
-  'coding-agent':                 { agentType: 'coding',   turnStyle: 'single-turn', servingStyle: 'not-disaggregated', dataSource: 'SWEBench',      isl: '~17000', osl: '~800',  description: 'Real coding-agent prompts from Sequrity SWEBench runs. PLLM planning calls with ~17K input tokens, ~800 output. Very long prefill stress test.' },
+  'coding-agent':                 { agentType: 'coding',   turnStyle: 'single-turn', servingStyle: 'not-disaggregated', dataSource: 'SWEBench',      isl: '~17000', osl: '~800',  description: 'Real coding-agent prompts captured from SWE-Bench runs. Planning-model calls with ~17K input tokens and ~800 output. Very long prefill stress test.' },
   'swebench-multiturn-short':     { agentType: 'coding',   turnStyle: 'multi-turn',  servingStyle: 'not-disaggregated', dataSource: 'SWEBench',      isl: '≤32K',   osl: '≤2000', description: 'Real SWEBench coding agent: 13-30 step sessions (shortest). Growing context from actual Codex agent trajectories.' },
   'swebench-multiturn-medium':    { agentType: 'coding',   turnStyle: 'multi-turn',  servingStyle: 'not-disaggregated', dataSource: 'SWEBench',      isl: '≤64K',   osl: '≤2000', description: 'Real SWEBench coding agent: 30-80 step sessions. Medium-length agent runs with command execution and file edits.' },
   'swebench-multiturn-long':      { agentType: 'coding',   turnStyle: 'multi-turn',  servingStyle: 'not-disaggregated', dataSource: 'SWEBench',      isl: '≤128K',  osl: '≤2000', description: 'Real SWEBench coding agent: 80-150 step sessions. Long agent runs stressing KV cache with accumulated context.' },

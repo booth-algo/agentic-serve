@@ -10,9 +10,6 @@ passes, giving pure kernel time with fuses matched to real cuBLAS dispatch
 behavior.
 
 See also: llm_predict/predictors/per_kernel/README.md
-
-Training artifacts: /Users/kev/gated/phase_a_results/phase_a3_validation_report.md
-Paper: Section 4.4 of NeurIPS 2026 E&D submission.
 """
 
 import math

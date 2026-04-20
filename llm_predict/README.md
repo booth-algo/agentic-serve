@@ -8,8 +8,8 @@
 
 `llm_predict` predicts per-kernel, per-op, and end-to-end latency for
 transformer inference. It is the analytical-composition + ML-hybrid
-engine behind AgentServe-Bench's predicted-vs-measured story (paper
-[dashboard](https://booth-algo.github.io/agentic-serve/)).
+engine behind AgentServe-Bench's predicted-vs-measured story (dashboard
+link withheld for anonymous review).
 
 Derived from [LLMCompass (ISCA'24)](https://parallel.princeton.edu/papers/isca24_llmcompass.pdf);
 the hardware / cost / DSE simulator inherited from upstream is kept intact.
@@ -65,8 +65,7 @@ t_attn = d.predict_attention_prefill(batch=1, seq_len=512, n_heads=32, head_dim=
 ```
 
 For E2E composition examples (walk transformer layers, sum kernels × n_layers,
-compare to measured TTFT), see the composers in `inference-benchmark/` and the
-per-request validation at `/Users/kev/gated/step4_results/`.
+compare to measured TTFT), see the composers in `inference-benchmark/`.
 
 ## Profiling data
 

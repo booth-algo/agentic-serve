@@ -1,6 +1,6 @@
 # inference-benchmark
 
-Realistic LLM inference benchmarking tool for Sequrity.ai.
+Realistic LLM inference benchmarking tool.
 
 Fixes the core problems with InferenceX:
 - Real text workloads instead of random tokens

@@ -3,8 +3,8 @@ PredictorDispatch: tries per-kernel XGBoost first, falls back to analytical
 roofline.
 
 Tiers from finest to coarsest:
-  1. Per-kernel (XGBoost, shape-only, ncu ground truth) — trained in Phase A
-     of the NeurIPS 2026 submission; held-out aggregate layer MAPE ~4%
+  1. Per-kernel (XGBoost, shape-only, ncu ground truth) — held-out
+     aggregate layer MAPE ~4%
   2. Analytical roofline — always available, least accurate
 """
 
