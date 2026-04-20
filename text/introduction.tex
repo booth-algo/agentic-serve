@@ -11,11 +11,17 @@
 How should we benchmark LLM inference when the dominant workload is no longer a short chat exchange but a multi-step coding agent that sends 6{,}000+ tokens per request? LLM agents now power coding assistants, terminal automation, and computer-use systems, yet inference benchmarks continue to evaluate serving infrastructure using chat-scale traces that do not represent these workloads. These include short single-turn chat exchanges, synthetic random-token stress tests, or fixed-length request distributions drawn from datasets like ShareGPT~\citep{sharegpt}. Reddi et al.'s MLPerf Inference~\citep{mlperf,mlperf_v51} evaluates summarisation, chat, and long-context reasoning; its LLM workloads range from 1{,}024-token Q\&A (Llama~2~70B on OpenOrca) to 128K-token document tasks (Llama~3.1~405B), but remain single-turn with no multi-step tool use. The benchmarks bundled with Kwon et al.'s vLLM~\citep{vllm} default to ShareGPT prompts whose input lengths cluster around 1{,}024 tokens; Zheng et al.'s SGLang~\citep{sglang} similarly defaults to ShareGPT for serving evaluation.
 
 %% -- NOTES TALKING WITH AARON --
-Existing benchmarking falls short in ... 1) no agentic / multi-turn workloads, 2) incorrect ctx length config, 3) does not consider multiple-user / saturate hardware reosurce
+Existing benchmarking falls short in ... 1) no agentic / multi-turn workloads, 2) incorrect ctx length config, 3) does not consider multiple-user / saturate hardware resource
 
 One paragraph listing all these problems
 One paragraph listing how we consider these
 Have to be clearer, don't assume people know, and most importantly: show our difference / advantage
+
+Claude created the idea of using concurrency as x-axis in our plots - and concurrency its not a common terminology -> we need to define it
+
+inferenceX 
+-> synthetic workloads are bs, they dont even saturate the hardware pipeline properly - figure out arguments from data to solidify
+-> what i mean by ctx length config is the arbitrary isl/osl
 %%
 
 
