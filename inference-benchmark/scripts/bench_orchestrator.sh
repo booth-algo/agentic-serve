@@ -48,7 +48,10 @@ bump_attempt() { local n=$(($(read_attempt "$1") + 1)); echo "$n" > "$STATE_DIR/
 # Phase 1: detect which hosts are busy with vllm.
 declare -A HOST_BUSY
 for HOST in gpu-4 3090 2080ti; do
-    if ssh -o ConnectTimeout=5 -o BatchMode=yes "$HOST" 'pgrep -f "vllm.entrypoints.openai" > /dev/null' 2>/dev/null; then
+    # Check for a listener on the vllm API port (8089). Prior versions used
+    # pgrep -f "vllm.entrypoints.openai" which self-matched the ssh wrapper's
+    # own cmdline and reported every host busy on every tick.
+    if ssh -o ConnectTimeout=5 -o BatchMode=yes "$HOST" 'ss -ltn 2>/dev/null | awk "\$4 ~ /:8089\$/ {found=1} END{exit !found}"' 2>/dev/null; then
         HOST_BUSY[$HOST]=1
         log "host busy: $HOST"
     else
@@ -119,7 +122,11 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE MAX_LEN GPU_MEM CONCS PROFIL
             CMD="${EXTRA_ENV} bash /tmp/inference-benchmark/scripts/${SCRIPT} \
                 ${MODEL_PATH} ${TP} ${SHORT} vllm ${OUT_DIR_REMOTE} \
                 ${PY} ${GPU_MEM} ${MAX_LEN} \"${CONCS}\" \"${PROFILES}\""
-            ssh "$HOST" "nohup bash -c '${CMD}' > /tmp/bench_${SHORT}_${TP}_${MODE}.log 2>&1 &"
+            # setsid + </dev/null lets the process survive ssh disconnect
+            # reliably. Per-job remote log for debugging (vllm_8089.log
+            # rotates per sweep and loses history).
+            REMOTE_LOG="/tmp/bench_${SHORT}_tp${TP}_${MODE}.log"
+            ssh "$HOST" "setsid bash -c '${CMD}' > '${REMOTE_LOG}' 2>&1 </dev/null &"
             log "$JID: dispatched"
             ;;
     esac
