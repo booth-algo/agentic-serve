@@ -244,7 +244,7 @@ def write_report(results: list[dict], report_path: Path) -> None:
     lines: list[str] = ["# Phase A3 Training Report (shape_v2)", ""]
 
     for fam in FAMILY_CONFIG:
-        feats = FAMILY_CONFIG[fam]["cols"]
+        feats = FAMILY_CONFIG[fam]["features"]
         leaks_any = any(r["feature_audit"].get(fam) for r in results)
         lines.append(f"- **{fam}** features ({len(feats)}): " +
                      (", ".join(f"`{f}`" for f in feats)) +
