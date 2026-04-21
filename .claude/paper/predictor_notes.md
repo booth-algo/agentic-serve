@@ -103,3 +103,26 @@ in `model_specs.py`.
 - **2026-04-21** — initial file. Locked: drop Qwen3.5 from flash_attn
   family (option (a)); CSV output (not parquet); scope ends before
   trainer.py changes.
+- **2026-04-21 (later, 2080ti train run)** — trainer produced 11 pkls
+  across 3 GPUs (A100×4, RTX3090×4, RTX2080Ti×3; no 2080Ti flash_attn
+  per sm_75 pre-FA2). Headline aggregate held-out error on
+  `prefill_seq128_bs1`: **A100 ~50%**, **RTX3090 ~52%** for all 70B/72B
+  held-out models — matches predictor_notes' expected pre-roofline
+  baseline. Per-family held-out MAPE on A100: gemm 65%, flash_attn 3.5%,
+  elementwise 13.7%, misc 15.3%. Qwen3.5 flash_attn exclusion now
+  enforced in both `split_by_family.py` and `trainer.py` via
+  `feature_spec.FAMILY_EXCLUDED_MODELS`.
+- **2026-04-21 (roofline sweep, 2080ti only)** — ran `collect_gemm.sh
+  RTX2080Ti fp16` on 2080ti GPU 1 (cuBLAS issued 1038 of expected 1071
+  matmuls, 5191 ncu rows). Roofline-appended LOMO MAPE on 2080Ti gemm:
+  Llama-8B held-out 168.7% (was 181.8%), Qwen3.5-9B held-out 75.1%
+  (was 83.0%). Modest win — 2-model pool + no held-out 70B is
+  structurally the limit. A100 and RTX3090 roofline sweeps deferred
+  (Phase 4).
+- **2026-04-21 (per-op gap documented)** — the only trained per-op pkl
+  that exists anywhere is `A100/trained/perop_analytical_v4.pkl`
+  (pulled from R2 2026-04-15, 673 KB, 6 models, no heldout_mape logged
+  in payload). RTX3090 and RTX2080Ti have no per-op pkls and no per-op
+  CUDA-event traces. H100 has raw `*_moe_profile.csv` for Mixtral +
+  gpt-oss-20b on R2 but no trained pkl. Per-op productisation planned
+  for Phase 2 of the profiling-coverage plan.
