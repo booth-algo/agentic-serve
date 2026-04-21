@@ -2,38 +2,38 @@
   "A100": {
     "heldout_mape": {
       "gemm": 7.095951050189475,
-      "flash_attn": 4.051423385664559,
+      "flash_attn": 12.271552904195971,
       "elementwise": 13.732536183062749,
       "misc": 15.186435984188556
     },
     "aggregate_err_pct": {
-      "Llama-3.3-70B": 7.462028806716601,
-      "Llama-70B": 7.636671318191286,
-      "Qwen-72B": 6.561879904952382
+      "Llama-3.3-70B": 7.535734427890815,
+      "Llama-70B": 7.710237838252457,
+      "Qwen-72B": 6.634414069843548
     },
     "saved_pkls": [
-      "/root/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
-      "/root/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl",
-      "/root/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
-      "/root/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_misc_shape_v2.pkl"
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_misc_shape_v2.pkl"
     ]
   },
   "RTX3090": {
     "heldout_mape": {
       "gemm": 15.64799765978061,
-      "flash_attn": 27.209091407654,
+      "flash_attn": 42.84143054464623,
       "elementwise": 18.989324590834254,
       "misc": 18.481483967260175
     },
     "aggregate_err_pct": {
-      "Llama-70B": 0.032528390758224654,
-      "Qwen-72B": 0.4331854817916214
+      "Llama-70B": 0.09829636654812943,
+      "Qwen-72B": 0.49789928635244185
     },
     "saved_pkls": [
-      "/root/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
-      "/root/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl",
-      "/root/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
-      "/root/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_misc_shape_v2.pkl"
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_misc_shape_v2.pkl"
     ]
   },
   "RTX2080Ti": {
@@ -45,9 +45,9 @@
     },
     "aggregate_err_pct": {},
     "saved_pkls": [
-      "/root/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
-      "/root/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
-      "/root/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_misc_shape_v2.pkl"
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_misc_shape_v2.pkl"
     ]
   }
 }
