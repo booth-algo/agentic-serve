@@ -256,7 +256,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
         <SummaryCell label="Empty" value={`${summary.empty}`} sub="profile tried, 0 results" color="#f97583" />
         <SummaryCell label="OOM" value={`${summary.oom}`} sub="structurally blocked" color="#e040fb" />
         <SummaryCell label="Infeasible" value={`${summary.infeasible}`} sub="VRAM too small" color="#64b5f6" />
-        <SummaryCell label="Untested" value={`${summary.untested}`} sub="not yet attempted" color="#8b949e" />
+        <SummaryCell label="Untested" value={`${summary.untested}`} sub="not yet attempted" color="#ff9800" />
       </div>
 
       <div className="flex flex-wrap items-center gap-4 rounded-md border border-[#21262d] bg-[#161b22] px-4 py-2 text-xs text-[#8b949e]">
@@ -350,16 +350,18 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
                   <td className="whitespace-nowrap px-3 py-1.5 text-[#8b949e]">
                     {r.profile}
                     {r.isMultiTurn && <span className="ml-1 rounded bg-[#8b5cf6]/20 px-1 text-[10px] text-[#8b5cf6]">mt</span>}
-                    {profileUntested && <span className="ml-1 rounded border border-[#30363d] bg-[#21262d] px-1 text-[10px] text-[#8b949e] uppercase">untested</span>}
+                    {profileUntested && <span className="ml-1 rounded border border-[#ff9800]/40 bg-[#ff9800]/10 px-1 text-[10px] text-[#ff9800] uppercase">todo</span>}
                   </td>
                   {allConcs.map((c) => {
                     const expected = r.expected.includes(c);
                     const present = r.present.has(c);
-                    let state: 'present' | 'missing' | 'na';
-                    if (!expected) state = 'na';
-                    else if (present) state = 'present';
-                    else if (profileUntested) state = 'na';  // mute cells when profile fully untested
-                    else state = 'missing';
+                    // Concurrencies outside the expected set render muted.
+                    // Everything in the expected set that we don't yet have
+                    // — including fully-untested profiles — renders as
+                    // "expected & missing" (outlined), NOT muted, since
+                    // these are runs we still want to do.
+                    const state: 'present' | 'missing' | 'na' =
+                      !expected ? 'na' : present ? 'present' : 'missing';
                     return (
                       <td key={c} className="px-1 py-1.5 text-center">
                         <Cell state={state} />
@@ -427,8 +429,11 @@ function StatusBadge({ kind }: { kind: 'oom' | 'untested' | 'infeasible' }) {
     cls = 'bg-[#64b5f6]/15 text-[#64b5f6] border-[#64b5f6]/40';
     label = 'N/A';
   } else {
-    cls = 'bg-[#21262d] text-[#8b949e] border-[#30363d]';
-    label = '—';
+    // Untested = "expected, not yet run" — use the same amber as
+    // partial coverage so it reads as a gap we intend to fill, not
+    // as "not expected".
+    cls = 'bg-[#ff9800]/10 text-[#ff9800] border-[#ff9800]/40';
+    label = 'TODO';
   }
   return (
     <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>
