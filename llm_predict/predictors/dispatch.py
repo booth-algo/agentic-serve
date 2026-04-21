@@ -43,7 +43,7 @@ class PredictorDispatch:
         if self._perop_predictor is not None:
             return self._perop_predictor
         from llm_predict.predictors.per_op.predictor import PerOpPredictor
-        p = PerOpPredictor()
+        p = PerOpPredictor(gpu=self.gpu)
         if p.load():
             self._perop_predictor = p
         return self._perop_predictor
