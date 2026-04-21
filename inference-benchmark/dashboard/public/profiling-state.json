@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-04-21T00:00:00Z",
+  "gpus": ["A100-40GB", "RTX2080Ti", "RTX3090", "H100"],
+  "models": ["Llama-8B", "Llama-70B"],
+  "cells": [
+    {
+      "gpu": "A100-40GB",
+      "model": "Llama-8B",
+      "per_kernel_prefill":  { "status": "done",      "rows": 1842, "version": "ncu-2024.1" },
+      "per_kernel_roofline": { "status": "done",      "rows": 1842, "version": "ncu-2024.1" },
+      "per_op_cuda_events":  { "status": "done",      "rows": 9210 },
+      "per_op_trained_pkl":  { "status": "done",      "rows": 9210, "version": "v0.3.1" }
+    },
+    {
+      "gpu": "A100-40GB",
+      "model": "Llama-70B",
+      "per_kernel_prefill":  { "status": "missing",   "reason": "not yet scheduled" },
+      "per_kernel_roofline": { "status": "missing",   "reason": "not yet scheduled" },
+      "per_op_cuda_events":  { "status": "done",      "rows": 4800 },
+      "per_op_trained_pkl":  { "status": "partial",   "rows": 1200, "reason": "only 25% of prefill lengths covered" }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Llama-8B",
+      "per_kernel_prefill":  { "status": "done",      "rows": 920,  "version": "ncu-2024.1" },
+      "per_kernel_roofline": { "status": "done",      "rows": 920,  "version": "ncu-2024.1" },
+      "per_op_cuda_events":  { "status": "done",      "rows": 4600 },
+      "per_op_trained_pkl":  { "status": "done",      "rows": 4600, "version": "v0.3.1" }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Llama-70B",
+      "per_kernel_prefill":  { "status": "infeasible", "reason": "11 GB VRAM insufficient for 70B weights (140 GB)" },
+      "per_kernel_roofline": { "status": "infeasible", "reason": "11 GB VRAM insufficient for 70B weights (140 GB)" },
+      "per_op_cuda_events":  { "status": "infeasible", "reason": "11 GB VRAM insufficient for 70B weights (140 GB)" },
+      "per_op_trained_pkl":  { "status": "infeasible", "reason": "11 GB VRAM insufficient for 70B weights (140 GB)" }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Llama-8B",
+      "per_kernel_prefill":  { "status": "done",      "rows": 1100, "version": "ncu-2024.1" },
+      "per_kernel_roofline": { "status": "partial",   "rows": 550,  "reason": "roofline sweeps only 50% complete" },
+      "per_op_cuda_events":  { "status": "done",      "rows": 5500 },
+      "per_op_trained_pkl":  { "status": "missing",   "reason": "trainer not yet run for this GPU" }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Llama-70B",
+      "per_kernel_prefill":  { "status": "infeasible", "reason": "24 GB VRAM insufficient for 70B weights (140 GB)" },
+      "per_kernel_roofline": { "status": "infeasible", "reason": "24 GB VRAM insufficient for 70B weights (140 GB)" },
+      "per_op_cuda_events":  { "status": "infeasible", "reason": "24 GB VRAM insufficient for 70B weights (140 GB)" },
+      "per_op_trained_pkl":  { "status": "infeasible", "reason": "24 GB VRAM insufficient for 70B weights (140 GB)" }
+    },
+    {
+      "gpu": "H100",
+      "model": "Llama-8B",
+      "per_kernel_prefill":  { "status": "pending_infra_access", "reason": "waiting for ncu root permissions on H100 node" },
+      "per_kernel_roofline": { "status": "pending_infra_access", "reason": "waiting for ncu root permissions on H100 node" },
+      "per_op_cuda_events":  { "status": "pending_infra_access", "reason": "waiting for cuda-event harness deployment" },
+      "per_op_trained_pkl":  { "status": "pending_infra_access", "reason": "depends on cuda-event traces" }
+    },
+    {
+      "gpu": "H100",
+      "model": "Llama-70B",
+      "per_kernel_prefill":  { "status": "pending_infra_access", "reason": "waiting for ncu root permissions on H100 node" },
+      "per_kernel_roofline": { "status": "pending_infra_access", "reason": "waiting for ncu root permissions on H100 node" },
+      "per_op_cuda_events":  { "status": "pending_infra_access", "reason": "waiting for cuda-event harness deployment" },
+      "per_op_trained_pkl":  { "status": "pending_infra_access", "reason": "depends on cuda-event traces" }
+    }
+  ]
+}
