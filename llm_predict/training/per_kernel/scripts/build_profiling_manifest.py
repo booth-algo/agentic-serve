@@ -276,13 +276,14 @@ def trained_pkl_status(
             "reason": "runpod container perms",
         }
 
-    # check local
+    # check local — pick newest pkl by mtime (alphabetical sort breaks
+    # once version numbers go double-digit, e.g. v10 sorts before v4).
     trained_dir = repo_root / "llm_predict" / "profiling" / "data" / gpu / "trained"
     local_pkl: Path | None = None
     if trained_dir.is_dir():
-        candidates = sorted(trained_dir.glob("perop_*.pkl"))
+        candidates = list(trained_dir.glob("perop_*.pkl"))
         if candidates:
-            local_pkl = candidates[-1]  # most recent alphabetically
+            local_pkl = max(candidates, key=lambda p: os.stat(p).st_mtime)
 
     if local_pkl is not None:
         meta = _read_pkl_meta(local_pkl)
