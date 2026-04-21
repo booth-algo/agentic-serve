@@ -29,11 +29,14 @@ import pandas as pd
 import xgboost as xgb
 
 from . import model_specs  # noqa: F401  (kept for parity with labeler; used indirectly)
+from .feature_spec import (
+    FAMILY_CONFIG,
+    MISC_FAMILIES,
+    audit_features,  # noqa: F401  (re-exported for legacy callers)
+)
 
 warnings.filterwarnings("ignore")
 
-
-DTYPE_BYTES = {"bf16": 2, "fp16": 2, "fp32": 4, "fp8": 1}
 
 XGB_PARAMS: dict[str, Any] = dict(
     n_estimators=800, max_depth=8, learning_rate=0.03,
@@ -41,12 +44,6 @@ XGB_PARAMS: dict[str, Any] = dict(
     reg_alpha=0.1, reg_lambda=1.0, random_state=42, n_jobs=4,
     tree_method="hist", verbosity=0,
 )
-
-FORBIDDEN_SUBSTRINGS = [
-    "cycles", "throughput", "launch_", "dram_bytes_sum", "dram_bytes_read",
-    "dram_bytes_write", "register", "occupancy", "sm_active",
-    "compute_throughput", "memory_throughput",
-]
 
 
 def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -56,97 +53,6 @@ def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     if mask.sum() == 0:
         return float("nan")
     return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100.0)
-
-
-# ───────── Feature builders (MUST match predictor.py) ─────────
-
-def build_gemm_features(df: pd.DataFrame) -> pd.DataFrame:
-    sub = df[df["M"].notna() & df["N"].notna() & df["K"].notna()].copy()
-    sub["dtype_bytes"] = sub["dtype"].map(DTYPE_BYTES).fillna(2.0)
-    sub["log_M"] = np.log1p(sub["M"])
-    sub["log_N"] = np.log1p(sub["N"])
-    sub["log_K"] = np.log1p(sub["K"])
-    sub["analytical_flops"] = 2.0 * sub["M"] * sub["N"] * sub["K"]
-    sub["analytical_bytes"] = (sub["M"] * sub["K"] + sub["N"] * sub["K"] + sub["M"] * sub["N"]) * sub["dtype_bytes"]
-    sub["analytical_ai"] = sub["analytical_flops"] / np.maximum(sub["analytical_bytes"], 1.0)
-    sub["log_flops"] = np.log1p(sub["analytical_flops"])
-    sub["log_bytes"] = np.log1p(sub["analytical_bytes"])
-    sub["dtype_onehot_bf16"] = (sub["dtype"] == "bf16").astype(int)
-    return sub
-
-
-GEMM_FEATURES = [
-    "M", "N", "K", "log_M", "log_N", "log_K",
-    "analytical_flops", "analytical_bytes", "analytical_ai",
-    "log_flops", "log_bytes", "dtype_onehot_bf16",
-]
-
-
-def build_flash_attn_features(df: pd.DataFrame) -> pd.DataFrame:
-    sub = df.copy()
-    sub["total_flops"] = 4.0 * sub["bs"] * sub["n_heads"] * (sub["seq"] ** 2) * sub["head_dim"]
-    sub["log_seq"] = np.log1p(sub["seq"])
-    sub["log_heads"] = np.log1p(sub["n_heads"])
-    return sub
-
-
-FLASH_ATTN_FEATURES = [
-    "bs", "seq", "n_heads", "head_dim", "kv_heads",
-    "total_flops", "log_seq", "log_heads",
-]
-
-
-ELEM_OPS = ["rmsnorm", "silu", "mul", "residual", "rope", "neg", "fill", "compare", "other"]
-
-
-def build_elementwise_features(df: pd.DataFrame) -> pd.DataFrame:
-    sub = df.copy()
-    sub["log_numel"] = np.log1p(sub["numel"].fillna(0))
-    for op in ELEM_OPS:
-        sub[f"op_type_onehot_{op}"] = (sub["op_type"] == op).astype(int)
-    known = set(ELEM_OPS)
-    sub.loc[~sub["op_type"].isin(known), "op_type_onehot_other"] = 1
-    return sub
-
-
-ELEMENTWISE_FEATURES = ["numel", "log_numel"] + [f"op_type_onehot_{op}" for op in ELEM_OPS]
-
-
-MISC_FAMILIES = ["reduce", "splitk_reduce", "cast", "copy"]
-
-
-def build_misc_features(df: pd.DataFrame) -> pd.DataFrame:
-    sub = df.copy()
-    m = sub["M"].fillna(0.0); n = sub["N"].fillna(0.0); k = sub["K"].fillna(0.0)
-    nn = sub["numel"].fillna(0.0)
-    size_proxy = np.where(nn > 0, nn, m * n)
-    sub["numel_or_shape_total"] = size_proxy
-    sub["log_numel_or_shape"] = np.log1p(size_proxy)
-    sub["size_m"] = m
-    sub["size_n"] = n
-    sub["size_k"] = k
-    sub["log_size_m"] = np.log1p(m)
-    sub["log_size_n"] = np.log1p(n)
-    sub["log_size_k"] = np.log1p(k)
-    for fam in MISC_FAMILIES:
-        sub[f"kernel_family_onehot_{fam}"] = (sub["kernel_family"] == fam).astype(int)
-    return sub
-
-
-MISC_FEATURES = (
-    ["numel_or_shape_total", "log_numel_or_shape",
-     "size_m", "size_n", "size_k",
-     "log_size_m", "log_size_n", "log_size_k"]
-    + [f"kernel_family_onehot_{fam}" for fam in MISC_FAMILIES]
-)
-
-
-FAMILY_CONFIG: dict[str, dict[str, Any]] = {
-    "gemm":        {"families": ["gemm"],         "builder": build_gemm_features,        "cols": GEMM_FEATURES},
-    "flash_attn":  {"families": ["flash_attn"],   "builder": build_flash_attn_features,  "cols": FLASH_ATTN_FEATURES},
-    "elementwise": {"families": ["elementwise"],  "builder": build_elementwise_features, "cols": ELEMENTWISE_FEATURES},
-    "misc":        {"families": MISC_FAMILIES,    "builder": build_misc_features,        "cols": MISC_FEATURES},
-}
 
 
 # ───────── Core train / predict ─────────
@@ -175,15 +81,6 @@ def predict_ms(model: xgb.XGBRegressor, X: pd.DataFrame, feature_cols: list[str]
     return np.exp(y_log_pred)
 
 
-def audit_features(feature_cols: list[str]) -> list[tuple[str, str]]:
-    leaks = []
-    for feat in feature_cols:
-        for bad in FORBIDDEN_SUBSTRINGS:
-            if bad in feat.lower():
-                leaks.append((feat, bad))
-    return leaks
-
-
 MIN_TRAIN_ROWS = 5
 
 
@@ -196,7 +93,7 @@ def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
 
     family_frames: dict[str, pd.DataFrame] = {}
     for fam, cfg in FAMILY_CONFIG.items():
-        sub = df[df["kernel_family"].isin(cfg["families"])].copy()
+        sub = df[df["kernel_family"].isin(cfg["kernel_families"])].copy()
         family_frames[fam] = cfg["builder"](sub)
 
     training_models = sorted(set(df[~df["held_out"].astype(bool)]["model"].unique()))
@@ -212,8 +109,8 @@ def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
                 if n_tr < MIN_TRAIN_ROWS or n_te == 0:
                     cv_results[hold_mdl][fam] = {"mape": float("nan"), "n_train": n_tr, "n_test": n_te}
                     continue
-                m = train_one(train_data, train_data["gpu_time_duration_ms"].values, cfg["cols"], family=fam)
-                y_pred = predict_ms(m, test_data, cfg["cols"])
+                m = train_one(train_data, train_data["gpu_time_duration_ms"].values, cfg["features"], family=fam)
+                y_pred = predict_ms(m, test_data, cfg["features"])
                 cv_results[hold_mdl][fam] = {"mape": mape(test_data["gpu_time_duration_ms"].values, y_pred),
                                               "n_train": n_tr, "n_test": n_te}
 
@@ -231,11 +128,11 @@ def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
             heldout[fam] = {"skipped": True, "reason": f"n_train={n_tr} < {MIN_TRAIN_ROWS}",
                             "n_train": n_tr, "n_test": n_te}
             continue
-        model = train_one(train_data, train_data["gpu_time_duration_ms"].values, cfg["cols"], family=fam)
+        model = train_one(train_data, train_data["gpu_time_duration_ms"].values, cfg["features"], family=fam)
         final_models[fam] = model
 
         if n_te > 0:
-            y_pred = predict_ms(model, test_data, cfg["cols"])
+            y_pred = predict_ms(model, test_data, cfg["features"])
             heldout[fam] = {"mape": mape(test_data["gpu_time_duration_ms"].values, y_pred),
                             "n_train": n_tr, "n_test": n_te,
                             "y_test_sum": float(test_data["gpu_time_duration_ms"].sum()),
@@ -269,14 +166,14 @@ def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
                     continue
                 sub_m = train_one(sub_df,
                                     sub_df["gpu_time_duration_ms"].values,
-                                    cfg["cols"], family="misc")
+                                    cfg["features"], family="misc")
                 sub_models[sub] = sub_m
                 sub_train_counts[sub] = len(sub_df)
             payload = {
                 "model": model,                          # back-compat
                 "models": sub_models,                    # per-subfamily
                 "per_subfamily_n_training": sub_train_counts,
-                "feature_cols": list(cfg["cols"]),
+                "feature_cols": list(cfg["features"]),
                 "target": "log_gpu_time_duration_ms",
                 "kernel_family": fam,
                 "gpu": gpu,
@@ -288,7 +185,7 @@ def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
         else:
             payload = {
                 "model": model,
-                "feature_cols": list(cfg["cols"]),
+                "feature_cols": list(cfg["features"]),
                 "target": "log_gpu_time_duration_ms",
                 "kernel_family": fam,
                 "gpu": gpu,
@@ -314,7 +211,7 @@ def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
             model = final_models.get(fam)
             if model is None:
                 continue
-            y_pred = predict_ms(model, test, cfg["cols"])
+            y_pred = predict_ms(model, test, cfg["features"])
             y_meas = test["gpu_time_duration_ms"].values
             total_pred += y_pred.sum()
             total_meas += y_meas.sum()
@@ -329,7 +226,7 @@ def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
         "heldout_per_model": heldout_per_model,
         "agg": agg_rows,
         "saved_pkls": saved,
-        "feature_audit": {fam: audit_features(cfg["cols"]) for fam, cfg in FAMILY_CONFIG.items()},
+        "feature_audit": {fam: audit_features(cfg["features"]) for fam, cfg in FAMILY_CONFIG.items()},
         "training_models": training_models,
         "heldout_list": heldout_list,
     }
