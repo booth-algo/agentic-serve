@@ -9,28 +9,24 @@
 
 | GPU | held-out model | sum(pred ms) | sum(meas ms) | abs err % |
 |---|---|---:|---:|---:|
-| A100 | Llama-3.3-70B | 165.05 | 178.50 | 7.54% |
-| A100 | Llama-70B | 165.05 | 178.84 | 7.71% |
-| A100 | Qwen-72B | 169.35 | 181.39 | 6.63% |
-| RTX3090 | Llama-70B | 392.97 | 393.35 | 0.10% |
-| RTX3090 | Qwen-72B | 397.81 | 399.80 | 0.50% |
+| A100 | Llama-3.3-70B | 165.19 | 178.50 | 7.46% |
+| A100 | Llama-70B | 165.19 | 178.84 | 7.63% |
+| A100 | Qwen-72B | 169.49 | 181.39 | 6.56% |
+| RTX3090 | Llama-70B | 393.08 | 393.35 | 0.07% |
+| RTX3090 | Qwen-72B | 397.93 | 399.80 | 0.47% |
 
 ## Held-out per-family MAPE (full-train)
 
 | GPU | family | n_train | n_test | MAPE |
 |---|---|---:|---:|---:|
 | A100 | gemm | 4111 | 1683 | 7.10% |
-| A100 | flash_attn | 190 | 240 | 12.27% |
+| A100 | flash_attn | 64 | 240 | 3.51% |
 | A100 | elementwise | 19007 | 5307 | 13.73% |
 | A100 | misc | 25029 | 2910 | 15.19% |
 | RTX3090 | gemm | 4088 | 1122 | 15.65% |
-| RTX3090 | flash_attn | 190 | 160 | 42.84% |
+| RTX3090 | flash_attn | 64 | 160 | 35.77% |
 | RTX3090 | elementwise | 18986 | 3538 | 18.99% |
 | RTX3090 | misc | 24598 | 1780 | 18.48% |
-| RTX2080Ti | gemm | 1904 | 0 | no-heldout (train only) |
-| RTX2080Ti | flash_attn | 0 | 0 | skipped (n_train=0 < 5) |
-| RTX2080Ti | elementwise | 6373 | 0 | no-heldout (train only) |
-| RTX2080Ti | misc | 7857 | 0 | no-heldout (train only) |
 
 ## Leave-one-model-out CV
 
@@ -38,11 +34,10 @@
 
 | held-out | gemm | flash_attn | elementwise | misc |
 |---|---:|---:|---:|---:|
-| Llama-8B | 16.8% (n=225) | 1.3% (n=32) | 8.6% (n=713) | 10.3% (n=490) |
-| Mixtral-8x7B | 21.2% (n=914) | 1.3% (n=32) | 14.1% (n=1562) | 25.9% (n=2156) |
+| Llama-8B | 16.8% (n=225) | 1.2% (n=32) | 8.6% (n=713) | 10.3% (n=490) |
+| Mixtral-8x7B | 21.2% (n=914) | 1.1% (n=32) | 14.1% (n=1562) | 25.9% (n=2156) |
 | Qwen3.5-27B | 64.1% (n=1122) | n/a | 9.4% (n=10508) | 12.0% (n=14255) |
 | Qwen3.5-9B | 38.5% (n=562) | n/a | 9.0% (n=5260) | 10.3% (n=7223) |
-| flash_sweep | n/a | 27.0% (n=126) | n/a | n/a |
 | gpt-oss-20b | 110.1% (n=217) | n/a | 42.9% (n=964) | 30.8% (n=541) |
 | misc_sweep | n/a | n/a | n/a | 55.9% (n=364) |
 | roofline | 63.4% (n=1071) | n/a | n/a | n/a |
@@ -51,22 +46,13 @@
 
 | held-out | gemm | flash_attn | elementwise | misc |
 |---|---:|---:|---:|---:|
-| Llama-8B | 10.6% (n=225) | 1.1% (n=32) | 10.0% (n=713) | 18.2% (n=394) |
-| Mixtral-8x7B | 15.8% (n=893) | 1.1% (n=32) | 14.0% (n=1541) | 23.6% (n=1909) |
+| Llama-8B | 10.6% (n=225) | 0.3% (n=32) | 10.0% (n=713) | 18.2% (n=394) |
+| Mixtral-8x7B | 15.8% (n=893) | 0.4% (n=32) | 14.0% (n=1541) | 23.6% (n=1909) |
 | Qwen3.5-27B | 39.8% (n=1121) | n/a | 10.5% (n=10508) | 12.9% (n=14255) |
 | Qwen3.5-9B | 51.7% (n=561) | n/a | 13.3% (n=5260) | 14.1% (n=7135) |
-| flash_sweep | n/a | 30.1% (n=126) | n/a | n/a |
 | gpt-oss-20b | 33.7% (n=217) | n/a | 42.4% (n=964) | 29.9% (n=541) |
 | misc_sweep | n/a | n/a | n/a | 75.1% (n=364) |
 | roofline | 68.4% (n=1071) | n/a | n/a | n/a |
-
-### RTX2080Ti
-
-| held-out | gemm | flash_attn | elementwise | misc |
-|---|---:|---:|---:|---:|
-| Llama-8B | 168.7% (n=289) | n/a | 13.9% (n=1033) | 21.9% (n=714) |
-| Qwen3.5-9B | 75.1% (n=577) | n/a | 20.8% (n=5340) | 29.9% (n=7143) |
-| roofline | 277.1% (n=1038) | n/a | n/a | n/a |
 
 ## Saved pkls
 - **A100**
@@ -79,7 +65,3 @@
   - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl`
   - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_elementwise_shape_v2.pkl`
   - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_misc_shape_v2.pkl`
-- **RTX2080Ti**
-  - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_gemm_shape_v2.pkl`
-  - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_elementwise_shape_v2.pkl`
-  - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_misc_shape_v2.pkl`

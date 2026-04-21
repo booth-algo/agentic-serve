@@ -2,14 +2,14 @@
   "A100": {
     "heldout_mape": {
       "gemm": 7.095951050189475,
-      "flash_attn": 12.271552904195971,
+      "flash_attn": 3.5104502260427064,
       "elementwise": 13.732536183062749,
       "misc": 15.186435984188556
     },
     "aggregate_err_pct": {
-      "Llama-3.3-70B": 7.535734427890815,
-      "Llama-70B": 7.710237838252457,
-      "Qwen-72B": 6.634414069843548
+      "Llama-3.3-70B": 7.4571771437910686,
+      "Llama-70B": 7.6318288115784245,
+      "Qwen-72B": 6.557105352984288
     },
     "saved_pkls": [
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
@@ -21,33 +21,19 @@
   "RTX3090": {
     "heldout_mape": {
       "gemm": 15.64799765978061,
-      "flash_attn": 42.84143054464623,
+      "flash_attn": 35.76723451946702,
       "elementwise": 18.989324590834254,
       "misc": 18.481483967260175
     },
     "aggregate_err_pct": {
-      "Llama-70B": 0.09829636654812943,
-      "Qwen-72B": 0.49789928635244185
+      "Llama-70B": 0.06853536869348617,
+      "Qwen-72B": 0.4686183931631653
     },
     "saved_pkls": [
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl",
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_misc_shape_v2.pkl"
-    ]
-  },
-  "RTX2080Ti": {
-    "heldout_mape": {
-      "gemm": NaN,
-      "flash_attn": null,
-      "elementwise": NaN,
-      "misc": NaN
-    },
-    "aggregate_err_pct": {},
-    "saved_pkls": [
-      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
-      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
-      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_misc_shape_v2.pkl"
     ]
   }
 }
