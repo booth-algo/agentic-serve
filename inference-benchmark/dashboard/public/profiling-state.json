@@ -1,0 +1,684 @@
+{
+  "generated_at": "2026-04-21T17:31:07Z",
+  "gpus": [
+    "A100",
+    "H100",
+    "RTX2080Ti",
+    "RTX3090"
+  ],
+  "models": [
+    "Llama-3.3-70B",
+    "Llama-70B",
+    "Llama-8B",
+    "Mixtral-8x7B",
+    "Qwen-72B",
+    "Qwen3.5-27B",
+    "Qwen3.5-9B",
+    "gpt-oss-20b"
+  ],
+  "cells": [
+    {
+      "gpu": "A100",
+      "model": "Llama-3.3-70B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 13528
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "done",
+        "version": "v4-6models"
+      }
+    },
+    {
+      "gpu": "A100",
+      "model": "Llama-70B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 16910
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "done",
+        "version": "v4-6models"
+      }
+    },
+    {
+      "gpu": "A100",
+      "model": "Llama-8B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 7310
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "done"
+      },
+      "per_op_trained_pkl": {
+        "status": "done",
+        "version": "v4-6models"
+      }
+    },
+    {
+      "gpu": "A100",
+      "model": "Mixtral-8x7B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 29470
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "done"
+      },
+      "per_op_trained_pkl": {
+        "status": "done",
+        "version": "v4-6models"
+      }
+    },
+    {
+      "gpu": "A100",
+      "model": "Qwen-72B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 16910
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "done",
+        "version": "v4-6models"
+      }
+    },
+    {
+      "gpu": "A100",
+      "model": "Qwen3.5-27B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 131030
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "done",
+        "version": "v4-6models"
+      }
+    },
+    {
+      "gpu": "A100",
+      "model": "Qwen3.5-9B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 66030
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "done",
+        "version": "v4-6models"
+      }
+    },
+    {
+      "gpu": "A100",
+      "model": "gpt-oss-20b",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 7112
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "done",
+        "version": "v4-6models"
+      }
+    },
+    {
+      "gpu": "H100",
+      "model": "Llama-3.3-70B",
+      "per_kernel_prefill": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_kernel_roofline": {
+        "status": "missing"
+      },
+      "per_op_cuda_events": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_op_trained_pkl": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      }
+    },
+    {
+      "gpu": "H100",
+      "model": "Llama-70B",
+      "per_kernel_prefill": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_kernel_roofline": {
+        "status": "missing"
+      },
+      "per_op_cuda_events": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_op_trained_pkl": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      }
+    },
+    {
+      "gpu": "H100",
+      "model": "Llama-8B",
+      "per_kernel_prefill": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_kernel_roofline": {
+        "status": "missing"
+      },
+      "per_op_cuda_events": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_op_trained_pkl": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      }
+    },
+    {
+      "gpu": "H100",
+      "model": "Mixtral-8x7B",
+      "per_kernel_prefill": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_kernel_roofline": {
+        "status": "missing"
+      },
+      "per_op_cuda_events": {
+        "status": "partial",
+        "reason": "only MoE profile exists (decode OR prefill phase only)"
+      },
+      "per_op_trained_pkl": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      }
+    },
+    {
+      "gpu": "H100",
+      "model": "Qwen-72B",
+      "per_kernel_prefill": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_kernel_roofline": {
+        "status": "missing"
+      },
+      "per_op_cuda_events": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_op_trained_pkl": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      }
+    },
+    {
+      "gpu": "H100",
+      "model": "Qwen3.5-27B",
+      "per_kernel_prefill": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_kernel_roofline": {
+        "status": "missing"
+      },
+      "per_op_cuda_events": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_op_trained_pkl": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      }
+    },
+    {
+      "gpu": "H100",
+      "model": "Qwen3.5-9B",
+      "per_kernel_prefill": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_kernel_roofline": {
+        "status": "missing"
+      },
+      "per_op_cuda_events": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_op_trained_pkl": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      }
+    },
+    {
+      "gpu": "H100",
+      "model": "gpt-oss-20b",
+      "per_kernel_prefill": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      },
+      "per_kernel_roofline": {
+        "status": "missing"
+      },
+      "per_op_cuda_events": {
+        "status": "partial",
+        "reason": "only MoE profile exists (decode OR prefill phase only)"
+      },
+      "per_op_trained_pkl": {
+        "status": "pending_infra_access",
+        "reason": "runpod container perms"
+      }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Llama-3.3-70B",
+      "per_kernel_prefill": {
+        "status": "infeasible",
+        "reason": "weights 140 GB > single-GPU budget 18.7 GB"
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5190
+      },
+      "per_op_cuda_events": {
+        "status": "infeasible",
+        "reason": "propagated from per_kernel.prefill infeasibility"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Llama-70B",
+      "per_kernel_prefill": {
+        "status": "infeasible",
+        "reason": "weights 140 GB > single-GPU budget 18.7 GB"
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5190
+      },
+      "per_op_cuda_events": {
+        "status": "infeasible",
+        "reason": "propagated from per_kernel.prefill infeasibility"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Llama-8B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 10350
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5190
+      },
+      "per_op_cuda_events": {
+        "status": "done"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Mixtral-8x7B",
+      "per_kernel_prefill": {
+        "status": "infeasible",
+        "reason": "weights 94 GB > single-GPU budget 18.7 GB"
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5190
+      },
+      "per_op_cuda_events": {
+        "status": "infeasible",
+        "reason": "propagated from per_kernel.prefill infeasibility"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Qwen-72B",
+      "per_kernel_prefill": {
+        "status": "infeasible",
+        "reason": "weights 144 GB > single-GPU budget 18.7 GB"
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5190
+      },
+      "per_op_cuda_events": {
+        "status": "infeasible",
+        "reason": "propagated from per_kernel.prefill infeasibility"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Qwen3.5-27B",
+      "per_kernel_prefill": {
+        "status": "infeasible",
+        "reason": "weights 54 GB > single-GPU budget 18.7 GB"
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5190
+      },
+      "per_op_cuda_events": {
+        "status": "infeasible",
+        "reason": "propagated from per_kernel.prefill infeasibility"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Qwen3.5-9B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 66070
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5190
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "gpt-oss-20b",
+      "per_kernel_prefill": {
+        "status": "infeasible",
+        "reason": "weights 40 GB > single-GPU budget 18.7 GB"
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5190
+      },
+      "per_op_cuda_events": {
+        "status": "infeasible",
+        "reason": "propagated from per_kernel.prefill infeasibility"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Llama-3.3-70B",
+      "per_kernel_prefill": {
+        "status": "infeasible",
+        "reason": "weights 140 GB > single-GPU budget 20.4 GB"
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Llama-70B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 27056
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Llama-8B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 10928
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "done"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Mixtral-8x7B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 27875
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "done"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Qwen-72B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 25776
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Qwen3.5-27B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 131030
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Qwen3.5-9B",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 65590
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "gpt-oss-20b",
+      "per_kernel_prefill": {
+        "status": "done",
+        "rows": 14224
+      },
+      "per_kernel_roofline": {
+        "status": "done",
+        "rows": 5355
+      },
+      "per_op_cuda_events": {
+        "status": "missing"
+      },
+      "per_op_trained_pkl": {
+        "status": "missing"
+      }
+    }
+  ],
+  "results": {
+    "per_kernel": {
+      "A100": {
+        "heldout_mape_per_family": {
+          "gemm": 7.095951050189475,
+          "flash_attn": 3.5104502260427064,
+          "elementwise": 13.732536183062749,
+          "misc": 15.186435984188556
+        },
+        "aggregate_err_per_model": {
+          "Llama-3.3-70B": 7.4571771437910686,
+          "Llama-70B": 7.6318288115784245,
+          "Qwen-72B": 6.557105352984288
+        }
+      },
+      "RTX3090": {
+        "heldout_mape_per_family": {
+          "gemm": 15.64799765978061,
+          "flash_attn": 35.76723451946702,
+          "elementwise": 18.989324590834254,
+          "misc": 18.481483967260175
+        },
+        "aggregate_err_per_model": {
+          "Llama-70B": 0.06853536869348617,
+          "Qwen-72B": 0.4686183931631653
+        }
+      }
+    },
+    "per_op": {
+      "A100": {
+        "heldout_mape": 38.66214357027025,
+        "pool_models": [
+          "Llama-8B",
+          "Mixtral",
+          "gpt-oss-20b"
+        ],
+        "heldout_models": [
+          "Llama-3.3-70B",
+          "Llama-70B",
+          "Qwen-72B"
+        ]
+      },
+      "RTX3090": {
+        "heldout_mape": 26.584837445240765,
+        "pool_models": [
+          "Llama-8B",
+          "Mixtral",
+          "Qwen3.5-9B",
+          "gpt-oss-20b"
+        ],
+        "heldout_models": [
+          "Llama-70B",
+          "Qwen-72B"
+        ]
+      },
+      "RTX2080Ti": {
+        "heldout_mape": null,
+        "pool_models": [
+          "Llama-8B",
+          "Qwen3.5-9B"
+        ],
+        "heldout_models": []
+      }
+    }
+  }
+}
