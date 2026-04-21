@@ -57,7 +57,7 @@ interface EnrichedResult {
 // via sweep_all_profiles.sh / sweep_multiturn_profiles.sh.
 const FALLBACK_ENGINE_VERSIONS: Record<string, string> = {
   vllm: '0.19.0',
-  sglang: '0.4.5',
+  sglang: '0.5.9',
 };
 
 const RESULTS_DIR = path.resolve(__dirname, '../../results');
