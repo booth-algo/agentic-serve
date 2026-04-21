@@ -23,10 +23,16 @@ const ALL_MULTI_PROFILES = [
 
 const TP_OPTIONS = [1, 2, 4, 8];
 
-// Max feasible cells per (hw, model) — every single+multi profile at every
-// expected concurrency. Used as the denominator for cells that haven't yet
-// produced data (running/pending/abandoned/untested) so the "N/M" coverage
-// readout reflects the full target, not just already-attempted models.
+// Backends we report coverage for. Each (hw, model) pair gets one entry
+// per backend so sglang gaps are explicit rather than folded under vllm.
+// sweep.yaml currently only dispatches vllm — sglang shows as untested
+// unless historical data.json data exists.
+const EXPECTED_BACKENDS = ['vllm', 'sglang'];
+
+// Max feasible cells per (hw, model, backend) — every single+multi profile
+// at every expected concurrency. Used as the denominator for cells that
+// haven't yet produced data (running/pending/abandoned/untested) so the
+// "N/M" coverage readout reflects the full target, not just attempted.
 const EXPECTED_CELLS_PER_MODEL =
   ALL_SINGLE_PROFILES.length * SINGLE_CONCS.length +
   ALL_MULTI_PROFILES.length * MULTI_CONCS.length;
@@ -42,6 +48,7 @@ interface DataModel {
   kind: 'data';
   hardware: string;
   model: string;
+  backend: string;
   profiles: ProfileRow[];
   // Aggregate coverage across all profiles.
   totalHave: number;
@@ -52,6 +59,7 @@ interface StatusModel {
   kind: 'status';
   hardware: string;
   model: string;
+  backend: string;
   status: 'oom' | 'untested' | 'infeasible' | 'running' | 'abandoned' | 'pending';
   reason?: string;
   attempt?: number;
@@ -147,18 +155,23 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
     const ratio = sweepState?.feasibility_ratio ?? 0.85;
 
     const bucket = new Map<string, Set<number>>();
-    const hwHasData = new Map<string, Set<string>>();
+    const mbHasData = new Map<string, Set<string>>();  // hw -> Set<"model|backend">
     for (const r of allData) {
-      const k = `${r.hardware}|${r.modelShort}|${r.config.profile}`;
+      const backend = r.config.backend;
+      const k = `${r.hardware}|${r.modelShort}|${backend}|${r.config.profile}`;
       if (!bucket.has(k)) bucket.set(k, new Set());
       bucket.get(k)!.add(r.config.concurrency);
-      if (!hwHasData.has(r.hardware)) hwHasData.set(r.hardware, new Set());
-      hwHasData.get(r.hardware)!.add(r.modelShort);
+      if (!mbHasData.has(r.hardware)) mbHasData.set(r.hardware, new Set());
+      mbHasData.get(r.hardware)!.add(`${r.modelShort}|${backend}`);
     }
 
     const aggStatus = sweepState
       ? aggregateCells(sweepState.cells)
       : new Map<string, SweepCell>();
+
+    // sweep-state tracks only vllm (orchestrator dispatches vllm-only today).
+    // sglang cells without data.json data surface as untested.
+    const SWEEP_BACKEND = 'vllm';
 
     const hwGroups: HwGroup[] = [];
     for (const hw of expectedHw) {
@@ -170,70 +183,72 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
         totalHave: 0, totalNeed: 0,
       };
       for (const model of modelList) {
-        const key = `${hw}|${model}`;
-        const hasData = hwHasData.get(hw)?.has(model) ?? false;
-        const cell = aggStatus.get(key);
+        for (const backend of EXPECTED_BACKENDS) {
+          const hasData = mbHasData.get(hw)?.has(`${model}|${backend}`) ?? false;
+          // sweep-state status only applies to the vllm backend.
+          const cell = backend === SWEEP_BACKEND ? aggStatus.get(`${hw}|${model}`) : undefined;
 
-        if (hasData) {
-          const profiles: ProfileRow[] = [];
-          let totalHave = 0;
-          let totalNeed = 0;
-          for (const profile of ALL_SINGLE_PROFILES) {
-            const present = bucket.get(`${hw}|${model}|${profile}`) ?? new Set<number>();
-            const have = [...present].filter((c) => SINGLE_CONCS.includes(c)).length;
-            totalHave += have;
-            totalNeed += SINGLE_CONCS.length;
-            profiles.push({ profile, isMultiTurn: false, expected: SINGLE_CONCS, present });
+          if (hasData) {
+            const profiles: ProfileRow[] = [];
+            let totalHave = 0;
+            let totalNeed = 0;
+            for (const profile of ALL_SINGLE_PROFILES) {
+              const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
+              const have = [...present].filter((c) => SINGLE_CONCS.includes(c)).length;
+              totalHave += have;
+              totalNeed += SINGLE_CONCS.length;
+              profiles.push({ profile, isMultiTurn: false, expected: SINGLE_CONCS, present });
+            }
+            for (const profile of ALL_MULTI_PROFILES) {
+              const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
+              const have = [...present].filter((c) => MULTI_CONCS.includes(c)).length;
+              totalHave += have;
+              totalNeed += MULTI_CONCS.length;
+              profiles.push({ profile, isMultiTurn: true, expected: MULTI_CONCS, present });
+            }
+            models.push({ kind: 'data', hardware: hw, model, backend, profiles, totalHave, totalNeed });
+            summary.totalHave += totalHave;
+            summary.totalNeed += totalNeed;
+            if (totalHave === totalNeed) summary.complete += 1;
+            else summary.partial += 1;
+            continue;
           }
-          for (const profile of ALL_MULTI_PROFILES) {
-            const present = bucket.get(`${hw}|${model}|${profile}`) ?? new Set<number>();
-            const have = [...present].filter((c) => MULTI_CONCS.includes(c)).length;
-            totalHave += have;
-            totalNeed += MULTI_CONCS.length;
-            profiles.push({ profile, isMultiTurn: true, expected: MULTI_CONCS, present });
-          }
-          models.push({ kind: 'data', hardware: hw, model, profiles, totalHave, totalNeed });
-          summary.totalHave += totalHave;
-          summary.totalNeed += totalNeed;
-          if (totalHave === totalNeed) summary.complete += 1;
-          else summary.partial += 1;
-          continue;
-        }
 
-        if (cell) {
-          if (cell.status === 'known_oom') {
-            models.push({ kind: 'status', hardware: hw, model, status: 'oom', reason: cell.reason ?? undefined });
-            summary.oom += 1;
-            continue;
+          if (cell) {
+            if (cell.status === 'known_oom') {
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'oom', reason: cell.reason ?? undefined });
+              summary.oom += 1;
+              continue;
+            }
+            if (cell.status === 'running') {
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'running', attempt: cell.attempt, updatedAt: cell.updated_at });
+              summary.running += 1;
+              summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
+              continue;
+            }
+            if (cell.status === 'abandoned') {
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'abandoned', reason: cell.reason ?? undefined, attempt: cell.attempt });
+              summary.abandoned += 1;
+              summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
+              continue;
+            }
+            if (cell.status === 'pending' || cell.status === 'done') {
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'pending' });
+              summary.pending += 1;
+              summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
+              continue;
+            }
           }
-          if (cell.status === 'running') {
-            models.push({ kind: 'status', hardware: hw, model, status: 'running', attempt: cell.attempt, updatedAt: cell.updated_at });
-            summary.running += 1;
-            summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
-            continue;
-          }
-          if (cell.status === 'abandoned') {
-            models.push({ kind: 'status', hardware: hw, model, status: 'abandoned', reason: cell.reason ?? undefined, attempt: cell.attempt });
-            summary.abandoned += 1;
-            summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
-            continue;
-          }
-          if (cell.status === 'pending' || cell.status === 'done') {
-            models.push({ kind: 'status', hardware: hw, model, status: 'pending' });
-            summary.pending += 1;
-            summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
-            continue;
-          }
-        }
 
-        const infReason = infeasibilityReason(vramFor(hw), weightsFor(model), tpOf(hw), ratio);
-        if (infReason) {
-          models.push({ kind: 'status', hardware: hw, model, status: 'infeasible', reason: infReason });
-          summary.infeasible += 1;
-        } else {
-          models.push({ kind: 'status', hardware: hw, model, status: 'untested' });
-          summary.untested += 1;
-          summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
+          const infReason = infeasibilityReason(vramFor(hw), weightsFor(model), tpOf(hw), ratio);
+          if (infReason) {
+            models.push({ kind: 'status', hardware: hw, model, backend, status: 'infeasible', reason: infReason });
+            summary.infeasible += 1;
+          } else {
+            models.push({ kind: 'status', hardware: hw, model, backend, status: 'untested' });
+            summary.untested += 1;
+            summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
+          }
         }
       }
       hwGroups.push({ hardware: hw, models, summary });
@@ -448,16 +463,19 @@ function GroupRows({ group, hwOpen, expandedModel, onToggleHw, onToggleModel, al
           </span>
         </td>
       </tr>
-      {hwOpen && g.models.map((m) => (
-        <ModelRows
-          key={`${g.hardware}|${m.model}`}
-          hwName={g.hardware}
-          model={m}
-          open={expandedModel.has(`${g.hardware}|${m.model}`)}
-          onToggle={() => onToggleModel(`${g.hardware}|${m.model}`)}
-          allConcs={allConcs}
-        />
-      ))}
+      {hwOpen && g.models.map((m) => {
+        const mKey = `${g.hardware}|${m.model}|${m.backend}`;
+        return (
+          <ModelRows
+            key={mKey}
+            hwName={g.hardware}
+            model={m}
+            open={expandedModel.has(mKey)}
+            onToggle={() => onToggleModel(mKey)}
+            allConcs={allConcs}
+          />
+        );
+      })}
     </>
   );
 }
@@ -480,6 +498,7 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
         <td className="whitespace-nowrap px-3 py-1.5 pl-10 text-[#c9d1d9]">
           <span className="mr-2 inline-block w-3 text-[#30363d]">·</span>
           {model.model}
+          <BackendBadge backend={model.backend} />
         </td>
         <td colSpan={allConcs.length + 1} className="whitespace-nowrap px-3 py-1.5">
           <div className="flex items-center gap-2">
@@ -520,6 +539,7 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
         <td className="whitespace-nowrap px-3 py-1.5 pl-10 text-[#c9d1d9]">
           <span className="mr-2 inline-block w-3 text-[#8b949e]">{open ? '▼' : '▶'}</span>
           {model.model}
+          <BackendBadge backend={model.backend} />
         </td>
         <td className="whitespace-nowrap px-3 py-1.5 text-[#8b949e]">
           <span className="text-[10px] uppercase tracking-wide">{model.profiles.length} profiles</span>
@@ -599,6 +619,18 @@ function Cell({ state }: { state: 'present' | 'missing' | 'na' }) {
     state === 'missing' ? 'bg-transparent border-[#30363d]' :
     'bg-[#21262d]/50 border-transparent';
   return <span className={`inline-block h-3 w-3 rounded-sm border ${cls}`} />;
+}
+
+function BackendBadge({ backend }: { backend: string }) {
+  const cls =
+    backend === 'vllm'   ? 'bg-[#3fb950]/15 text-[#3fb950] border-[#3fb950]/40' :
+    backend === 'sglang' ? 'bg-[#ffb74d]/15 text-[#ffb74d] border-[#ffb74d]/40' :
+                           'bg-[#21262d] text-[#8b949e] border-[#30363d]';
+  return (
+    <span className={`ml-2 rounded border px-1.5 py-0.5 text-[10px] font-medium lowercase tracking-wide ${cls}`}>
+      {backend}
+    </span>
+  );
 }
 
 // Aggregate cell for model-row summaries. Solid green only when every
