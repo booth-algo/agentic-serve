@@ -49,6 +49,7 @@ interface DataModel {
   hardware: string;
   model: string;
   backend: string;
+  engineVersion?: string;
   profiles: ProfileRow[];
   // Aggregate coverage across all profiles.
   totalHave: number;
@@ -156,6 +157,7 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
 
     const bucket = new Map<string, Set<number>>();
     const mbHasData = new Map<string, Set<string>>();  // hw -> Set<"model|backend">
+    const engineVersionByMb = new Map<string, string>();  // "hw|model|backend" -> version
     for (const r of allData) {
       const backend = r.config.backend;
       const k = `${r.hardware}|${r.modelShort}|${backend}|${r.config.profile}`;
@@ -163,6 +165,10 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
       bucket.get(k)!.add(r.config.concurrency);
       if (!mbHasData.has(r.hardware)) mbHasData.set(r.hardware, new Set());
       mbHasData.get(r.hardware)!.add(`${r.modelShort}|${backend}`);
+      const mbKey = `${r.hardware}|${r.modelShort}|${backend}`;
+      if (r.engineVersion && !engineVersionByMb.has(mbKey)) {
+        engineVersionByMb.set(mbKey, r.engineVersion);
+      }
     }
 
     const aggStatus = sweepState
@@ -206,7 +212,8 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
               totalNeed += MULTI_CONCS.length;
               profiles.push({ profile, isMultiTurn: true, expected: MULTI_CONCS, present });
             }
-            models.push({ kind: 'data', hardware: hw, model, backend, profiles, totalHave, totalNeed });
+            const engineVersion = engineVersionByMb.get(`${hw}|${model}|${backend}`);
+            models.push({ kind: 'data', hardware: hw, model, backend, engineVersion, profiles, totalHave, totalNeed });
             summary.totalHave += totalHave;
             summary.totalNeed += totalNeed;
             if (totalHave === totalNeed) summary.complete += 1;
@@ -539,7 +546,7 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
         <td className="whitespace-nowrap px-3 py-1.5 pl-10 text-[#c9d1d9]">
           <span className="mr-2 inline-block w-3 text-[#8b949e]">{open ? '▼' : '▶'}</span>
           {model.model}
-          <BackendBadge backend={model.backend} />
+          <BackendBadge backend={model.backend} version={model.engineVersion} />
         </td>
         <td className="whitespace-nowrap px-3 py-1.5 text-[#8b949e]">
           <span className="text-[10px] uppercase tracking-wide">{model.profiles.length} profiles</span>
@@ -621,14 +628,14 @@ function Cell({ state }: { state: 'present' | 'missing' | 'na' }) {
   return <span className={`inline-block h-3 w-3 rounded-sm border ${cls}`} />;
 }
 
-function BackendBadge({ backend }: { backend: string }) {
+function BackendBadge({ backend, version }: { backend: string; version?: string }) {
   const cls =
     backend === 'vllm'   ? 'bg-[#3fb950]/15 text-[#3fb950] border-[#3fb950]/40' :
     backend === 'sglang' ? 'bg-[#ffb74d]/15 text-[#ffb74d] border-[#ffb74d]/40' :
                            'bg-[#21262d] text-[#8b949e] border-[#30363d]';
   return (
     <span className={`ml-2 rounded border px-1.5 py-0.5 text-[10px] font-medium lowercase tracking-wide ${cls}`}>
-      {backend}
+      {backend}{version ? ` ${version}` : ''}
     </span>
   );
 }

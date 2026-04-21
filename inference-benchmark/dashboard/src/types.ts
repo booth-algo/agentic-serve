@@ -80,6 +80,7 @@ export interface BenchmarkResult {
   modelShort: string;
   seriesKey: string;
   filename: string;
+  engineVersion?: string;  // "0.19.0" — from _engine_version.txt sidecar or fallback
   perTurn?: PerTurnEntry[];
   scatterData?: ScatterPoint[];
 }
