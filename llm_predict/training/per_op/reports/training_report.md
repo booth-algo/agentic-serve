@@ -7,8 +7,16 @@
 | GPU | n_train | n_heldout | pool | heldout | MAPE |
 |---|---:|---:|---|---|---:|
 | RTX2080Ti | 133 | 0 | Llama-8B, Qwen3.5-9B | — | — |
+| RTX3090 | 285 | 152 | Llama-8B, Mixtral, Qwen3.5-9B, gpt-oss-20b | Llama-70B, Qwen-72B | 32.84% |
 
 ## Per-heldout-model MAPE
+
+### RTX3090
+
+| held-out model | MAPE |
+|---|---:|
+| Llama-70B | 32.11% |
+| Qwen-72B | 33.58% |
 
 ## LOMO cross-validation
 
@@ -19,5 +27,15 @@
 | Llama-8B | 57 | 76 | 25.20% |
 | Qwen3.5-9B | 76 | 57 | 13.04% |
 
+### RTX3090
+
+| held-out | n_train | n_test | MAPE |
+|---|---:|---:|---:|
+| Llama-8B | 209 | 76 | 15.86% |
+| Mixtral | 209 | 76 | 21.27% |
+| Qwen3.5-9B | 228 | 57 | 16.81% |
+| gpt-oss-20b | 209 | 76 | 46.14% |
+
 ## Saved pkls
 - **RTX2080Ti**: `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_op/perop_v5_shape.pkl`
+- **RTX3090**: `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_op/perop_v5_shape.pkl`

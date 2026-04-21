@@ -9,5 +9,21 @@
       "Qwen3.5-9B"
     ],
     "heldout_models": []
+  },
+  {
+    "gpu": "RTX3090",
+    "skipped": false,
+    "heldout_mape": 32.84490276360098,
+    "saved_pkl": "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_op/perop_v5_shape.pkl",
+    "pool_models": [
+      "Llama-8B",
+      "Mixtral",
+      "Qwen3.5-9B",
+      "gpt-oss-20b"
+    ],
+    "heldout_models": [
+      "Llama-70B",
+      "Qwen-72B"
+    ]
   }
 ]
