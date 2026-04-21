@@ -3,20 +3,23 @@
 - Predictor: A100 pkls (['elementwise', 'flash_attn', 'gemm', 'misc'])
 - Ground truth: sum(gpu_time_duration_ms) per model from kernels_labeled.csv
 - Input: bs=1, seq=128, tp=1
+- Headline MAPE = supported architectures only (dense, non-hybrid-attn).
+  MoE and hybrid-attn rows are known composer gaps and listed separately.
 
 ## Per-model
 
-| Model | predicted TTFT (ms) | measured Σ (ms) | abs err % | n kernels |
-|---|---:|---:|---:|---:|
-| Llama-8B | 23.62 | 26.48 | 10.79% | 1461 |
-| Llama-70B _(held-out)_ | 165.36 | 178.85 | 7.54% | 3381 |
-| Llama-3.3-70B _(held-out)_ | 165.36 | 178.51 | 7.37% | 3381 |
-| Qwen-72B _(held-out)_ | 169.66 | 181.39 | 6.47% | 3381 |
-| Qwen3.5-9B | 21.11 | 105.21 | 79.94% | 13061 |
-| Qwen3.5-27B | 57.16 | 233.93 | 75.57% | 25917 |
-| gpt-oss-20b | 15.38 | 60.34 | 74.51% | 1723 |
-| Mixtral-8x7B | 31.74 | 109.87 | 71.11% | 4665 |
-| **TOTAL** | **649.39** | **1074.58** | **39.57%** | |
+| Model | arch | predicted TTFT (ms) | measured Σ (ms) | abs err % | n kernels |
+|---|---|---:|---:|---:|---:|
+| Llama-8B | supported | 23.62 | 26.48 | 10.79% | 1461 |
+| Llama-70B _(held-out)_ | supported | 165.36 | 178.85 | 7.54% | 3381 |
+| Llama-3.3-70B _(held-out)_ | supported | 165.36 | 178.51 | 7.37% | 3381 |
+| Qwen-72B _(held-out)_ | supported | 169.66 | 181.39 | 6.47% | 3381 |
+| Qwen3.5-9B | hybrid_attn | 21.11 | 105.21 | 79.94% | 13061 |
+| Qwen3.5-27B | hybrid_attn | 57.16 | 233.93 | 75.57% | 25917 |
+| gpt-oss-20b | moe | 15.38 | 60.34 | 74.51% | 1723 |
+| Mixtral-8x7B | moe | 31.74 | 109.87 | 71.11% | 4665 |
+| **supported aggregate** (4 rows) | | **524.00** | **565.23** | **Σ-err 7.29% · MAPE 8.04%** | |
+| _out-of-scope_ | | | | _2 moe, 2 hybrid_attn — excluded from headline_ | |
 
 ## Measured time breakdown by family (ms)
 
