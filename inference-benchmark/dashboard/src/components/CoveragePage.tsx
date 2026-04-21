@@ -44,6 +44,12 @@ const EXPECTED_HARDWARE = [
 
 const HARDWARE_ORDER = EXPECTED_HARDWARE.concat(['A6000']);
 
+// Backends we report coverage for. A given (hw, model) cell can have
+// data for one, both, or neither; missing backends surface as per-backend
+// status rows (OOM / infeasible / untested) so engine-specific gaps are
+// explicit rather than hidden.
+const EXPECTED_BACKENDS = ['vllm', 'sglang'];
+
 // Total VRAM per hardware config (GB, rounded).
 const HARDWARE_VRAM_GB: Record<string, number> = {
   'H100': 80, 'H100x2': 160, 'H100x4': 320, 'H100x8': 640,
@@ -81,25 +87,27 @@ const ALL_MODELS = [
   'gpt-oss-120b',
 ];
 
-// Known-structural failures: (hardware|model) → short reason.
+// Known-structural failures: (hardware|model|backend) → short reason.
 // Reserved for things that fail after a real attempt, not for things
 // that are obviously too large (those are caught by checkFeasibility).
 // OOM takes priority over the static feasibility rule, so entries here
 // override "needs ≥X GB" messaging with the specific failure we saw.
+// Keyed per-backend because OOM is observed per-engine — a cell that
+// OOMs on vllm may not have been tried on sglang yet.
 const KNOWN_OOM: Record<string, string> = {
   // A100-40GBx4 (gpu-4, TP=4): 70B/72B weights + vLLM v0.19 cudagraph
   // accounting overrun even at gpu_mem=0.95, max_len=2048. Would fit on
   // A100-40GBx8 or on v0.18.
-  'A100-40GBx4|Llama-3.1-70B': 'vLLM v0.19 cudagraph OOM — gpu_mem=0.95 + max_len=2048 still exceeds 160 GB',
-  'A100-40GBx4|Llama-3.3-70B': 'vLLM v0.19 cudagraph OOM — gpu_mem=0.95 + max_len=2048 still exceeds 160 GB',
-  'A100-40GBx4|Qwen2.5-72B':   '144 GB weights + cudagraph overhead exceeds 160 GB on vLLM v0.19',
+  'A100-40GBx4|Llama-3.1-70B|vllm': 'vLLM v0.19 cudagraph OOM — gpu_mem=0.95 + max_len=2048 still exceeds 160 GB',
+  'A100-40GBx4|Llama-3.3-70B|vllm': 'vLLM v0.19 cudagraph OOM — gpu_mem=0.95 + max_len=2048 still exceeds 160 GB',
+  'A100-40GBx4|Qwen2.5-72B|vllm':   '144 GB weights + cudagraph overhead exceeds 160 GB on vLLM v0.19',
   // Qwen3.5 hybrid attention: triton chunk_gated_delta_rule kernel OOMs
   // on prefill regardless of TP size; not weight-fit related.
-  'A100-40GBx2|Qwen3.5-27B': 'hybrid-attn triton chunk_gated_delta_rule OOMs on prefill',
-  'A100-40GBx4|Qwen3.5-27B': 'hybrid-attn triton chunk_gated_delta_rule OOMs on prefill',
+  'A100-40GBx2|Qwen3.5-27B|vllm': 'hybrid-attn triton chunk_gated_delta_rule OOMs on prefill',
+  'A100-40GBx4|Qwen3.5-27B|vllm': 'hybrid-attn triton chunk_gated_delta_rule OOMs on prefill',
   // 3090x4: Mixtral all-experts-resident (94 GB) doesn't fit with
   // cudagraph overhead in 96 GB. Would fit on 3090x8.
-  '3090x4|Mixtral-8x7B': '94 GB MoE weights exceed 96 GB after cudagraph allocation',
+  '3090x4|Mixtral-8x7B|vllm': '94 GB MoE weights exceed 96 GB after cudagraph allocation',
 };
 
 // Infeasible if weights don't leave at least 15% headroom for KV cache
@@ -129,6 +137,7 @@ interface DataRow {
   kind: 'data';
   hardware: string;
   model: string;
+  backend: string;
   profile: string;
   isMultiTurn: boolean;
   expected: number[];
@@ -139,6 +148,7 @@ interface StatusRow {
   kind: 'status';
   hardware: string;
   model: string;
+  backend: string;
   status: 'oom' | 'untested' | 'infeasible';
   reason?: string;
 }
@@ -149,15 +159,23 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
   const { rows, hardwareSet } = useMemo(() => {
     const bucket = new Map<string, Set<number>>();
     const hwSet = new Set<string>();
-    const modelByHw = new Map<string, Set<string>>();
+    // hw -> Set<"model|backend"> — tracks which (model, backend) pairs
+    // have at least one data point on this hardware.
+    const mbByHw = new Map<string, Set<string>>();
+    // hw -> Set<model> — used to build the model list per GPU (including
+    // any off-canonical models we happen to have data for).
+    const modelsByHw = new Map<string, Set<string>>();
 
     for (const r of allData) {
-      const key = `${r.hardware}|${r.modelShort}|${r.config.profile}`;
+      const backend = r.config.backend;
+      const key = `${r.hardware}|${r.modelShort}|${backend}|${r.config.profile}`;
       if (!bucket.has(key)) bucket.set(key, new Set());
       bucket.get(key)!.add(r.config.concurrency);
       hwSet.add(r.hardware);
-      if (!modelByHw.has(r.hardware)) modelByHw.set(r.hardware, new Set());
-      modelByHw.get(r.hardware)!.add(r.modelShort);
+      if (!mbByHw.has(r.hardware)) mbByHw.set(r.hardware, new Set());
+      mbByHw.get(r.hardware)!.add(`${r.modelShort}|${backend}`);
+      if (!modelsByHw.has(r.hardware)) modelsByHw.set(r.hardware, new Set());
+      modelsByHw.get(r.hardware)!.add(r.modelShort);
     }
 
     const out: AnyRow[] = [];
@@ -165,59 +183,64 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
     const sortedHw = Array.from(fullHwSet).sort(sortHardware);
 
     for (const hw of sortedHw) {
-      const modelsWithData = modelByHw.get(hw) ?? new Set();
+      const mbSet = mbByHw.get(hw) ?? new Set<string>();
+      const modelsWithData = modelsByHw.get(hw) ?? new Set<string>();
       const extras = Array.from(modelsWithData).filter((m) => !ALL_MODELS.includes(m));
       const modelList = [...ALL_MODELS, ...extras.sort()];
 
       for (const model of modelList) {
-        const hasData = modelsWithData.has(model);
-        const oomReason = KNOWN_OOM[`${hw}|${model}`];
-        const infeasReason = checkFeasibility(hw, model);
+        for (const backend of EXPECTED_BACKENDS) {
+          const hasData = mbSet.has(`${model}|${backend}`);
+          const oomReason = KNOWN_OOM[`${hw}|${model}|${backend}`];
+          const infeasReason = checkFeasibility(hw, model);
 
-        // OOM takes priority (confirmed via real run). Then infeasibility
-        // (static rule). Then untested if no data. If data exists, emit
-        // a full profile grid regardless.
-        if (!hasData) {
-          let status: StatusRow['status'];
-          let reason: string | undefined;
-          if (oomReason) {
-            status = 'oom';
-            reason = oomReason;
-          } else if (infeasReason) {
-            status = 'infeasible';
-            reason = infeasReason;
-          } else {
-            status = 'untested';
+          // OOM takes priority (confirmed via real run). Then infeasibility
+          // (static rule, backend-agnostic). Then untested if no data.
+          // If data exists, emit a full profile grid regardless.
+          if (!hasData) {
+            let status: StatusRow['status'];
+            let reason: string | undefined;
+            if (oomReason) {
+              status = 'oom';
+              reason = oomReason;
+            } else if (infeasReason) {
+              status = 'infeasible';
+              reason = infeasReason;
+            } else {
+              status = 'untested';
+            }
+            out.push({ kind: 'status', hardware: hw, model, backend, status, reason });
+            continue;
           }
-          out.push({ kind: 'status', hardware: hw, model, status, reason });
-          continue;
-        }
 
-        // Has data → list ALL profiles (single + multi), even profiles
-        // with zero runs, so gaps are explicit.
-        for (const profile of ALL_SINGLE_PROFILES) {
-          const key = `${hw}|${model}|${profile}`;
-          out.push({
-            kind: 'data',
-            hardware: hw,
-            model,
-            profile,
-            isMultiTurn: false,
-            expected: SINGLE_CONCS,
-            present: bucket.get(key) ?? new Set(),
-          });
-        }
-        for (const profile of ALL_MULTI_PROFILES) {
-          const key = `${hw}|${model}|${profile}`;
-          out.push({
-            kind: 'data',
-            hardware: hw,
-            model,
-            profile,
-            isMultiTurn: true,
-            expected: MULTI_CONCS,
-            present: bucket.get(key) ?? new Set(),
-          });
+          // Has data → list ALL profiles (single + multi), even profiles
+          // with zero runs, so gaps are explicit.
+          for (const profile of ALL_SINGLE_PROFILES) {
+            const key = `${hw}|${model}|${backend}|${profile}`;
+            out.push({
+              kind: 'data',
+              hardware: hw,
+              model,
+              backend,
+              profile,
+              isMultiTurn: false,
+              expected: SINGLE_CONCS,
+              present: bucket.get(key) ?? new Set(),
+            });
+          }
+          for (const profile of ALL_MULTI_PROFILES) {
+            const key = `${hw}|${model}|${backend}|${profile}`;
+            out.push({
+              kind: 'data',
+              hardware: hw,
+              model,
+              backend,
+              profile,
+              isMultiTurn: true,
+              expected: MULTI_CONCS,
+              present: bucket.get(key) ?? new Set(),
+            });
+          }
         }
       }
     }
@@ -290,6 +313,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
             <tr className="border-b border-[#21262d] text-[#8b949e]">
               <th className="px-3 py-2 text-left font-medium">Hardware</th>
               <th className="px-3 py-2 text-left font-medium">Model</th>
+              <th className="px-3 py-2 text-left font-medium">Backend</th>
               <th className="px-3 py-2 text-left font-medium">Profile</th>
               {allConcs.map((c) => (
                 <th key={c} className="px-1.5 py-2 text-center font-mono font-normal">{c}</th>
@@ -301,8 +325,10 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
             {rows.map((r, i) => {
               const prevHw = i > 0 ? rows[i - 1].hardware : null;
               const prevModel = i > 0 ? rows[i - 1].model : null;
+              const prevBackend = i > 0 ? rows[i - 1].backend : null;
               const hwChange = r.hardware !== prevHw;
               const modelChange = r.model !== prevModel || hwChange;
+              const backendChange = r.backend !== prevBackend || modelChange;
 
               if (r.kind === 'status') {
                 const bg =
@@ -319,7 +345,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
                   'untested';
                 return (
                   <tr
-                    key={`${r.hardware}|${r.model}|__${r.status}`}
+                    key={`${r.hardware}|${r.model}|${r.backend}|__${r.status}`}
                     className={`border-b border-[#21262d]/50 ${bg} ${hwChange ? 'border-t-2 border-t-[#30363d]' : ''}`}
                   >
                     <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[#c9d1d9]">
@@ -327,6 +353,9 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
                     </td>
                     <td className="whitespace-nowrap px-3 py-1.5 text-[#c9d1d9]">
                       {modelChange ? r.model : ''}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[#8b949e]">
+                      {backendChange ? r.backend : ''}
                     </td>
                     <td
                       colSpan={allConcs.length + 1}
@@ -351,7 +380,7 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
               const profileUntested = have === 0;
               return (
                 <tr
-                  key={`${r.hardware}|${r.model}|${r.profile}`}
+                  key={`${r.hardware}|${r.model}|${r.backend}|${r.profile}`}
                   className={`border-b border-[#21262d]/50 ${hwChange ? 'border-t-2 border-t-[#30363d]' : ''}`}
                 >
                   <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[#c9d1d9]">
@@ -359,6 +388,9 @@ export function CoveragePage({ allData, loading }: CoveragePageProps) {
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-[#c9d1d9]">
                     {modelChange ? r.model : ''}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[#8b949e]">
+                    {backendChange ? r.backend : ''}
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-[#8b949e]">
                     {r.profile}
