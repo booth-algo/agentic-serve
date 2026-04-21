@@ -23,11 +23,14 @@ const ALL_MULTI_PROFILES = [
 
 const TP_OPTIONS = [1, 2, 4, 8];
 
-// Backends we report coverage for. Each (hw, model) pair gets one entry
-// per backend so sglang gaps are explicit rather than folded under vllm.
-// sweep.yaml currently only dispatches vllm — sglang shows as untested
-// unless historical data.json data exists.
-const EXPECTED_BACKENDS = ['vllm', 'sglang'];
+// Backends we always want a coverage row for. Only vllm right now — the
+// orchestrator hardcodes vllm and there's no sglang env on the sweep
+// hosts yet. sglang rows still appear for any (hw, model) that has
+// historical sglang data in data.json, so the 2026-04-14 H100x2
+// Llama-3.1-70B sglang runs stay visible without padding every cell
+// with an "sglang TODO" placeholder.
+const ACTIVE_BACKENDS = ['vllm'];
+const KNOWN_BACKENDS = ['vllm', 'sglang'];  // for picking up historical data
 
 // Max feasible cells per (hw, model, backend) — every single+multi profile
 // at every expected concurrency. Used as the denominator for cells that
@@ -189,7 +192,14 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
         totalHave: 0, totalNeed: 0,
       };
       for (const model of modelList) {
-        for (const backend of EXPECTED_BACKENDS) {
+        // Always include ACTIVE_BACKENDS (current sweep target) plus any
+        // other known backend that actually has data for this (hw, model).
+        const backendSet = new Set<string>(ACTIVE_BACKENDS);
+        for (const b of KNOWN_BACKENDS) {
+          if (mbHasData.get(hw)?.has(`${model}|${b}`)) backendSet.add(b);
+        }
+        const backendsForCell = Array.from(backendSet).sort();
+        for (const backend of backendsForCell) {
           const hasData = mbHasData.get(hw)?.has(`${model}|${backend}`) ?? false;
           // sweep-state status only applies to the vllm backend.
           const cell = backend === SWEEP_BACKEND ? aggStatus.get(`${hw}|${model}`) : undefined;
