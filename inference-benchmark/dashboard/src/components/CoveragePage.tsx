@@ -486,13 +486,16 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
 
   // model.kind === 'data'
   const rowPct = model.totalNeed > 0 ? Math.round((model.totalHave / model.totalNeed) * 100) : 0;
-  // Aggregate presence across all profiles, per concurrency, for a glance view
-  // on the collapsed model row.
-  const aggPresent = new Set<number>();
-  const aggExpected = new Set<number>();
+  // Per-concurrency fill fraction across all profiles. A conc is "full" only
+  // when every profile that expects it actually has a run at that conc.
+  const concStats = new Map<number, { present: number; expected: number }>();
   for (const p of model.profiles) {
-    for (const c of p.present) aggPresent.add(c);
-    for (const c of p.expected) aggExpected.add(c);
+    for (const c of p.expected) {
+      const s = concStats.get(c) ?? { present: 0, expected: 0 };
+      s.expected += 1;
+      if (p.present.has(c)) s.present += 1;
+      concStats.set(c, s);
+    }
   }
 
   return (
@@ -509,11 +512,9 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
           <span className="text-[10px] uppercase tracking-wide">{model.profiles.length} profiles</span>
         </td>
         {allConcs.map((c) => {
-          const expected = aggExpected.has(c);
-          const present = aggPresent.has(c);
-          const state: 'present' | 'missing' | 'na' =
-            !expected ? 'na' : present ? 'present' : 'missing';
-          return <td key={c} className="px-1 py-1.5 text-center"><Cell state={state} /></td>;
+          const s = concStats.get(c);
+          if (!s) return <td key={c} className="px-1 py-1.5 text-center"><Cell state="na" /></td>;
+          return <td key={c} className="px-1 py-1.5 text-center"><PartialCell present={s.present} expected={s.expected} /></td>;
         })}
         <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono">
           <span
@@ -585,6 +586,27 @@ function Cell({ state }: { state: 'present' | 'missing' | 'na' }) {
     state === 'missing' ? 'bg-transparent border-[#30363d]' :
     'bg-[#21262d]/50 border-transparent';
   return <span className={`inline-block h-3 w-3 rounded-sm border ${cls}`} />;
+}
+
+// Aggregate cell for model-row summaries. Solid green only when every
+// profile that expects this concurrency has a run at it; partial fill from
+// bottom proportional to fraction otherwise. Empty outline = 0 / N.
+function PartialCell({ present, expected }: { present: number; expected: number }) {
+  if (expected === 0) return <span className="inline-block h-3 w-3 rounded-sm border border-transparent bg-[#21262d]/50" />;
+  if (present === 0) return <span className="inline-block h-3 w-3 rounded-sm border border-[#30363d] bg-transparent" />;
+  if (present >= expected) return <span className="inline-block h-3 w-3 rounded-sm border border-[#3fb950] bg-[#3fb950]" title={`${present}/${expected}`} />;
+  const fillPct = Math.round((present / expected) * 100);
+  return (
+    <span
+      className="relative inline-block h-3 w-3 overflow-hidden rounded-sm border border-[#3fb950]/60 bg-transparent"
+      title={`${present}/${expected}`}
+    >
+      <span
+        className="absolute inset-x-0 bottom-0 bg-[#3fb950]"
+        style={{ height: `${fillPct}%` }}
+      />
+    </span>
+  );
 }
 
 type BadgeKind = StatusModel['status'];
