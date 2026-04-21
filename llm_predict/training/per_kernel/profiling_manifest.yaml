@@ -1,0 +1,917 @@
+generated_at: '2026-04-21T17:31:07Z'
+gpus:
+  A100:
+    Llama-3.3-70B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/A100/ncu/Llama-3.3-70B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/A100/ncu/Llama-3.3-70B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 13528
+          size_bytes: 4855286
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_A100.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training:
+          - Llama-8B
+          - Llama-70B
+          - Mixtral
+          - Qwen-72B
+          - gpt-oss-20b
+          - gpt-oss-120b
+          n_training: 13144
+          pkl: /root/agentic-serve/llm_predict/profiling/data/A100/trained/perop_analytical_v4.pkl
+          r2_key: profiling-data/A100/trained/perop_analytical_v4.pkl
+          size_bytes: 673298
+          status: done
+          version: v4-6models
+    Llama-70B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/A100/ncu/Llama-3.1-70B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/A100/ncu/Llama-3.1-70B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 16910
+          size_bytes: 6054756
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_A100.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training:
+          - Llama-8B
+          - Llama-70B
+          - Mixtral
+          - Qwen-72B
+          - gpt-oss-20b
+          - gpt-oss-120b
+          n_training: 13144
+          pkl: /root/agentic-serve/llm_predict/profiling/data/A100/trained/perop_analytical_v4.pkl
+          r2_key: profiling-data/A100/trained/perop_analytical_v4.pkl
+          size_bytes: 673298
+          status: done
+          version: v4-6models
+    Llama-8B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/A100/ncu/Llama-3.1-8B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/A100/ncu/Llama-3.1-8B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 7310
+          size_bytes: 2701222
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_A100.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources:
+          - /root/agentic-serve/experiment/ncu_llama8b_model.csv
+          status: done
+        trained_pkl:
+          models_in_training:
+          - Llama-8B
+          - Llama-70B
+          - Mixtral
+          - Qwen-72B
+          - gpt-oss-20b
+          - gpt-oss-120b
+          n_training: 13144
+          pkl: /root/agentic-serve/llm_predict/profiling/data/A100/trained/perop_analytical_v4.pkl
+          r2_key: profiling-data/A100/trained/perop_analytical_v4.pkl
+          size_bytes: 673298
+          status: done
+          version: v4-6models
+    Mixtral-8x7B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/A100/ncu/Mixtral-8x7B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/A100/ncu/Mixtral-8x7B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 29470
+          size_bytes: 11303790
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_A100.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources:
+          - /root/agentic-serve/experiment/ncu_mixtral_model.csv
+          status: done
+        trained_pkl:
+          models_in_training:
+          - Llama-8B
+          - Llama-70B
+          - Mixtral
+          - Qwen-72B
+          - gpt-oss-20b
+          - gpt-oss-120b
+          n_training: 13144
+          pkl: /root/agentic-serve/llm_predict/profiling/data/A100/trained/perop_analytical_v4.pkl
+          r2_key: profiling-data/A100/trained/perop_analytical_v4.pkl
+          size_bytes: 673298
+          status: done
+          version: v4-6models
+    Qwen-72B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/A100/ncu/Qwen2.5-72B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/A100/ncu/Qwen2.5-72B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 16910
+          size_bytes: 6056378
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_A100.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training:
+          - Llama-8B
+          - Llama-70B
+          - Mixtral
+          - Qwen-72B
+          - gpt-oss-20b
+          - gpt-oss-120b
+          n_training: 13144
+          pkl: /root/agentic-serve/llm_predict/profiling/data/A100/trained/perop_analytical_v4.pkl
+          r2_key: profiling-data/A100/trained/perop_analytical_v4.pkl
+          size_bytes: 673298
+          status: done
+          version: v4-6models
+    Qwen3.5-27B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/A100/ncu/Qwen3.5-27B/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/A100/ncu/Qwen3.5-27B/prefill_seq128_bs1.csv
+          reason: null
+          rows: 131030
+          size_bytes: 52286725
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_A100.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training:
+          - Llama-8B
+          - Llama-70B
+          - Mixtral
+          - Qwen-72B
+          - gpt-oss-20b
+          - gpt-oss-120b
+          n_training: 13144
+          pkl: /root/agentic-serve/llm_predict/profiling/data/A100/trained/perop_analytical_v4.pkl
+          r2_key: profiling-data/A100/trained/perop_analytical_v4.pkl
+          size_bytes: 673298
+          status: done
+          version: v4-6models
+    Qwen3.5-9B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/A100/ncu/Qwen3.5-9B/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/A100/ncu/Qwen3.5-9B/prefill_seq128_bs1.csv
+          reason: null
+          rows: 66030
+          size_bytes: 26376336
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_A100.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training:
+          - Llama-8B
+          - Llama-70B
+          - Mixtral
+          - Qwen-72B
+          - gpt-oss-20b
+          - gpt-oss-120b
+          n_training: 13144
+          pkl: /root/agentic-serve/llm_predict/profiling/data/A100/trained/perop_analytical_v4.pkl
+          r2_key: profiling-data/A100/trained/perop_analytical_v4.pkl
+          size_bytes: 673298
+          status: done
+          version: v4-6models
+    gpt-oss-20b:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/A100/ncu/gpt-oss-20b/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/A100/ncu/gpt-oss-20b/prefill_seq128_bs1.csv
+          reason: null
+          rows: 7112
+          size_bytes: 2559828
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_A100.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training:
+          - Llama-8B
+          - Llama-70B
+          - Mixtral
+          - Qwen-72B
+          - gpt-oss-20b
+          - gpt-oss-120b
+          n_training: 13144
+          pkl: /root/agentic-serve/llm_predict/profiling/data/A100/trained/perop_analytical_v4.pkl
+          r2_key: profiling-data/A100/trained/perop_analytical_v4.pkl
+          size_bytes: 673298
+          status: done
+          version: v4-6models
+  H100:
+    Llama-3.3-70B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: runpod container perms
+          rows: null
+          size_bytes: null
+          status: pending_infra_access
+        roofline_sweep:
+          local_path: null
+          rows: null
+          status: missing
+      per_op:
+        cuda_events:
+          reason: runpod container perms
+          sources: []
+          status: pending_infra_access
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          reason: runpod container perms
+          size_bytes: null
+          status: pending_infra_access
+          version: null
+    Llama-70B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: runpod container perms
+          rows: null
+          size_bytes: null
+          status: pending_infra_access
+        roofline_sweep:
+          local_path: null
+          rows: null
+          status: missing
+      per_op:
+        cuda_events:
+          reason: runpod container perms
+          sources: []
+          status: pending_infra_access
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          reason: runpod container perms
+          size_bytes: null
+          status: pending_infra_access
+          version: null
+    Llama-8B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: runpod container perms
+          rows: null
+          size_bytes: null
+          status: pending_infra_access
+        roofline_sweep:
+          local_path: null
+          rows: null
+          status: missing
+      per_op:
+        cuda_events:
+          reason: runpod container perms
+          sources: []
+          status: pending_infra_access
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          reason: runpod container perms
+          size_bytes: null
+          status: pending_infra_access
+          version: null
+    Mixtral-8x7B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: runpod container perms
+          rows: null
+          size_bytes: null
+          status: pending_infra_access
+        roofline_sweep:
+          local_path: null
+          rows: null
+          status: missing
+      per_op:
+        cuda_events:
+          reason: only MoE profile exists (decode OR prefill phase only)
+          sources:
+          - profiling-data/H100/perop/Mixtral_8x7B_Instruct_v0_1_meta.json
+          - profiling-data/H100/perop/Mixtral_8x7B_Instruct_v0_1_moe_profile.csv
+          status: partial
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          reason: runpod container perms
+          size_bytes: null
+          status: pending_infra_access
+          version: null
+    Qwen-72B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: runpod container perms
+          rows: null
+          size_bytes: null
+          status: pending_infra_access
+        roofline_sweep:
+          local_path: null
+          rows: null
+          status: missing
+      per_op:
+        cuda_events:
+          reason: runpod container perms
+          sources: []
+          status: pending_infra_access
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          reason: runpod container perms
+          size_bytes: null
+          status: pending_infra_access
+          version: null
+    Qwen3.5-27B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: runpod container perms
+          rows: null
+          size_bytes: null
+          status: pending_infra_access
+        roofline_sweep:
+          local_path: null
+          rows: null
+          status: missing
+      per_op:
+        cuda_events:
+          reason: runpod container perms
+          sources: []
+          status: pending_infra_access
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          reason: runpod container perms
+          size_bytes: null
+          status: pending_infra_access
+          version: null
+    Qwen3.5-9B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: runpod container perms
+          rows: null
+          size_bytes: null
+          status: pending_infra_access
+        roofline_sweep:
+          local_path: null
+          rows: null
+          status: missing
+      per_op:
+        cuda_events:
+          reason: runpod container perms
+          sources: []
+          status: pending_infra_access
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          reason: runpod container perms
+          size_bytes: null
+          status: pending_infra_access
+          version: null
+    gpt-oss-20b:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: runpod container perms
+          rows: null
+          size_bytes: null
+          status: pending_infra_access
+        roofline_sweep:
+          local_path: null
+          rows: null
+          status: missing
+      per_op:
+        cuda_events:
+          reason: only MoE profile exists (decode OR prefill phase only)
+          sources:
+          - profiling-data/H100/perop/gpt_oss_20b_meta.json
+          - profiling-data/H100/perop/gpt_oss_20b_moe_profile.csv
+          status: partial
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          reason: runpod container perms
+          size_bytes: null
+          status: pending_infra_access
+          version: null
+  RTX2080Ti:
+    Llama-3.3-70B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: weights 140 GB > single-GPU budget 18.7 GB
+          rows: null
+          size_bytes: null
+          status: infeasible
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX2080Ti.csv
+          rows: 5190
+          status: done
+      per_op:
+        cuda_events:
+          reason: propagated from per_kernel.prefill infeasibility
+          sources: []
+          status: infeasible
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Llama-70B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: weights 140 GB > single-GPU budget 18.7 GB
+          rows: null
+          size_bytes: null
+          status: infeasible
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX2080Ti.csv
+          rows: 5190
+          status: done
+      per_op:
+        cuda_events:
+          reason: propagated from per_kernel.prefill infeasibility
+          sources: []
+          status: infeasible
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Llama-8B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/RTX2080Ti/ncu/Llama-3.1-8B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/RTX2080Ti/ncu/Llama-3.1-8B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 10350
+          size_bytes: 3672385
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX2080Ti.csv
+          rows: 5190
+          status: done
+      per_op:
+        cuda_events:
+          sources:
+          - /root/agentic-serve/experiment/ncu_llama8b_model.csv
+          status: done
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Mixtral-8x7B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: weights 94 GB > single-GPU budget 18.7 GB
+          rows: null
+          size_bytes: null
+          status: infeasible
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX2080Ti.csv
+          rows: 5190
+          status: done
+      per_op:
+        cuda_events:
+          reason: propagated from per_kernel.prefill infeasibility
+          sources: []
+          status: infeasible
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Qwen-72B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: weights 144 GB > single-GPU budget 18.7 GB
+          rows: null
+          size_bytes: null
+          status: infeasible
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX2080Ti.csv
+          rows: 5190
+          status: done
+      per_op:
+        cuda_events:
+          reason: propagated from per_kernel.prefill infeasibility
+          sources: []
+          status: infeasible
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Qwen3.5-27B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: weights 54 GB > single-GPU budget 18.7 GB
+          rows: null
+          size_bytes: null
+          status: infeasible
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX2080Ti.csv
+          rows: 5190
+          status: done
+      per_op:
+        cuda_events:
+          reason: propagated from per_kernel.prefill infeasibility
+          sources: []
+          status: infeasible
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Qwen3.5-9B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/RTX2080Ti/ncu/Qwen3.5-9B/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/RTX2080Ti/ncu/Qwen3.5-9B/prefill_seq128_bs1.csv
+          reason: null
+          rows: 66070
+          size_bytes: 26177169
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX2080Ti.csv
+          rows: 5190
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    gpt-oss-20b:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: weights 40 GB > single-GPU budget 18.7 GB
+          rows: null
+          size_bytes: null
+          status: infeasible
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX2080Ti.csv
+          rows: 5190
+          status: done
+      per_op:
+        cuda_events:
+          reason: propagated from per_kernel.prefill infeasibility
+          sources: []
+          status: infeasible
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+  RTX3090:
+    Llama-3.3-70B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: null
+          mtime: null
+          r2_key: null
+          reason: weights 140 GB > single-GPU budget 20.4 GB
+          rows: null
+          size_bytes: null
+          status: infeasible
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX3090.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Llama-70B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/RTX3090/ncu/Llama-3.1-70B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/RTX3090/ncu/Llama-3.1-70B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 27056
+          size_bytes: 9869288
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX3090.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Llama-8B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/RTX3090/ncu/Llama-3.1-8B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/RTX3090/ncu/Llama-3.1-8B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 10928
+          size_bytes: 3944211
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX3090.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources:
+          - /root/agentic-serve/experiment/ncu_llama8b_model.csv
+          status: done
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Mixtral-8x7B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/RTX3090/ncu/Mixtral-8x7B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/RTX3090/ncu/Mixtral-8x7B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 27875
+          size_bytes: 10562733
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX3090.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources:
+          - /root/agentic-serve/experiment/ncu_mixtral_model.csv
+          status: done
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Qwen-72B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/RTX3090/ncu/Qwen2.5-72B-Instruct/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/RTX3090/ncu/Qwen2.5-72B-Instruct/prefill_seq128_bs1.csv
+          reason: null
+          rows: 25776
+          size_bytes: 9124577
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX3090.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Qwen3.5-27B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/RTX3090/ncu/Qwen3.5-27B/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/RTX3090/ncu/Qwen3.5-27B/prefill_seq128_bs1.csv
+          reason: null
+          rows: 131030
+          size_bytes: 52011342
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX3090.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    Qwen3.5-9B:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/RTX3090/ncu/Qwen3.5-9B/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/RTX3090/ncu/Qwen3.5-9B/prefill_seq128_bs1.csv
+          reason: null
+          rows: 65590
+          size_bytes: 25934341
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX3090.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
+    gpt-oss-20b:
+      per_kernel:
+        prefill_seq128_bs1:
+          local_path: /root/llm/profiling-data/RTX3090/ncu/gpt-oss-20b/prefill_seq128_bs1.csv
+          mtime: '2026-04-17'
+          r2_key: profiling-data/RTX3090/ncu/gpt-oss-20b/prefill_seq128_bs1.csv
+          reason: null
+          rows: 14224
+          size_bytes: 5155658
+          status: done
+        roofline_sweep:
+          local_path: /tmp/ncu_gemm_sweep_RTX3090.csv
+          rows: 5355
+          status: done
+      per_op:
+        cuda_events:
+          sources: []
+          status: missing
+        trained_pkl:
+          models_in_training: []
+          n_training: null
+          pkl: null
+          r2_key: null
+          size_bytes: null
+          status: missing
+          version: null
