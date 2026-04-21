@@ -95,6 +95,8 @@ def _normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         df = df.rename(columns={"input": "n_tokens"})
     if "latency(ns)" in df.columns and "latency_ns" not in df.columns:
         df = df.rename(columns={"latency(ns)": "latency_ns"})
+    if "kv_cache" in df.columns and "kv_cache_len" not in df.columns:
+        df = df.rename(columns={"kv_cache": "kv_cache_len"})
     return df
 
 
@@ -117,15 +119,25 @@ def label_model_csv(csv_path: Path, gpu: str, model_dir: str) -> list[dict]:
     df = df.dropna(subset=["op"])
 
     rows: list[dict] = []
+    def _safe_int(v, default):
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return default
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return default
     for _, r in df.iterrows():
         try:
             duration_us = _resolve_latency_us(r)
         except KeyError:
             continue
-        bs = int(r.get("bs", 1))
-        seq = int(r.get("seq", r.get("n_tokens", 0)))
-        n_tokens = int(r.get("n_tokens", bs * seq))
-        kv_cache_len = int(r.get("kv_cache_len", 0))
+        n_tokens_raw = r.get("n_tokens")
+        n_tokens = _safe_int(n_tokens_raw, 0)
+        bs = _safe_int(r.get("bs"), 1)
+        seq = _safe_int(r.get("seq"), n_tokens if n_tokens > 0 else 1)
+        if n_tokens == 0:
+            n_tokens = bs * seq
+        kv_cache_len = _safe_int(r.get("kv_cache_len"), 0)
         rows.append({
             "gpu":          gpu,
             "model":        short,

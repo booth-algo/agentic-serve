@@ -51,10 +51,8 @@ warnings.filterwarnings("ignore")
 
 
 XGB_PARAMS: dict[str, Any] = dict(
-    n_estimators=400, max_depth=6, learning_rate=0.05,
-    subsample=0.8, colsample_bytree=0.8, min_child_weight=3,
-    reg_alpha=0.1, reg_lambda=1.0, random_state=42, n_jobs=4,
-    tree_method="hist", verbosity=0,
+    n_estimators=200, max_depth=6, learning_rate=0.1,
+    random_state=42, n_jobs=4, tree_method="hist", verbosity=0,
 )
 
 
@@ -74,15 +72,17 @@ def build_feature_matrix(df: pd.DataFrame) -> np.ndarray:
 
 
 def train_one(X: np.ndarray, y: np.ndarray) -> xgb.XGBRegressor:
-    y_log = np.log(np.maximum(y, 1e-6))
+    # Fit raw microseconds directly (matches v4 perop_analytical_v4 scheme).
+    # Log-space fit was tried but consistently under-predicts by ~30% on
+    # prefill_seq128 held-out; raw us with reg:squarederror is the proven
+    # baseline.
     model = xgb.XGBRegressor(**XGB_PARAMS)
-    model.fit(X, y_log)
+    model.fit(X, y)
     return model
 
 
 def predict_us(model: xgb.XGBRegressor, X: np.ndarray) -> np.ndarray:
-    y_log_pred = model.predict(X)
-    return np.exp(y_log_pred)
+    return np.maximum(0, model.predict(X))
 
 
 def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
@@ -149,7 +149,7 @@ def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
     payload: dict[str, Any] = {
         "model":          final_model,
         "feature_cols":   list(feature_spec.PEROP_FEATURES),
-        "target":         "log_duration_us",
+        "target":         "duration_us",
         "gpu":            gpu,
         "n_training":     int(n_tr),
         "heldout_mape":   heldout_mape,
