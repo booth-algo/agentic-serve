@@ -22,6 +22,14 @@ const ALL_MULTI_PROFILES = [
 
 const TP_OPTIONS = [1, 2, 4, 8];
 
+// Max feasible cells per (hw, model) — every single+multi profile at every
+// expected concurrency. Used as the denominator for cells that haven't yet
+// produced data (running/pending/abandoned/untested) so the "N/M" coverage
+// readout reflects the full target, not just already-attempted models.
+const EXPECTED_CELLS_PER_MODEL =
+  ALL_SINGLE_PROFILES.length * SINGLE_CONCS.length +
+  ALL_MULTI_PROFILES.length * MULTI_CONCS.length;
+
 interface ProfileRow {
   profile: string;
   isMultiTurn: boolean;
@@ -200,16 +208,19 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
           if (cell.status === 'running') {
             models.push({ kind: 'status', hardware: hw, model, status: 'running', attempt: cell.attempt, updatedAt: cell.updated_at });
             summary.running += 1;
+            summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
             continue;
           }
           if (cell.status === 'abandoned') {
             models.push({ kind: 'status', hardware: hw, model, status: 'abandoned', reason: cell.reason ?? undefined, attempt: cell.attempt });
             summary.abandoned += 1;
+            summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
             continue;
           }
           if (cell.status === 'pending' || cell.status === 'done') {
             models.push({ kind: 'status', hardware: hw, model, status: 'pending' });
             summary.pending += 1;
+            summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
             continue;
           }
         }
@@ -221,6 +232,7 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
         } else {
           models.push({ kind: 'status', hardware: hw, model, status: 'untested' });
           summary.untested += 1;
+          summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
         }
       }
       hwGroups.push({ hardware: hw, models, summary });
