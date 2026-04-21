@@ -86,17 +86,17 @@ presets:
     max_len: 32768
     gpu_mem: 0.85
     concurrencies: [5, 10, 20, 40, 80, 120, 160]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
   multi_medium:
     max_len: 8192
     gpu_mem: 0.85
     concurrencies: [5, 10, 20, 40, 80, 120, 160]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
   multi_tight:
     max_len: 8192
     gpu_mem: 0.85
     concurrencies: [5, 10, 20, 40, 80]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
 
 # --------------------------------------------------------------------------
 # Feasibility rule (mirrors CoveragePage.tsx checkFeasibility)

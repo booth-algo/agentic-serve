@@ -1,8 +1,8 @@
 export interface ProfileMeta {
-  agentType: 'chat' | 'coding' | 'terminal';
+  agentType: 'chat' | 'coding' | 'terminal' | 'computer-use';
   turnStyle: 'single-turn' | 'multi-turn';
   servingStyle: 'disaggregated' | 'not-disaggregated';
-  dataSource: string;    // "ShareGPT", "SWEBench", "TerminalBench", "Random", "Test"
+  dataSource: string;    // "ShareGPT", "SWEBench", "TerminalBench", "OSWorld", "Random", "Test"
   isl: string;
   osl: string;
   description: string;
@@ -36,13 +36,19 @@ export const PROFILE_META: Record<string, ProfileMeta> = {
   'chat-multiturn-medium':        { agentType: 'chat',     turnStyle: 'multi-turn',  servingStyle: 'not-disaggregated', dataSource: 'ShareGPT',      isl: '≤16K',   osl: '≤1500', description: 'ShareGPT multi-turn: 5-10 turns per session. Larger growing context, more KV cache pressure.' },
   'chat-multiturn-long':          { agentType: 'chat',     turnStyle: 'multi-turn',  servingStyle: 'not-disaggregated', dataSource: 'ShareGPT',      isl: '≤32K',   osl: '≤2000', description: 'ShareGPT multi-turn: 10-20 turns per session. Deep KV cache stress with large accumulated history.' },
   'chat-multiturn-xl':            { agentType: 'chat',     turnStyle: 'multi-turn',  servingStyle: 'not-disaggregated', dataSource: 'ShareGPT',      isl: '≤64K',   osl: '≤2000', description: 'ShareGPT multi-turn: 20-30 turns per session. Extreme context length stress testing.' },
+
+  // Tier 5: Computer-Use (OSWorld WebArena trajectories)
+  'osworld-multiturn-short':      { agentType: 'computer-use', turnStyle: 'multi-turn', servingStyle: 'not-disaggregated', dataSource: 'OSWorld',     isl: '≤16K',   osl: '≤800',  description: 'Real OSWorld computer-use agent: 2-10 step sessions (short browsing tasks). Growing screenshot+action context.' },
+  'osworld-multiturn-medium':     { agentType: 'computer-use', turnStyle: 'multi-turn', servingStyle: 'not-disaggregated', dataSource: 'OSWorld',     isl: '≤32K',   osl: '≤1000', description: 'Real OSWorld computer-use agent: 10-20 step sessions. Medium-length GUI interaction trajectories.' },
+  'osworld-multiturn-long':       { agentType: 'computer-use', turnStyle: 'multi-turn', servingStyle: 'not-disaggregated', dataSource: 'OSWorld',     isl: '≤64K',   osl: '≤1200', description: 'Real OSWorld computer-use agent: 20-30 step sessions (longest available). Heavy GUI + multi-modal context.' },
 };
 
 // Color for agent type badges
 export const AGENT_TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  'chat':     { bg: 'rgba(63,185,80,0.12)',   text: '#3fb950', border: 'rgba(63,185,80,0.3)' },
-  'coding':   { bg: 'rgba(0,188,212,0.12)',   text: '#00bcd4', border: 'rgba(0,188,212,0.3)' },
-  'terminal': { bg: 'rgba(249,117,131,0.12)', text: '#f97583', border: 'rgba(249,117,131,0.3)' },
+  'chat':         { bg: 'rgba(63,185,80,0.12)',   text: '#3fb950', border: 'rgba(63,185,80,0.3)' },
+  'coding':       { bg: 'rgba(0,188,212,0.12)',   text: '#00bcd4', border: 'rgba(0,188,212,0.3)' },
+  'terminal':     { bg: 'rgba(249,117,131,0.12)', text: '#f97583', border: 'rgba(249,117,131,0.3)' },
+  'computer-use': { bg: 'rgba(236,72,153,0.12)',  text: '#ec4899', border: 'rgba(236,72,153,0.3)' },
 };
 
 // Color for data source badges
@@ -50,5 +56,6 @@ export const DATA_SOURCE_COLORS: Record<string, { bg: string; text: string; bord
   'ShareGPT':      { bg: 'rgba(168,85,247,0.12)',  text: '#a855f7', border: 'rgba(168,85,247,0.3)' },
   'SWEBench':      { bg: 'rgba(121,192,255,0.12)', text: '#79c0ff', border: 'rgba(121,192,255,0.3)' },
   'TerminalBench': { bg: 'rgba(255,183,77,0.12)',  text: '#ffb74d', border: 'rgba(255,183,77,0.3)' },
+  'OSWorld':       { bg: 'rgba(20,184,166,0.12)',  text: '#14b8a6', border: 'rgba(20,184,166,0.3)' },
   'Random':        { bg: 'rgba(255,152,0,0.12)',   text: '#ff9800', border: 'rgba(255,152,0,0.3)' },
 };

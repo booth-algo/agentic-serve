@@ -18,6 +18,7 @@ const ALL_SINGLE_PROFILES = [
 const ALL_MULTI_PROFILES = [
   'chat-multiturn-short', 'chat-multiturn-medium', 'chat-multiturn-long',
   'terminalbench-multiturn-short',
+  'osworld-multiturn-short', 'osworld-multiturn-medium', 'osworld-multiturn-long',
 ];
 
 const TP_OPTIONS = [1, 2, 4, 8];
