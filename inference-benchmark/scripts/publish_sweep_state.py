@@ -42,8 +42,11 @@ def hw_label(host_cfg: dict, tp: int) -> str:
     return base if tp == 1 else f"{base}x{tp}"
 
 
-def job_id(host: str, model: str, tp: int, mode: str) -> str:
-    return f"{host}_{model}_tp{tp}_{mode}"
+def job_id(host: str, model: str, tp: int, mode: str, backend: str = "vllm") -> str:
+    jid = f"{host}_{model}_tp{tp}_{mode}"
+    if backend != "vllm":
+        jid += f"_{backend}"
+    return jid
 
 
 def read_state(jid: str) -> dict:
@@ -80,7 +83,8 @@ def build_state(manifest: dict) -> dict:
         tp = int(cell["tp"])
         mode = str(cell["mode"])
         model = str(cell["model"])
-        jid = job_id(host_name, model, tp, mode)
+        backend = str(cell.get("backend", "vllm"))
+        jid = job_id(host_name, model, tp, mode, backend)
         rt = read_state(jid)
 
         cells.append({
@@ -89,6 +93,7 @@ def build_state(manifest: dict) -> dict:
             "model": model,
             "tp": tp,
             "mode": mode,
+            "backend": backend,
             "status": rt["status"],
             "attempt": rt["attempt"],
             "max_len_override": rt["max_len_override"],
@@ -117,6 +122,7 @@ def build_state(manifest: dict) -> dict:
                 "model": model,
                 "tp": tp,
                 "mode": "single",
+                "backend": "vllm",
                 "status": "known_oom",
                 "attempt": 0,
                 "max_len_override": None,

@@ -32,13 +32,31 @@ host_prefix() {
 }
 
 host_python() {
-    case "$1" in
-        gpu-4)  echo "/data/kevinlau/miniconda3/bin/python" ;;
-        3090|2080ti) echo "/home/kevinlau/miniconda3/envs/vllm/bin/python" ;;
-    esac
+    # args: host [backend]
+    local host="$1" backend="${2:-vllm}"
+    if [[ "$backend" == "sglang" ]]; then
+        case "$host" in
+            gpu-4)       echo "/data/kevinlau/miniconda3/envs/sglang/bin/python" ;;
+            3090|2080ti) echo "/home/kevinlau/miniconda3/envs/sglang/bin/python" ;;
+        esac
+    else
+        case "$host" in
+            gpu-4)       echo "/data/kevinlau/miniconda3/bin/python" ;;
+            3090|2080ti) echo "/home/kevinlau/miniconda3/envs/vllm/bin/python" ;;
+        esac
+    fi
 }
 
-job_id() { echo "${1}_${2}_tp${3}_${4}"; }
+# job_id keeps the legacy "host_model_tpN_mode" shape for vllm so existing
+# state files in /tmp/bench_jobs/state/ remain valid. sglang cells get a
+# "_sglang" suffix to disambiguate from the vllm run of the same cell.
+job_id() {
+    local jid="${1}_${2}_tp${3}_${4}"
+    if [[ "${5:-vllm}" != "vllm" ]]; then
+        jid="${jid}_${5}"
+    fi
+    echo "$jid"
+}
 
 read_status()  { cat "$STATE_DIR/${1}.status" 2>/dev/null || echo "pending"; }
 write_status() { echo "$2" > "$STATE_DIR/${1}.status"; }
@@ -60,16 +78,17 @@ for HOST in gpu-4 3090 2080ti; do
 done
 
 # Phase 2: scan jobs, decide actions.
-while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE MAX_LEN GPU_MEM CONCS PROFILES EXTRA_ENV || [[ -n "$HOST" ]]; do
+while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONCS PROFILES EXTRA_ENV || [[ -n "$HOST" ]]; do
     HOST=$(echo "$HOST" | tr -d ' ')
     [[ -z "$HOST" || "${HOST:0:1}" == "#" ]] && continue
 
-    JID=$(job_id "$HOST" "$SHORT" "$TP" "$MODE")
+    : "${BACKEND:=vllm}"  # default if column missing (legacy rows)
+    JID=$(job_id "$HOST" "$SHORT" "$TP" "$MODE" "$BACKEND")
     STATUS=$(read_status "$JID")
     PREFIX=$(host_prefix "$HOST")
-    OUT_DIR_REMOTE="/tmp/results/${PREFIX}_${SHORT}_tp${TP}_vllm"
-    OUT_DIR_LOCAL="/tmp/bench_${PREFIX}_${SHORT}_tp${TP}_vllm"
-    R2_DIR="${PREFIX}_${SHORT}_tp${TP}_vllm"
+    OUT_DIR_REMOTE="/tmp/results/${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
+    OUT_DIR_LOCAL="/tmp/bench_${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
+    R2_DIR="${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
 
     case "$STATUS" in
         done|abandoned|failed)
@@ -136,19 +155,24 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE MAX_LEN GPU_MEM CONCS PROFIL
             if [[ -f "$OVERRIDE_FILE" ]]; then
                 MAX_LEN=$(cat "$OVERRIDE_FILE")
             fi
-            PY=$(host_python "$HOST")
-            SCRIPT="sweep_all_profiles.sh"
-            [[ "$MODE" == "multi" ]] && SCRIPT="sweep_multiturn_profiles.sh"
-            log "$JID: dispatching on $HOST (max_len=$MAX_LEN, mode=$MODE)"
+            PY=$(host_python "$HOST" "$BACKEND")
+            if [[ "$BACKEND" == "sglang" ]]; then
+                SCRIPT="sweep_all_profiles_sglang.sh"
+                [[ "$MODE" == "multi" ]] && SCRIPT="sweep_multiturn_profiles_sglang.sh"
+            else
+                SCRIPT="sweep_all_profiles.sh"
+                [[ "$MODE" == "multi" ]] && SCRIPT="sweep_multiturn_profiles.sh"
+            fi
+            log "$JID: dispatching on $HOST ($BACKEND, max_len=$MAX_LEN, mode=$MODE)"
             write_status "$JID" running
             HOST_BUSY[$HOST]=1
             CMD="${EXTRA_ENV} bash /tmp/inference-benchmark/scripts/${SCRIPT} \
-                ${MODEL_PATH} ${TP} ${SHORT} vllm ${OUT_DIR_REMOTE} \
+                ${MODEL_PATH} ${TP} ${SHORT} ${BACKEND} ${OUT_DIR_REMOTE} \
                 ${PY} ${GPU_MEM} ${MAX_LEN} \"${CONCS}\" \"${PROFILES}\""
             # setsid + </dev/null lets the process survive ssh disconnect
             # reliably. Per-job remote log for debugging (vllm_8089.log
             # rotates per sweep and loses history).
-            REMOTE_LOG="/tmp/bench_${SHORT}_tp${TP}_${MODE}.log"
+            REMOTE_LOG="/tmp/bench_${SHORT}_tp${TP}_${MODE}_${BACKEND}.log"
             # Local `< /dev/null` on the ssh call too — the `</dev/null`
             # inside the quoted command only redirects the REMOTE shell.
             # Without this, ssh slurps the outer while-read jobs file.

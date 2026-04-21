@@ -23,14 +23,12 @@ const ALL_MULTI_PROFILES = [
 
 const TP_OPTIONS = [1, 2, 4, 8];
 
-// Backends we always want a coverage row for. Only vllm right now — the
-// orchestrator hardcodes vllm and there's no sglang env on the sweep
-// hosts yet. sglang rows still appear for any (hw, model) that has
-// historical sglang data in data.json, so the 2026-04-14 H100x2
-// Llama-3.1-70B sglang runs stay visible without padding every cell
-// with an "sglang TODO" placeholder.
-const ACTIVE_BACKENDS = ['vllm'];
-const KNOWN_BACKENDS = ['vllm', 'sglang'];  // for picking up historical data
+// Backends we always want a coverage row for. sglang is active now that
+// the orchestrator routes by backend and all three hosts have sglang 0.5.9
+// environments. Each (hw, model) gets a row for every active backend, plus
+// any historical backend with data in data.json.
+const ACTIVE_BACKENDS = ['vllm', 'sglang'];
+const KNOWN_BACKENDS = ['vllm', 'sglang'];
 
 // Max feasible cells per (hw, model, backend) — every single+multi profile
 // at every expected concurrency. Used as the denominator for cells that
@@ -116,7 +114,7 @@ const STATUS_PRIORITY: Record<SweepCell['status'], number> = {
 function aggregateCells(cells: SweepCell[]): Map<string, SweepCell> {
   const out = new Map<string, SweepCell>();
   for (const c of cells) {
-    const key = `${c.hw_label}|${c.model}`;
+    const key = `${c.hw_label}|${c.model}|${c.backend}`;
     const prev = out.get(key);
     if (!prev || STATUS_PRIORITY[c.status] > STATUS_PRIORITY[prev.status]) {
       out.set(key, c);
@@ -178,10 +176,6 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
       ? aggregateCells(sweepState.cells)
       : new Map<string, SweepCell>();
 
-    // sweep-state tracks only vllm (orchestrator dispatches vllm-only today).
-    // sglang cells without data.json data surface as untested.
-    const SWEEP_BACKEND = 'vllm';
-
     const hwGroups: HwGroup[] = [];
     for (const hw of expectedHw) {
       const models: ModelEntry[] = [];
@@ -202,7 +196,7 @@ export function CoveragePage({ allData, sweepState, loading }: CoveragePageProps
         for (const backend of backendsForCell) {
           const hasData = mbHasData.get(hw)?.has(`${model}|${backend}`) ?? false;
           // sweep-state status only applies to the vllm backend.
-          const cell = backend === SWEEP_BACKEND ? aggStatus.get(`${hw}|${model}`) : undefined;
+          const cell = aggStatus.get(`${hw}|${model}|${backend}`);
 
           if (hasData) {
             const profiles: ProfileRow[] = [];
