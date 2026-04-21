@@ -33,6 +33,10 @@ R2_ENDPOINT_DEFAULT = "https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflaresto
 R2_BUCKET_DEFAULT = "agent-bench"
 R2_KEY = "profiling-state.json"
 
+# Populated by main() before build_state(). Kept at module-level so the builder
+# can pick it up without threading an extra argument through call sites.
+_RESULTS: dict = {}
+
 
 def _normalise(raw: object, keep: tuple[str, ...]) -> dict:
     """Reduce a manifest status entry to the dashboard's minimal schema:
@@ -48,6 +52,35 @@ def _normalise(raw: object, keep: tuple[str, ...]) -> dict:
                 out[k] = v
         return out
     return {"status": "missing"}
+
+
+def _load_results(repo_root: Path) -> dict:
+    """Best-effort: read training_report.json files and summarise MAPE."""
+    results: dict = {"per_kernel": {}, "per_op": {}}
+    pk_path = repo_root / "llm_predict/training/per_kernel/reports/training_report.json"
+    po_path = repo_root / "llm_predict/training/per_op/reports/training_report.json"
+    if pk_path.is_file():
+        try:
+            pk = json.loads(pk_path.read_text())
+            for gpu, entry in pk.items():
+                results["per_kernel"][gpu] = {
+                    "heldout_mape_per_family": entry.get("heldout_mape", {}),
+                    "aggregate_err_per_model": entry.get("aggregate_err_pct", {}),
+                }
+        except Exception as e:
+            print(f'[warn] per_kernel report parse failed: {e}', file=sys.stderr)
+    if po_path.is_file():
+        try:
+            po = json.loads(po_path.read_text())
+            for entry in po:
+                results["per_op"][entry["gpu"]] = {
+                    "heldout_mape": entry.get("heldout_mape"),
+                    "pool_models": entry.get("pool_models", []),
+                    "heldout_models": entry.get("heldout_models", []),
+                }
+        except Exception as e:
+            print(f'[warn] per_op report parse failed: {e}', file=sys.stderr)
+    return results
 
 
 def build_state(manifest: dict) -> dict:
@@ -89,6 +122,7 @@ def build_state(manifest: dict) -> dict:
         "gpus": gpus,
         "models": models,
         "cells": cells,
+        "results": _RESULTS,
     }
 
 
@@ -126,6 +160,9 @@ def main() -> int:
         return 1
 
     manifest = yaml.safe_load(args.manifest.read_text())
+    global _RESULTS
+    repo_root = HERE.parent.parent  # inference-benchmark/scripts -> inference-benchmark -> repo
+    _RESULTS = _load_results(repo_root)
     state = build_state(manifest)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

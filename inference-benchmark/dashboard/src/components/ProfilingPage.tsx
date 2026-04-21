@@ -1,4 +1,4 @@
-import type { ProfilingState, ProfilingStatus } from '../types-profiling';
+import type { ProfilingState, ProfilingStatus, PredictorResults } from '../types-profiling';
 
 interface ProfilingPageProps {
   profilingState: ProfilingState | null;
@@ -54,6 +54,113 @@ function SummaryCell({ label, value, sub, color }: { label: string; value: strin
       <div className="text-xs uppercase tracking-wide text-[#8b949e]">{label}</div>
       <div className="mt-1 font-mono text-xl font-semibold" style={{ color }}>{value}</div>
       <div className="text-[11px] text-[#8b949e]">{sub}</div>
+    </div>
+  );
+}
+
+function PredictorResultsSection({ results }: { results?: PredictorResults }) {
+  if (!results || (!results.per_kernel && !results.per_op)) return null;
+  const pkGpus = Object.keys(results.per_kernel ?? {}).sort();
+  const poGpus = Object.keys(results.per_op ?? {}).sort();
+  const allFamilies: string[] = [];
+  for (const g of pkGpus) {
+    const fams = Object.keys(results.per_kernel![g]?.heldout_mape_per_family ?? {});
+    for (const f of fams) if (!allFamilies.includes(f)) allFamilies.push(f);
+  }
+  const heldModels: string[] = [];
+  for (const g of pkGpus) {
+    const ms = Object.keys(results.per_kernel![g]?.aggregate_err_per_model ?? {});
+    for (const m of ms) if (!heldModels.includes(m)) heldModels.push(m);
+  }
+  const fmt = (v: number | undefined | null) => (v === undefined || v === null || isNaN(v) ? '—' : v.toFixed(2) + '%');
+  return (
+    <div className="mt-6 space-y-6">
+      <div className="text-sm font-semibold text-[#c9d1d9]">Predictor MAPE</div>
+
+      {pkGpus.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-[#8b949e]">Per-kernel held-out MAPE (per family)</div>
+          <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
+            <table className="min-w-full border-collapse text-xs">
+              <thead><tr className="border-b border-[#21262d] text-[#8b949e]">
+                <th className="px-3 py-2 text-left font-medium">GPU</th>
+                {allFamilies.map(f => <th key={f} className="px-3 py-2 text-right font-medium">{f}</th>)}
+              </tr></thead>
+              <tbody>
+                {pkGpus.map(g => (
+                  <tr key={g} className="border-b border-[#21262d]/50">
+                    <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{g}</td>
+                    {allFamilies.map(f => (
+                      <td key={f} className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">
+                        {fmt(results.per_kernel![g]?.heldout_mape_per_family?.[f])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {pkGpus.length > 0 && heldModels.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-[#8b949e]">Per-kernel e2e error on prefill_seq128_bs1 (sum of kernel preds)</div>
+          <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
+            <table className="min-w-full border-collapse text-xs">
+              <thead><tr className="border-b border-[#21262d] text-[#8b949e]">
+                <th className="px-3 py-2 text-left font-medium">GPU</th>
+                {heldModels.map(m => <th key={m} className="px-3 py-2 text-right font-medium">{m}</th>)}
+              </tr></thead>
+              <tbody>
+                {pkGpus.map(g => (
+                  <tr key={g} className="border-b border-[#21262d]/50">
+                    <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{g}</td>
+                    {heldModels.map(m => (
+                      <td key={m} className="px-3 py-1.5 text-right font-mono text-[#3fb950]">
+                        {fmt(results.per_kernel![g]?.aggregate_err_per_model?.[m])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {poGpus.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-[#8b949e]">Per-op held-out MAPE (strict: all 70B-class held out, no arch-anchor)</div>
+          <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
+            <table className="min-w-full border-collapse text-xs">
+              <thead><tr className="border-b border-[#21262d] text-[#8b949e]">
+                <th className="px-3 py-2 text-left font-medium">GPU</th>
+                <th className="px-3 py-2 text-right font-medium">MAPE</th>
+                <th className="px-3 py-2 text-left font-medium">Pool</th>
+                <th className="px-3 py-2 text-left font-medium">Held-out</th>
+              </tr></thead>
+              <tbody>
+                {poGpus.map(g => {
+                  const r = results.per_op![g];
+                  return (
+                    <tr key={g} className="border-b border-[#21262d]/50">
+                      <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{g}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-[#ff9800]">{fmt(r.heldout_mape)}</td>
+                      <td className="px-3 py-1.5 text-[#8b949e]">{(r.pool_models ?? []).join(', ')}</td>
+                      <td className="px-3 py-1.5 text-[#8b949e]">{(r.heldout_models ?? []).join(', ') || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="text-[11px] text-[#8b949e]">
+        See <code className="rounded bg-[#21262d] px-1">.claude/paper/per_op_vs_per_kernel_tradeoff.md</code> for cross-family and cross-scale analysis.
+      </div>
     </div>
   );
 }
@@ -151,6 +258,8 @@ export function ProfilingPage({ profilingState, loading }: ProfilingPageProps) {
           </tbody>
         </table>
       </div>
+
+      <PredictorResultsSection results={profilingState.results} />
 
       <div className="space-y-1 text-xs text-[#8b949e]">
         <p>
