@@ -31,6 +31,7 @@ import xgboost as xgb
 from . import model_specs  # noqa: F401  (kept for parity with labeler; used indirectly)
 from .feature_spec import (
     FAMILY_CONFIG,
+    FAMILY_EXCLUDED_MODELS,
     MISC_FAMILIES,
     audit_features,  # noqa: F401  (re-exported for legacy callers)
 )
@@ -94,6 +95,11 @@ def train_one_gpu(df: pd.DataFrame, gpu: str, out_dir: Path) -> dict:
     family_frames: dict[str, pd.DataFrame] = {}
     for fam, cfg in FAMILY_CONFIG.items():
         sub = df[df["kernel_family"].isin(cfg["kernel_families"])].copy()
+        # Per-family model exclusions per .claude/paper/predictor_notes.md
+        # (e.g. Qwen3.5 dropped from flash_attn — hybrid attention).
+        excluded = FAMILY_EXCLUDED_MODELS.get(fam, set())
+        if excluded:
+            sub = sub[~sub["model"].isin(excluded)]
         family_frames[fam] = cfg["builder"](sub)
 
     training_models = sorted(set(df[~df["held_out"].astype(bool)]["model"].unique()))
