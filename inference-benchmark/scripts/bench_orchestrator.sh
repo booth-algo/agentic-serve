@@ -96,12 +96,16 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE MAX_LEN GPU_MEM CONCS PROFIL
                 fi
             fi
             log "$JID: host idle — finalizing"
-            COUNT=$(ssh "$HOST" "ls $OUT_DIR_REMOTE 2>/dev/null | wc -l")
+            # All ssh/rsync/aws calls inside this `while read ... done <JOBS`
+            # loop must close stdin (`< /dev/null`), otherwise they consume
+            # the jobs file and iteration ends early — 2080ti rows were
+            # silently skipped on any tick that also dispatched a 3090 job.
+            COUNT=$(ssh "$HOST" "ls $OUT_DIR_REMOTE 2>/dev/null | wc -l" < /dev/null)
             if [[ "$COUNT" -gt 0 ]]; then
                 mkdir -p "$OUT_DIR_LOCAL"
-                rsync -az "$HOST:$OUT_DIR_REMOTE/" "$OUT_DIR_LOCAL/" >> "$LOG" 2>&1
+                rsync -az "$HOST:$OUT_DIR_REMOTE/" "$OUT_DIR_LOCAL/" < /dev/null >> "$LOG" 2>&1
                 aws --profile "$PROFILE" --endpoint-url "$EP" s3 sync \
-                    "$OUT_DIR_LOCAL/" "s3://$BUCKET/results/$R2_DIR/" >> "$LOG" 2>&1
+                    "$OUT_DIR_LOCAL/" "s3://$BUCKET/results/$R2_DIR/" < /dev/null >> "$LOG" 2>&1
                 write_status "$JID" done
                 log "$JID: DONE ($COUNT files uploaded)"
             else
@@ -109,7 +113,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE MAX_LEN GPU_MEM CONCS PROFIL
                 # ("Available KV cache memory: -...", "No available memory for
                 # the cache blocks") so model+cudagraph oversubscription also
                 # triggers the halved-max_len retry path.
-                OOM=$(ssh "$HOST" "grep -l 'OutOfMemoryError\\|out of memory\\|No available memory for the cache blocks\\|Available KV cache memory: -' /tmp/vllm_8089.log 2>/dev/null" || true)
+                OOM=$(ssh "$HOST" "grep -l 'OutOfMemoryError\\|out of memory\\|No available memory for the cache blocks\\|Available KV cache memory: -' /tmp/vllm_8089.log 2>/dev/null" < /dev/null || true)
                 ATT=$(read_attempt "$JID")
                 if [[ -n "$OOM" && "$ATT" -lt 1 ]]; then
                     bump_attempt "$JID"
@@ -145,7 +149,10 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE MAX_LEN GPU_MEM CONCS PROFIL
             # reliably. Per-job remote log for debugging (vllm_8089.log
             # rotates per sweep and loses history).
             REMOTE_LOG="/tmp/bench_${SHORT}_tp${TP}_${MODE}.log"
-            ssh "$HOST" "setsid bash -c '${CMD}' > '${REMOTE_LOG}' 2>&1 </dev/null &"
+            # Local `< /dev/null` on the ssh call too — the `</dev/null`
+            # inside the quoted command only redirects the REMOTE shell.
+            # Without this, ssh slurps the outer while-read jobs file.
+            ssh "$HOST" "setsid bash -c '${CMD}' > '${REMOTE_LOG}' 2>&1 </dev/null &" < /dev/null
             log "$JID: dispatched"
             ;;
     esac
