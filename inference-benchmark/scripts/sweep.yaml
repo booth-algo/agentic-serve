@@ -23,6 +23,7 @@ hosts:
     hardware_label: A100-40GB    # base label; dashboard adds x<TP> suffix for TP>1
     model_root: /data/models
     python: /data/kevinlau/miniconda3/bin/python
+    python_sglang: /data/kevinlau/miniconda3/envs/sglang/bin/python
     total_gpus: 8
     vram_gb_per_gpu: 40
 
@@ -30,6 +31,7 @@ hosts:
     hardware_label: "3090"
     model_root: /home/kevinlau/models
     python: /home/kevinlau/miniconda3/envs/vllm/bin/python
+    python_sglang: /home/kevinlau/miniconda3/envs/sglang/bin/python
     total_gpus: 8
     vram_gb_per_gpu: 24
 
@@ -37,6 +39,7 @@ hosts:
     hardware_label: 2080Ti
     model_root: /home/kevinlau/models
     python: /home/kevinlau/miniconda3/envs/vllm/bin/python
+    python_sglang: /home/kevinlau/miniconda3/envs/sglang/bin/python
     total_gpus: 8
     vram_gb_per_gpu: 22
     # 2080Ti has shared GPUs — pin to specific device IDs per run via cell.extra_env.
@@ -86,17 +89,17 @@ presets:
     max_len: 32768
     gpu_mem: 0.85
     concurrencies: [5, 10, 20, 40, 80, 120, 160]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
   multi_medium:
     max_len: 8192
     gpu_mem: 0.85
     concurrencies: [5, 10, 20, 40, 80, 120, 160]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
   multi_tight:
     max_len: 8192
     gpu_mem: 0.85
     concurrencies: [5, 10, 20, 40, 80]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
 
 # --------------------------------------------------------------------------
 # Feasibility rule (mirrors CoveragePage.tsx checkFeasibility)
@@ -168,3 +171,11 @@ cells:
   - { host: 2080ti, model: Llama-3.1-8B,  tp: 1, mode: multi,  preset: multi_tight, extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: single, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-short, chat-medium, chat-long, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: multi,  preset: multi_tight, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+
+  # === sglang cells (initial set for gpu-4 + 3090) ===
+  # Absent `backend:` defaults to vllm. When backend == sglang, orchestrator
+  # uses the sglang launcher + python_sglang env.
+  - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: single, backend: sglang, preset: single_small }
+  - { host: gpu-4, model: Llama-3.1-70B,  tp: 4, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: 3090,  model: Llama-3.1-8B,   tp: 1, mode: single, backend: sglang, preset: single_small, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320] }
+  - { host: 3090,  model: Qwen3.5-9B,     tp: 2, mode: single, backend: sglang, preset: single_large, max_len: 8192, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320] }

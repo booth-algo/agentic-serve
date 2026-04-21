@@ -9,6 +9,7 @@ export interface SweepCell {
   model: string;
   tp: number;
   mode: 'single' | 'multi';
+  backend: string;   // "vllm" | "sglang"
   status: CellStatus;
   attempt: number;
   max_len_override: number | null;

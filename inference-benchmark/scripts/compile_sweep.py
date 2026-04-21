@@ -90,12 +90,14 @@ def render_row(cell: dict, manifest: dict) -> str:
     concs = " ".join(str(c) for c in resolved["concurrencies"])
     profiles = " ".join(resolved["profiles"])
     extra_env = resolved.get("extra_env", "")
+    backend = str(cell.get("backend", "vllm"))
     fields = [
         str(cell["host"]),
         model_path,
         str(cell["tp"]),
         str(cell["model"]),
         str(cell["mode"]),
+        backend,
         str(resolved["max_len"]),
         str(resolved["gpu_mem"]),
         concs,
@@ -126,8 +128,9 @@ def render_file(emitted: list[tuple[dict, str]]) -> str:
     lines = [
         "# Benchmark job matrix consumed by bench_orchestrator.sh.",
         "# GENERATED from scripts/sweep.yaml by scripts/compile_sweep.py — DO NOT EDIT DIRECTLY.",
-        "# Format: HOST|MODEL_PATH|TP|SHORT|MODE|MAX_LEN|GPU_MEM|CONCS|PROFILES|EXTRA_ENV",
+        "# Format: HOST|MODEL_PATH|TP|SHORT|MODE|BACKEND|MAX_LEN|GPU_MEM|CONCS|PROFILES|EXTRA_ENV",
         "# MODE: single | multi",
+        "# BACKEND: vllm | sglang",
         "# EXTRA_ENV: optional `KEY=VAL KEY=VAL`.",
         "",
     ]

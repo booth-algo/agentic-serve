@@ -46,9 +46,19 @@ interface EnrichedResult {
   modelShort: string;
   seriesKey: string;
   filename: string;
+  engineVersion?: string;  // e.g. "0.19.0" — from _engine_version.txt sidecar or fallback
   perTurn?: PerTurnEntry[];
   scatterData?: ScatterPoint[];
 }
+
+// Fallback engine versions applied to historical runs without an
+// `_engine_version.txt` sidecar. Update when hosts upgrade or when
+// back-annotating historical data. New runs capture this at sweep time
+// via sweep_all_profiles.sh / sweep_multiturn_profiles.sh.
+const FALLBACK_ENGINE_VERSIONS: Record<string, string> = {
+  vllm: '0.19.0',
+  sglang: '0.5.9',
+};
 
 const RESULTS_DIR = path.resolve(__dirname, '../../results');
 const OUTPUT_FILE = path.resolve(__dirname, '../public/data.json');
@@ -202,6 +212,23 @@ function shouldSkip(filename: string, relDir: string): boolean {
   return false;
 }
 
+// Cache per-directory engine version so we only read each sidecar once.
+const engineVersionCache = new Map<string, string | null>();
+
+function readEngineVersion(relDir: string): string | null {
+  if (engineVersionCache.has(relDir)) return engineVersionCache.get(relDir)!;
+  const sidecar = path.join(RESULTS_DIR, relDir, '_engine_version.txt');
+  let version: string | null = null;
+  if (fs.existsSync(sidecar)) {
+    const content = fs.readFileSync(sidecar, 'utf-8').trim();
+    // Expected format: "backend=vllm version=0.19.0"
+    const m = content.match(/version=([^\s]+)/);
+    if (m) version = m[1];
+  }
+  engineVersionCache.set(relDir, version);
+  return version;
+}
+
 function main() {
   console.log(`Reading results from: ${RESULTS_DIR}`);
 
@@ -296,6 +323,10 @@ function main() {
         }
       }
 
+      // Engine version: prefer sidecar captured at sweep time, fall back
+      // to current-host default mapped from the detected backend.
+      const engineVersion = readEngineVersion(relDir) ?? FALLBACK_ENGINE_VERSIONS[backend];
+
       results.push({
         config: { ...raw.config, backend, profile, concurrency },
         summary: raw.summary,
@@ -304,6 +335,7 @@ function main() {
         modelShort,
         seriesKey,
         filename: path.join(relDir, filename),
+        ...(engineVersion ? { engineVersion } : {}),
         ...(perTurn ? { perTurn } : {}),
         ...(scatterData ? { scatterData } : {}),
       });
@@ -367,6 +399,7 @@ function main() {
       if (SUMMARY_KEEP.has(k)) summary[k] = v;
     }
     const slim: Record<string, unknown> = { config, summary, hardware: r.hardware, quant: r.quant, modelShort: r.modelShort, seriesKey: r.seriesKey };
+    if (r.engineVersion) slim.engineVersion = r.engineVersion;
     if ((r as Record<string, unknown>).perTurn) slim.perTurn = (r as Record<string, unknown>).perTurn;
     return slim;
   });

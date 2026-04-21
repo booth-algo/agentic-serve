@@ -66,6 +66,13 @@ done
 
 cd /tmp/inference-benchmark
 
+# Capture engine version alongside results so the dashboard can attribute
+# each sweep to a specific vllm build. Written once per sweep; applies to
+# every result file in the output dir.
+VLLM_VERSION=$("$PY" -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown")
+echo "backend=vllm version=$VLLM_VERSION" > "$OUT_DIR/_engine_version.txt"
+echo "[sweep] captured engine version: vllm $VLLM_VERSION"
+
 for PROFILE in $PROFILES; do
     for CONC in $CONCS; do
         OUT_FILE="$OUT_DIR/${PROFILE}_conc${CONC}.json"
