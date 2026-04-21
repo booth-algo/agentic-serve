@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-21T16:00:10.586569+00:00",
+  "generated_at": "2026-04-21T16:30:26.272221+00:00",
   "feasibility_ratio": 0.9,
   "hosts": {
     "gpu-4": {
@@ -114,11 +114,11 @@
       "model": "Llama-3.1-8B",
       "tp": 4,
       "mode": "single",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-21T15:53:46.106668+00:00"
+      "updated_at": "2026-04-21T16:30:23.752181+00:00"
     },
     {
       "host": "gpu-4",
@@ -150,11 +150,11 @@
       "model": "Llama-3.1-70B",
       "tp": 4,
       "mode": "single",
-      "status": "pending",
+      "status": "running",
       "attempt": 1,
       "max_len_override": 4096,
       "reason": null,
-      "updated_at": "2026-04-21T15:00:13.556638+00:00"
+      "updated_at": "2026-04-21T16:30:23.770180+00:00"
     },
     {
       "host": "gpu-4",
