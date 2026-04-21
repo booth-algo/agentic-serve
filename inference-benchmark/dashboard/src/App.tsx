@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useData } from './hooks/useData';
+import { useSweepState } from './hooks/useSweepState';
 import { Layout } from './components/Layout';
 import { KPICards } from './components/KPICards';
 import { Filters } from './components/Filters';
@@ -28,6 +29,7 @@ function App() {
     toggleFilter,
     clearFilters,
   } = useData();
+  const { sweepState } = useSweepState();
 
   const [activePage, setActivePage] = useState<PageId>('benchmark');
   const [activeTab, setActiveTab] = useState<TabId>('latency');
@@ -53,7 +55,7 @@ function App() {
       {activePage === 'roofline' ? (
         <RooflinePage />
       ) : activePage === 'coverage' ? (
-        <CoveragePage allData={allData} loading={loading} />
+        <CoveragePage allData={allData} sweepState={sweepState} loading={loading} />
       ) : loading ? (
         <div className="flex h-64 items-center justify-center">
           <div className="text-[#8b949e]">Loading benchmark data...</div>

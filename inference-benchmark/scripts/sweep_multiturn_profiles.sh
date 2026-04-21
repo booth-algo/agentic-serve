@@ -8,6 +8,13 @@
 #       [PY] [GPU_MEM] [MAX_LEN] [CONC_LIST] [PROFILE_LIST] [WARMUP]
 set -euo pipefail
 
+# Include CUDA graph memory in vLLM's pre-flight memory profiler.
+# Without this, vLLM sizes the KV cache greedily and OOMs during cudagraph
+# capture on tight configs (e.g. 70B/72B at TP=4 on 40GB A100). Slightly
+# reduces KV cache headroom in exchange for guaranteed startup; will be
+# vLLM's default in v0.19+.
+export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
+
 MODEL_PATH="${1:?model path}"
 TP="${2:?tp}"
 SHORT="${3:?short}"

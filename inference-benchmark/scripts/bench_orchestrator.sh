@@ -158,4 +158,11 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE MAX_LEN GPU_MEM CONCS PROFIL
     esac
 done < "$JOBS_FILE"
 
+# Publish sweep-state.json to R2 so the dashboard reflects the latest cell
+# status (pending/running/done/abandoned/known_oom). Non-fatal — if this
+# fails, the tick still succeeds; the next tick will republish.
+python3 "$REPO_ROOT/inference-benchmark/scripts/publish_sweep_state.py" \
+    --endpoint "$EP" --bucket "$BUCKET" --profile "$PROFILE" \
+    >> "$LOG" 2>&1 || log "publish_sweep_state.py failed"
+
 log "tick complete"

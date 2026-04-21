@@ -1,0 +1,436 @@
+{
+  "generated_at": "2026-04-21T16:00:10.586569+00:00",
+  "feasibility_ratio": 0.9,
+  "hosts": {
+    "gpu-4": {
+      "hardware_label": "A100-40GB",
+      "vram_gb_per_gpu": 40,
+      "total_gpus": 8
+    },
+    "3090": {
+      "hardware_label": "3090",
+      "vram_gb_per_gpu": 24,
+      "total_gpus": 8
+    },
+    "2080ti": {
+      "hardware_label": "2080Ti",
+      "vram_gb_per_gpu": 22,
+      "total_gpus": 8
+    }
+  },
+  "models": {
+    "Llama-3.1-8B": {
+      "weights_gb": 16
+    },
+    "Llama-3.1-70B": {
+      "weights_gb": 140
+    },
+    "Llama-3.3-70B": {
+      "weights_gb": 140
+    },
+    "Mixtral-8x7B": {
+      "weights_gb": 94
+    },
+    "Qwen2.5-72B": {
+      "weights_gb": 144
+    },
+    "Qwen3.5-9B": {
+      "weights_gb": 18
+    },
+    "Qwen3.5-27B": {
+      "weights_gb": 54
+    },
+    "gpt-oss-20b": {
+      "weights_gb": 12
+    },
+    "gpt-oss-120b": {
+      "weights_gb": 65
+    }
+  },
+  "cells": [
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-18T00:41:23.495272+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-18T01:50:52.372327+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-18T11:16:29.850230+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-20T18:00:19.102319+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-21T15:53:46.098668+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-8B",
+      "tp": 4,
+      "mode": "single",
+      "status": "running",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-21T15:53:46.106668+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Mixtral-8x7B",
+      "tp": 4,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-18T00:41:23.495272+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Mixtral-8x7B",
+      "tp": 4,
+      "mode": "multi",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-18T18:30:23.741840+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 1,
+      "max_len_override": 4096,
+      "reason": null,
+      "updated_at": "2026-04-21T15:00:13.556638+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.3-70B",
+      "tp": 4,
+      "mode": "single",
+      "status": "running",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-21T15:00:13.564638+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen2.5-72B",
+      "tp": 4,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "gpt-oss-20b",
+      "tp": 4,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx8",
+      "model": "Llama-3.1-8B",
+      "tp": 8,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx8",
+      "model": "Llama-3.1-70B",
+      "tp": 8,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx8",
+      "model": "Llama-3.3-70B",
+      "tp": 8,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx8",
+      "model": "Mixtral-8x7B",
+      "tp": 8,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx8",
+      "model": "Qwen2.5-72B",
+      "tp": 8,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx8",
+      "model": "Qwen3.5-9B",
+      "tp": 8,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx8",
+      "model": "Qwen3.5-27B",
+      "tp": 8,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx8",
+      "model": "gpt-oss-20b",
+      "tp": 8,
+      "mode": "single",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-18T00:41:23.495272+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-18T01:52:00.219490+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-18T00:41:23.495272+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-21T00:35:36.906748+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-21T01:00:21.663375+00:00"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-21T00:37:55.316792+00:00"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-21T01:30:30.090774+00:00"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Tix2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "single",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-21T02:00:23.967685+00:00"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Tix2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-04-21T04:30:19.466973+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "Qwen3.5-27B",
+      "tp": 2,
+      "mode": "single",
+      "status": "known_oom",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": "hybrid-attn triton",
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "single",
+      "status": "known_oom",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": "hybrid-attn triton",
+      "updated_at": null
+    }
+  ]
+}
