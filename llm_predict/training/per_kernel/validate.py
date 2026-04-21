@@ -22,8 +22,10 @@ CLI
 ---
     python -m llm_predict.training.per_kernel.validate --gpu A100
     python -m llm_predict.training.per_kernel.validate --vs-measured
+    # Apples-to-apples against the ncu seq=128 sweep — requires benchmark
+    # runs of the `fixed-seq128` workload profile so avg_seq ≈ 128:
     python -m llm_predict.training.per_kernel.validate --vs-measured \\
-        --data-json /path/to/data.json
+        --target-seq 128 --seq-tolerance 16
 """
 from __future__ import annotations
 
@@ -184,12 +186,20 @@ def validate_gpu(df: pd.DataFrame, gpu: str, report_path: Path, seq: int = 128) 
 
 def _load_measured_rows(data_json_path: Path,
                          gpu: str,
-                         concurrency: int = 1) -> list[dict]:
+                         concurrency: int = 1,
+                         target_seq: int | None = None,
+                         seq_tolerance: int = 16) -> list[dict]:
     """Return measured-ttft rows from data.json matching a given GPU/concurrency.
+
+    If `target_seq` is given, rows are restricted to profiles whose
+    per-request `avg_seq` lies within ±`seq_tolerance` tokens of it.
+    This is how the apples-to-apples comparison against the ncu
+    prefill_seq128_bs1 sweep is built: run a `fixed-seq128` benchmark
+    profile, then `--vs-measured --target-seq 128`.
 
     Each returned dict has:
         modelShort, backend, profile, concurrency,
-        avg_seq, measured_ttft_ms, successful_requests
+        avg_seq, measured_ttft_ms, median_tpot_ms, successful_requests
     """
     with open(data_json_path) as f:
         raw = json.load(f)
@@ -214,13 +224,19 @@ def _load_measured_rows(data_json_path: Path,
         median_ttft = summ.get("median_ttft_ms")
         if median_ttft is None or total_in <= 0:
             continue
+        avg_seq = total_in / succ
+        if target_seq is not None and abs(avg_seq - target_seq) > seq_tolerance:
+            continue
         rows.append({
             "modelShort": ms,
             "backend": cfg.get("backend", ""),
             "profile": cfg.get("profile", ""),
             "concurrency": concurrency,
-            "avg_seq": total_in / succ,
+            "avg_seq": avg_seq,
             "measured_ttft_ms": float(median_ttft),
+            "median_tpot_ms": (
+                float(summ["median_tpot_ms"]) if summ.get("median_tpot_ms") is not None else None
+            ),
             "successful_requests": succ,
         })
     return rows
@@ -230,13 +246,18 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
                               gpu: str,
                               data_json_path: Path,
                               report_path: Path,
-                              concurrency: int = 1) -> None:
+                              concurrency: int = 1,
+                              target_seq: int | None = None,
+                              seq_tolerance: int = 16) -> None:
     pred = PerKernelPredictor(gpu=gpu)
     if not pred.load():
         print(f"[{gpu}][vs-measured] no pkls — skipping")
         return
 
-    measured_rows = _load_measured_rows(data_json_path, gpu, concurrency=concurrency)
+    measured_rows = _load_measured_rows(
+        data_json_path, gpu, concurrency=concurrency,
+        target_seq=target_seq, seq_tolerance=seq_tolerance,
+    )
     if not measured_rows:
         print(f"[{gpu}][vs-measured] no matching rows in data.json — skipping")
         return
@@ -267,33 +288,40 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
         out_rows.append((
             short, arch, row["backend"], row["profile"], seq, row["concurrency"],
             pred_ms, meas_ms, err_pct, ncu_sum_ms, overhead_pct,
+            row.get("median_tpot_ms"),
         ))
 
+    seq_filter_note = (
+        f", avg_seq within ±{seq_tolerance} of {target_seq}"
+        if target_seq is not None else ""
+    )
     lines: list[str] = [
         f"# {gpu} — Wall-clock TTFT Validation (vs inference-benchmark data.json)",
         "",
         f"- Predictor: {gpu} pkls ({sorted(pred.families_loaded())})",
         f"- Ground truth: `summary.median_ttft_ms` per (model, backend, profile)",
-        f"- Filter: concurrency={concurrency}, TP=1",
+        f"- Filter: concurrency={concurrency}, TP=1{seq_filter_note}",
         f"- Overhead % = `(measured - ncu_kernel_sum) / measured` — fraction of real TTFT not captured by kernels.",
         "- Headline MAPE = supported architectures only. MoE + hybrid-attn rows are known composer gaps; they are shown in the table but excluded from the aggregate.",
+        "- `median tpot (ms)` is shown for reference; per-kernel composer currently only predicts TTFT, so no TPOT prediction column.",
         "",
         "## Per-row",
         "",
-        "| Model | arch | backend | profile | avg seq | bs | predicted TTFT (ms) | measured TTFT p50 (ms) | abs err % | ncu Σ (ms) | overhead % |",
-        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Model | arch | backend | profile | avg seq | bs | predicted TTFT (ms) | measured TTFT p50 (ms) | abs err % | ncu Σ (ms) | overhead % | median TPOT (ms) |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     supported_errs: list[float] = []
     supported_overheads: list[float] = []
     oos_counts = {"moe": 0, "hybrid_attn": 0}
     for (short, arch, backend, profile, seq, bs, pred_ms, meas_ms, err_pct,
-         ncu_sum_ms, overhead_pct) in out_rows:
+         ncu_sum_ms, overhead_pct, tpot_ms) in out_rows:
         marker = " _(held-out)_" if model_specs.is_held_out(_SHORT_TO_DIR.get(short, ""), gpu) else ""
         ncu_cell = f"{ncu_sum_ms:.2f}" if ncu_sum_ms is not None else "—"
         ov_cell = f"{overhead_pct:.1f}%" if overhead_pct is not None else "—"
+        tpot_cell = f"{tpot_ms:.2f}" if tpot_ms is not None else "—"
         lines.append(
             f"| {short}{marker} | {arch} | {backend} | {profile} | {seq} | {bs} | "
-            f"{pred_ms:.2f} | {meas_ms:.2f} | {err_pct:.2f}% | {ncu_cell} | {ov_cell} |"
+            f"{pred_ms:.2f} | {meas_ms:.2f} | {err_pct:.2f}% | {ncu_cell} | {ov_cell} | {tpot_cell} |"
         )
         if arch == "supported":
             supported_errs.append(err_pct)
@@ -306,11 +334,11 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
         mape = sum(supported_errs) / len(supported_errs)
         lines.append(
             f"| **supported MAPE** ({len(supported_errs)} rows) | | | | | | | | "
-            f"**{mape:.2f}%** | | |"
+            f"**{mape:.2f}%** | | | |"
         )
     if any(oos_counts.values()):
         oos_desc = ", ".join(f"{v} {k}" for k, v in oos_counts.items() if v)
-        lines.append(f"| _out-of-scope_ | | | | | | | | _{oos_desc} — excluded from headline_ | | |")
+        lines.append(f"| _out-of-scope_ | | | | | | | | _{oos_desc} — excluded from headline_ | | | |")
     if supported_overheads:
         mean_ov = sum(supported_overheads) / len(supported_overheads)
         lines.append("")
@@ -332,15 +360,19 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
 
 def run(data_csv: Path, report_dir: Path, gpus: list[str], seq: int = 128,
         vs_measured: bool = False, data_json: Path | None = None,
-        concurrency: int = 1) -> None:
+        concurrency: int = 1,
+        target_seq: int | None = None, seq_tolerance: int = 16) -> None:
     df = pd.read_csv(data_csv)
+    suffix = f"_seq{target_seq}" if target_seq is not None else ""
     for gpu in gpus:
         validate_gpu(df, gpu, report_dir / f"{gpu}_validation.md", seq=seq)
         if vs_measured and data_json is not None:
             validate_vs_measured_gpu(
                 df, gpu, data_json,
-                report_dir / f"{gpu}_wallclock_validation.md",
+                report_dir / f"{gpu}_wallclock_validation{suffix}.md",
                 concurrency=concurrency,
+                target_seq=target_seq,
+                seq_tolerance=seq_tolerance,
             )
 
 
@@ -359,6 +391,12 @@ def main() -> None:
                          "(default: <repo>/inference-benchmark/dashboard/public/data.json)")
     ap.add_argument("--concurrency", type=int, default=1,
                     help="Concurrency filter for --vs-measured (default 1).")
+    ap.add_argument("--target-seq", type=int, default=None,
+                    help="Restrict --vs-measured rows to those whose avg input "
+                         "seq lies within --seq-tolerance of this target. Use "
+                         "128 to match the ncu prefill_seq128_bs1 sweep.")
+    ap.add_argument("--seq-tolerance", type=int, default=16,
+                    help="±tokens tolerance around --target-seq (default 16).")
     args = ap.parse_args()
 
     pkg_dir = Path(__file__).resolve().parent
@@ -380,7 +418,8 @@ def main() -> None:
 
     run(data_csv, report_dir, gpus, seq=args.seq,
         vs_measured=args.vs_measured, data_json=data_json,
-        concurrency=args.concurrency)
+        concurrency=args.concurrency,
+        target_seq=args.target_seq, seq_tolerance=args.seq_tolerance)
 
 
 if __name__ == "__main__":
