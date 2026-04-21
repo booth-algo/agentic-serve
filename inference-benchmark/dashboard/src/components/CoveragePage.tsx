@@ -84,9 +84,22 @@ const ALL_MODELS = [
 // Known-structural failures: (hardware|model) → short reason.
 // Reserved for things that fail after a real attempt, not for things
 // that are obviously too large (those are caught by checkFeasibility).
+// OOM takes priority over the static feasibility rule, so entries here
+// override "needs ≥X GB" messaging with the specific failure we saw.
 const KNOWN_OOM: Record<string, string> = {
-  'A100-40GBx4|Qwen3.5-27B': 'hybrid-attn triton (both TP=2 & TP=4)',
-  '3090x4|Qwen3.5-27B': 'hybrid-attn triton',
+  // A100-40GBx4 (gpu-4, TP=4): 70B/72B weights + vLLM v0.19 cudagraph
+  // accounting overrun even at gpu_mem=0.95, max_len=2048. Would fit on
+  // A100-40GBx8 or on v0.18.
+  'A100-40GBx4|Llama-3.1-70B': 'vLLM v0.19 cudagraph OOM — gpu_mem=0.95 + max_len=2048 still exceeds 160 GB',
+  'A100-40GBx4|Llama-3.3-70B': 'vLLM v0.19 cudagraph OOM — gpu_mem=0.95 + max_len=2048 still exceeds 160 GB',
+  'A100-40GBx4|Qwen2.5-72B':   '144 GB weights + cudagraph overhead exceeds 160 GB on vLLM v0.19',
+  // Qwen3.5 hybrid attention: triton chunk_gated_delta_rule kernel OOMs
+  // on prefill regardless of TP size; not weight-fit related.
+  'A100-40GBx2|Qwen3.5-27B': 'hybrid-attn triton chunk_gated_delta_rule OOMs on prefill',
+  'A100-40GBx4|Qwen3.5-27B': 'hybrid-attn triton chunk_gated_delta_rule OOMs on prefill',
+  // 3090x4: Mixtral all-experts-resident (94 GB) doesn't fit with
+  // cudagraph overhead in 96 GB. Would fit on 3090x8.
+  '3090x4|Mixtral-8x7B': '94 GB MoE weights exceed 96 GB after cudagraph allocation',
 };
 
 // Infeasible if weights don't leave at least 15% headroom for KV cache
