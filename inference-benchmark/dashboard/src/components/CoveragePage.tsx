@@ -522,7 +522,14 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
             </span>
           </div>
         </td>
-        <td className="px-3 py-1.5 text-right text-[#8b949e]">—</td>
+        <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono">
+          {model.status === 'untested' || model.status === 'pending' ||
+           model.status === 'running'  || model.status === 'abandoned' ? (
+            <span className="text-[#8b949e]">0/{EXPECTED_CELLS_PER_MODEL}</span>
+          ) : (
+            <span className="text-[#8b949e]">—</span>
+          )}
+        </td>
       </tr>
     );
   }
