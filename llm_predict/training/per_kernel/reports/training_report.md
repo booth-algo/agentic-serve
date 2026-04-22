@@ -27,6 +27,10 @@
 | RTX3090 | flash_attn | 64 | 160 | 35.77% |
 | RTX3090 | elementwise | 18986 | 3538 | 18.99% |
 | RTX3090 | misc | 24598 | 1780 | 18.48% |
+| RTX2080Ti | gemm | 1937 | 0 | no-heldout (train only) |
+| RTX2080Ti | flash_attn | 0 | 0 | skipped (n_train=0 < 5) |
+| RTX2080Ti | elementwise | 6373 | 0 | no-heldout (train only) |
+| RTX2080Ti | misc | 7857 | 0 | no-heldout (train only) |
 
 ## Leave-one-model-out CV
 
@@ -54,6 +58,14 @@
 | misc_sweep | n/a | n/a | n/a | 75.1% (n=364) |
 | roofline | 68.4% (n=1071) | n/a | n/a | n/a |
 
+### RTX2080Ti
+
+| held-out | gemm | flash_attn | elementwise | misc |
+|---|---:|---:|---:|---:|
+| Llama-8B | 144.8% (n=289) | n/a | 13.9% (n=1033) | 21.9% (n=714) |
+| Qwen3.5-9B | 75.7% (n=577) | n/a | 20.8% (n=5340) | 29.9% (n=7143) |
+| roofline | 714.3% (n=1071) | n/a | n/a | n/a |
+
 ## Saved pkls
 - **A100**
   - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_gemm_shape_v2.pkl`
@@ -65,3 +77,7 @@
   - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl`
   - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_elementwise_shape_v2.pkl`
   - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_misc_shape_v2.pkl`
+- **RTX2080Ti**
+  - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_gemm_shape_v2.pkl`
+  - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_elementwise_shape_v2.pkl`
+  - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_misc_shape_v2.pkl`

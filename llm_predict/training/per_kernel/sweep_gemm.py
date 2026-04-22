@@ -86,6 +86,10 @@ def run_sweep(dtype: torch.dtype, manifest_out: Path) -> None:
             nvtx.range_push(shape_tag)
             a = torch.randn(M, K, dtype=dtype, device="cuda")
             b = torch.randn(K, N, dtype=dtype, device="cuda")
+            # Warmup: cuBLAS autotune + JIT compile happen on first invocations.
+            # Record only steady-state timings below.
+            for _ in range(3):
+                c = a @ b
             torch.cuda.synchronize()
             for _ in range(REPS):
                 c = a @ b

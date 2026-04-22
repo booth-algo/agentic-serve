@@ -35,5 +35,19 @@
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_misc_shape_v2.pkl"
     ]
+  },
+  "RTX2080Ti": {
+    "heldout_mape": {
+      "gemm": NaN,
+      "flash_attn": null,
+      "elementwise": NaN,
+      "misc": NaN
+    },
+    "aggregate_err_pct": {},
+    "saved_pkls": [
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_misc_shape_v2.pkl"
+    ]
   }
 }
