@@ -25,6 +25,7 @@ import json
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 from torch.cuda import nvtx
 
 
@@ -64,7 +65,7 @@ SHAPE_TEMPLATES: list[tuple[int, int, str]] = [
     (5120,  5120,   "filler_sq5k"),
 ]
 
-REPS = 3
+REPS = 10
 
 
 def run_sweep(dtype: torch.dtype, manifest_out: Path) -> None:
@@ -84,15 +85,19 @@ def run_sweep(dtype: torch.dtype, manifest_out: Path) -> None:
         for (N, K, tag) in SHAPE_TEMPLATES:
             shape_tag = f"gemm_M{M}_N{N}_K{K}_{tag}"
             nvtx.range_push(shape_tag)
+            # Use a real nn.Linear module so cuBLAS picks the TN-layout
+            # kernel that vLLM/HF production code hits (ampere_bf16_s16816gemm_..._tn).
+            # Naive `a @ b` lands on the NN-layout variant which measures
+            # ~2.7x higher on A100 for the same (M,N,K).
             a = torch.randn(M, K, dtype=dtype, device="cuda")
-            b = torch.randn(K, N, dtype=dtype, device="cuda")
+            lin = torch.nn.Linear(K, N, bias=False).to(device="cuda", dtype=dtype)
             # Warmup: cuBLAS autotune + JIT compile happen on first invocations.
             # Record only steady-state timings below.
-            for _ in range(3):
-                c = a @ b
+            for _ in range(10):
+                c = lin(a)
             torch.cuda.synchronize()
             for _ in range(REPS):
-                c = a @ b
+                c = lin(a)
                 manifest.append({
                     "idx": idx, "M": M, "N": N, "K": K,
                     "dtype": str(dtype).replace("torch.", ""),
@@ -101,7 +106,7 @@ def run_sweep(dtype: torch.dtype, manifest_out: Path) -> None:
                 idx += 1
             torch.cuda.synchronize()
             nvtx.range_pop()
-            del a, b, c
+            del a, lin, c
     torch.cuda.empty_cache()
 
     manifest_out.parent.mkdir(parents=True, exist_ok=True)

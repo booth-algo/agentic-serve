@@ -11,7 +11,7 @@
 
 | Model | arch | backend | profile | avg seq | bs | predicted TTFT (ms) | measured TTFT p50 (ms) | abs err % | ncu Σ (ms) | overhead % | median TPOT (ms) |
 |---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Llama-8B | supported | vllm | fixed-seq128 | 167 | 1 | 25.02 | 36.71 | 31.85% | 26.48 | 27.9% | 12.89 |
-| **supported MAPE** (1 rows) | | | | | | | | **31.85%** | | | |
+| Llama-8B | supported | vllm | fixed-seq128 | 167 | 1 | 37.43 | 36.71 | 1.97% | 26.48 | 27.9% | 12.89 |
+| **supported MAPE** (1 rows) | | | | | | | | **1.97%** | | | |
 
 **Mean overhead across 1 supported rows with ncu data:** 27.9%
