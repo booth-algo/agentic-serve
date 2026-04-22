@@ -103,6 +103,8 @@ gpt-oss-120b        & TP=8 (MXFP4)    & TP=2 (MXFP4)    & --- \\
 \subsection{Chat vs Agentic Workloads}
 \label{sec:chat_vs_agentic}
 
+
+
 \begin{table}[t]
 \caption{Single-turn serving performance at saturation on H100-SXM5-80GB, vLLM v0.19, bf16, prefix caching on. Each request is independent (no accumulated context). \textit{Saturation}: concurrency at peak output token throughput. Three profiles: \texttt{chat-short} (Tier~2 ShareGPT, ISL\,$\leq$\,500, OSL\,$\leq$\,300); \texttt{coding-agent} (Tier~1 SWE-Bench, ISL\,$\approx$\,17{,}000, OSL\,$\approx$\,800); \texttt{pf-heavy} (synthetic, ISL\,=\,8{,}192, OSL\,=\,256). Mixtral coding-agent omitted: 32{,}768-token context window cannot accommodate SWE-Bench prompts under TP\,=\,2.}
 \label{tab:serving-perf}
