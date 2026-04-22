@@ -15,6 +15,34 @@
 # symmetry with the vllm script; the output filenames still use it.
 set -uo pipefail
 
+# sglang 0.5.9 has a startup check that refuses to run on torch 2.9.1 +
+# cudnn < 9.15 due to a nn.Conv3d bug (pytorch#168167). LLM inference
+# doesn't touch Conv3d, so the check is a false positive for us.
+export SGLANG_DISABLE_CUDNN_CHECK=1
+
+# NCCL init workarounds — sglang 0.5.9 hits "unhandled system error" on
+# 3090 tp>1 otherwise. Disabling direct P2P and shared-memory fast paths
+# falls back to CUDA IPC which works universally (slightly slower but
+# fine for benchmarks where the primary metric is forward-pass latency,
+# not NCCL bandwidth).
+export NCCL_P2P_DISABLE=1
+export NCCL_SHM_DISABLE=1
+# Surface the real NCCL error (not just "unhandled system error") on crash.
+export NCCL_DEBUG=WARN
+
+# sglang's CUDA graph runner JIT-compiles flashinfer kernels with nvcc
+# then links with libcudart. Point CUDA_HOME at the conda-installed nvcc
+# (cuda-nvcc=12.8 from nvidia channel) and make sure the linker finds
+# libcudart.so (from nvidia-cuda-runtime-cu12 pip wheel or the env lib).
+SGLANG_ENV_DIR="$(dirname "$(dirname "${6:-python}")")"
+if [[ -x "$SGLANG_ENV_DIR/bin/nvcc" ]]; then
+    export CUDA_HOME="$SGLANG_ENV_DIR"
+    export PATH="$SGLANG_ENV_DIR/bin:$PATH"
+    # Compile-time lib search (ld -lcudart) and runtime dynamic linker.
+    export LIBRARY_PATH="$SGLANG_ENV_DIR/lib:$SGLANG_ENV_DIR/targets/x86_64-linux/lib:${LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="$SGLANG_ENV_DIR/lib:$SGLANG_ENV_DIR/targets/x86_64-linux/lib:${LD_LIBRARY_PATH:-}"
+fi
+
 MODEL_PATH="${1:?model path}"
 TP="${2:?tp}"
 SHORT="${3:?short}"

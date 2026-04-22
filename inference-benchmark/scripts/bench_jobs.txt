@@ -47,4 +47,4 @@ gpu-4|/data/models/Llama-3.1-70B-Instruct|4|Llama-3.1-70B|single|sglang|8192|0.9
 
 # === 3090 ===
 3090|/home/kevinlau/models/Llama-3.1-8B-Instruct|1|Llama-3.1-8B|single|sglang|32768|0.85|1 10 20 40 80 120 160 200 256 320|chat-short chat-medium chat-long|
-3090|/home/kevinlau/models/Qwen3.5-9B|2|Qwen3.5-9B|single|sglang|8192|0.85|1 10 20 40 80 120 160 200 256 320|chat-short chat-medium chat-long|
+3090|/home/kevinlau/models/Qwen3.5-9B|2|Qwen3.5-9B|single|sglang|8192|0.85|1 10 20 40 80 120 160 200 256 320|chat-short chat-medium chat-long|CUDA_VISIBLE_DEVICES=0,1

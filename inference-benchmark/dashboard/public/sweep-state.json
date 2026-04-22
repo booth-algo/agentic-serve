@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-21T21:35:46.608740+00:00",
+  "generated_at": "2026-04-22T13:10:53.414547+00:00",
   "feasibility_ratio": 0.9,
   "hosts": {
     "gpu-4": {
@@ -16,6 +16,16 @@
       "hardware_label": "2080Ti",
       "vram_gb_per_gpu": 22,
       "total_gpus": 8
+    },
+    "H100": {
+      "hardware_label": "H100",
+      "vram_gb_per_gpu": 80,
+      "total_gpus": 8
+    },
+    "A6000": {
+      "hardware_label": "A6000",
+      "vram_gb_per_gpu": 48,
+      "total_gpus": 1
     }
   },
   "models": {
@@ -211,11 +221,11 @@
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-21T21:35:41.473302+00:00"
+      "updated_at": "2026-04-21T22:00:18.465570+00:00"
     },
     {
       "host": "gpu-4",
@@ -224,11 +234,11 @@
       "tp": 8,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-21T22:20:19.735894+00:00"
     },
     {
       "host": "gpu-4",
@@ -237,11 +247,11 @@
       "tp": 8,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-21T22:50:18.678514+00:00"
     },
     {
       "host": "gpu-4",
@@ -250,11 +260,11 @@
       "tp": 8,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-21T23:20:18.739529+00:00"
     },
     {
       "host": "gpu-4",
@@ -263,11 +273,11 @@
       "tp": 8,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-21T23:32:21.066773+00:00"
     },
     {
       "host": "gpu-4",
@@ -276,11 +286,11 @@
       "tp": 8,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-22T00:00:19.633173+00:00"
     },
     {
       "host": "gpu-4",
@@ -289,11 +299,11 @@
       "tp": 8,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-22T00:20:25.045300+00:00"
     },
     {
       "host": "gpu-4",
@@ -302,11 +312,11 @@
       "tp": 8,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-22T00:40:19.789671+00:00"
     },
     {
       "host": "gpu-4",
@@ -315,11 +325,11 @@
       "tp": 8,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-22T01:00:18.818567+00:00"
     },
     {
       "host": "3090",
@@ -445,11 +455,11 @@
       "tp": 1,
       "mode": "single",
       "backend": "sglang",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-22T01:20:19.860975+00:00"
     },
     {
       "host": "gpu-4",
@@ -458,11 +468,11 @@
       "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-22T02:00:20.249156+00:00"
     },
     {
       "host": "3090",
@@ -471,11 +481,11 @@
       "tp": 1,
       "mode": "single",
       "backend": "sglang",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-21T21:35:43.978230+00:00"
+      "updated_at": "2026-04-21T23:10:20.495928+00:00"
     },
     {
       "host": "3090",
@@ -484,11 +494,11 @@
       "tp": 2,
       "mode": "single",
       "backend": "sglang",
-      "status": "pending",
+      "status": "abandoned",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-04-22T00:10:14.824219+00:00"
     },
     {
       "host": "gpu-4",

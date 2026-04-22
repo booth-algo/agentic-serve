@@ -44,6 +44,25 @@ hosts:
     vram_gb_per_gpu: 22
     # 2080Ti has shared GPUs — pin to specific device IDs per run via cell.extra_env.
 
+  # Reference-only hosts: we never dispatch benchmarks to these from the
+  # orchestrator (no cells reference them), but data.json contains
+  # historical results from them (e.g. RunPod H100 runs). Having their
+  # vram_gb_per_gpu here lets CoveragePage apply the feasibility rule
+  # correctly instead of silently marking out-of-budget cells as "untested".
+  H100:
+    hardware_label: H100
+    model_root: /REFERENCE-ONLY
+    python: /REFERENCE-ONLY
+    total_gpus: 8
+    vram_gb_per_gpu: 80
+
+  A6000:
+    hardware_label: A6000
+    model_root: /REFERENCE-ONLY
+    python: /REFERENCE-ONLY
+    total_gpus: 1
+    vram_gb_per_gpu: 48
+
 # --------------------------------------------------------------------------
 # Models
 # --------------------------------------------------------------------------
@@ -178,4 +197,6 @@ cells:
   - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: single, backend: sglang, preset: single_small }
   - { host: gpu-4, model: Llama-3.1-70B,  tp: 4, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
   - { host: 3090,  model: Llama-3.1-8B,   tp: 1, mode: single, backend: sglang, preset: single_small, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320] }
-  - { host: 3090,  model: Qwen3.5-9B,     tp: 2, mode: single, backend: sglang, preset: single_large, max_len: 8192, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320] }
+  # Pin away from 3090's broken GPU5 (Unknown device handle NVML error);
+  # NCCL init fails on tp>1 otherwise. Healthy pair: GPUs 0+1.
+  - { host: 3090,  model: Qwen3.5-9B,     tp: 2, mode: single, backend: sglang, preset: single_large, max_len: 8192, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320], extra_env: "CUDA_VISIBLE_DEVICES=0,1" }
