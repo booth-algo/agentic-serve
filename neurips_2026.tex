@@ -65,6 +65,17 @@
 \usepackage{placeins}       % \FloatBarrier to keep tables/figures in their section
 \graphicspath{{image/}}     % look for figures in image/
 
+% Aaron Zhao v2.0 macro pack — mandatory per "How to Write an ML Paper" slide deck.
+\usepackage{amsmath}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\eg}{\textit{e.g\@.}}
+\newcommand{\etc}{\textit{etc\@.}}
+\newcommand{\etal}{\textit{et~al\@.}}
+\newcommand{\ie}{\textit{i.e\@.}}
+\newcommand{\vs}{\textit{vs\@.}}
+\newcommand{\viceversa}{\textit{vice versa}}
+
 % Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote. 
 \title{Inference Benchmarking in the Era of Agentic LLMs:\\[2pt]
   {\large Revisiting the Benchmarking Methodology on Inference Frameworks}}
