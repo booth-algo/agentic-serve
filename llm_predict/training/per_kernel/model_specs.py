@@ -160,8 +160,8 @@ def get_model_config(dir_name: str, held_out: bool = False) -> Optional[ModelCon
 
 # ───────── Train/held-out splits per GPU ─────────
 HELD_OUT_BY_GPU: dict[str, set[str]] = {
-    "A100":     {"Qwen2.5-72B-Instruct", "Llama-3.1-70B-Instruct", "Llama-3.3-70B-Instruct"},
-    "RTX3090":  {"Qwen2.5-72B-Instruct", "Llama-3.1-70B-Instruct"},
+    "A100":     {"Qwen2.5-72B-Instruct", "Llama-3.3-70B-Instruct"},  # Llama-3.1-70B moved to pool (2026-04-24)
+    "RTX3090":  {"Qwen2.5-72B-Instruct"},  # Llama-70B moved to training pool (2026-04-24)
     "RTX2080Ti": {"Qwen2.5-7B-Instruct"},   # 3-model LOMO: hold out Qwen-7B (added 2026-04-24).
 }
 

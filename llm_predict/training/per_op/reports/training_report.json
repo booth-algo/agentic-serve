@@ -2,32 +2,32 @@
   {
     "gpu": "A100",
     "skipped": false,
-    "heldout_mape": 38.66214357027025,
+    "heldout_mape": 30.677165609897365,
     "saved_pkl": "/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_op/perop_v5_shape.pkl",
     "pool_models": [
+      "Llama-70B",
       "Llama-8B",
       "Mixtral",
       "gpt-oss-20b"
     ],
     "heldout_models": [
       "Llama-3.3-70B",
-      "Llama-70B",
       "Qwen-72B"
     ]
   },
   {
     "gpu": "RTX3090",
     "skipped": false,
-    "heldout_mape": 26.584837445240765,
+    "heldout_mape": 13.949424904129714,
     "saved_pkl": "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_op/perop_v5_shape.pkl",
     "pool_models": [
+      "Llama-70B",
       "Llama-8B",
       "Mixtral",
       "Qwen3.5-9B",
       "gpt-oss-20b"
     ],
     "heldout_models": [
-      "Llama-70B",
       "Qwen-72B"
     ]
   },
