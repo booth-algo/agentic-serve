@@ -8,7 +8,7 @@
 |---|---:|---:|---|---|---:|
 | A100 | 6396 | 6228 | Llama-8B, Mixtral, gpt-oss-20b | Llama-3.3-70B, Llama-70B, Qwen-72B | 38.66% |
 | RTX3090 | 285 | 152 | Llama-8B, Mixtral, Qwen3.5-9B, gpt-oss-20b | Llama-70B, Qwen-72B | 26.58% |
-| RTX2080Ti | 133 | 0 | Llama-8B, Qwen3.5-9B | — | — |
+| RTX2080Ti | 133 | 76 | Llama-8B, Qwen3.5-9B | Qwen-7B | 17.15% |
 
 ## Per-heldout-model MAPE
 
@@ -26,6 +26,12 @@
 |---|---:|
 | Llama-70B | 26.64% |
 | Qwen-72B | 26.53% |
+
+### RTX2080Ti
+
+| held-out model | MAPE |
+|---|---:|
+| Qwen-7B | 17.15% |
 
 ## LOMO cross-validation
 

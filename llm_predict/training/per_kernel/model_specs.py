@@ -76,6 +76,10 @@ _FALLBACK: dict[str, dict] = {
     "Qwen3.5-27B": dict(
         name="Qwen3.5-27B", d=5120, h=24, kv=4, ffn=17408, n_layers=64, vocab=248320,
     ),
+    # Qwen2.5-7B-Instruct — added 2026-04-24 for RTX2080Ti per-op arch coverage.
+    "Qwen2.5-7B-Instruct": dict(
+        name="Qwen-7B", d=3584, h=28, kv=4, ffn=18944, n_layers=28, vocab=152064,
+    ),
 }
 
 # Maps ncu-directory names → model_configs JSON stem.
@@ -96,6 +100,7 @@ _DIR_TO_SHORT: dict[str, str] = {
     "Qwen3.5-27B":            "Qwen3.5-27B",
     "gpt-oss-20b":            "gpt-oss-20b",
     "Mixtral-8x7B-Instruct":  "Mixtral",
+    "Qwen2.5-7B-Instruct":    "Qwen-7B",
 }
 
 
@@ -157,7 +162,7 @@ def get_model_config(dir_name: str, held_out: bool = False) -> Optional[ModelCon
 HELD_OUT_BY_GPU: dict[str, set[str]] = {
     "A100":     {"Qwen2.5-72B-Instruct", "Llama-3.1-70B-Instruct", "Llama-3.3-70B-Instruct"},
     "RTX3090":  {"Qwen2.5-72B-Instruct", "Llama-3.1-70B-Instruct"},
-    "RTX2080Ti": set(),   # LOMO degenerate with 2 models; skip held-out split.
+    "RTX2080Ti": {"Qwen2.5-7B-Instruct"},   # 3-model LOMO: hold out Qwen-7B (added 2026-04-24).
 }
 
 

@@ -34,12 +34,14 @@
   {
     "gpu": "RTX2080Ti",
     "skipped": false,
-    "heldout_mape": null,
+    "heldout_mape": 17.15250798342451,
     "saved_pkl": "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_op/perop_v5_shape.pkl",
     "pool_models": [
       "Llama-8B",
       "Qwen3.5-9B"
     ],
-    "heldout_models": []
+    "heldout_models": [
+      "Qwen-7B"
+    ]
   }
 ]
