@@ -1,15 +1,15 @@
 {
   "A100": {
     "heldout_mape": {
-      "gemm": 7.095951050189475,
+      "gemm": 396.4594535004887,
       "flash_attn": 3.5104502260427064,
       "elementwise": 13.732536183062749,
       "misc": 15.186435984188556
     },
     "aggregate_err_pct": {
-      "Llama-3.3-70B": 7.4571771437910686,
-      "Llama-70B": 7.6318288115784245,
-      "Qwen-72B": 6.557105352984288
+      "Llama-3.3-70B": 81.68626089069308,
+      "Llama-70B": 81.34337305240105,
+      "Qwen-72B": 77.5111778195454
     },
     "saved_pkls": [
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
@@ -34,6 +34,20 @@
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl",
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_misc_shape_v2.pkl"
+    ]
+  },
+  "RTX2080Ti": {
+    "heldout_mape": {
+      "gemm": NaN,
+      "flash_attn": null,
+      "elementwise": NaN,
+      "misc": NaN
+    },
+    "aggregate_err_pct": {},
+    "saved_pkls": [
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_kernel/perkernel_misc_shape_v2.pkl"
     ]
   }
 }

@@ -3,19 +3,22 @@
 - Predictor: RTX3090 pkls (['elementwise', 'flash_attn', 'gemm', 'misc'])
 - Ground truth: sum(gpu_time_duration_ms) per model from kernels_labeled.csv
 - Input: bs=1, seq=128, tp=1
+- Headline MAPE = supported architectures only (dense, non-hybrid-attn).
+  MoE and hybrid-attn rows are known composer gaps and listed separately.
 
 ## Per-model
 
-| Model | predicted TTFT (ms) | measured Σ (ms) | abs err % | n kernels |
-|---|---:|---:|---:|---:|
-| Llama-8B | 55.02 | 55.06 | 0.08% | 1365 |
-| Llama-70B _(held-out)_ | 384.89 | 393.35 | 2.15% | 3381 |
-| Qwen-72B _(held-out)_ | 390.47 | 399.80 | 2.33% | 3221 |
-| Qwen3.5-9B | 46.89 | 108.94 | 56.96% | 12973 |
-| Qwen3.5-27B | 128.89 | 269.15 | 52.11% | 25917 |
-| gpt-oss-20b | 24.12 | 128.27 | 81.19% | 1723 |
-| Mixtral-8x7B | 54.39 | 202.04 | 73.08% | 4376 |
-| **TOTAL** | **1084.68** | **1556.63** | **30.32%** | |
+| Model | arch | predicted TTFT (ms) | measured Σ (ms) | abs err % | n kernels |
+|---|---|---:|---:|---:|---:|
+| Llama-8B | supported | 55.02 | 55.06 | 0.08% | 1365 |
+| Llama-70B _(held-out)_ | supported | 384.75 | 393.35 | 2.19% | 3381 |
+| Qwen-72B _(held-out)_ | supported | 390.33 | 399.80 | 2.37% | 3221 |
+| Qwen3.5-9B | hybrid_attn | 46.86 | 108.94 | 56.98% | 12973 |
+| Qwen3.5-27B | hybrid_attn | 128.67 | 269.15 | 52.19% | 25917 |
+| gpt-oss-20b | moe | 24.12 | 128.27 | 81.19% | 1723 |
+| Mixtral-8x7B | moe | 54.39 | 202.04 | 73.08% | 4376 |
+| **supported aggregate** (3 rows) | | **830.10** | **848.22** | **Σ-err 2.14% · MAPE 1.55%** | |
+| _out-of-scope_ | | | | _2 moe, 2 hybrid_attn — excluded from headline_ | |
 
 ## Measured time breakdown by family (ms)
 
