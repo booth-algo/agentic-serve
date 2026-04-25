@@ -4,6 +4,12 @@ Reads:
     {prefix}.csv           — ncu long-format CSV from collect_flash.sh
     {prefix}.manifest.json — sweep manifest from sweep_flash.py
 
+v2 (2026-04-25): replaces broken positional 1:1 matching with SDPA-call
+grouping. FA2 dispatches 1-N kernels per F.scaled_dot_product_attention
+call (primary flash_fwd_kernel + optional splitkv + combine). This labeler
+groups consecutive kernels into SDPA calls, pairs warmup/measured calls,
+and sums gpu_time across all kernels in each call.
+
 Emits rows matching `labeler.py OUT_COLS` so they can be concatenated with
 the model-prefill `kernels_labeled.csv`.
 """
@@ -16,8 +22,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import ncu_loader
-from . import gpu_kernel_regex as gkr
 from .labeler import OUT_COLS, DTYPE_DEFAULT
 
 
@@ -25,6 +29,70 @@ _DTYPE_NORMALIZE = {
     "bfloat16": "bf16", "torch.bfloat16": "bf16", "bf16": "bf16",
     "float16":  "fp16", "torch.float16":  "fp16", "fp16": "fp16",
 }
+
+
+def _ktype(name: str) -> str:
+    if "splitkv_combine" in name:
+        return "combine"
+    if "splitkv_kernel" in name:
+        return "splitkv"
+    if "flash_fwd_kernel" in name:
+        return "primary"
+    return "other"
+
+
+def _pivot_long_to_wide(df: pd.DataFrame) -> list[dict]:
+    """Pivot ncu long-format (one row per metric) to one dict per kernel."""
+    by_id: dict[str, dict] = {}
+    id_order: list[str] = []
+    for _, row in df.iterrows():
+        kid = str(row["ID"])
+        if kid not in by_id:
+            id_order.append(kid)
+            by_id[kid] = {"Kernel Name": row["Kernel Name"]}
+        metric = row["Metric Name"]
+        try:
+            by_id[kid][metric] = float(str(row["Metric Value"]).replace(",", ""))
+        except (ValueError, TypeError):
+            by_id[kid][metric] = np.nan
+    return [by_id[kid] for kid in id_order]
+
+
+def _group_sdpa_calls(kernels: list[dict]) -> list[list[dict]]:
+    """Group consecutive kernels into SDPA calls.
+    A new call starts at each 'primary' kernel."""
+    calls: list[list[dict]] = []
+    current: list[dict] = []
+    for k in kernels:
+        t = _ktype(k["Kernel Name"])
+        if t == "primary" and current:
+            calls.append(current)
+            current = []
+        current.append(k)
+    if current:
+        calls.append(current)
+    return calls
+
+
+def _pair_warmup_measured(calls: list[list[dict]]) -> list[list[dict]]:
+    """Extract measured SDPA calls by pairing consecutive same-signature calls.
+    
+    Each config runs warmup + measured (REPS=1). Consecutive calls with the
+    same kernel-type signature are paired; the second (measured) is kept.
+    Unpaired calls are kept as-is (single ncu capture)."""
+    def sig(call):
+        return tuple(_ktype(k["Kernel Name"]) for k in call)
+    
+    measured: list[list[dict]] = []
+    i = 0
+    while i < len(calls):
+        if i + 1 < len(calls) and sig(calls[i]) == sig(calls[i + 1]):
+            measured.append(calls[i + 1])
+            i += 2
+        else:
+            measured.append(calls[i])
+            i += 1
+    return measured
 
 
 def _empty_row(source: str, gpu: str, dtype: str) -> dict:
@@ -38,51 +106,58 @@ def _empty_row(source: str, gpu: str, dtype: str) -> dict:
 
 
 def label_sweep(sweep_csv: Path, manifest_json: Path, gpu: str,
-                  source: str = "flash_sweep") -> pd.DataFrame:
+                source: str = "flash_sweep") -> pd.DataFrame:
     with open(manifest_json) as f:
         manifest = json.load(f)
-    invocations: list[dict] = manifest["invocations"]
+    configs: list[dict] = manifest["configs"]
     dtype = _DTYPE_NORMALIZE.get(manifest.get("dtype", "bf16"), DTYPE_DEFAULT)
 
-    df = ncu_loader.load(sweep_csv)
+    df = pd.read_csv(sweep_csv)
     if len(df) == 0:
         print(f"[!] empty sweep CSV: {sweep_csv}")
         return pd.DataFrame(columns=OUT_COLS)
 
-    pairs = df["Kernel Name"].fillna("").map(gkr.classify_kernel)
-    df["kernel_family"] = pairs.map(lambda p: p[1])
+    kernels = _pivot_long_to_wide(df)
+    flash_kernels = [k for k in kernels if _ktype(k["Kernel Name"]) != "other"]
 
-    flash = df[df["kernel_family"] == "flash_attn"].reset_index(drop=True)
+    calls = _group_sdpa_calls(flash_kernels)
+    measured = _pair_warmup_measured(calls)
 
-    n_flash, n_expected = len(flash), len(invocations)
-    print(f"[*] sweep flash kernels = {n_flash}, expected invocations = {n_expected}")
-    if n_flash == 0:
-        return pd.DataFrame(columns=OUT_COLS)
-    if n_flash != n_expected:
-        ratio = n_flash / max(n_expected, 1)
-        print(f"[!] mismatch; ratio flash/expected = {ratio:.3f} — may include fallback paths")
+    n_matched = min(len(measured), len(configs))
+    print(f"[*] {gpu}: {len(flash_kernels)} flash kernels -> {len(calls)} SDPA calls "
+          f"-> {len(measured)} measured -> {n_matched}/{len(configs)} configs matched")
 
-    n = min(n_flash, n_expected)
     rows: list[dict] = []
-    for i in range(n):
-        raw = flash.iloc[i]
-        m = invocations[i]
+    for i in range(n_matched):
+        cfg = configs[i]
+        call = measured[i]
         r = _empty_row(source, gpu, dtype)
-        r["kernel_name"] = raw.get("Kernel Name", "")
-        r["bs"] = int(m["bs"])
-        r["seq"] = int(m["seq"])
-        r["n_heads"] = int(m["n_heads"])
-        r["head_dim"] = int(m["head_dim"])
-        r["kv_heads"] = int(m["kv_heads"])
-        r["gpu_time_duration_ms"] = raw.get("gpu_time_duration_ms", np.nan)
-        r["launch_block_size"] = raw.get("launch_block_size", np.nan)
-        r["launch_grid_size"] = raw.get("launch_grid_size", np.nan)
-        r["launch_registers_per_thread"] = raw.get("launch_registers_per_thread", np.nan)
-        r["dram_bytes_sum"] = raw.get("dram_bytes_sum", np.nan)
+
+        primary = [k for k in call if _ktype(k["Kernel Name"]) == "primary"]
+        r["kernel_name"] = primary[0]["Kernel Name"] if primary else call[0]["Kernel Name"]
+        r["bs"] = int(cfg["bs"])
+        r["seq"] = int(cfg["seq"])
+        r["n_heads"] = int(cfg["n_heads"])
+        r["head_dim"] = int(cfg["head_dim"])
+        r["kv_heads"] = int(cfg["kv_heads"])
+
+        r["gpu_time_duration_ms"] = sum(
+            k.get("gpu__time_duration.sum", 0) for k in call
+        ) / 1000.0
+
+        total_dram = sum(k.get("dram__bytes.sum", 0) for k in call)
+        r["dram_bytes_sum"] = total_dram if total_dram > 0 else np.nan
+
+        if primary:
+            p = primary[0]
+            r["launch_block_size"] = p.get("launch__block_size", np.nan)
+            r["launch_grid_size"] = p.get("launch__grid_size", np.nan)
+            r["launch_registers_per_thread"] = p.get("launch__registers_per_thread", np.nan)
+
         rows.append(r)
 
     out = pd.DataFrame(rows, columns=OUT_COLS)
-    print(f"[+] labeled flash rows: {len(out)}")
+    print(f"[+] labeled {len(out)} flash rows (summed across multi-kernel SDPA calls)")
     return out
 
 
@@ -98,7 +173,7 @@ def main() -> None:
 
     prefix = Path(args.sweep_prefix)
     sweep_csv = Path(str(prefix) + ".csv") if not prefix.suffix else prefix.with_suffix(".csv")
-    manifest  = Path(str(prefix) + ".manifest.json") if not prefix.suffix else prefix.with_suffix(".manifest.json")
+    manifest = Path(str(prefix) + ".manifest.json") if not prefix.suffix else prefix.with_suffix(".manifest.json")
     if not sweep_csv.is_file():
         alt = Path(str(prefix) + ".csv")
         if alt.is_file():

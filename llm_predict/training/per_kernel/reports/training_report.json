@@ -2,14 +2,14 @@
   "A100": {
     "heldout_mape": {
       "gemm": 396.4594535004887,
-      "flash_attn": 3.5104502260427064,
+      "flash_attn": 2.7456165579344507,
       "elementwise": 13.732536183062749,
       "misc": 15.186435984188556
     },
     "aggregate_err_pct": {
-      "Llama-3.3-70B": 81.68626089069308,
-      "Llama-70B": 81.34337305240105,
-      "Qwen-72B": 77.5111778195454
+      "Llama-3.3-70B": 81.69315068078932,
+      "Llama-70B": 81.35024983972414,
+      "Qwen-72B": 77.51795810526775
     },
     "saved_pkls": [
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
@@ -21,13 +21,13 @@
   "RTX3090": {
     "heldout_mape": {
       "gemm": 15.64799765978061,
-      "flash_attn": 35.76723451946702,
+      "flash_attn": 1.1068823962039893,
       "elementwise": 18.989324590834254,
       "misc": 18.481483967260175
     },
     "aggregate_err_pct": {
-      "Llama-70B": 0.06853536869348617,
-      "Qwen-72B": 0.4686183931631653
+      "Llama-70B": 0.0774145509210991,
+      "Qwen-72B": 0.3250229388678918
     },
     "saved_pkls": [
       "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_kernel/perkernel_gemm_shape_v2.pkl",

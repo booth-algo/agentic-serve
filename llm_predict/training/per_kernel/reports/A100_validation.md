@@ -10,15 +10,15 @@
 
 | Model | arch | predicted TTFT (ms) | measured Σ (ms) | abs err % | n kernels |
 |---|---|---:|---:|---:|---:|
-| Llama-8B | supported | 36.44 | 26.48 | 37.59% | 1461 |
-| Llama-70B _(held-out)_ | supported | 181.23 | 178.85 | 1.33% | 3381 |
-| Llama-3.3-70B _(held-out)_ | supported | 181.23 | 178.51 | 1.53% | 3381 |
-| Qwen-72B _(held-out)_ | supported | 178.90 | 181.39 | 1.37% | 3381 |
-| Qwen3.5-9B | hybrid_attn | 31.12 | 105.21 | 70.42% | 13061 |
-| Qwen3.5-27B | hybrid_attn | 56.84 | 233.93 | 75.70% | 25917 |
-| gpt-oss-20b | moe | 14.81 | 60.34 | 75.45% | 1723 |
+| Llama-8B | supported | 36.44 | 26.48 | 37.58% | 1461 |
+| Llama-70B | supported | 181.25 | 178.85 | 1.34% | 3381 |
+| Llama-3.3-70B _(held-out)_ | supported | 181.25 | 178.51 | 1.53% | 3381 |
+| Qwen-72B _(held-out)_ | supported | 178.91 | 181.39 | 1.37% | 3381 |
+| Qwen3.5-9B | hybrid_attn | 31.20 | 105.21 | 70.35% | 13061 |
+| Qwen3.5-27B | hybrid_attn | 56.99 | 233.93 | 75.64% | 25917 |
+| gpt-oss-20b | moe | 14.67 | 60.34 | 75.69% | 1723 |
 | Mixtral-8x7B | moe | 83.64 | 109.87 | 23.87% | 4665 |
-| **supported aggregate** (4 rows) | | **577.80** | **565.23** | **Σ-err 2.22% · MAPE 10.46%** | |
+| **supported aggregate** (4 rows) | | **577.84** | **565.23** | **Σ-err 2.23% · MAPE 10.46%** | |
 | _out-of-scope_ | | | | _2 moe, 2 hybrid_attn — excluded from headline_ | |
 
 ## Measured time breakdown by family (ms)
@@ -32,6 +32,7 @@
 | Qwen-72B      |  3.204 |  3.611 |        15.032 |        1.601 |  155.235 |    1.705 |           1.004 |
 | Qwen3.5-27B   | 62.383 |  0.994 |        56.144 |        0.476 |   69.694 |   43.36  |           0.883 |
 | Qwen3.5-9B    | 30.159 |  0.491 |        26.831 |        0.206 |   25.178 |   21.062 |           1.281 |
+| flash_sweep   |  0     |  0     |         0     |       14.505 |    0     |    0     |           0     |
 | gpt-oss-20b   |  2.203 |  1.366 |        18.247 |        0     |   35.632 |    2.402 |           0.493 |
 | misc_sweep    |  2.452 |  0.732 |         0     |        0     |    0     |    7.429 |           0     |
 | roofline      |  0     |  0     |         0     |        0     | 1715.66  |    0     |           0     |
