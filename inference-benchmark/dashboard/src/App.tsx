@@ -14,6 +14,7 @@ import { RooflinePage } from './components/RooflinePage';
 import { CoveragePage } from './components/CoveragePage';
 import { ProfilingPage } from './components/ProfilingPage';
 import { useProfilingState } from './hooks/useProfilingState';
+import { usePredictorCoverage } from './hooks/usePredictorCoverage';
 import type { TabId } from './types';
 import './index.css';
 
@@ -33,6 +34,7 @@ function App() {
   } = useData();
   const { sweepState } = useSweepState();
   const { profilingState, loading: profilingLoading } = useProfilingState();
+  const { predictorCoverage, loading: predictorCoverageLoading } = usePredictorCoverage();
 
   const [activePage, setActivePage] = useState<PageId>('benchmark');
   const [activeTab, setActiveTab] = useState<TabId>('latency');
@@ -60,7 +62,13 @@ function App() {
       ) : activePage === 'roofline' ? (
         <RooflinePage />
       ) : activePage === 'coverage' ? (
-        <CoveragePage allData={allData} sweepState={sweepState} loading={loading} />
+        <CoveragePage
+          allData={allData}
+          sweepState={sweepState}
+          predictorCoverage={predictorCoverage}
+          predictorCoverageLoading={predictorCoverageLoading}
+          loading={loading}
+        />
       ) : loading ? (
         <div className="flex h-64 items-center justify-center">
           <div className="text-[#8b949e]">Loading benchmark data...</div>

@@ -1,0 +1,567 @@
+{
+  "generated_at": "2026-04-25T01:03:24.396828+00:00",
+  "gpus": [
+    "A100",
+    "RTX2080Ti",
+    "RTX3090"
+  ],
+  "models": [
+    "Llama-3.3-70B",
+    "Llama-70B",
+    "Llama-8B",
+    "Mixtral",
+    "Mixtral-8x7B",
+    "Qwen-72B",
+    "Qwen-7B",
+    "Qwen3.5-27B",
+    "Qwen3.5-9B",
+    "gpt-oss-20b"
+  ],
+  "expected_ops": [
+    "attn",
+    "ffn",
+    "norm_post",
+    "norm_pre"
+  ],
+  "per_kernel": {
+    "shared": [
+      {
+        "gpu": "A100",
+        "roofline_rows": 3570,
+        "misc_rows": 364,
+        "sweep_version": "post-fix",
+        "expected_roofline": 3500,
+        "expected_misc": 350
+      },
+      {
+        "gpu": "RTX2080Ti",
+        "roofline_rows": 3570,
+        "misc_rows": 0,
+        "sweep_version": "post-fix",
+        "expected_roofline": 3500,
+        "expected_misc": 350
+      },
+      {
+        "gpu": "RTX3090",
+        "roofline_rows": 1071,
+        "misc_rows": 364,
+        "sweep_version": "pre-fix",
+        "expected_roofline": 3500,
+        "expected_misc": 350
+      }
+    ],
+    "cells": [
+      {
+        "gpu": "A100",
+        "model": "Llama-3.3-70B",
+        "prefill_rows": 3381,
+        "flash_rows": 0,
+        "total_rows": 3381,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "A100",
+        "model": "Llama-70B",
+        "prefill_rows": 3381,
+        "flash_rows": 0,
+        "total_rows": 3381,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "A100",
+        "model": "Llama-8B",
+        "prefill_rows": 1461,
+        "flash_rows": 0,
+        "total_rows": 1461,
+        "held_out": false,
+        "status": "partial",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "A100",
+        "model": "Mixtral-8x7B",
+        "prefill_rows": 4665,
+        "flash_rows": 0,
+        "total_rows": 4665,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "A100",
+        "model": "Qwen-72B",
+        "prefill_rows": 3381,
+        "flash_rows": 0,
+        "total_rows": 3381,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "A100",
+        "model": "Qwen3.5-27B",
+        "prefill_rows": 25917,
+        "flash_rows": 0,
+        "total_rows": 25917,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "A100",
+        "model": "Qwen3.5-9B",
+        "prefill_rows": 13061,
+        "flash_rows": 0,
+        "total_rows": 13061,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "A100",
+        "model": "gpt-oss-20b",
+        "prefill_rows": 1723,
+        "flash_rows": 0,
+        "total_rows": 1723,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "RTX2080Ti",
+        "model": "Llama-8B",
+        "prefill_rows": 2037,
+        "flash_rows": 0,
+        "total_rows": 2037,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "RTX2080Ti",
+        "model": "Qwen3.5-9B",
+        "prefill_rows": 13061,
+        "flash_rows": 0,
+        "total_rows": 13061,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "RTX3090",
+        "model": "Llama-70B",
+        "prefill_rows": 3381,
+        "flash_rows": 0,
+        "total_rows": 3381,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "RTX3090",
+        "model": "Llama-8B",
+        "prefill_rows": 1365,
+        "flash_rows": 0,
+        "total_rows": 1365,
+        "held_out": false,
+        "status": "partial",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "RTX3090",
+        "model": "Mixtral-8x7B",
+        "prefill_rows": 4376,
+        "flash_rows": 0,
+        "total_rows": 4376,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "RTX3090",
+        "model": "Qwen-72B",
+        "prefill_rows": 3221,
+        "flash_rows": 0,
+        "total_rows": 3221,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "RTX3090",
+        "model": "Qwen3.5-27B",
+        "prefill_rows": 25917,
+        "flash_rows": 0,
+        "total_rows": 25917,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "RTX3090",
+        "model": "Qwen3.5-9B",
+        "prefill_rows": 12973,
+        "flash_rows": 0,
+        "total_rows": 12973,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      },
+      {
+        "gpu": "RTX3090",
+        "model": "gpt-oss-20b",
+        "prefill_rows": 1723,
+        "flash_rows": 0,
+        "total_rows": 1723,
+        "held_out": false,
+        "status": "present",
+        "expected_prefill": 1500,
+        "expected_flash": 250
+      }
+    ]
+  },
+  "per_op": [
+    {
+      "gpu": "A100",
+      "model": "Llama-3.3-70B",
+      "rows_per_op": {
+        "attn": 512,
+        "ffn": 512,
+        "norm_pre": 512,
+        "norm_post": 512
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 2048,
+      "grid_cells": 512,
+      "density": "dense",
+      "held_out": false,
+      "status": "present",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "A100",
+      "model": "Llama-70B",
+      "rows_per_op": {
+        "attn": 512,
+        "ffn": 512,
+        "norm_pre": 512,
+        "norm_post": 512
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 2048,
+      "grid_cells": 512,
+      "density": "dense",
+      "held_out": false,
+      "status": "present",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "A100",
+      "model": "Llama-8B",
+      "rows_per_op": {
+        "attn": 533,
+        "ffn": 533,
+        "norm_pre": 533,
+        "norm_post": 533
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 2132,
+      "grid_cells": 22,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "A100",
+      "model": "Mixtral",
+      "rows_per_op": {
+        "attn": 533,
+        "ffn": 533,
+        "norm_pre": 533,
+        "norm_post": 533
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 2132,
+      "grid_cells": 22,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "A100",
+      "model": "Qwen-72B",
+      "rows_per_op": {
+        "attn": 533,
+        "ffn": 533,
+        "norm_pre": 533,
+        "norm_post": 533
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 2132,
+      "grid_cells": 22,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "A100",
+      "model": "gpt-oss-20b",
+      "rows_per_op": {
+        "attn": 533,
+        "ffn": 533,
+        "norm_pre": 533,
+        "norm_post": 533
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 2132,
+      "grid_cells": 22,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Llama-8B",
+      "rows_per_op": {
+        "attn": 19,
+        "ffn": 19,
+        "norm_pre": 19,
+        "norm_post": 19
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 76,
+      "grid_cells": 19,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Qwen-7B",
+      "rows_per_op": {
+        "attn": 19,
+        "ffn": 19,
+        "norm_pre": 19,
+        "norm_post": 19
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 76,
+      "grid_cells": 19,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "RTX2080Ti",
+      "model": "Qwen3.5-9B",
+      "rows_per_op": {
+        "ffn": 19,
+        "norm_pre": 19,
+        "norm_post": 19
+      },
+      "ops_present": [
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [
+        "attn"
+      ],
+      "total_rows": 57,
+      "grid_cells": 19,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Llama-8B",
+      "rows_per_op": {
+        "attn": 19,
+        "ffn": 19,
+        "norm_pre": 19,
+        "norm_post": 19
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 76,
+      "grid_cells": 19,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Mixtral",
+      "rows_per_op": {
+        "attn": 19,
+        "ffn": 19,
+        "norm_pre": 19,
+        "norm_post": 19
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 76,
+      "grid_cells": 19,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Qwen-72B",
+      "rows_per_op": {
+        "attn": 19,
+        "ffn": 19,
+        "norm_pre": 19,
+        "norm_post": 19
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 76,
+      "grid_cells": 19,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "Qwen3.5-9B",
+      "rows_per_op": {
+        "ffn": 19,
+        "norm_pre": 19,
+        "norm_post": 19
+      },
+      "ops_present": [
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [
+        "attn"
+      ],
+      "total_rows": 57,
+      "grid_cells": 19,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    },
+    {
+      "gpu": "RTX3090",
+      "model": "gpt-oss-20b",
+      "rows_per_op": {
+        "attn": 19,
+        "ffn": 19,
+        "norm_pre": 19,
+        "norm_post": 19
+      },
+      "ops_present": [
+        "attn",
+        "ffn",
+        "norm_post",
+        "norm_pre"
+      ],
+      "ops_missing": [],
+      "total_rows": 76,
+      "grid_cells": 19,
+      "density": "thin",
+      "held_out": false,
+      "status": "partial",
+      "expected_grid": 512
+    }
+  ]
+}
