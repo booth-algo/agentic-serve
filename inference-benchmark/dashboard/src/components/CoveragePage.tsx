@@ -286,16 +286,7 @@ export function CoveragePage({
     return { groups: hwGroups, hardwareList: expectedHw, sweepMtime: sweepState?.generated_at ?? null };
   }, [allData, sweepState]);
 
-  const [expandedHw, setExpandedHw] = useState<Set<string>>(() => {
-    // Auto-expand HW groups that have any active status (running/skipped/partial).
-    const set = new Set<string>();
-    for (const g of groups) {
-      if (g.summary.running > 0 || g.summary.skipped > 0 || g.summary.partial > 0) {
-        set.add(g.hardware);
-      }
-    }
-    return set;
-  });
+  const [expandedHw, setExpandedHw] = useState<Set<string>>(new Set());
   const [expandedModel, setExpandedModel] = useState<Set<string>>(new Set());
 
   const toggleHw = (hw: string) => {
@@ -390,8 +381,8 @@ export function CoveragePage({
         <span className="flex items-center gap-1.5"><StatusBadge kind="infeasible" />infeasible</span>
         <span className="flex items-center gap-1.5"><StatusBadge kind="untested" />untested</span>
         <span className="ml-auto flex items-center gap-3 font-mono">
-          <button onClick={expandAll} className="rounded border border-[#30363d] px-2 py-0.5 text-[11px] text-[#c9d1d9] hover:border-[#58a6ff] hover:text-[#58a6ff]">expand all</button>
-          <button onClick={collapseAll} className="rounded border border-[#30363d] px-2 py-0.5 text-[11px] text-[#c9d1d9] hover:border-[#58a6ff] hover:text-[#58a6ff]">collapse all</button>
+          <button onClick={expandAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1 text-[11px] font-medium text-[#c9d1d9] shadow-sm transition-all hover:border-[#58a6ff] hover:bg-[#58a6ff]/10 hover:text-[#58a6ff] active:scale-95">▼ Expand All</button>
+          <button onClick={collapseAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1 text-[11px] font-medium text-[#c9d1d9] shadow-sm transition-all hover:border-[#f97583] hover:bg-[#f97583]/10 hover:text-[#f97583] active:scale-95">▲ Collapse All</button>
           <span>hardware: {hardwareList.length}</span>
           {sweepMtime && <span>· sweep-state: {new Date(sweepMtime).toLocaleTimeString()}</span>}
         </span>
