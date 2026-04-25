@@ -10,12 +10,12 @@
 
 | Model | arch | backend | ISL | OSL | bs | pred TTFT | meas TTFT | TTFT err | pred TPOT | meas TPOT | TPOT err | pred E2EL | meas E2EL | E2EL err |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Llama-8B | supported | vllm | 113 | 158 | 1 | 279.36 | 69.11 | 304.2% | 63.87 | 32.72 | 95.2% | 10370.23 | 5266.87 | 96.9% |
+| Llama-8B | supported | vllm | 113 | 158 | 1 | 348.16 | 69.11 | 403.8% | 62.51 | 32.72 | 91.0% | 10224.30 | 5266.87 | 94.1% |
 
 ## Summary (supported architectures only)
 
 | Metric | MAPE | n rows |
 |---|---:|---:|
-| TTFT | 304.24% | 1 |
-| TPOT | 95.17% | 1 |
-| E2EL | 96.90% | 1 |
+| TTFT | 403.80% | 1 |
+| TPOT | 91.02% | 1 |
+| E2EL | 94.12% | 1 |

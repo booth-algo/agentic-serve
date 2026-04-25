@@ -6,7 +6,8 @@
 
 | GPU | n_train | n_heldout | pool | heldout | MAPE |
 |---|---:|---:|---|---|---:|
-| A100 | 8957 | 4180 | Llama-70B, Llama-8B, Mixtral, Qwen3.5-9B, gpt-oss-20b | Llama-3.3-70B, Qwen-72B | 26.64% |
+| A100 | 8305 | 152 | Llama-70B, Llama-8B, Mixtral, Qwen3.5-9B, gpt-oss-20b | Llama-3.3-70B, Qwen-72B | 57.73% |
+| RTX2080Ti | 133 | 76 | Llama-8B, Qwen3.5-9B | Qwen-7B | 96.59% |
 
 ## Per-heldout-model MAPE
 
@@ -14,8 +15,14 @@
 
 | held-out model | MAPE |
 |---|---:|
-| Llama-3.3-70B | 15.14% |
-| Qwen-72B | 37.68% |
+| Llama-3.3-70B | 57.57% |
+| Qwen-72B | 57.88% |
+
+### RTX2080Ti
+
+| held-out model | MAPE |
+|---|---:|
+| Qwen-7B | 96.59% |
 
 ## LOMO cross-validation
 
@@ -23,11 +30,19 @@
 
 | held-out | n_train | n_test | MAPE |
 |---|---:|---:|---:|
-| Llama-70B | 6797 | 2160 | 42.82% |
-| Llama-8B | 6713 | 2244 | 18.74% |
-| Mixtral | 6713 | 2244 | 30.50% |
-| Qwen3.5-9B | 8876 | 81 | 43.31% |
-| gpt-oss-20b | 6729 | 2228 | 51.70% |
+| Llama-70B | 8081 | 224 | 61.59% |
+| Llama-8B | 6145 | 2160 | 22.41% |
+| Mixtral | 6145 | 2160 | 14.31% |
+| Qwen3.5-9B | 6688 | 1617 | 20.14% |
+| gpt-oss-20b | 6161 | 2144 | 53.50% |
+
+### RTX2080Ti
+
+| held-out | n_train | n_test | MAPE |
+|---|---:|---:|---:|
+| Llama-8B | 45 | 88 | 124.09% |
+| Qwen3.5-9B | 88 | 45 | 79.80% |
 
 ## Saved pkls
 - **A100**: `/home/kevinlau/agentic-serve/llm_predict/profiling/data/A100/trained/per_op/perop_v5_shape.pkl`
+- **RTX2080Ti**: `/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX2080Ti/trained/per_op/perop_v5_shape.pkl`
