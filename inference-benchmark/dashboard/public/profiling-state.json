@@ -654,12 +654,18 @@
       }
     },
     "per_op": {
-      "H100": {
-        "heldout_mape": null,
+      "RTX3090": {
+        "heldout_mape": 42.266252699689396,
         "pool_models": [
-          "Llama-8B"
+          "Llama-70B",
+          "Llama-8B",
+          "Mixtral",
+          "Qwen3.5-9B",
+          "gpt-oss-20b"
         ],
-        "heldout_models": []
+        "heldout_models": [
+          "Qwen-72B"
+        ]
       }
     },
     "wallclock": {
@@ -917,6 +923,86 @@
           ]
         }
       },
+      "RTX3090": {
+        "chat-short": {
+          "mape": {
+            "ttft": 43.14,
+            "tpot": 65.56,
+            "e2el": 63.09
+          },
+          "rows": [
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 127,
+              "osl": 150,
+              "bs": 1,
+              "pred_ttft_ms": 54.29,
+              "meas_ttft_ms": 37.93,
+              "ttft_err_pct": 43.1,
+              "pred_tpot_ms": 32.71,
+              "meas_tpot_ms": 19.75,
+              "tpot_err_pct": 65.6,
+              "pred_e2el_ms": 4960.19,
+              "meas_e2el_ms": 3041.37,
+              "e2el_err_pct": 63.1
+            }
+          ]
+        },
+        "chat-medium": {
+          "mape": {
+            "ttft": 51.26,
+            "tpot": 65.16,
+            "e2el": 71.0
+          },
+          "rows": [
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 120,
+              "osl": 238,
+              "bs": 1,
+              "pred_ttft_ms": 53.67,
+              "meas_ttft_ms": 35.48,
+              "ttft_err_pct": 51.3,
+              "pred_tpot_ms": 32.8,
+              "meas_tpot_ms": 19.86,
+              "tpot_err_pct": 65.2,
+              "pred_e2el_ms": 7859.67,
+              "meas_e2el_ms": 4596.41,
+              "e2el_err_pct": 71.0
+            }
+          ]
+        },
+        "chat-long": {
+          "mape": {
+            "ttft": 48.13,
+            "tpot": 65.06,
+            "e2el": 70.63
+          },
+          "rows": [
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 218,
+              "osl": 288,
+              "bs": 1,
+              "pred_ttft_ms": 61.83,
+              "meas_ttft_ms": 41.74,
+              "ttft_err_pct": 48.1,
+              "pred_tpot_ms": 32.86,
+              "meas_tpot_ms": 19.91,
+              "tpot_err_pct": 65.1,
+              "pred_e2el_ms": 9525.35,
+              "meas_e2el_ms": 5582.54,
+              "e2el_err_pct": 70.6
+            }
+          ]
+        }
+      },
       "RTX2080Ti": {
         "chat-short": {
           "mape": {
@@ -1125,6 +1211,86 @@
               "pred_e2el_ms": 8419.65,
               "meas_e2el_ms": 3920.65,
               "e2el_err_pct": 114.8
+            }
+          ]
+        }
+      },
+      "RTX3090": {
+        "chat-short": {
+          "mape": {
+            "ttft": 115.29,
+            "tpot": 255.57,
+            "e2el": 249.11
+          },
+          "rows": [
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 127,
+              "osl": 150,
+              "bs": 1,
+              "pred_ttft_ms": 81.65,
+              "meas_ttft_ms": 37.93,
+              "ttft_err_pct": 115.3,
+              "pred_tpot_ms": 70.24,
+              "meas_tpot_ms": 19.75,
+              "tpot_err_pct": 255.6,
+              "pred_e2el_ms": 10617.66,
+              "meas_e2el_ms": 3041.37,
+              "e2el_err_pct": 249.1
+            }
+          ]
+        },
+        "chat-medium": {
+          "mape": {
+            "ttft": 129.51,
+            "tpot": 254.35,
+            "e2el": 266.13
+          },
+          "rows": [
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 120,
+              "osl": 238,
+              "bs": 1,
+              "pred_ttft_ms": 81.44,
+              "meas_ttft_ms": 35.48,
+              "ttft_err_pct": 129.5,
+              "pred_tpot_ms": 70.37,
+              "meas_tpot_ms": 19.86,
+              "tpot_err_pct": 254.3,
+              "pred_e2el_ms": 16828.94,
+              "meas_e2el_ms": 4596.41,
+              "e2el_err_pct": 266.1
+            }
+          ]
+        },
+        "chat-long": {
+          "mape": {
+            "ttft": 143.42,
+            "tpot": 254.26,
+            "e2el": 265.65
+          },
+          "rows": [
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 218,
+              "osl": 288,
+              "bs": 1,
+              "pred_ttft_ms": 101.61,
+              "meas_ttft_ms": 41.74,
+              "ttft_err_pct": 143.4,
+              "pred_tpot_ms": 70.52,
+              "meas_tpot_ms": 19.91,
+              "tpot_err_pct": 254.3,
+              "pred_e2el_ms": 20412.79,
+              "meas_e2el_ms": 5582.54,
+              "e2el_err_pct": 265.7
             }
           ]
         }
