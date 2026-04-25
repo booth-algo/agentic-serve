@@ -654,29 +654,12 @@
       }
     },
     "per_op": {
-      "A100": {
-        "heldout_mape": 57.726944622224664,
+      "H100": {
+        "heldout_mape": null,
         "pool_models": [
-          "Llama-70B",
-          "Llama-8B",
-          "Mixtral",
-          "Qwen3.5-9B",
-          "gpt-oss-20b"
+          "Llama-8B"
         ],
-        "heldout_models": [
-          "Llama-3.3-70B",
-          "Qwen-72B"
-        ]
-      },
-      "RTX2080Ti": {
-        "heldout_mape": 96.59434060166213,
-        "pool_models": [
-          "Llama-8B",
-          "Qwen3.5-9B"
-        ],
-        "heldout_models": [
-          "Qwen-7B"
-        ]
+        "heldout_models": []
       }
     },
     "wallclock": {
