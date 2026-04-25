@@ -109,4 +109,10 @@ def predict_ttft_batch(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
                      for s in seqs], dtype=float)
 
 
-__all__ = ["predict_layer_ms", "predict_ttft_ms", "predict_ttft_batch"]
+# Naming-convention alias (locked 2026-04-25; see .claude/paper/predictor_roadmap.md):
+# `microbench_ttft` is the prefill-only TTFT track. Use the alias in new code so
+# the intent is explicit; the legacy `predict_ttft_ms` stays for backwards compat.
+predict_microbench_ttft = predict_ttft_ms
+
+__all__ = ["predict_layer_ms", "predict_ttft_ms", "predict_microbench_ttft",
+           "predict_ttft_batch"]
