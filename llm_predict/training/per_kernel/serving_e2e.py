@@ -33,12 +33,12 @@ from . import composer, model_specs
 #         (bandwidth approx underpredicts; missing dispatch/sync overhead)
 #   RTX2080Ti: chat-short Llama-8B conc=1 → 0.605
 #         (per-op decode_attn pkl overpredicts; torch.profiler overhead)
-#   RTX3090: not yet calibrated, interpolated from A100 (similar arch)
+#   RTX3090: mean across chat-{short,medium,long} Llama-8B conc=1 -> 0.832
 # Applied multiplicatively to predicted decode_ms. Option 2 (ncu decode
 # profiling) will eliminate the need for this factor.
 _DECODE_CORRECTION: dict[str, float] = {
     "A100": 1.497,
-    "RTX3090": 1.40,
+    "RTX3090": 0.832,
     "RTX2080Ti": 0.605,
     "H100": 1.50,
 }
