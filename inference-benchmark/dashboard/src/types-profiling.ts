@@ -22,9 +22,28 @@ export interface PerOpResults {
   pool_models?: string[];
   heldout_models?: string[];
 }
+export interface WallclockRow {
+  model: string;
+  arch: string;
+  backend: string;
+  profile: string;
+  avg_seq: number;
+  predicted_ms: number;
+  measured_ms: number;
+  abs_err_pct: number;
+  ncu_sum_ms?: number;
+  overhead_pct?: number;
+  median_tpot_ms?: number;
+}
+export interface WallclockResults {
+  target_seq: number;
+  supported_mape?: number;
+  rows: WallclockRow[];
+}
 export interface PredictorResults {
   per_kernel?: Record<string, PerKernelResults>;
   per_op?: Record<string, PerOpResults>;
+  wallclock?: Record<string, WallclockResults>;
 }
 
 export interface ProfilingState {
