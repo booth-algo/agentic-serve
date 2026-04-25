@@ -19,7 +19,7 @@ interface CoveragePageProps {
 }
 
 const SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
-const MULTI_CONCS = [5, 10, 20, 40, 80, 120, 160];
+const MULTI_CONCS = [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320];
 
 const ALL_SINGLE_PROFILES = [
   'chat-short', 'chat-medium', 'chat-long',
@@ -27,7 +27,8 @@ const ALL_SINGLE_PROFILES = [
 ];
 const ALL_MULTI_PROFILES = [
   'chat-multiturn-short', 'chat-multiturn-medium', 'chat-multiturn-long',
-  'terminalbench-multiturn-short',
+  'terminalbench-multiturn-short', 'terminalbench-multiturn-medium',
+  'swebench-multiturn-short', 'swebench-multiturn-medium',
   'osworld-multiturn-short', 'osworld-multiturn-medium', 'osworld-multiturn-long',
 ];
 
