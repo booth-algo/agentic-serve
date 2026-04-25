@@ -341,7 +341,7 @@ function main() {
       const engineVersion = readEngineVersion(relDir) ?? FALLBACK_ENGINE_VERSIONS[backend];
 
       results.push({
-        config: { ...raw.config, backend, profile, concurrency },
+        config: { ...raw.config, backend, profile, concurrency, mode },
         summary: raw.summary,
         hardware,
         quant,
