@@ -21,7 +21,7 @@ models across A100 / RTX 3090 / RTX 2080 Ti:
 These 6 all fit the single predictor family structure: every transformer
 layer has the same op composition — `{norm, q_proj, k_proj, v_proj,
 flash_attn, o_proj, norm, gate_proj, up_proj, down_proj}` — so an
-e2e latency estimate is just `Σ per-op × n_layers + fixed_overhead`.
+TTFT (prefill) latency estimate is just `Σ per-op × n_layers + fixed_overhead`.
 
 ## Excluded: Qwen3.5 (hybrid attention)
 
@@ -60,7 +60,7 @@ via triton's `chunk_gated_delta_rule` kernels. The current
 `chunk_gated_delta_rule`, `chunk_scan_fwd`, and the Qwen3.5-specific
 `delta_rule_recurrent` kernels) once we collect ncu data from at least
 3 hybrid-attention models. Until then, Qwen3.5 stays out of the per-kernel
-predictor. Per-op and e2e predictors can still be fit to Qwen3.5 separately
+predictor. Per-op and per-kernel (microbench_ttft) predictors can still be fit to Qwen3.5 separately
 if needed — they don't share this constraint.
 
 ## Other Pipeline Decisions (2026-04-21)
@@ -238,7 +238,7 @@ rmsnorm on 3090 is bandwidth-bound and exec'es in ~1.5 us. The bulk is
 torch.profiler sync + dispatch + event-record overhead per op.
 
 Composer composition (4 ops x 32 layers) amplifies this to ~2x wall-
-clock. This is the root cause of the 96.92% per-op e2e MAPE on 3090
+clock. This is the root cause of the 96.92% per-op composed-TTFT MAPE on 3090
 when initially compared against wall-clock at seq=167 - not a
 predictor bug, but a measurement-granularity mismatch between
 torch.profiler-based per-op data and ncu-based per-kernel data.
