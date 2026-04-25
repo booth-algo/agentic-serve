@@ -1,20 +1,27 @@
 """Paper-facing validation — per-GPU MAPE + aggregate layer error.
 
-Two comparison modes:
+Three comparison modes:
 
 1. **ncu-self-consistency** (default):
    `composer.predict_ttft_ms(model, seq=128)` vs sum-of-kernel-times from
    `kernels_labeled.csv` for every `(gpu, model)`. Proves the kernel
    predictor reproduces the ncu numbers it was trained on.
 
-2. **wall-clock** (`--vs-measured`):
+2. **microbench_ttft** (`--mode microbench_ttft` or legacy `--vs-measured`):
    `composer.predict_ttft_ms(model, seq=avg_input_tokens, bs=concurrency)`
    vs `summary.median_ttft_ms` from the inference-benchmark `data.json`
    dump. Adds a third column that captures launch overhead + stream
    gaps + CPU dispatch — everything the ncu-self-consistency view
    misses.
 
-The two-column "overhead %" on the wall-clock report is
+3. **serving_e2e** (`--mode serving_e2e --profile <name>`):
+   `serving_e2e.predict_serving_e2e(model, isl, osl, bs)` vs
+   `summary.{median_ttft_ms, median_tpot_ms, median_e2el_ms}` from
+   `data.json`, filtered to the specified workload profile (e.g.
+   chat-short, chat-medium, chat-long). Validates the full ISL/OSL →
+   TTFT + TPOT + E2EL prediction pipeline.
+
+The two-column "overhead %" on the microbench_ttft report is
 `(wall_clock_ms - kernel_sum_ms) / wall_clock_ms * 100` and represents
 the fraction of real TTFT we don't model with kernels.
 
@@ -22,10 +29,10 @@ CLI
 ---
     python -m llm_predict.training.per_kernel.validate --gpu A100
     python -m llm_predict.training.per_kernel.validate --vs-measured
-    # Apples-to-apples against the ncu seq=128 sweep — requires benchmark
-    # runs of the `fixed-seq128` workload profile so avg_seq ≈ 128:
     python -m llm_predict.training.per_kernel.validate --vs-measured \\
         --target-seq 128 --seq-tolerance 16
+    python -m llm_predict.training.per_kernel.validate \\
+        --mode serving_e2e --profile chat-medium --gpu A100
 """
 from __future__ import annotations
 
@@ -37,7 +44,7 @@ import pandas as pd
 
 from llm_predict.predictors.per_kernel.predictor import PerKernelPredictor
 
-from . import composer, model_specs
+from . import composer, model_specs, serving_e2e
 
 
 # Inverse of _DIR_TO_SHORT — CSV `model` column (short) → dir_name for ModelConfig.
@@ -79,14 +86,6 @@ _MODELSHORT_TO_DIR = {
 
 
 # ── Composer scope ──────────────────────────────────────────────────────────
-# `composer.predict_ttft_ms` has known gaps on two architecture classes:
-#   - `moe`         (cfg.is_moe): expert dispatch not modelled.
-#   - `hybrid_attn` (Qwen3.5 family): the composer assumes full attention at
-#     every layer, but Qwen3.5 is hybrid (1/4 full + 3/4 linear) — it will
-#     over-predict flash_attn 4×. See composer.predict_layer_ms and the
-#     note in model_specs._FALLBACK for Qwen3.5-9B.
-# Rows in these classes are reported separately so the headline MAPE
-# reflects only architectures the composer fully supports.
 _HYBRID_ATTN_MODELS: set[str] = {"Qwen3.5-9B", "Qwen3.5-27B"}
 
 
@@ -182,24 +181,26 @@ def validate_gpu(df: pd.DataFrame, gpu: str, report_path: Path, seq: int = 128) 
     )
 
 
-# ── wall-clock (vs measured TTFT) validation ────────────────────────────────
+# ── microbench_ttft (wall-clock vs measured TTFT) validation ─────────────────
 
 def _load_measured_rows(data_json_path: Path,
                          gpu: str,
                          concurrency: int = 1,
                          target_seq: int | None = None,
-                         seq_tolerance: int = 16) -> list[dict]:
-    """Return measured-ttft rows from data.json matching a given GPU/concurrency.
+                         seq_tolerance: int = 16,
+                         profile_filter: str | None = None) -> list[dict]:
+    """Return measured rows from data.json matching a given GPU/concurrency.
 
     If `target_seq` is given, rows are restricted to profiles whose
     per-request `avg_seq` lies within ±`seq_tolerance` tokens of it.
-    This is how the apples-to-apples comparison against the ncu
-    prefill_seq128_bs1 sweep is built: run a `fixed-seq128` benchmark
-    profile, then `--vs-measured --target-seq 128`.
+
+    If `profile_filter` is given, only rows matching that profile name
+    are returned (used by serving_e2e mode).
 
     Each returned dict has:
         modelShort, backend, profile, concurrency,
-        avg_seq, measured_ttft_ms, median_tpot_ms, successful_requests
+        avg_isl, avg_osl, measured_ttft_ms, median_tpot_ms,
+        median_e2el_ms, successful_requests
     """
     with open(data_json_path) as f:
         raw = json.load(f)
@@ -217,25 +218,35 @@ def _load_measured_rows(data_json_path: Path,
         ms = r.get("modelShort", "")
         if ms not in _MODELSHORT_TO_DIR:
             continue
+        if profile_filter is not None and cfg.get("profile", "") != profile_filter:
+            continue
         succ = int(summ.get("successful_requests", 0) or 0)
         if succ <= 0:
             continue
         total_in = float(summ.get("total_input_tokens", 0) or 0)
+        total_out = float(summ.get("total_output_tokens", 0) or 0)
         median_ttft = summ.get("median_ttft_ms")
         if median_ttft is None or total_in <= 0:
             continue
-        avg_seq = total_in / succ
-        if target_seq is not None and abs(avg_seq - target_seq) > seq_tolerance:
+        avg_isl = total_in / succ
+        avg_osl = total_out / succ if total_out > 0 else 0.0
+        if target_seq is not None and abs(avg_isl - target_seq) > seq_tolerance:
             continue
         rows.append({
             "modelShort": ms,
             "backend": cfg.get("backend", ""),
             "profile": cfg.get("profile", ""),
             "concurrency": concurrency,
-            "avg_seq": avg_seq,
+            "avg_isl": avg_isl,
+            "avg_osl": avg_osl,
+            # Backwards compat alias
+            "avg_seq": avg_isl,
             "measured_ttft_ms": float(median_ttft),
             "median_tpot_ms": (
                 float(summ["median_tpot_ms"]) if summ.get("median_tpot_ms") is not None else None
+            ),
+            "median_e2el_ms": (
+                float(summ["median_e2el_ms"]) if summ.get("median_e2el_ms") is not None else None
             ),
             "successful_requests": succ,
         })
@@ -251,7 +262,7 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
                               seq_tolerance: int = 16) -> None:
     pred = PerKernelPredictor(gpu=gpu)
     if not pred.load():
-        print(f"[{gpu}][vs-measured] no pkls — skipping")
+        print(f"[{gpu}][microbench_ttft] no pkls — skipping")
         return
 
     measured_rows = _load_measured_rows(
@@ -259,10 +270,9 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
         target_seq=target_seq, seq_tolerance=seq_tolerance,
     )
     if not measured_rows:
-        print(f"[{gpu}][vs-measured] no matching rows in data.json — skipping")
+        print(f"[{gpu}][microbench_ttft] no matching rows in data.json — skipping")
         return
 
-    # Per-(model) kernel-sum from ncu for the overhead column.
     df_gpu = df[df["gpu"] == gpu].copy()
     kernel_sum_per_model = df_gpu.groupby("model")["gpu_time_duration_ms"].sum().to_dict()
 
@@ -273,7 +283,7 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
             dir_name, held_out=model_specs.is_held_out(dir_name, gpu))
         if cfg is None:
             continue
-        seq = max(1, int(round(row["avg_seq"])))
+        seq = max(1, int(round(row["avg_isl"])))
         pred_ms = composer.predict_ttft_ms(pred, cfg, seq=seq, bs=row["concurrency"])
         meas_ms = row["measured_ttft_ms"]
         err_pct = abs(pred_ms - meas_ms) / max(meas_ms, 1e-9) * 100.0
@@ -296,14 +306,14 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
         if target_seq is not None else ""
     )
     lines: list[str] = [
-        f"# {gpu} — Wall-clock TTFT Validation (vs inference-benchmark data.json)",
+        f"# {gpu} — microbench_ttft Validation (vs inference-benchmark data.json)",
         "",
+        f"- Predictor track: **microbench_ttft** (prefill-only TTFT)",
         f"- Predictor: {gpu} pkls ({sorted(pred.families_loaded())})",
         f"- Ground truth: `summary.median_ttft_ms` per (model, backend, profile)",
         f"- Filter: concurrency={concurrency}, TP=1{seq_filter_note}",
         f"- Overhead % = `(measured - ncu_kernel_sum) / measured` — fraction of real TTFT not captured by kernels.",
         "- Headline MAPE = supported architectures only. MoE + hybrid-attn rows are known composer gaps; they are shown in the table but excluded from the aggregate.",
-        "- `median tpot (ms)` is shown for reference; per-kernel composer currently only predicts TTFT, so no TPOT prediction column.",
         "",
         "## Per-row",
         "",
@@ -316,9 +326,9 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
     for (short, arch, backend, profile, seq, bs, pred_ms, meas_ms, err_pct,
          ncu_sum_ms, overhead_pct, tpot_ms) in out_rows:
         marker = " _(held-out)_" if model_specs.is_held_out(_SHORT_TO_DIR.get(short, ""), gpu) else ""
-        ncu_cell = f"{ncu_sum_ms:.2f}" if ncu_sum_ms is not None else "—"
-        ov_cell = f"{overhead_pct:.1f}%" if overhead_pct is not None else "—"
-        tpot_cell = f"{tpot_ms:.2f}" if tpot_ms is not None else "—"
+        ncu_cell = f"{ncu_sum_ms:.2f}" if ncu_sum_ms is not None else "\u2014"
+        ov_cell = f"{overhead_pct:.1f}%" if overhead_pct is not None else "\u2014"
+        tpot_cell = f"{tpot_ms:.2f}" if tpot_ms is not None else "\u2014"
         lines.append(
             f"| {short}{marker} | {arch} | {backend} | {profile} | {seq} | {bs} | "
             f"{pred_ms:.2f} | {meas_ms:.2f} | {err_pct:.2f}% | {ncu_cell} | {ov_cell} | {tpot_cell} |"
@@ -353,27 +363,192 @@ def validate_vs_measured_gpu(df: pd.DataFrame,
     n = len(out_rows)
     mape_s = f"{sum(supported_errs)/len(supported_errs):.2f}%" if supported_errs else "n/a"
     print(
-        f"[{gpu}][vs-measured] supported MAPE {mape_s} "
+        f"[{gpu}][microbench_ttft] supported MAPE {mape_s} "
         f"({len(supported_errs)}/{n} rows in scope) — wrote {report_path}"
     )
 
 
+# ── serving_e2e (ISL/OSL → TTFT + TPOT + E2EL) validation ───────────────────
+
+def validate_serving_e2e_gpu(gpu: str,
+                              data_json_path: Path,
+                              report_path: Path,
+                              profile_name: str,
+                              concurrency: int = 1) -> None:
+    """Compare serving_e2e predictions vs real bench results for a given profile."""
+    pred = PerKernelPredictor(gpu=gpu)
+    if not pred.load():
+        print(f"[{gpu}][serving_e2e] no pkls — skipping")
+        return
+
+    measured_rows = _load_measured_rows(
+        data_json_path, gpu, concurrency=concurrency,
+        profile_filter=profile_name,
+    )
+    if not measured_rows:
+        print(f"[{gpu}][serving_e2e] no rows for profile={profile_name} conc={concurrency} — skipping")
+        return
+
+    out_rows: list[dict] = []
+    for row in measured_rows:
+        dir_name = _MODELSHORT_TO_DIR[row["modelShort"]]
+        cfg = model_specs.get_model_config(
+            dir_name, held_out=model_specs.is_held_out(dir_name, gpu))
+        if cfg is None:
+            continue
+        isl = max(1, int(round(row["avg_isl"])))
+        osl = max(0, int(round(row["avg_osl"])))
+        bs = row["concurrency"]
+
+        short = next((s for s, d in _SHORT_TO_DIR.items() if d == dir_name), row["modelShort"])
+        arch = _arch_class(short, cfg)
+
+        result = serving_e2e.predict_serving_e2e(pred, cfg, isl=isl, osl=osl, bs=bs)
+
+        meas_ttft = row["measured_ttft_ms"]
+        meas_tpot = row.get("median_tpot_ms")
+        meas_e2el = row.get("median_e2el_ms")
+
+        ttft_err = abs(result["ttft_ms"] - meas_ttft) / max(meas_ttft, 1e-9) * 100.0
+        tpot_err = (abs(result["tpot_ms"] - meas_tpot) / max(meas_tpot, 1e-9) * 100.0
+                    if meas_tpot is not None and meas_tpot > 0 else None)
+        e2el_err = (abs(result["e2el_ms"] - meas_e2el) / max(meas_e2el, 1e-9) * 100.0
+                    if meas_e2el is not None and meas_e2el > 0 else None)
+
+        out_rows.append({
+            "short": short, "arch": arch, "backend": row["backend"],
+            "isl": isl, "osl": osl, "bs": bs,
+            "pred_ttft": result["ttft_ms"],
+            "pred_tpot": result["tpot_ms"],
+            "pred_e2el": result["e2el_ms"],
+            "pred_decode": result["decode_ms"],
+            "meas_ttft": meas_ttft,
+            "meas_tpot": meas_tpot,
+            "meas_e2el": meas_e2el,
+            "ttft_err": ttft_err,
+            "tpot_err": tpot_err,
+            "e2el_err": e2el_err,
+            "held_out": model_specs.is_held_out(dir_name, gpu),
+        })
+
+    lines: list[str] = [
+        f"# {gpu} — serving_e2e Validation: {profile_name}",
+        "",
+        f"- Predictor track: **serving_e2e** (ISL/OSL → TTFT + TPOT + E2EL)",
+        f"- Predictor: {gpu} pkls ({sorted(pred.families_loaded())})",
+        f"- Profile: `{profile_name}` (concurrency={concurrency})",
+        f"- Ground truth: `summary.{{median_ttft_ms, median_tpot_ms, median_e2el_ms}}`",
+        "- Headline MAPE = supported architectures only.",
+        "",
+        "## Per-row",
+        "",
+        "| Model | arch | backend | ISL | OSL | bs "
+        "| pred TTFT | meas TTFT | TTFT err "
+        "| pred TPOT | meas TPOT | TPOT err "
+        "| pred E2EL | meas E2EL | E2EL err |",
+        "|---|---|---|---:|---:|---:"
+        "|---:|---:|---:"
+        "|---:|---:|---:"
+        "|---:|---:|---:|",
+    ]
+
+    supported_ttft_errs: list[float] = []
+    supported_tpot_errs: list[float] = []
+    supported_e2el_errs: list[float] = []
+    oos_counts = {"moe": 0, "hybrid_attn": 0}
+
+    for r in out_rows:
+        marker = " _(held-out)_" if r["held_out"] else ""
+        tpot_pred = f"{r['pred_tpot']:.2f}" if r["osl"] > 0 else "\u2014"
+        tpot_meas = f"{r['meas_tpot']:.2f}" if r["meas_tpot"] is not None else "\u2014"
+        tpot_err_s = f"{r['tpot_err']:.1f}%" if r["tpot_err"] is not None else "\u2014"
+        e2el_meas = f"{r['meas_e2el']:.2f}" if r["meas_e2el"] is not None else "\u2014"
+        e2el_err_s = f"{r['e2el_err']:.1f}%" if r["e2el_err"] is not None else "\u2014"
+
+        lines.append(
+            f"| {r['short']}{marker} | {r['arch']} | {r['backend']} "
+            f"| {r['isl']} | {r['osl']} | {r['bs']} "
+            f"| {r['pred_ttft']:.2f} | {r['meas_ttft']:.2f} | {r['ttft_err']:.1f}% "
+            f"| {tpot_pred} | {tpot_meas} | {tpot_err_s} "
+            f"| {r['pred_e2el']:.2f} | {e2el_meas} | {e2el_err_s} |"
+        )
+
+        if r["arch"] == "supported":
+            supported_ttft_errs.append(r["ttft_err"])
+            if r["tpot_err"] is not None:
+                supported_tpot_errs.append(r["tpot_err"])
+            if r["e2el_err"] is not None:
+                supported_e2el_errs.append(r["e2el_err"])
+        else:
+            oos_counts[r["arch"]] += 1
+
+    lines.append("")
+    lines.append("## Summary (supported architectures only)")
+    lines.append("")
+
+    def _mape(errs: list[float]) -> str:
+        return f"{sum(errs)/len(errs):.2f}%" if errs else "n/a"
+
+    lines.append(f"| Metric | MAPE | n rows |")
+    lines.append(f"|---|---:|---:|")
+    lines.append(f"| TTFT | {_mape(supported_ttft_errs)} | {len(supported_ttft_errs)} |")
+    lines.append(f"| TPOT | {_mape(supported_tpot_errs)} | {len(supported_tpot_errs)} |")
+    lines.append(f"| E2EL | {_mape(supported_e2el_errs)} | {len(supported_e2el_errs)} |")
+
+    if any(oos_counts.values()):
+        oos_desc = ", ".join(f"{v} {k}" for k, v in oos_counts.items() if v)
+        lines.append(f"\n_Out-of-scope: {oos_desc} — excluded from headline._")
+    lines.append("")
+
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("\n".join(lines))
+
+    ttft_s = _mape(supported_ttft_errs)
+    tpot_s = _mape(supported_tpot_errs)
+    e2el_s = _mape(supported_e2el_errs)
+    print(
+        f"[{gpu}][serving_e2e][{profile_name}] "
+        f"TTFT MAPE={ttft_s}  TPOT MAPE={tpot_s}  E2EL MAPE={e2el_s} "
+        f"({len(supported_ttft_errs)}/{len(out_rows)} in scope) — wrote {report_path}"
+    )
+
+
+# ── orchestration ────────────────────────────────────────────────────────────
+
 def run(data_csv: Path, report_dir: Path, gpus: list[str], seq: int = 128,
         vs_measured: bool = False, data_json: Path | None = None,
         concurrency: int = 1,
-        target_seq: int | None = None, seq_tolerance: int = 16) -> None:
+        target_seq: int | None = None, seq_tolerance: int = 16,
+        mode: str | None = None, profile: str | None = None) -> None:
     df = pd.read_csv(data_csv)
-    suffix = f"_seq{target_seq}" if target_seq is not None else ""
+
     for gpu in gpus:
-        validate_gpu(df, gpu, report_dir / f"{gpu}_validation.md", seq=seq)
-        if vs_measured and data_json is not None:
-            validate_vs_measured_gpu(
-                df, gpu, data_json,
-                report_dir / f"{gpu}_wallclock_validation{suffix}.md",
-                concurrency=concurrency,
-                target_seq=target_seq,
-                seq_tolerance=seq_tolerance,
-            )
+        if mode == "serving_e2e":
+            if data_json is None:
+                print(f"[{gpu}][serving_e2e] --data-json required")
+                continue
+            profiles = [profile] if profile else [
+                "chat-short", "chat-medium", "chat-long",
+                "coding-agent", "prefill-heavy", "decode-heavy",
+            ]
+            for p in profiles:
+                validate_serving_e2e_gpu(
+                    gpu, data_json,
+                    report_dir / f"{gpu}_serving_e2e_{p}.md",
+                    profile_name=p,
+                    concurrency=concurrency,
+                )
+        else:
+            validate_gpu(df, gpu, report_dir / f"{gpu}_validation.md", seq=seq)
+            if vs_measured and data_json is not None:
+                suffix = f"_seq{target_seq}" if target_seq is not None else ""
+                validate_vs_measured_gpu(
+                    df, gpu, data_json,
+                    report_dir / f"{gpu}_microbench_ttft_wallclock{suffix}.md",
+                    concurrency=concurrency,
+                    target_seq=target_seq,
+                    seq_tolerance=seq_tolerance,
+                )
 
 
 def main() -> None:
@@ -383,18 +558,24 @@ def main() -> None:
     ap.add_argument("--gpus", nargs="+", default=["A100", "RTX3090", "RTX2080Ti"])
     ap.add_argument("--gpu", default=None, help="Shortcut for a single GPU")
     ap.add_argument("--seq", type=int, default=128)
+
+    ap.add_argument("--mode", choices=["microbench_ttft", "serving_e2e"], default=None,
+                    help="Validation mode: microbench_ttft (prefill-only TTFT, default "
+                         "when --vs-measured) or serving_e2e (ISL/OSL → TTFT+TPOT+E2EL).")
+    ap.add_argument("--profile", default=None,
+                    help="Workload profile for --mode serving_e2e (e.g. chat-short, "
+                         "chat-medium, chat-long). If omitted, validates all standard profiles.")
+
     ap.add_argument("--vs-measured", action="store_true",
-                    help="Also compare composer.predict_ttft_ms against measured "
-                         "median_ttft_ms from inference-benchmark data.json.")
+                    help="microbench_ttft mode: compare composer.predict_ttft_ms against "
+                         "measured median_ttft_ms from data.json. "
+                         "Equivalent to --mode microbench_ttft.")
     ap.add_argument("--data-json", default=None,
-                    help="Path to inference-benchmark data.json "
-                         "(default: <repo>/inference-benchmark/dashboard/public/data.json)")
+                    help="Path to inference-benchmark data.json.")
     ap.add_argument("--concurrency", type=int, default=1,
-                    help="Concurrency filter for --vs-measured (default 1).")
+                    help="Concurrency filter (default 1).")
     ap.add_argument("--target-seq", type=int, default=None,
-                    help="Restrict --vs-measured rows to those whose avg input "
-                         "seq lies within --seq-tolerance of this target. Use "
-                         "128 to match the ncu prefill_seq128_bs1 sweep.")
+                    help="Restrict microbench_ttft rows to avg_seq within --seq-tolerance.")
     ap.add_argument("--seq-tolerance", type=int, default=16,
                     help="±tokens tolerance around --target-seq (default 16).")
     args = ap.parse_args()
@@ -404,22 +585,28 @@ def main() -> None:
     report_dir = Path(args.report_dir) if args.report_dir else pkg_dir / "reports"
     gpus = [args.gpu] if args.gpu else args.gpus
 
-    if args.vs_measured:
+    mode = args.mode
+    if mode is None and args.vs_measured:
+        mode = "microbench_ttft"
+    vs_measured = args.vs_measured or mode == "microbench_ttft"
+
+    needs_data_json = vs_measured or mode == "serving_e2e"
+    if needs_data_json:
         if args.data_json:
             data_json = Path(args.data_json)
         else:
-            # <repo>/llm_predict/training/per_kernel/validate.py → <repo>
             repo_root = pkg_dir.parent.parent.parent
             data_json = repo_root / "inference-benchmark" / "dashboard" / "public" / "data.json"
         if not data_json.exists():
-            raise SystemExit(f"[--vs-measured] data.json not found: {data_json}")
+            raise SystemExit(f"data.json not found: {data_json}")
     else:
         data_json = None
 
     run(data_csv, report_dir, gpus, seq=args.seq,
-        vs_measured=args.vs_measured, data_json=data_json,
+        vs_measured=vs_measured, data_json=data_json,
         concurrency=args.concurrency,
-        target_seq=args.target_seq, seq_tolerance=args.seq_tolerance)
+        target_seq=args.target_seq, seq_tolerance=args.seq_tolerance,
+        mode=mode, profile=args.profile)
 
 
 if __name__ == "__main__":
