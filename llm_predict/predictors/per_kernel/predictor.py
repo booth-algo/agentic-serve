@@ -73,6 +73,19 @@ class PerKernelPredictor:
             if family == 'misc' and isinstance(data.get('models'), dict):
                 # Per-subfamily misc predictors override the single `model`.
                 self.misc_submodels = dict(data['models'])
+        # Phase 2: optional decode_attn pkl (trained from per-op decode data).
+        da_path = os.path.join(pkl_dir, 'perkernel_decode_attn_shape_v2.pkl')
+        if os.path.isfile(da_path):
+            with open(da_path, 'rb') as f:
+                da = pickle.load(f)
+            self.models['decode_attn'] = da['model']
+            self.feature_cols['decode_attn'] = list(da['feature_cols'])
+            self.metadata['decode_attn'] = {
+                'n_training': da.get('n_training'),
+                'train_mape': da.get('train_mape'),
+                'version': da.get('version'),
+                'target': da.get('target', 'log_duration_us'),
+            }
         return len(self.models) > 0
 
     def is_loaded(self) -> bool:
@@ -137,6 +150,69 @@ class PerKernelPredictor:
             'log_heads': math.log1p(h_f),
         }
         return self._predict('flash_attn', feats)
+
+    # Per-GPU HBM bandwidth in GB/s. Used by the Phase-1 decode-attention
+    # approximation; Phase 2 retrains a learned decode pkl that supersedes this.
+    # Sources: NVIDIA published specs, dtype-agnostic peak.
+    _HBM_BW_GBPS: dict = {
+        'A100': 1555.0,        # A100-40GB SXM4
+        'A100-80GB': 2039.0,
+        'RTX3090': 936.0,
+        'RTX2080Ti': 616.0,
+        'H100': 3350.0,        # H100-80GB SXM5
+    }
+
+    def predict_attention_decode(self, bs: int, kv_cache_len: int,
+                                  n_heads: int, head_dim: int = 128,
+                                  kv_heads: Optional[int] = None,
+                                  dtype: str = 'bf16',
+                                  efficiency: float = 0.65) -> float:
+        """Predict ONE-step decode attention latency in ms (Phase 1 stub).
+
+        Uses memory-bandwidth approximation: at decode step t, attn reads the
+        full K and V cache (size bs * kv_cache_len * kv_heads * head_dim * 2
+        bytes for bf16, doubled for K + V). Latency = bytes / (HBM_BW * eff)
+        where eff is achieved fraction of peak (typically 60-70% for FlashAttn
+        decode kernels).
+
+        Phase 2 replaces this with a trained pkl matching the prefill
+        flash_attn family but with `phase_onehot_decode=1` and `kv_cache_len`
+        as features. Until then this returns a deterministic, kv-linear
+        approximation that is correct in shape (linear in kv_cache_len) so
+        the trapezoidal integration in serving_e2e.py is unbiased.
+
+        Returns ms, or -1.0 if no model loaded and GPU not in bandwidth table.
+        """
+        if kv_heads is None:
+            kv_heads = n_heads
+        dtype_bytes = 2 if dtype in ('bf16', 'fp16') else 4
+
+        # Learned model path (Phase 2): use trained decode_attn pkl.
+        if 'decode_attn' in self.models:
+            kv_bytes = 2.0 * bs * kv_cache_len * kv_heads * head_dim * dtype_bytes
+            feats = {
+                'bs': float(bs),
+                'log_bs': math.log2(bs + 1),
+                'kv_cache_len': float(kv_cache_len),
+                'log_kv_cache_len': math.log2(kv_cache_len + 1),
+                'n_heads': float(n_heads),
+                'kv_heads': float(kv_heads),
+                'head_dim': float(head_dim),
+                'kv_bytes': kv_bytes,
+                'log_kv_bytes': math.log2(kv_bytes + 1),
+            }
+            cols = self.feature_cols['decode_attn']
+            X = np.array([[feats.get(c, 0.0) for c in cols]], dtype=float)
+            log_pred = self.models['decode_attn'].predict(X)[0]
+            # Target is log(duration_us); convert to ms.
+            return float(np.exp(log_pred)) / 1000.0
+
+        # Fallback: analytical bandwidth approximation.
+        bw_gbps = self._HBM_BW_GBPS.get(self.gpu)
+        if bw_gbps is None:
+            return -1.0
+        bytes_kv = 2.0 * bs * kv_cache_len * kv_heads * head_dim * dtype_bytes
+        return bytes_kv / (bw_gbps * efficiency * 1e9) * 1000.0
 
     def predict_elementwise(self, op_type: str, numel: int) -> float:
         """Predict elementwise (rmsnorm/silu/mul/residual/rope/neg/fill/compare/other) latency in ms."""

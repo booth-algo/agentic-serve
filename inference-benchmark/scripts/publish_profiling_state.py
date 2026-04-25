@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -54,11 +55,148 @@ def _normalise(raw: object, keep: tuple[str, ...]) -> dict:
     return {"status": "missing"}
 
 
+_WALLCLOCK_RE = re.compile(
+    r"^\|\s*([^|]+?)\s*\|\s*(supported|moe|hybrid_attn)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|"
+    r"\s*(\d+)\s*\|\s*(\d+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)%\s*\|"
+    r"\s*([\d.]+|—)\s*\|\s*(-?[\d.]+%|—)\s*\|\s*([\d.]+|—)\s*\|\s*$"
+)
+
+
+def _parse_wallclock(md_path: Path) -> dict | None:
+    """Parse {gpu}_wallclock_validation_seq167.md -> {target_seq, supported_mape, rows}."""
+    if not md_path.is_file():
+        return None
+    supported_mape: float | None = None
+    rows: list[dict] = []
+    target_seq = 167
+    for line in md_path.read_text().splitlines():
+        m_seq = re.search(r"avg_seq within .*?of\s*(\d+)", line)
+        if m_seq:
+            target_seq = int(m_seq.group(1))
+        m_mape = re.search(r"\*\*supported MAPE\*\*.*?\*\*([\d.]+)%\*\*", line)
+        if m_mape and supported_mape is None:
+            supported_mape = float(m_mape.group(1))
+            continue
+        m = _WALLCLOCK_RE.match(line)
+        if not m:
+            continue
+        model = m.group(1).strip().replace("_(held-out)_", "").strip()
+        arch = m.group(2).strip()
+        backend = m.group(3).strip()
+        profile = m.group(4).strip()
+        avg_seq = int(m.group(5))
+        pred_ms = float(m.group(7))
+        meas_ms = float(m.group(8))
+        err_pct = float(m.group(9))
+        ncu_str = m.group(10).strip()
+        ov_str = m.group(11).strip().rstrip("%")
+        tpot_str = m.group(12).strip()
+        row: dict = {
+            "model": model, "arch": arch, "backend": backend, "profile": profile,
+            "avg_seq": avg_seq, "predicted_ms": pred_ms, "measured_ms": meas_ms,
+            "abs_err_pct": err_pct,
+        }
+        if ncu_str != "—":
+            row["ncu_sum_ms"] = float(ncu_str)
+        if ov_str != "—":
+            row["overhead_pct"] = float(ov_str)
+        if tpot_str != "—":
+            row["median_tpot_ms"] = float(tpot_str)
+        rows.append(row)
+    if not rows:
+        return None
+    out: dict = {"target_seq": target_seq, "rows": rows}
+    if supported_mape is not None:
+        out["supported_mape"] = supported_mape
+    return out
+
+
+_SERVING_PROFILES = ("chat-short", "chat-medium", "chat-long",
+                     "coding-agent", "prefill-heavy", "decode-heavy")
+
+
+def _parse_serving_e2e(md_path: Path) -> dict | None:
+    """Parse {gpu}_serving_e2e_{profile}.md -> {mape, rows}."""
+    if not md_path.is_file():
+        return None
+    rows: list[dict] = []
+    mape: dict[str, float] = {}
+
+    def _opt(s: str) -> float | None:
+        s = s.strip().rstrip("%")
+        return float(s) if s != "—" else None
+
+    for line in md_path.read_text().splitlines():
+        m_summary = re.match(
+            r"^\|\s*(TTFT|TPOT|E2EL)\s*\|\s*([\d.]+)%\s*\|\s*(\d+)\s*\|", line)
+        if m_summary:
+            mape[m_summary.group(1).lower()] = float(m_summary.group(2))
+            continue
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) < 17:
+            continue
+        cols = parts[1:-1]
+        if len(cols) != 15:
+            continue
+        arch = cols[1].strip()
+        if arch not in ("supported", "moe", "hybrid_attn"):
+            continue
+        model = cols[0].replace("_(held-out)_", "").strip()
+        try:
+            row: dict = {
+                "model": model, "arch": arch, "backend": cols[2].strip(),
+                "isl": int(cols[3]), "osl": int(cols[4]), "bs": int(cols[5]),
+                "pred_ttft_ms": float(cols[6]),
+                "meas_ttft_ms": float(cols[7]),
+                "ttft_err_pct": float(cols[8].rstrip("%")),
+            }
+        except (ValueError, IndexError):
+            continue
+        row["pred_tpot_ms"] = _opt(cols[9])
+        row["meas_tpot_ms"] = _opt(cols[10])
+        row["tpot_err_pct"] = _opt(cols[11])
+        try:
+            row["pred_e2el_ms"] = float(cols[12])
+        except ValueError:
+            continue
+        row["meas_e2el_ms"] = _opt(cols[13])
+        row["e2el_err_pct"] = _opt(cols[14])
+        rows.append(row)
+
+    if not rows and not mape:
+        return None
+    return {"mape": mape, "rows": rows}
+
+
 def _load_results(repo_root: Path) -> dict:
-    """Best-effort: read training_report.json files and summarise MAPE."""
-    results: dict = {"per_kernel": {}, "per_op": {}}
+    """Best-effort: read training_report.json files and wallclock markdown reports."""
+    results: dict = {"per_kernel": {}, "per_op": {}, "wallclock": {},
+                     "serving_e2e": {}, "serving_e2e_perop": {}}
     pk_path = repo_root / "llm_predict/training/per_kernel/reports/training_report.json"
     po_path = repo_root / "llm_predict/training/per_op/reports/training_report.json"
+    pk_reports = repo_root / "llm_predict" / "training" / "per_kernel" / "reports"
+    po_reports = repo_root / "llm_predict" / "training" / "per_op" / "reports"
+    for gpu in ("A100", "RTX3090", "RTX2080Ti"):
+        wc_path = pk_reports / f"{gpu}_wallclock_validation_seq167.md"
+        wc = _parse_wallclock(wc_path)
+        if wc is not None:
+            results["wallclock"][gpu] = wc
+        # per-kernel serving_e2e
+        profiles: dict = {}
+        for profile in _SERVING_PROFILES:
+            parsed = _parse_serving_e2e(pk_reports / f"{gpu}_serving_e2e_{profile}.md")
+            if parsed is not None:
+                profiles[profile] = parsed
+        if profiles:
+            results["serving_e2e"][gpu] = profiles
+        # per-op serving_e2e (ablation)
+        po_profiles: dict = {}
+        for profile in _SERVING_PROFILES:
+            parsed = _parse_serving_e2e(po_reports / f"{gpu}_serving_e2e_perop_{profile}.md")
+            if parsed is not None:
+                po_profiles[profile] = parsed
+        if po_profiles:
+            results["serving_e2e_perop"][gpu] = po_profiles
     if pk_path.is_file():
         try:
             pk = json.loads(pk_path.read_text())

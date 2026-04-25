@@ -466,6 +466,28 @@ PROFILES: dict[str, WorkloadProfile] = {
         data_source="random",
     ),
 
+    # Fixed-shape profiles for per-kernel/per-op predictor validation.
+    # Matches the ncu sweep (prefill_seq128_bs1) so --vs-measured can be
+    # compared apples-to-apples at a known seq. Stress-test mode keeps
+    # prefix caching OFF and uses random tokens to guarantee each request
+    # actually prefills seq=128 (ShareGPT-derived profiles vary per request
+    # and hit prefix cache from turn 2 onward).
+    "fixed-seq128": WorkloadProfile(
+        name="fixed-seq128",
+        isl_tokens=128,
+        osl_tokens=128,
+        isl_stddev=0.0,
+        description="Fixed ISL=128 OSL=128 random tokens — matches ncu prefill_seq128_bs1 for predictor validation.",
+        dataset="random",
+        tokenizer_name="meta-llama/Llama-3.1-8B-Instruct",
+        mode="stress-test",
+        prefix_caching_required=False,
+        agent_type="chat",
+        turn_style="single-turn",
+        serving_style="not-disaggregated",
+        data_source="random",
+    ),
+
     # ===================================================================
     # Group 4: Utility
     # ===================================================================

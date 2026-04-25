@@ -620,15 +620,15 @@
     "per_kernel": {
       "A100": {
         "heldout_mape_per_family": {
-          "gemm": 7.095951050189475,
+          "gemm": 396.4594535004887,
           "flash_attn": 3.5104502260427064,
           "elementwise": 13.732536183062749,
           "misc": 15.186435984188556
         },
         "aggregate_err_per_model": {
-          "Llama-3.3-70B": 7.4571771437910686,
-          "Llama-70B": 7.6318288115784245,
-          "Qwen-72B": 6.557105352984288
+          "Llama-3.3-70B": 81.68626089069308,
+          "Llama-70B": 81.34337305240105,
+          "Qwen-72B": 77.5111778195454
         }
       },
       "RTX3090": {
@@ -642,42 +642,393 @@
           "Llama-70B": 0.06853536869348617,
           "Qwen-72B": 0.4686183931631653
         }
+      },
+      "RTX2080Ti": {
+        "heldout_mape_per_family": {
+          "gemm": NaN,
+          "flash_attn": null,
+          "elementwise": NaN,
+          "misc": NaN
+        },
+        "aggregate_err_per_model": {}
       }
     },
     "per_op": {
       "A100": {
-        "heldout_mape": 38.66214357027025,
+        "heldout_mape": 30.677165609897365,
         "pool_models": [
+          "Llama-70B",
           "Llama-8B",
           "Mixtral",
           "gpt-oss-20b"
         ],
         "heldout_models": [
           "Llama-3.3-70B",
-          "Llama-70B",
           "Qwen-72B"
         ]
       },
       "RTX3090": {
-        "heldout_mape": 26.584837445240765,
+        "heldout_mape": 13.949424904129714,
         "pool_models": [
+          "Llama-70B",
           "Llama-8B",
           "Mixtral",
           "Qwen3.5-9B",
           "gpt-oss-20b"
         ],
         "heldout_models": [
-          "Llama-70B",
           "Qwen-72B"
         ]
       },
       "RTX2080Ti": {
-        "heldout_mape": null,
+        "heldout_mape": 17.15250798342451,
         "pool_models": [
           "Llama-8B",
           "Qwen3.5-9B"
         ],
-        "heldout_models": []
+        "heldout_models": [
+          "Qwen-7B"
+        ]
+      }
+    },
+    "wallclock": {
+      "A100": {
+        "target_seq": 167,
+        "rows": [
+          {
+            "model": "Llama-8B",
+            "arch": "supported",
+            "backend": "vllm",
+            "profile": "fixed-seq128",
+            "avg_seq": 167,
+            "predicted_ms": 37.43,
+            "measured_ms": 36.71,
+            "abs_err_pct": 1.97,
+            "ncu_sum_ms": 26.48,
+            "overhead_pct": 27.9,
+            "median_tpot_ms": 12.89
+          },
+          {
+            "model": "gpt-oss-20b",
+            "arch": "moe",
+            "backend": "vllm",
+            "profile": "fixed-seq128",
+            "avg_seq": 166,
+            "predicted_ms": 12.0,
+            "measured_ms": 33.88,
+            "abs_err_pct": 64.59,
+            "ncu_sum_ms": 60.34,
+            "overhead_pct": -78.1,
+            "median_tpot_ms": 4.95
+          }
+        ],
+        "supported_mape": 1.97
+      },
+      "RTX3090": {
+        "target_seq": 167,
+        "rows": [
+          {
+            "model": "Llama-8B",
+            "arch": "supported",
+            "backend": "vllm",
+            "profile": "fixed-seq128",
+            "avg_seq": 167,
+            "predicted_ms": 58.77,
+            "measured_ms": 59.66,
+            "abs_err_pct": 1.49,
+            "ncu_sum_ms": 55.06,
+            "overhead_pct": 7.7,
+            "median_tpot_ms": 19.68
+          }
+        ],
+        "supported_mape": 1.49
+      },
+      "RTX2080Ti": {
+        "target_seq": 167,
+        "rows": [
+          {
+            "model": "Llama-8B",
+            "arch": "supported",
+            "backend": "vllm",
+            "profile": "fixed-seq128",
+            "avg_seq": 167,
+            "predicted_ms": 49.72,
+            "measured_ms": 81.05,
+            "abs_err_pct": 38.66,
+            "ncu_sum_ms": 65.56,
+            "overhead_pct": 19.1,
+            "median_tpot_ms": 27.48
+          }
+        ],
+        "supported_mape": 38.66
+      }
+    },
+    "serving_e2e": {
+      "A100": {
+        "chat-short": {
+          "mape": {
+            "ttft": 0.2,
+            "tpot": 1.77,
+            "e2el": 3.59
+          },
+          "rows": [
+            {
+              "model": "gpt-oss-20b",
+              "arch": "moe",
+              "backend": "vllm",
+              "isl": 150,
+              "osl": 171,
+              "bs": 1,
+              "pred_ttft_ms": 11.93,
+              "meas_ttft_ms": 32.99,
+              "ttft_err_pct": 63.8,
+              "pred_tpot_ms": 4.72,
+              "meas_tpot_ms": 4.93,
+              "tpot_err_pct": 4.2,
+              "pred_e2el_ms": 819.75,
+              "meas_e2el_ms": 979.27,
+              "e2el_err_pct": 16.3
+            },
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 127,
+              "osl": 149,
+              "bs": 1,
+              "pred_ttft_ms": 35.25,
+              "meas_ttft_ms": 35.18,
+              "ttft_err_pct": 0.2,
+              "pred_tpot_ms": 12.66,
+              "meas_tpot_ms": 12.89,
+              "tpot_err_pct": 1.8,
+              "pred_e2el_ms": 1921.82,
+              "meas_e2el_ms": 1993.33,
+              "e2el_err_pct": 3.6
+            },
+            {
+              "model": "Qwen3.5-9B",
+              "arch": "hybrid_attn",
+              "backend": "vllm",
+              "isl": 95,
+              "osl": 172,
+              "bs": 1,
+              "pred_ttft_ms": 29.66,
+              "meas_ttft_ms": 89.43,
+              "ttft_err_pct": 66.8,
+              "pred_tpot_ms": 22.33,
+              "meas_tpot_ms": 13.76,
+              "tpot_err_pct": 62.2,
+              "pred_e2el_ms": 3869.84,
+              "meas_e2el_ms": 2752.05,
+              "e2el_err_pct": 40.6
+            }
+          ]
+        },
+        "chat-medium": {
+          "mape": {
+            "ttft": 0.15,
+            "tpot": 1.86,
+            "e2el": 3.02
+          },
+          "rows": [
+            {
+              "model": "gpt-oss-20b",
+              "arch": "moe",
+              "backend": "vllm",
+              "isl": 159,
+              "osl": 270,
+              "bs": 1,
+              "pred_ttft_ms": 12.02,
+              "meas_ttft_ms": 33.49,
+              "ttft_err_pct": 64.1,
+              "pred_tpot_ms": 4.74,
+              "meas_tpot_ms": 4.94,
+              "tpot_err_pct": 4.1,
+              "pred_e2el_ms": 1291.09,
+              "meas_e2el_ms": 1336.96,
+              "e2el_err_pct": 3.4
+            },
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 120,
+              "osl": 257,
+              "bs": 1,
+              "pred_ttft_ms": 34.76,
+              "meas_ttft_ms": 34.81,
+              "ttft_err_pct": 0.1,
+              "pred_tpot_ms": 12.71,
+              "meas_tpot_ms": 12.95,
+              "tpot_err_pct": 1.9,
+              "pred_e2el_ms": 3300.34,
+              "meas_e2el_ms": 3203.68,
+              "e2el_err_pct": 3.0
+            },
+            {
+              "model": "Qwen3.5-9B",
+              "arch": "hybrid_attn",
+              "backend": "vllm",
+              "isl": 103,
+              "osl": 271,
+              "bs": 1,
+              "pred_ttft_ms": 30.52,
+              "meas_ttft_ms": 89.55,
+              "ttft_err_pct": 65.9,
+              "pred_tpot_ms": 22.39,
+              "meas_tpot_ms": 13.78,
+              "tpot_err_pct": 62.4,
+              "pred_e2el_ms": 6096.98,
+              "meas_e2el_ms": 3594.96,
+              "e2el_err_pct": 69.6
+            }
+          ]
+        },
+        "chat-long": {
+          "mape": {
+            "ttft": 2.09,
+            "tpot": 1.66,
+            "e2el": 0.82
+          },
+          "rows": [
+            {
+              "model": "gpt-oss-20b",
+              "arch": "moe",
+              "backend": "vllm",
+              "isl": 258,
+              "osl": 299,
+              "bs": 1,
+              "pred_ttft_ms": 13.2,
+              "meas_ttft_ms": 33.67,
+              "ttft_err_pct": 60.8,
+              "pred_tpot_ms": 4.74,
+              "meas_tpot_ms": 4.94,
+              "tpot_err_pct": 4.0,
+              "pred_e2el_ms": 1431.89,
+              "meas_e2el_ms": 1399.07,
+              "e2el_err_pct": 2.3
+            },
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 218,
+              "osl": 285,
+              "bs": 1,
+              "pred_ttft_ms": 33.89,
+              "meas_ttft_ms": 34.62,
+              "ttft_err_pct": 2.1,
+              "pred_tpot_ms": 12.73,
+              "meas_tpot_ms": 12.95,
+              "tpot_err_pct": 1.7,
+              "pred_e2el_ms": 3662.83,
+              "meas_e2el_ms": 3633.09,
+              "e2el_err_pct": 0.8
+            },
+            {
+              "model": "Qwen3.5-9B",
+              "arch": "hybrid_attn",
+              "backend": "vllm",
+              "isl": 206,
+              "osl": 300,
+              "bs": 1,
+              "pred_ttft_ms": 19.19,
+              "meas_ttft_ms": 87.58,
+              "ttft_err_pct": 78.1,
+              "pred_tpot_ms": 22.42,
+              "meas_tpot_ms": 13.78,
+              "tpot_err_pct": 62.6,
+              "pred_e2el_ms": 6744.04,
+              "meas_e2el_ms": 3920.65,
+              "e2el_err_pct": 72.0
+            }
+          ]
+        }
+      },
+      "RTX2080Ti": {
+        "chat-short": {
+          "mape": {
+            "ttft": 41.21,
+            "tpot": 0.48,
+            "e2el": 0.59
+          },
+          "rows": [
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 113,
+              "osl": 158,
+              "bs": 1,
+              "pred_ttft_ms": 40.63,
+              "meas_ttft_ms": 69.11,
+              "ttft_err_pct": 41.2,
+              "pred_tpot_ms": 32.88,
+              "meas_tpot_ms": 32.72,
+              "tpot_err_pct": 0.5,
+              "pred_e2el_ms": 5236.02,
+              "meas_e2el_ms": 5266.87,
+              "e2el_err_pct": 0.6
+            }
+          ]
+        }
+      }
+    },
+    "serving_e2e_perop": {
+      "RTX2080Ti": {
+        "chat-short": {
+          "mape": {
+            "ttft": 304.24,
+            "tpot": 95.17,
+            "e2el": 96.9
+          },
+          "rows": [
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 113,
+              "osl": 158,
+              "bs": 1,
+              "pred_ttft_ms": 279.36,
+              "meas_ttft_ms": 69.11,
+              "ttft_err_pct": 304.2,
+              "pred_tpot_ms": 63.87,
+              "meas_tpot_ms": 32.72,
+              "tpot_err_pct": 95.2,
+              "pred_e2el_ms": 10370.23,
+              "meas_e2el_ms": 5266.87,
+              "e2el_err_pct": 96.9
+            }
+          ]
+        },
+        "chat-medium": {
+          "mape": {
+            "ttft": 362.31,
+            "tpot": 93.94,
+            "e2el": 106.7
+          },
+          "rows": [
+            {
+              "model": "Llama-8B",
+              "arch": "supported",
+              "backend": "vllm",
+              "isl": 120,
+              "osl": 254,
+              "bs": 1,
+              "pred_ttft_ms": 279.36,
+              "meas_ttft_ms": 60.43,
+              "ttft_err_pct": 362.3,
+              "pred_tpot_ms": 63.79,
+              "meas_tpot_ms": 32.89,
+              "tpot_err_pct": 93.9,
+              "pred_e2el_ms": 16482.71,
+              "meas_e2el_ms": 7974.15,
+              "e2el_err_pct": 106.7
+            }
+          ]
+        }
       }
     }
   }

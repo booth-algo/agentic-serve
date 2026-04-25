@@ -3,20 +3,23 @@
 - Predictor: A100 pkls (['elementwise', 'flash_attn', 'gemm', 'misc'])
 - Ground truth: sum(gpu_time_duration_ms) per model from kernels_labeled.csv
 - Input: bs=1, seq=128, tp=1
+- Headline MAPE = supported architectures only (dense, non-hybrid-attn).
+  MoE and hybrid-attn rows are known composer gaps and listed separately.
 
 ## Per-model
 
-| Model | predicted TTFT (ms) | measured Σ (ms) | abs err % | n kernels |
-|---|---:|---:|---:|---:|
-| Llama-8B | 23.62 | 26.48 | 10.80% | 1461 |
-| Llama-70B _(held-out)_ | 165.35 | 178.85 | 7.55% | 3381 |
-| Llama-3.3-70B _(held-out)_ | 165.35 | 178.51 | 7.37% | 3381 |
-| Qwen-72B _(held-out)_ | 169.65 | 181.39 | 6.47% | 3381 |
-| Qwen3.5-9B | 20.90 | 105.21 | 80.14% | 13061 |
-| Qwen3.5-27B | 56.87 | 233.93 | 75.69% | 25917 |
-| gpt-oss-20b | 15.38 | 60.34 | 74.51% | 1723 |
-| Mixtral-8x7B | 31.74 | 109.87 | 71.11% | 4665 |
-| **TOTAL** | **648.86** | **1074.58** | **39.62%** | |
+| Model | arch | predicted TTFT (ms) | measured Σ (ms) | abs err % | n kernels |
+|---|---|---:|---:|---:|---:|
+| Llama-8B | supported | 36.44 | 26.48 | 37.59% | 1461 |
+| Llama-70B _(held-out)_ | supported | 181.23 | 178.85 | 1.33% | 3381 |
+| Llama-3.3-70B _(held-out)_ | supported | 181.23 | 178.51 | 1.53% | 3381 |
+| Qwen-72B _(held-out)_ | supported | 178.90 | 181.39 | 1.37% | 3381 |
+| Qwen3.5-9B | hybrid_attn | 31.12 | 105.21 | 70.42% | 13061 |
+| Qwen3.5-27B | hybrid_attn | 56.84 | 233.93 | 75.70% | 25917 |
+| gpt-oss-20b | moe | 14.81 | 60.34 | 75.45% | 1723 |
+| Mixtral-8x7B | moe | 83.64 | 109.87 | 23.87% | 4665 |
+| **supported aggregate** (4 rows) | | **577.80** | **565.23** | **Σ-err 2.22% · MAPE 10.46%** | |
+| _out-of-scope_ | | | | _2 moe, 2 hybrid_attn — excluded from headline_ | |
 
 ## Measured time breakdown by family (ms)
 
@@ -31,4 +34,4 @@
 | Qwen3.5-9B    | 30.159 |  0.491 |        26.831 |        0.206 |   25.178 |   21.062 |           1.281 |
 | gpt-oss-20b   |  2.203 |  1.366 |        18.247 |        0     |   35.632 |    2.402 |           0.493 |
 | misc_sweep    |  2.452 |  0.732 |         0     |        0     |    0     |    7.429 |           0     |
-| roofline      |  0     |  0     |         0     |        0     | 6293.11  |    0     |           0     |
+| roofline      |  0     |  0     |         0     |        0     | 1715.66  |    0     |           0     |

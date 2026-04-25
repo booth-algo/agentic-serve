@@ -3,13 +3,13 @@
 Experimental grid run 2026-04-21 on A100-only data comparing per-op
 (26-feature analytical layer predictor) and per-kernel (per-family
 shape-feature XGBoost) on the same train/test configurations. All
-e2e numbers are absolute error on prefill_seq128_bs1 summed across
+TTFT (composed) numbers are absolute error on prefill_seq128_bs1 summed across
 the model's 80-layer (Llama-70B/Llama-3.3-70B/Qwen-72B) or 32-layer
 (Llama-8B/Mixtral) transformer stack.
 
 ## Headline
 
-| experiment | per-op e2e err | per-kernel e2e err |
+| experiment | per-op TTFT err | per-kernel TTFT err |
 |---|---:|---:|
 | Llama-8B → Llama-70B (10× pure scale, no sweep aux) | 28.62% | 58.50% (w/o roofline) |
 | Llama-8B + **roofline sweep** → Llama-70B | — | **6.21%** |
@@ -24,7 +24,7 @@ Llama-70B — a 10× parameter extrapolation with no 70B-class training
 model.
 
 **Per-op does NOT benefit from the roofline sweep** (its features are
-layer-level, not kernel-level). Per-op's path to low e2e error is
+layer-level, not kernel-level). Per-op's path to low TTFT error is
 through architecture coverage: it hits 0.80% only when an
 architecturally-identical anchor model (Llama-70B in this case) is
 present in training.
@@ -33,13 +33,13 @@ present in training.
 
 Train on one family's models, predict a model in a different family.
 
-| train pool | test | full MAPE (all bs/seq/kv) | e2e bs=1 seq=128 |
+| train pool | test | full MAPE (all bs/seq/kv) | TTFT bs=1 seq=128 |
 |---|---|---:|---:|
 | Llama-family {8B, 70B} | Qwen-72B | 35.3% | n/a (row missing) |
 | Qwen-only {Qwen-72B} | Llama-70B | 41.0% | **1.25%** |
 | non-Llama {Qwen, Mixtral, gpt-oss-20b} | Llama-70B | 37.2% | **4.69%** |
 
-Qwen-72B → Llama-70B e2e is 1.25% despite high full-grid MAPE. Reason:
+Qwen-72B → Llama-70B TTFT is 1.25% despite high full-grid MAPE. Reason:
 the two share identical transformer dims (d=8192, h=64, kv=8) and
 only differ on ffn (29568 vs 28672); per-op's architecture features
 (d, h, kv, ffn) map this as a near-identity transform. The high
@@ -51,7 +51,7 @@ the prefill_seq128_bs1 point.
 Holding out every 70B-class model, asking per-op to extrapolate from
 smaller models.
 
-| train pool | test | full MAPE | e2e |
+| train pool | test | full MAPE | TTFT |
 |---|---|---:|---:|
 | Llama-8B only | Llama-70B | 36.4% | **28.62%** |
 | Llama-8B + Mixtral | Llama-70B | 36.4% | 28.62% |
@@ -68,7 +68,7 @@ model learns conflicting scale-latency patterns.
 
 Can dense predict MoE, or vice-versa?
 
-| train pool | test | full MAPE | e2e |
+| train pool | test | full MAPE | TTFT |
 |---|---|---:|---:|
 | MoE only {Mixtral, gpt-oss-20b} | Llama-70B (dense) | 209.6% | **358.31%** |
 
@@ -80,7 +80,7 @@ to dense (E=0, k=0) at all.
 
 Direct mirror of per-op cross-scale, but at the per-kernel level.
 
-| train pool | test | per-kernel e2e |
+| train pool | test | per-kernel TTFT |
 |---|---|---:|
 | Llama-8B only (no sweep) | Llama-70B | 58.50% |
 | **Llama-8B + roofline** | **Llama-70B** | **6.21%** |
@@ -138,7 +138,7 @@ coverage is available or ncu access isn't.
   + misc sweeps ingested and flash_sweep stripped (the flash sweep
   hurt due to multi-kernel dispatch mislabeling — documented in the
   commit log).
-- The held-out metric is e2e at (bs=1, seq=128) specifically.
+- The held-out metric is composed TTFT at (bs=1, seq=128) specifically.
   Broader validation on decode rows (kv_cache_len > 0) is an
   open follow-up.
 
