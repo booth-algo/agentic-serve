@@ -288,6 +288,7 @@ function main() {
       const mode = profileName.includes('multiturn')
         ? 'multi-turn'
         : (raw.config.mode || (relDir.includes('multiturn') ? 'multi-turn' : 'single-turn'));
+      raw.config.mode = mode;
       if (mode !== 'multi-turn' && concurrency > 1 && raw.config.num_requests && raw.config.num_requests < concurrency) {
         skipped++;
         continue;
