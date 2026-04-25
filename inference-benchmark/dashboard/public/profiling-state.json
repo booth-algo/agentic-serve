@@ -645,10 +645,10 @@
       },
       "RTX2080Ti": {
         "heldout_mape_per_family": {
-          "gemm": NaN,
+          "gemm": null,
           "flash_attn": null,
-          "elementwise": NaN,
-          "misc": NaN
+          "elementwise": null,
+          "misc": null
         },
         "aggregate_err_per_model": {}
       }

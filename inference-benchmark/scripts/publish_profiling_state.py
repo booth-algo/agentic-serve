@@ -304,7 +304,16 @@ def main() -> int:
     state = build_state(manifest)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(state, indent=2) + "\n")
+    def _sanitize(obj):
+        if isinstance(obj, float) and (obj != obj):  # NaN check
+            return None
+        if isinstance(obj, dict):
+            return {k: _sanitize(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_sanitize(v) for v in obj]
+        return obj
+
+    args.out.write_text(json.dumps(_sanitize(state), indent=2) + "\n")
     print(f"wrote {args.out} ({len(state['cells'])} cells)", file=sys.stderr)
 
     if not args.no_upload:
