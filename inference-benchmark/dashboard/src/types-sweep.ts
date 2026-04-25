@@ -1,7 +1,7 @@
 // Runtime sweep state published by scripts/publish_sweep_state.py to R2.
 // Schema mirrors sweep.yaml + /tmp/bench_jobs/state/<jid>.status.
 
-export type CellStatus = 'pending' | 'running' | 'done' | 'abandoned' | 'known_oom';
+export type CellStatus = 'pending' | 'running' | 'done' | 'skipped' | 'known_oom';
 
 export interface SweepCell {
   host: string;

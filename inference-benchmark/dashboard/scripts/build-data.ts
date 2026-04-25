@@ -275,7 +275,19 @@ function main() {
 
       // Skip underloaded single-turn results (nreq < concurrency)
       // Multi-turn uses num_requests=num_sessions which is intentionally < concurrency
-      const mode = raw.config.mode || (relDir.includes('multiturn') ? 'multi-turn' : 'single-turn');
+      //
+      // Mode inference priority:
+      //   1. profile name contains "multiturn" → definitely multi-turn (profile
+      //      name is authoritative; historical runs stored raw.config.mode as
+      //      null or "single-turn" even for multi-turn sweeps because the
+      //      result dir is shared between modes)
+      //   2. raw.config.mode if the runner set it
+      //   3. relDir hint (legacy)
+      //   4. default to single-turn
+      const profileName = String(raw.config.profile ?? '');
+      const mode = profileName.includes('multiturn')
+        ? 'multi-turn'
+        : (raw.config.mode || (relDir.includes('multiturn') ? 'multi-turn' : 'single-turn'));
       if (mode !== 'multi-turn' && concurrency > 1 && raw.config.num_requests && raw.config.num_requests < concurrency) {
         skipped++;
         continue;

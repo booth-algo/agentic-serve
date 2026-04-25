@@ -54,7 +54,7 @@ tail -80 /tmp/bench_orchestrator.log 2>/dev/null > "$TMP_DIR/orchestrator.tail.l
     echo ""
     echo "# Counts:"
     echo "  done      : $(grep -l done /tmp/bench_jobs/state/*.status 2>/dev/null | wc -l)"
-    echo "  abandoned : $(grep -l abandoned /tmp/bench_jobs/state/*.status 2>/dev/null | wc -l)"
+    echo "  skipped : $(grep -l skipped /tmp/bench_jobs/state/*.status 2>/dev/null | wc -l)"
     echo "  running   : $(grep -l running /tmp/bench_jobs/state/*.status 2>/dev/null | wc -l)"
     echo "  pending   : $(grep -l pending /tmp/bench_jobs/state/*.status 2>/dev/null | wc -l)"
 } > "$TMP_DIR/job-state.txt"

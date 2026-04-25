@@ -38,11 +38,13 @@ host_python() {
         case "$host" in
             gpu-4)       echo "/data/kevinlau/miniconda3/envs/sglang/bin/python" ;;
             3090|2080ti) echo "/home/kevinlau/miniconda3/envs/sglang/bin/python" ;;
+            h100)        echo "/data/kevinlau/miniconda3/envs/sglang/bin/python" ;;
         esac
     else
         case "$host" in
             gpu-4)       echo "/data/kevinlau/miniconda3/bin/python" ;;
             3090|2080ti) echo "/home/kevinlau/miniconda3/envs/vllm/bin/python" ;;
+            h100)        echo "/data/kevinlau/miniconda3/envs/vllm/bin/python" ;;
         esac
     fi
 }
@@ -65,7 +67,7 @@ bump_attempt() { local n=$(($(read_attempt "$1") + 1)); echo "$n" > "$STATE_DIR/
 
 # Phase 1: detect which hosts are busy with vllm.
 declare -A HOST_BUSY
-for HOST in gpu-4 3090 2080ti; do
+for HOST in gpu-4 3090 2080ti h100; do
     # Check for a listener on the vllm API port (8089). Prior versions used
     # pgrep -f "vllm.entrypoints.openai" which self-matched the ssh wrapper's
     # own cmdline and reported every host busy on every tick.
@@ -91,7 +93,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
     R2_DIR="${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
 
     case "$STATUS" in
-        done|abandoned|failed)
+        done|skipped|failed)
             continue
             ;;
         running)
@@ -142,8 +144,8 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                     echo "$NEW_MAX" > "$STATE_DIR/${JID}.max_len_override"
                     log "$JID: OOM detected, retry with max_len=$NEW_MAX"
                 else
-                    write_status "$JID" abandoned
-                    log "$JID: ABANDONED (zero results, attempt=$ATT, oom_log=$OOM)"
+                    write_status "$JID" skipped
+                    log "$JID: SKIPPED (zero results, attempt=$ATT, oom_log=$OOM)"
                 fi
             fi
             ;;
@@ -183,7 +185,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
 done < "$JOBS_FILE"
 
 # Publish sweep-state.json to R2 so the dashboard reflects the latest cell
-# status (pending/running/done/abandoned/known_oom). Non-fatal — if this
+# status (pending/running/done/skipped/known_oom). Non-fatal — if this
 # fails, the tick still succeeds; the next tick will republish.
 python3 "$REPO_ROOT/inference-benchmark/scripts/publish_sweep_state.py" \
     --endpoint "$EP" --bucket "$BUCKET" --profile "$PROFILE" \

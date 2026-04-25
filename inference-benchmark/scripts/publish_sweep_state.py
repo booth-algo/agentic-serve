@@ -50,7 +50,7 @@ def job_id(host: str, model: str, tp: int, mode: str, backend: str = "vllm") -> 
 
 
 def read_state(jid: str) -> dict:
-    out: dict = {"status": "pending", "attempt": 0, "max_len_override": None, "updated_at": None}
+    out: dict = {"status": "pending", "attempt": 0, "max_len_override": None, "reason": None, "updated_at": None}
     p = STATE_DIR / f"{jid}.status"
     if p.exists():
         out["status"] = p.read_text().strip() or "pending"
@@ -67,6 +67,11 @@ def read_state(jid: str) -> dict:
             out["max_len_override"] = int(ov.read_text().strip())
         except ValueError:
             pass
+    rs = STATE_DIR / f"{jid}.reason"
+    if rs.exists():
+        txt = rs.read_text().strip()
+        if txt:
+            out["reason"] = txt
     return out
 
 
@@ -97,7 +102,7 @@ def build_state(manifest: dict) -> dict:
             "status": rt["status"],
             "attempt": rt["attempt"],
             "max_len_override": rt["max_len_override"],
-            "reason": None,
+            "reason": rt["reason"],
             "updated_at": rt["updated_at"],
         })
 
