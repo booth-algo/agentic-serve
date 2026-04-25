@@ -294,6 +294,17 @@ function main() {
         continue;
       }
 
+      // Skip runs at non-standard concurrencies (ad-hoc saturation probes from
+      // earlier experiments). Raw files stay on R2 for archival; just excluded
+      // from the dashboard to keep the coverage grid clean.
+      const VALID_SINGLE_CONCS = new Set([1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500]);
+      const VALID_MULTI_CONCS = new Set([1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320]);
+      const validConcs = mode === 'multi-turn' ? VALID_MULTI_CONCS : VALID_SINGLE_CONCS;
+      if (!validConcs.has(concurrency)) {
+        skipped++;
+        continue;
+      }
+
       // Skip runs with >50% failure rate — garbage metrics from OOM/timeouts/crashes.
       // Keep the file for evidence, just don't plot it.
       const okReqs = raw.summary.successful_requests ?? 0;
