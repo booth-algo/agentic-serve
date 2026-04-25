@@ -26,6 +26,23 @@ from llm_predict.predictors.per_kernel.predictor import PerKernelPredictor
 
 from . import composer, model_specs
 
+# Per-GPU decode overhead correction factor, calibrated from bench data.
+# α = measured_decode / predicted_decode, where decode = e2el - ttft.
+# Sources:
+#   A100: mean across chat-{short,medium,long} Llama-8B conc=1 → 1.497
+#         (bandwidth approx underpredicts; missing dispatch/sync overhead)
+#   RTX2080Ti: chat-short Llama-8B conc=1 → 0.605
+#         (per-op decode_attn pkl overpredicts; torch.profiler overhead)
+#   RTX3090: not yet calibrated, interpolated from A100 (similar arch)
+# Applied multiplicatively to predicted decode_ms. Option 2 (ncu decode
+# profiling) will eliminate the need for this factor.
+_DECODE_CORRECTION: dict[str, float] = {
+    "A100": 1.497,
+    "RTX3090": 1.40,
+    "RTX2080Ti": 0.605,
+    "H100": 1.50,
+}
+
 
 def _decode_step_ms(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
                     kv_cache_len: int, bs: int = 1, tp: int = 1,
@@ -129,6 +146,10 @@ def predict_serving_e2e(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
             seg_avg = 0.5 * (per_sample[i] + per_sample[i + 1])
             seg_tokens = (osl - 1) / (n_samples - 1)
             decode_ms += seg_avg * seg_tokens
+
+    # Apply per-GPU decode correction factor (Option 1 calibration).
+    alpha = _DECODE_CORRECTION.get(pred.gpu, 1.0)
+    decode_ms *= alpha
 
     tpot_ms = decode_ms / max(osl, 1)
     e2el_ms = ttft_ms + decode_ms

@@ -10,16 +10,16 @@
 
 | Model | arch | backend | ISL | OSL | bs | pred TTFT | meas TTFT | TTFT err | pred TPOT | meas TPOT | TPOT err | pred E2EL | meas E2EL | E2EL err |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| gpt-oss-20b | moe | vllm | 150 | 171 | 1 | 11.93 | 32.99 | 63.8% | 3.16 | 4.93 | 36.0% | 551.56 | 979.27 | 43.7% |
-| Llama-8B | supported | vllm | 127 | 149 | 1 | 35.25 | 35.18 | 0.2% | 8.46 | 12.89 | 34.4% | 1295.48 | 1993.33 | 35.0% |
-| Qwen3.5-9B | hybrid_attn | vllm | 95 | 172 | 1 | 29.66 | 89.43 | 66.8% | 14.91 | 13.76 | 8.4% | 2594.91 | 2752.05 | 5.7% |
+| gpt-oss-20b | moe | vllm | 150 | 171 | 1 | 11.93 | 32.99 | 63.8% | 4.72 | 4.93 | 4.2% | 819.75 | 979.27 | 16.3% |
+| Llama-8B | supported | vllm | 127 | 149 | 1 | 35.25 | 35.18 | 0.2% | 12.66 | 12.89 | 1.8% | 1921.82 | 1993.33 | 3.6% |
+| Qwen3.5-9B | hybrid_attn | vllm | 95 | 172 | 1 | 29.66 | 89.43 | 66.8% | 22.33 | 13.76 | 62.2% | 3869.84 | 2752.05 | 40.6% |
 
 ## Summary (supported architectures only)
 
 | Metric | MAPE | n rows |
 |---|---:|---:|
 | TTFT | 0.20% | 1 |
-| TPOT | 34.38% | 1 |
-| E2EL | 35.01% | 1 |
+| TPOT | 1.77% | 1 |
+| E2EL | 3.59% | 1 |
 
 _Out-of-scope: 1 moe, 1 hybrid_attn — excluded from headline._

@@ -66,6 +66,8 @@ PEROP_FEATURES: list[str] = [
     "bs", "seq",
     "log_bs", "log_seq",
     "attn_quad", "log_attn_quad",
+    # v5 additions (2): decode KV cache depth (Phase 2, 2026-04-25)
+    "kv_cache_len", "log_kv_cache_len",
 ]
 
 
@@ -167,6 +169,7 @@ def compute_features(row: dict[str, Any]) -> list[float]:
         bs_f, seq_f,
         math.log2(bs_f + 1), math.log2(seq_f + 1),
         attn_quad, math.log2(attn_quad + 1) if attn_quad > 0 else 0,
+        kv_cache_len, math.log2(kv_cache_len + 1),
     ]
 
 

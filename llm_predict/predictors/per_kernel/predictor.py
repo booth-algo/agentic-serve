@@ -73,6 +73,19 @@ class PerKernelPredictor:
             if family == 'misc' and isinstance(data.get('models'), dict):
                 # Per-subfamily misc predictors override the single `model`.
                 self.misc_submodels = dict(data['models'])
+        # Phase 2: optional decode_attn pkl (trained from per-op decode data).
+        da_path = os.path.join(pkl_dir, 'perkernel_decode_attn_shape_v2.pkl')
+        if os.path.isfile(da_path):
+            with open(da_path, 'rb') as f:
+                da = pickle.load(f)
+            self.models['decode_attn'] = da['model']
+            self.feature_cols['decode_attn'] = list(da['feature_cols'])
+            self.metadata['decode_attn'] = {
+                'n_training': da.get('n_training'),
+                'train_mape': da.get('train_mape'),
+                'version': da.get('version'),
+                'target': da.get('target', 'log_duration_us'),
+            }
         return len(self.models) > 0
 
     def is_loaded(self) -> bool:
@@ -168,17 +181,37 @@ class PerKernelPredictor:
         approximation that is correct in shape (linear in kv_cache_len) so
         the trapezoidal integration in serving_e2e.py is unbiased.
 
-        Returns ms, or -1.0 if the GPU is unknown to the bandwidth table.
+        Returns ms, or -1.0 if no model loaded and GPU not in bandwidth table.
         """
-        bw_gbps = self._HBM_BW_GBPS.get(self.gpu)
-        if bw_gbps is None:
-            return -1.0
         if kv_heads is None:
             kv_heads = n_heads
         dtype_bytes = 2 if dtype in ('bf16', 'fp16') else 4
-        # Read K + V (factor 2) for each kv head across the cache.
+
+        # Learned model path (Phase 2): use trained decode_attn pkl.
+        if 'decode_attn' in self.models:
+            kv_bytes = 2.0 * bs * kv_cache_len * kv_heads * head_dim * dtype_bytes
+            feats = {
+                'bs': float(bs),
+                'log_bs': math.log2(bs + 1),
+                'kv_cache_len': float(kv_cache_len),
+                'log_kv_cache_len': math.log2(kv_cache_len + 1),
+                'n_heads': float(n_heads),
+                'kv_heads': float(kv_heads),
+                'head_dim': float(head_dim),
+                'kv_bytes': kv_bytes,
+                'log_kv_bytes': math.log2(kv_bytes + 1),
+            }
+            cols = self.feature_cols['decode_attn']
+            X = np.array([[feats.get(c, 0.0) for c in cols]], dtype=float)
+            log_pred = self.models['decode_attn'].predict(X)[0]
+            # Target is log(duration_us); convert to ms.
+            return float(np.exp(log_pred)) / 1000.0
+
+        # Fallback: analytical bandwidth approximation.
+        bw_gbps = self._HBM_BW_GBPS.get(self.gpu)
+        if bw_gbps is None:
+            return -1.0
         bytes_kv = 2.0 * bs * kv_cache_len * kv_heads * head_dim * dtype_bytes
-        # Convert to ms: bytes / (GB/s * efficiency * 1e9) * 1000.
         return bytes_kv / (bw_gbps * efficiency * 1e9) * 1000.0
 
     def predict_elementwise(self, op_type: str, numel: int) -> float:
