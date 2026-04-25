@@ -59,9 +59,10 @@ function SummaryCell({ label, value, sub, color }: { label: string; value: strin
 }
 
 function PredictorResultsSection({ results }: { results?: PredictorResults }) {
-  if (!results || (!results.per_kernel && !results.per_op)) return null;
+  if (!results || (!results.per_kernel && !results.per_op && !results.wallclock)) return null;
   const pkGpus = Object.keys(results.per_kernel ?? {}).sort();
   const poGpus = Object.keys(results.per_op ?? {}).sort();
+  const wcGpus = Object.keys(results.wallclock ?? {}).sort();
   const allFamilies: string[] = [];
   for (const g of pkGpus) {
     const fams = Object.keys(results.per_kernel![g]?.heldout_mape_per_family ?? {});
@@ -154,6 +155,55 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {wcGpus.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-[#8b949e]">
+            Per-kernel e2e wall-clock (vs real vLLM 0.19 TTFT, fixed-seq128, bs=1)
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
+            <table className="min-w-full border-collapse text-xs">
+              <thead><tr className="border-b border-[#21262d] text-[#8b949e]">
+                <th className="px-3 py-2 text-left font-medium">GPU</th>
+                <th className="px-3 py-2 text-left font-medium">Model</th>
+                <th className="px-3 py-2 text-left font-medium">arch</th>
+                <th className="px-3 py-2 text-right font-medium">pred (ms)</th>
+                <th className="px-3 py-2 text-right font-medium">measured (ms)</th>
+                <th className="px-3 py-2 text-right font-medium">MAPE</th>
+                <th className="px-3 py-2 text-right font-medium">ncu Σ (ms)</th>
+                <th className="px-3 py-2 text-right font-medium">overhead %</th>
+              </tr></thead>
+              <tbody>
+                {wcGpus.flatMap(g => {
+                  const wc = results.wallclock![g];
+                  return (wc.rows ?? []).map((r, i) => {
+                    const archColor = r.arch === 'supported' ? 'text-[#3fb950]' : 'text-[#8b949e]';
+                    const errColor = r.arch === 'supported' ? 'text-[#3fb950]' : 'text-[#8b949e]';
+                    return (
+                      <tr key={`${g}-${r.model}-${i}`} className="border-b border-[#21262d]/50">
+                        <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{g}</td>
+                        <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{r.model}</td>
+                        <td className={`px-3 py-1.5 font-mono ${archColor}`}>{r.arch}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">{r.predicted_ms.toFixed(2)}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">{r.measured_ms.toFixed(2)}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono ${errColor}`}>{r.abs_err_pct.toFixed(2)}%</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-[#8b949e]">{r.ncu_sum_ms !== undefined ? r.ncu_sum_ms.toFixed(2) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-[#8b949e]">{r.overhead_pct !== undefined ? `${r.overhead_pct.toFixed(1)}%` : '—'}</td>
+                      </tr>
+                    );
+                  });
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="text-[11px] text-[#8b949e]">
+            Supported MAPE (dense, full-attn, non-MoE): {wcGpus.map(g => {
+              const m = results.wallclock![g]?.supported_mape;
+              return `${g}: ${m !== undefined ? m.toFixed(2) + '%' : '—'}`;
+            }).join(' · ')}
           </div>
         </div>
       )}

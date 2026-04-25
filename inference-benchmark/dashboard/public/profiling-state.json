@@ -620,15 +620,15 @@
     "per_kernel": {
       "A100": {
         "heldout_mape_per_family": {
-          "gemm": 7.095951050189475,
+          "gemm": 396.4594535004887,
           "flash_attn": 3.5104502260427064,
           "elementwise": 13.732536183062749,
           "misc": 15.186435984188556
         },
         "aggregate_err_per_model": {
-          "Llama-3.3-70B": 7.4571771437910686,
-          "Llama-70B": 7.6318288115784245,
-          "Qwen-72B": 6.557105352984288
+          "Llama-3.3-70B": 81.68626089069308,
+          "Llama-70B": 81.34337305240105,
+          "Qwen-72B": 77.5111778195454
         }
       },
       "RTX3090": {
@@ -642,42 +642,125 @@
           "Llama-70B": 0.06853536869348617,
           "Qwen-72B": 0.4686183931631653
         }
+      },
+      "RTX2080Ti": {
+        "heldout_mape_per_family": {
+          "gemm": NaN,
+          "flash_attn": null,
+          "elementwise": NaN,
+          "misc": NaN
+        },
+        "aggregate_err_per_model": {}
       }
     },
     "per_op": {
       "A100": {
-        "heldout_mape": 38.66214357027025,
+        "heldout_mape": 26.724437006026626,
         "pool_models": [
+          "Llama-70B",
           "Llama-8B",
           "Mixtral",
           "gpt-oss-20b"
         ],
         "heldout_models": [
           "Llama-3.3-70B",
-          "Llama-70B",
           "Qwen-72B"
         ]
       },
       "RTX3090": {
-        "heldout_mape": 26.584837445240765,
+        "heldout_mape": 21.31523189010911,
         "pool_models": [
+          "Llama-70B",
           "Llama-8B",
           "Mixtral",
           "Qwen3.5-9B",
           "gpt-oss-20b"
         ],
         "heldout_models": [
-          "Llama-70B",
           "Qwen-72B"
         ]
       },
       "RTX2080Ti": {
-        "heldout_mape": null,
+        "heldout_mape": 17.15250798342451,
         "pool_models": [
           "Llama-8B",
           "Qwen3.5-9B"
         ],
-        "heldout_models": []
+        "heldout_models": [
+          "Qwen-7B"
+        ]
+      }
+    },
+    "wallclock": {
+      "A100": {
+        "target_seq": 167,
+        "rows": [
+          {
+            "model": "Llama-8B",
+            "arch": "supported",
+            "backend": "vllm",
+            "profile": "fixed-seq128",
+            "avg_seq": 167,
+            "predicted_ms": 37.43,
+            "measured_ms": 36.71,
+            "abs_err_pct": 1.97,
+            "ncu_sum_ms": 26.48,
+            "overhead_pct": 27.9,
+            "median_tpot_ms": 12.89
+          },
+          {
+            "model": "gpt-oss-20b",
+            "arch": "moe",
+            "backend": "vllm",
+            "profile": "fixed-seq128",
+            "avg_seq": 166,
+            "predicted_ms": 12.0,
+            "measured_ms": 33.88,
+            "abs_err_pct": 64.59,
+            "ncu_sum_ms": 60.34,
+            "overhead_pct": -78.1,
+            "median_tpot_ms": 4.95
+          }
+        ],
+        "supported_mape": 1.97
+      },
+      "RTX3090": {
+        "target_seq": 167,
+        "rows": [
+          {
+            "model": "Llama-8B",
+            "arch": "supported",
+            "backend": "vllm",
+            "profile": "fixed-seq128",
+            "avg_seq": 167,
+            "predicted_ms": 58.77,
+            "measured_ms": 59.66,
+            "abs_err_pct": 1.49,
+            "ncu_sum_ms": 55.06,
+            "overhead_pct": 7.7,
+            "median_tpot_ms": 19.68
+          }
+        ],
+        "supported_mape": 1.49
+      },
+      "RTX2080Ti": {
+        "target_seq": 167,
+        "rows": [
+          {
+            "model": "Llama-8B",
+            "arch": "supported",
+            "backend": "vllm",
+            "profile": "fixed-seq128",
+            "avg_seq": 167,
+            "predicted_ms": 49.72,
+            "measured_ms": 81.05,
+            "abs_err_pct": 38.66,
+            "ncu_sum_ms": 65.56,
+            "overhead_pct": 19.1,
+            "median_tpot_ms": 27.48
+          }
+        ],
+        "supported_mape": 38.66
       }
     }
   }

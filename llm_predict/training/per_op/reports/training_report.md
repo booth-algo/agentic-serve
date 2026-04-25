@@ -6,9 +6,9 @@
 
 | GPU | n_train | n_heldout | pool | heldout | MAPE |
 |---|---:|---:|---|---|---:|
-| A100 | 6396 | 6228 | Llama-8B, Mixtral, gpt-oss-20b | Llama-3.3-70B, Llama-70B, Qwen-72B | 38.66% |
-| RTX3090 | 285 | 152 | Llama-8B, Mixtral, Qwen3.5-9B, gpt-oss-20b | Llama-70B, Qwen-72B | 26.58% |
-| RTX2080Ti | 133 | 0 | Llama-8B, Qwen3.5-9B | — | — |
+| A100 | 6472 | 4180 | Llama-70B, Llama-8B, Mixtral, gpt-oss-20b | Llama-3.3-70B, Qwen-72B | 30.68% |
+| RTX3090 | 361 | 76 | Llama-70B, Llama-8B, Mixtral, Qwen3.5-9B, gpt-oss-20b | Qwen-72B | 13.95% |
+| RTX2080Ti | 133 | 76 | Llama-8B, Qwen3.5-9B | Qwen-7B | 17.15% |
 
 ## Per-heldout-model MAPE
 
@@ -16,16 +16,20 @@
 
 | held-out model | MAPE |
 |---|---:|
-| Llama-3.3-70B | 35.54% |
-| Llama-70B | 36.17% |
-| Qwen-72B | 44.05% |
+| Llama-3.3-70B | 29.17% |
+| Qwen-72B | 32.13% |
 
 ### RTX3090
 
 | held-out model | MAPE |
 |---|---:|
-| Llama-70B | 26.64% |
-| Qwen-72B | 26.53% |
+| Qwen-72B | 13.95% |
+
+### RTX2080Ti
+
+| held-out model | MAPE |
+|---|---:|
+| Qwen-7B | 17.15% |
 
 ## LOMO cross-validation
 
@@ -33,18 +37,20 @@
 
 | held-out | n_train | n_test | MAPE |
 |---|---:|---:|---:|
-| Llama-8B | 4264 | 2132 | 19.28% |
-| Mixtral | 4264 | 2132 | 17.36% |
-| gpt-oss-20b | 4264 | 2132 | 52.09% |
+| Llama-70B | 6396 | 76 | 37.61% |
+| Llama-8B | 4340 | 2132 | 17.96% |
+| Mixtral | 4340 | 2132 | 17.33% |
+| gpt-oss-20b | 4340 | 2132 | 42.75% |
 
 ### RTX3090
 
 | held-out | n_train | n_test | MAPE |
 |---|---:|---:|---:|
-| Llama-8B | 209 | 76 | 21.11% |
-| Mixtral | 209 | 76 | 21.78% |
-| Qwen3.5-9B | 228 | 57 | 18.65% |
-| gpt-oss-20b | 209 | 76 | 43.76% |
+| Llama-70B | 285 | 76 | 26.64% |
+| Llama-8B | 285 | 76 | 17.60% |
+| Mixtral | 285 | 76 | 19.30% |
+| Qwen3.5-9B | 304 | 57 | 17.39% |
+| gpt-oss-20b | 285 | 76 | 42.46% |
 
 ### RTX2080Ti
 

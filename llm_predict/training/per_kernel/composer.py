@@ -1,4 +1,4 @@
-"""Per-kernel → layer → e2e composition.
+"""Per-kernel → layer → TTFT composition.
 
 Port of `/root/per-kernel-rebuild/compose_percat.py` using the runtime
 `PerKernelPredictor` API instead of raw pkl loads, so any trainer/predictor
@@ -8,7 +8,7 @@ For a given (ModelConfig, GPU, input_seq_len, batch, tp), enumerate the ops
 in one transformer layer, call the four family predictors per op, sum, and
 multiply by n_layers. Returns predicted TTFT in ms.
 
-No measured-e2e loader here — `validate.py` provides the comparison loop.
+No measured-TTFT loader here — `validate.py` provides the comparison loop.
 """
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ def predict_layer_ms(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
 def predict_ttft_ms(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
                      seq: int, bs: int = 1, tp: int = 1, shard_tp: bool = True,
                      include_lm_head: bool = True) -> float:
-    """Predict TTFT (prefill e2e) in ms: per_layer × n_layers + optional LM head."""
+    """Predict TTFT (prefill only) in ms: per_layer × n_layers + optional LM head."""
     per_layer = predict_layer_ms(pred, cfg, seq=seq, bs=bs, tp=tp, shard_tp=shard_tp)
     total = per_layer * cfg.n_layers
     if include_lm_head:
@@ -109,4 +109,10 @@ def predict_ttft_batch(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
                      for s in seqs], dtype=float)
 
 
-__all__ = ["predict_layer_ms", "predict_ttft_ms", "predict_ttft_batch"]
+# Naming-convention alias (locked 2026-04-25; see .claude/paper/predictor_roadmap.md):
+# `microbench_ttft` is the prefill-only TTFT track. Use the alias in new code so
+# the intent is explicit; the legacy `predict_ttft_ms` stays for backwards compat.
+predict_microbench_ttft = predict_ttft_ms
+
+__all__ = ["predict_layer_ms", "predict_ttft_ms", "predict_microbench_ttft",
+           "predict_ttft_batch"]
