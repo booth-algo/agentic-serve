@@ -143,10 +143,18 @@ def predict_serving_e2e(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
             "bs_eff": 1.0, "saturated": False,
         }
 
+    _DECODE_BS_EXPONENT = {
+        "A100": -0.13,
+        "RTX3090": -0.02,
+        "RTX2080Ti": -0.05,
+        "H100": -0.13,
+    }
+
     def _alpha_at_bs(bs_val: float) -> float:
         if bs_val <= 1:
             return alpha_base
-        return alpha_base * (bs_val ** -0.13)
+        exp = _DECODE_BS_EXPONENT.get(pred.gpu, -0.13)
+        return alpha_base * (bs_val ** exp)
 
     def tpot_at_bs(bs_val: float) -> float:
         raw = _integrate_decode_ms(pred, cfg, isl, osl,
