@@ -56,7 +56,7 @@ Workloads fall into three tiers (Table~\ref{tab:profiles}).
 \subsection{Benchmarking Framework}
 \label{sec:framework}
 
-We extend an open-source asynchronous benchmark client that targets OpenAI-compatible endpoints (\texttt{/v1/chat/completions}). For each (model, profile, concurrency) cell, we record per-request TTFT, ITL, TPOT, end-to-end latency, and input/output token counts from the streamed response. We report median and p90; throughput is aggregate output tokens per second. Three warmup requests per cell are discarded.
+We extend an open-source asynchronous benchmark client that targets OpenAI-compatible endpoints (\texttt{/v1/chat/completions}). For each (model, profile, concurrency) cell, we record per-request TTFT, inter-token latency (ITL), TPOT, end-to-end latency, and input/output token counts from the streamed response. We report median and p90; throughput is aggregate output tokens per second. Three warmup requests per cell are discarded.
 
 \paragraph{Closed-loop arrival.} Concurrency is enforced via \texttt{asyncio.Semaphore(concurrency)}: all $N$ requests fire at $t{=}0$ but at most \texttt{concurrency} are in flight, with the next request launched the instant one completes. Open-loop \texttt{--request-rate inf} runs (used by InferenceX~\citep{inferencex}) inflate TTFT with queue-wait time; our TTFT reflects scheduler behavior at a stable in-flight load.
 
