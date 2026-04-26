@@ -65,13 +65,16 @@ def ttft_queuing_factor(concurrency: int, ttft_ms: float, tpot_ms: float,
                         osl: int, gpu: str = "A100") -> float:
     if concurrency <= 1:
         return 1.0
-    C_THRESH = 30
+    # Workload-aware threshold: longer decode = higher C before prefill
+    # queue saturates. k=1.8 calibrated from A100 Llama-8B chat-short/medium/long.
+    PREFILL_SATURATION_K = 1.8
     LOW_SLOPE = 0.025
     PLATEAU_BASE = 8.0
     PLATEAU_EXP = 0.1
-    if concurrency < C_THRESH:
+    c_thresh = max(5, osl * tpot_ms / max(ttft_ms, 1e-9) / PREFILL_SATURATION_K)
+    if concurrency < c_thresh:
         return 1.0 + LOW_SLOPE * (concurrency - 1)
-    return PLATEAU_BASE * (concurrency / C_THRESH) ** PLATEAU_EXP
+    return PLATEAU_BASE * (concurrency / c_thresh) ** PLATEAU_EXP
 
 
 def estimate_kv_memory_gb(bs_eff: float, max_kv_len: int, n_layers: int,

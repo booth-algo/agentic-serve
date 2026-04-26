@@ -515,6 +515,134 @@ def validate_serving_e2e_gpu(gpu: str,
 
 # ── orchestration ────────────────────────────────────────────────────────────
 
+
+# __ serving_e2e_conc (concurrency sweep) validation ______________________
+
+DEFAULT_CONCURRENCIES = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500]
+
+
+def validate_serving_e2e_conc_gpu(gpu, data_json_path, report_path,
+                                   profile_name, concurrencies=None):
+    pred = PerKernelPredictor(gpu=gpu)
+    if not pred.load():
+        print("[%s][serving_e2e_conc] no pkls" % gpu)
+        return
+
+    concs = concurrencies or DEFAULT_CONCURRENCIES
+    out_rows = []
+
+    for conc in concs:
+        measured_rows = _load_measured_rows(
+            data_json_path, gpu, concurrency=conc,
+            profile_filter=profile_name,
+        )
+        for row in measured_rows:
+            dir_name = _MODELSHORT_TO_DIR.get(row["modelShort"])
+            if not dir_name:
+                continue
+            cfg = model_specs.get_model_config(
+                dir_name, held_out=model_specs.is_held_out(dir_name, gpu))
+            if cfg is None:
+                continue
+            isl = max(1, int(round(row["avg_isl"])))
+            osl = max(0, int(round(row["avg_osl"])))
+            short = next((s for s, d in _SHORT_TO_DIR.items() if d == dir_name), row["modelShort"])
+            arch = _arch_class(short, cfg)
+
+            result = serving_e2e.predict_serving_e2e(
+                pred, cfg, isl=isl, osl=osl, concurrency=conc)
+
+            meas_ttft = row["measured_ttft_ms"]
+            meas_tpot = row.get("median_tpot_ms")
+            meas_e2el = row.get("median_e2el_ms")
+
+            ttft_err = abs(result["ttft_ms"] - meas_ttft) / max(meas_ttft, 1e-9) * 100.0
+            tpot_err = (abs(result["tpot_ms"] - meas_tpot) / max(meas_tpot, 1e-9) * 100.0
+                        if meas_tpot and meas_tpot > 0 else None)
+            e2el_err = (abs(result["e2el_ms"] - meas_e2el) / max(meas_e2el, 1e-9) * 100.0
+                        if meas_e2el and meas_e2el > 0 else None)
+
+            out_rows.append({
+                "short": short, "arch": arch, "conc": conc,
+                "isl": isl, "osl": osl, "bs_eff": result["bs_eff"],
+                "saturated": result["saturated"],
+                "pred_ttft": result["ttft_ms"], "pred_tpot": result["tpot_ms"],
+                "pred_e2el": result["e2el_ms"],
+                "meas_ttft": meas_ttft, "meas_tpot": meas_tpot, "meas_e2el": meas_e2el,
+                "ttft_err": ttft_err, "tpot_err": tpot_err, "e2el_err": e2el_err,
+            })
+
+    if not out_rows:
+        print("[%s][serving_e2e_conc][%s] no data" % (gpu, profile_name))
+        return
+
+    def _m(errs):
+        return "%.1f%%" % (sum(errs)/len(errs)) if errs else "n/a"
+
+    lines = [
+        "# %s -- serving_e2e Concurrency Sweep: %s" % (gpu, profile_name),
+        "",
+        "- Predictor: Little's Law concurrency model + per-kernel XGBoost",
+        "- Concurrencies: %s" % concs,
+        "",
+        "## Per-concurrency MAPE (supported architectures)",
+        "",
+        "| Conc | bs_eff | TTFT MAPE | TPOT MAPE | E2EL MAPE | n |",
+        "|---:|---:|---:|---:|---:|---:|",
+    ]
+
+    for conc in concs:
+        cr = [r for r in out_rows if r["conc"] == conc and r["arch"] == "supported"]
+        if not cr:
+            continue
+        te = [r["ttft_err"] for r in cr]
+        pe = [r["tpot_err"] for r in cr if r["tpot_err"] is not None]
+        ee = [r["e2el_err"] for r in cr if r["e2el_err"] is not None]
+        bs = sum(r["bs_eff"] for r in cr) / len(cr)
+        lines.append("| %d | %.1f | %s | %s | %s | %d |" % (conc, bs, _m(te), _m(pe), _m(ee), len(cr)))
+
+    lines.append("")
+    sup = [r for r in out_rows if r["arch"] == "supported"]
+    sup_e2el = [r["e2el_err"] for r in sup if r["e2el_err"] is not None]
+    sup_tpot = [r["tpot_err"] for r in sup if r["tpot_err"] is not None]
+    lines.append("Overall supported MAPE: TPOT %s, E2EL %s" % (_m(sup_tpot), _m(sup_e2el)))
+    lines.append("")
+
+    lines.append("## Per-row detail")
+    lines.append("")
+    lines.append("| Model | arch | Conc | ISL | OSL | bs_eff "
+                 "| pred TTFT | meas TTFT | TTFT err "
+                 "| pred TPOT | meas TPOT | TPOT err "
+                 "| pred E2EL | meas E2EL | E2EL err |")
+    lines.append("|---|---|---:|---:|---:|---:"
+                 "|---:|---:|---:"
+                 "|---:|---:|---:"
+                 "|---:|---:|---:|")
+
+    for r in out_rows:
+        tp = "%.1f" % r["pred_tpot"]
+        tm = "%.1f" % r["meas_tpot"] if r["meas_tpot"] else "-"
+        tes = "%.1f%%" % r["tpot_err"] if r["tpot_err"] is not None else "-"
+        em = "%.1f" % r["meas_e2el"] if r["meas_e2el"] else "-"
+        ees = "%.1f%%" % r["e2el_err"] if r["e2el_err"] is not None else "-"
+        lines.append(
+            "| %s | %s | %d | %d | %d | %.1f "
+            "| %.1f | %.1f | %.1f%% "
+            "| %s | %s | %s "
+            "| %.1f | %s | %s |" % (
+                r["short"], r["arch"], r["conc"], r["isl"], r["osl"], r["bs_eff"],
+                r["pred_ttft"], r["meas_ttft"], r["ttft_err"],
+                tp, tm, tes,
+                r["pred_e2el"], em, ees))
+    lines.append("")
+
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("\n".join(lines))
+
+    print("[%s][serving_e2e_conc][%s] TPOT %s E2EL %s (%d/%d supported) -- wrote %s" % (
+        gpu, profile_name, _m(sup_tpot), _m(sup_e2el),
+        len(sup), len(out_rows), report_path))
+
 def run(data_csv: Path, report_dir: Path, gpus: list[str], seq: int = 128,
         vs_measured: bool = False, data_json: Path | None = None,
         concurrency: int = 1,
@@ -523,7 +651,17 @@ def run(data_csv: Path, report_dir: Path, gpus: list[str], seq: int = 128,
     df = pd.read_csv(data_csv)
 
     for gpu in gpus:
-        if mode == "serving_e2e":
+        if mode == "serving_e2e_conc":
+            profiles_list = [profile] if profile else [
+                "chat-short", "chat-medium", "chat-long",
+            ]
+            for p in profiles_list:
+                validate_serving_e2e_conc_gpu(
+                    gpu, data_json,
+                    report_dir / f"{gpu}_serving_e2e_conc_{p}.md",
+                    profile_name=p,
+                )
+        elif mode == "serving_e2e":
             if data_json is None:
                 print(f"[{gpu}][serving_e2e] --data-json required")
                 continue
@@ -559,7 +697,7 @@ def main() -> None:
     ap.add_argument("--gpu", default=None, help="Shortcut for a single GPU")
     ap.add_argument("--seq", type=int, default=128)
 
-    ap.add_argument("--mode", choices=["microbench_ttft", "serving_e2e"], default=None,
+    ap.add_argument("--mode", choices=["microbench_ttft", "serving_e2e", "serving_e2e_conc"], default=None,
                     help="Validation mode: microbench_ttft (prefill-only TTFT, default "
                          "when --vs-measured) or serving_e2e (ISL/OSL → TTFT+TPOT+E2EL).")
     ap.add_argument("--profile", default=None,
@@ -590,7 +728,7 @@ def main() -> None:
         mode = "microbench_ttft"
     vs_measured = args.vs_measured or mode == "microbench_ttft"
 
-    needs_data_json = vs_measured or mode == "serving_e2e"
+    needs_data_json = vs_measured or mode in ("serving_e2e", "serving_e2e_conc")
     if needs_data_json:
         if args.data_json:
             data_json = Path(args.data_json)
