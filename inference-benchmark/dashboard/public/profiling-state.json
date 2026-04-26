@@ -654,18 +654,14 @@
       }
     },
     "per_op": {
-      "RTX3090": {
-        "heldout_mape": 42.266252699689396,
+      "H100": {
+        "heldout_mape": null,
         "pool_models": [
-          "Llama-70B",
           "Llama-8B",
-          "Mixtral",
           "Qwen3.5-9B",
           "gpt-oss-20b"
         ],
-        "heldout_models": [
-          "Qwen-72B"
-        ]
+        "heldout_models": []
       }
     },
     "wallclock": {
@@ -927,8 +923,8 @@
         "chat-short": {
           "mape": {
             "ttft": 43.14,
-            "tpot": 65.56,
-            "e2el": 63.09
+            "tpot": 1.61,
+            "e2el": 2.35
           },
           "rows": [
             {
@@ -941,20 +937,20 @@
               "pred_ttft_ms": 54.29,
               "meas_ttft_ms": 37.93,
               "ttft_err_pct": 43.1,
-              "pred_tpot_ms": 32.71,
+              "pred_tpot_ms": 19.44,
               "meas_tpot_ms": 19.75,
-              "tpot_err_pct": 65.6,
-              "pred_e2el_ms": 4960.19,
+              "tpot_err_pct": 1.6,
+              "pred_e2el_ms": 2969.8,
               "meas_e2el_ms": 3041.37,
-              "e2el_err_pct": 63.1
+              "e2el_err_pct": 2.4
             }
           ]
         },
         "chat-medium": {
           "mape": {
             "ttft": 51.26,
-            "tpot": 65.16,
-            "e2el": 71.0
+            "tpot": 1.85,
+            "e2el": 2.09
           },
           "rows": [
             {
@@ -967,20 +963,20 @@
               "pred_ttft_ms": 53.67,
               "meas_ttft_ms": 35.48,
               "ttft_err_pct": 51.3,
-              "pred_tpot_ms": 32.8,
+              "pred_tpot_ms": 19.49,
               "meas_tpot_ms": 19.86,
-              "tpot_err_pct": 65.2,
-              "pred_e2el_ms": 7859.67,
+              "tpot_err_pct": 1.8,
+              "pred_e2el_ms": 4692.67,
               "meas_e2el_ms": 4596.41,
-              "e2el_err_pct": 71.0
+              "e2el_err_pct": 2.1
             }
           ]
         },
         "chat-long": {
           "mape": {
             "ttft": 48.13,
-            "tpot": 65.06,
-            "e2el": 70.63
+            "tpot": 1.91,
+            "e2el": 1.85
           },
           "rows": [
             {
@@ -993,12 +989,12 @@
               "pred_ttft_ms": 61.83,
               "meas_ttft_ms": 41.74,
               "ttft_err_pct": 48.1,
-              "pred_tpot_ms": 32.86,
+              "pred_tpot_ms": 19.53,
               "meas_tpot_ms": 19.91,
-              "tpot_err_pct": 65.1,
-              "pred_e2el_ms": 9525.35,
+              "tpot_err_pct": 1.9,
+              "pred_e2el_ms": 5685.87,
               "meas_e2el_ms": 5582.54,
-              "e2el_err_pct": 70.6
+              "e2el_err_pct": 1.9
             }
           ]
         }

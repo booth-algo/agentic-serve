@@ -1,18 +1,14 @@
 [
   {
-    "gpu": "RTX3090",
+    "gpu": "H100",
     "skipped": false,
-    "heldout_mape": 42.266252699689396,
-    "saved_pkl": "/home/kevinlau/agentic-serve/llm_predict/profiling/data/RTX3090/trained/per_op/perop_v5_shape.pkl",
+    "heldout_mape": null,
+    "saved_pkl": "/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_op/perop_v5_shape.pkl",
     "pool_models": [
-      "Llama-70B",
       "Llama-8B",
-      "Mixtral",
       "Qwen3.5-9B",
       "gpt-oss-20b"
     ],
-    "heldout_models": [
-      "Qwen-72B"
-    ]
+    "heldout_models": []
   }
 ]
