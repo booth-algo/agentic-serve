@@ -130,7 +130,6 @@ export function CoveragePage({
   sweepState,
   loading,
 }: CoveragePageProps) {
-  const [view, setView] = useState<CoverageView>('bench');
   const { groups, hardwareList, sweepMtime } = useMemo(() => {
     const baseHwLabels = sweepState
       ? Object.values(sweepState.hosts).map((h) => h.hardware_label)
@@ -338,15 +337,6 @@ export function CoveragePage({
 
   return (
     <div className="space-y-4">
-
-      {view === 'per-kernel' && (
-        <PerKernelCoverage data={predictorCoverage ?? null} loading={predictorCoverageLoading ?? false} />
-      )}
-      {view === 'per-op' && (
-        <PerOpCoverage data={predictorCoverage ?? null} loading={predictorCoverageLoading ?? false} />
-      )}
-
-      {view === 'bench' && (<>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
         <SummaryCell label="Overall" value={`${pct}%`} sub={`${grand.totalHave}/${grand.totalNeed} cells`} color="#00bcd4" />
         <SummaryCell label="Complete" value={`${grand.complete}`} sub="all concs present" color="#3fb950" />
