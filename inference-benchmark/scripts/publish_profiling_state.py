@@ -112,7 +112,11 @@ def _parse_wallclock(md_path: Path) -> dict | None:
 
 
 _SERVING_PROFILES = ("chat-short", "chat-medium", "chat-long",
-                     "coding-agent", "prefill-heavy", "decode-heavy")
+                     "chat-multiturn-short", "chat-multiturn-medium", "chat-multiturn-long",
+                     "coding-agent", "prefill-heavy", "decode-heavy",
+                     "terminalbench-multiturn-short", "terminalbench-multiturn-medium",
+                     "swebench-multiturn-short", "swebench-multiturn-medium",
+                     "osworld-multiturn-short", "osworld-multiturn-medium")
 
 
 def _parse_serving_e2e(md_path: Path) -> dict | None:
