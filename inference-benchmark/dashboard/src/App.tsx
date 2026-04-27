@@ -34,7 +34,6 @@ function App() {
   } = useData();
   const { sweepState } = useSweepState();
   const { profilingState, loading: profilingLoading } = useProfilingState();
-  const { predictorCoverage, loading: predictorCoverageLoading } = usePredictorCoverage();
 
   const [activePage, setActivePage] = useState<PageId>('benchmark');
   const [activeTab, setActiveTab] = useState<TabId>('latency');
@@ -65,8 +64,6 @@ function App() {
         <CoveragePage
           allData={allData}
           sweepState={sweepState}
-          predictorCoverage={predictorCoverage}
-          predictorCoverageLoading={predictorCoverageLoading}
           loading={loading}
         />
       ) : loading ? (

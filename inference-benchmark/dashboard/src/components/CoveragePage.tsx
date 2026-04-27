@@ -2,19 +2,11 @@ import { Fragment, useMemo, useState } from 'react';
 import type { BenchmarkResult } from '../types';
 import type { SweepCell, SweepState } from '../types-sweep';
 import type {
-  KernelModelCell,
-  KernelSharedRow,
-  PerOpCell,
-  PredictorCoverage,
-} from '../types-predictor-coverage';
 
-type CoverageView = 'bench' | 'per-kernel' | 'per-op';
 
 interface CoveragePageProps {
   allData: BenchmarkResult[];
   sweepState: SweepState | null;
-  predictorCoverage?: PredictorCoverage | null;
-  predictorCoverageLoading?: boolean;
   loading: boolean;
 }
 
@@ -137,8 +129,6 @@ function aggregateCells(cells: SweepCell[]): Map<string, SweepCell> {
 export function CoveragePage({
   allData,
   sweepState,
-  predictorCoverage,
-  predictorCoverageLoading,
   loading,
 }: CoveragePageProps) {
   const [view, setView] = useState<CoverageView>('bench');
@@ -349,7 +339,6 @@ export function CoveragePage({
 
   return (
     <div className="space-y-4">
-      <SubTabs view={view} onChange={setView} predictorCoverage={predictorCoverage ?? null} />
 
       {view === 'per-kernel' && (
         <PerKernelCoverage data={predictorCoverage ?? null} loading={predictorCoverageLoading ?? false} />
@@ -431,7 +420,6 @@ export function CoveragePage({
           <code className="ml-1 rounded bg-[#21262d] px-1">known_oom</code>.
         </p>
       </div>
-      </>)}
     </div>
   );
 }
@@ -752,289 +740,3 @@ interface SubTabsProps {
   predictorCoverage: PredictorCoverage | null;
 }
 
-function SubTabs({ view, onChange, predictorCoverage }: SubTabsProps) {
-  const tabs: { id: CoverageView; label: string; sub: string }[] = [
-    { id: 'bench', label: 'Bench', sub: 'sweep grid coverage' },
-    { id: 'per-kernel', label: 'Per-kernel', sub: 'ncu trace rows' },
-    { id: 'per-op', label: 'Per-op', sub: 'cuda event rows' },
-  ];
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border border-[#21262d] bg-[#161b22] px-3 py-2 text-xs">
-      {tabs.map((t) => {
-        const active = view === t.id;
-        return (
-          <button
-            key={t.id}
-            onClick={() => onChange(t.id)}
-            className={
-              active
-                ? 'rounded border border-[#58a6ff] bg-[#58a6ff]/10 px-3 py-1 font-medium text-[#58a6ff]'
-                : 'rounded border border-transparent px-3 py-1 text-[#c9d1d9] hover:border-[#30363d] hover:text-white'
-            }
-          >
-            <span>{t.label}</span>
-            <span className="ml-2 text-[10px] text-[#8b949e]">{t.sub}</span>
-          </button>
-        );
-      })}
-      {predictorCoverage && (
-        <span className="ml-auto font-mono text-[10px] text-[#8b949e]">
-          predictor-coverage: {new Date(predictorCoverage.generated_at).toLocaleTimeString()}
-        </span>
-      )}
-    </div>
-  );
-}
-
-interface PredictorViewProps {
-  data: PredictorCoverage | null;
-  loading: boolean;
-}
-
-function PerKernelCoverage({ data, loading }: PredictorViewProps) {
-  if (loading) return <PredictorLoading label="per-kernel coverage" />;
-  if (!data) return <PredictorMissing label="predictor-coverage.json" />;
-
-  const sharedByGpu = new Map<string, KernelSharedRow>();
-  for (const s of data.per_kernel.shared) sharedByGpu.set(s.gpu, s);
-
-  const cellsByGpu = new Map<string, KernelModelCell[]>();
-  for (const c of data.per_kernel.cells) {
-    const arr = cellsByGpu.get(c.gpu) ?? [];
-    arr.push(c);
-    cellsByGpu.set(c.gpu, arr);
-  }
-
-  const totalRows = data.per_kernel.cells.reduce((a, c) => a + c.total_rows, 0)
-    + data.per_kernel.shared.reduce((a, s) => a + s.roofline_rows + s.misc_rows, 0);
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <SummaryCell label="GPUs" value={`${data.gpus.length}`} sub="profiled" color="#00bcd4" />
-        <SummaryCell label="Models" value={`${cellsByGpu.size > 0 ? Array.from(new Set(data.per_kernel.cells.map((c) => c.model))).length : 0}`} sub="with prefill rows" color="#3fb950" />
-        <SummaryCell label="Cells" value={`${data.per_kernel.cells.length}`} sub="(gpu, model)" color="#ff9800" />
-        <SummaryCell label="Total rows" value={`${totalRows.toLocaleString()}`} sub="ncu kernels" color="#a5b4fc" />
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
-        <table className="min-w-full border-collapse text-xs">
-          <thead className="sticky top-0 z-10 bg-[#161b22]">
-            <tr className="border-b border-[#21262d] text-[#8b949e]">
-              <th className="px-3 py-2 text-left font-medium">GPU / Model</th>
-              <th className="px-3 py-2 text-right font-medium">Prefill rows</th>
-              <th className="px-3 py-2 text-right font-medium">Flash rows</th>
-              <th className="px-3 py-2 text-right font-medium">Roofline (shared)</th>
-              <th className="px-3 py-2 text-right font-medium">Misc (shared)</th>
-              <th className="px-3 py-2 text-left font-medium">Sweep</th>
-              <th className="px-3 py-2 text-right font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.gpus.map((gpu) => {
-              const cells = (cellsByGpu.get(gpu) ?? []).sort((a, b) => a.model.localeCompare(b.model));
-              const shared = sharedByGpu.get(gpu);
-              return (
-                <Fragment key={gpu}>
-                  <tr className="border-b-2 border-t-2 border-[#30363d] bg-[#0d1117]">
-                    <td className="px-3 py-2 font-mono text-sm font-semibold text-[#c9d1d9]" colSpan={2}>{gpu}</td>
-                    <td className="px-3 py-2 text-right text-[#8b949e]" />
-                    <td className={`px-3 py-2 text-right font-mono ${shared ? rowsColor(shared.roofline_rows, shared.expected_roofline) : 'text-[#8b949e]'}`}>
-                      {shared ? `${shared.roofline_rows.toLocaleString()} / ${shared.expected_roofline.toLocaleString()}` : '—'}
-                    </td>
-                    <td className={`px-3 py-2 text-right font-mono ${shared ? rowsColor(shared.misc_rows, shared.expected_misc) : 'text-[#8b949e]'}`}>
-                      {shared ? `${shared.misc_rows.toLocaleString()} / ${shared.expected_misc.toLocaleString()}` : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-left">
-                      {shared && <SweepVersionBadge v={shared.sweep_version} />}
-                    </td>
-                    <td className="px-3 py-2 text-right" />
-                  </tr>
-                  {cells.length === 0 && (
-                    <tr className="border-b border-[#21262d]/50">
-                      <td colSpan={7} className="px-6 py-2 italic text-[#8b949e]">no per-model prefill rows yet</td>
-                    </tr>
-                  )}
-                  {cells.map((c) => (
-                    <tr key={`${gpu}|${c.model}`} className="border-b border-[#21262d]/50 hover:bg-[#1b222a]">
-                      <td className="px-3 py-1.5 pl-8 text-[#c9d1d9]">
-                        {c.model}
-                        {c.held_out && <span className="ml-2 rounded border border-[#a5b4fc]/40 bg-[#a5b4fc]/10 px-1 text-[10px] uppercase text-[#a5b4fc]">held-out</span>}
-                      </td>
-                      <td className={`px-3 py-1.5 text-right font-mono ${rowsColor(c.prefill_rows, c.expected_prefill)}`}>
-                        {c.prefill_rows.toLocaleString()} / {c.expected_prefill.toLocaleString()}
-                      </td>
-                      <td className={`px-3 py-1.5 text-right font-mono ${rowsColor(c.flash_rows, c.expected_flash)}`}>
-                        {c.flash_rows > 0 ? `${c.flash_rows.toLocaleString()} / ${c.expected_flash.toLocaleString()}` : '—'}
-                      </td>
-                      <td className="px-3 py-1.5 text-right text-[#30363d]" colSpan={3}>·</td>
-                      <td className="px-3 py-1.5 text-right">
-                        <PredStatusBadge s={c.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="space-y-1 text-xs text-[#8b949e]">
-        <p>
-          Per-kernel rows come from <code className="rounded bg-[#21262d] px-1">kernels_labeled.csv</code>; <em>roofline</em> + <em>misc</em> are profiled once per GPU and composed with per-model prefill at predict time.
-        </p>
-        <p>
-          Sweep version is inferred from roofline row count: <span className="text-[#3fb950]">post-fix</span> = nn.Linear sweep (~3.5k rows), <span className="text-[#ff9800]">pre-fix</span> = legacy a@b matmul (~1k rows).
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function PerOpCoverage({ data, loading }: PredictorViewProps) {
-  if (loading) return <PredictorLoading label="per-op coverage" />;
-  if (!data) return <PredictorMissing label="predictor-coverage.json" />;
-
-  const cellsByGpu = new Map<string, PerOpCell[]>();
-  for (const c of data.per_op) {
-    const arr = cellsByGpu.get(c.gpu) ?? [];
-    arr.push(c);
-    cellsByGpu.set(c.gpu, arr);
-  }
-
-  const totalRows = data.per_op.reduce((a, c) => a + c.total_rows, 0);
-  const denseCells = data.per_op.filter((c) => c.density === 'dense').length;
-  const thinCells = data.per_op.filter((c) => c.density === 'thin').length;
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <SummaryCell label="Cells" value={`${data.per_op.length}`} sub="(gpu, model)" color="#00bcd4" />
-        <SummaryCell label="Dense" value={`${denseCells}`} sub="≥256 (bs,seq) cells" color="#3fb950" />
-        <SummaryCell label="Thin" value={`${thinCells}`} sub="<256 (bs,seq) cells" color="#ff9800" />
-        <SummaryCell label="Total rows" value={`${totalRows.toLocaleString()}`} sub="cuda events" color="#a5b4fc" />
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
-        <table className="min-w-full border-collapse text-xs">
-          <thead className="sticky top-0 z-10 bg-[#161b22]">
-            <tr className="border-b border-[#21262d] text-[#8b949e]">
-              <th className="px-3 py-2 text-left font-medium">GPU / Model</th>
-              {data.expected_ops.map((op) => (
-                <th key={op} className="px-3 py-2 text-right font-medium">{op}</th>
-              ))}
-              <th className="px-3 py-2 text-right font-medium">Grid cells</th>
-              <th className="px-3 py-2 text-left font-medium">Density</th>
-              <th className="px-3 py-2 text-right font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.gpus.map((gpu) => {
-              const cells = (cellsByGpu.get(gpu) ?? []).sort((a, b) => a.model.localeCompare(b.model));
-              return (
-                <Fragment key={gpu}>
-                  <tr className="border-b-2 border-t-2 border-[#30363d] bg-[#0d1117]">
-                    <td className="px-3 py-2 font-mono text-sm font-semibold text-[#c9d1d9]" colSpan={data.expected_ops.length + 4}>{gpu}</td>
-                  </tr>
-                  {cells.length === 0 && (
-                    <tr className="border-b border-[#21262d]/50">
-                      <td colSpan={data.expected_ops.length + 4} className="px-6 py-2 italic text-[#8b949e]">no per-op rows yet</td>
-                    </tr>
-                  )}
-                  {cells.map((c) => (
-                    <tr key={`${gpu}|${c.model}`} className="border-b border-[#21262d]/50 hover:bg-[#1b222a]">
-                      <td className="px-3 py-1.5 pl-8 text-[#c9d1d9]">
-                        {c.model}
-                        {c.held_out && <span className="ml-2 rounded border border-[#a5b4fc]/40 bg-[#a5b4fc]/10 px-1 text-[10px] uppercase text-[#a5b4fc]">held-out</span>}
-                      </td>
-                      {data.expected_ops.map((op) => {
-                        const v = c.rows_per_op[op] ?? 0;
-                        return (
-                          <td key={op} className={`px-3 py-1.5 text-right font-mono ${v === 0 ? 'text-[#f97583]' : v >= 256 ? 'text-[#3fb950]' : 'text-[#ff9800]'}`}>
-                            {v > 0 ? v.toLocaleString() : '—'}
-                          </td>
-                        );
-                      })}
-                      <td className={`px-3 py-1.5 text-right font-mono ${rowsColor(c.grid_cells, c.expected_grid)}`}>
-                        {c.grid_cells} / {c.expected_grid}
-                      </td>
-                      <td className="px-3 py-1.5 text-left">
-                        <DensityBadge d={c.density} />
-                      </td>
-                      <td className="px-3 py-1.5 text-right">
-                        <PredStatusBadge s={c.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="space-y-1 text-xs text-[#8b949e]">
-        <p>
-          Per-op rows from <code className="rounded bg-[#21262d] px-1">per_op_labeled.csv</code> (torch.profiler cuda events). Grid is <code className="rounded bg-[#21262d] px-1">bs=1, seq=1..512</code> when dense.
-        </p>
-        <p>
-          A cell is <span className="text-[#3fb950]">present</span> only when all 4 ops are populated <em>and</em> grid is dense; otherwise <span className="text-[#ff9800]">partial</span>. Thin grids regress MAPE when mixed with dense pool models — see predictor_notes.md.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function PredictorLoading({ label }: { label: string }) {
-  return (
-    <div className="flex h-32 items-center justify-center rounded-lg border border-[#21262d] bg-[#161b22] text-[#8b949e]">
-      Loading {label}...
-    </div>
-  );
-}
-
-function PredictorMissing({ label }: { label: string }) {
-  return (
-    <div className="flex h-32 flex-col items-center justify-center gap-1 rounded-lg border border-[#f97583]/30 bg-[#f97583]/5 text-[#f97583]">
-      <div className="text-sm font-medium">{label} unavailable</div>
-      <div className="text-xs text-[#8b949e]">
-        Run <code className="rounded bg-[#21262d] px-1">scripts/publish_predictor_coverage.py</code> to generate it.
-      </div>
-    </div>
-  );
-}
-
-function rowsColor(have: number, expected: number): string {
-  if (have === 0) return 'text-[#f97583]';
-  if (have >= expected) return 'text-[#3fb950]';
-  if (have >= expected * 0.5) return 'text-[#ff9800]';
-  return 'text-[#f97583]';
-}
-
-function SweepVersionBadge({ v }: { v: KernelSharedRow['sweep_version'] }) {
-  const cls =
-    v === 'post-fix' ? 'border-[#3fb950]/40 bg-[#3fb950]/10 text-[#3fb950]' :
-    v === 'pre-fix'  ? 'border-[#ff9800]/40 bg-[#ff9800]/10 text-[#ff9800]' :
-                       'border-[#30363d] bg-[#21262d] text-[#8b949e]';
-  return <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>{v}</span>;
-}
-
-function DensityBadge({ d }: { d: PerOpCell['density'] }) {
-  const cls =
-    d === 'dense'   ? 'border-[#3fb950]/40 bg-[#3fb950]/10 text-[#3fb950]' :
-    d === 'partial' ? 'border-[#ff9800]/40 bg-[#ff9800]/10 text-[#ff9800]' :
-                      'border-[#f97583]/40 bg-[#f97583]/10 text-[#f97583]';
-  return <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>{d}</span>;
-}
-
-function PredStatusBadge({ s }: { s: PerOpCell['status'] }) {
-  const map: Record<PerOpCell['status'], [string, string]> = {
-    present: ['border-[#3fb950]/40 bg-[#3fb950]/10 text-[#3fb950]', 'present'],
-    partial: ['border-[#ff9800]/40 bg-[#ff9800]/10 text-[#ff9800]', 'partial'],
-    missing: ['border-[#f97583]/40 bg-[#f97583]/10 text-[#f97583]', 'missing'],
-    pending: ['border-[#a5b4fc]/40 bg-[#a5b4fc]/10 text-[#a5b4fc]', 'pending'],
-  };
-  const [cls, label] = map[s];
-  return <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>{label}</span>;
-}
