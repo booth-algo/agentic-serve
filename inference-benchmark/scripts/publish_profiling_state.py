@@ -172,10 +172,47 @@ def _parse_serving_e2e(md_path: Path) -> dict | None:
     return {"mape": mape, "rows": rows}
 
 
+
+
+def _parse_serving_e2e_conc(md_path):
+    """Parse {gpu}_serving_e2e_conc_{profile}.md -> {overall, per_conc}."""
+    if not md_path.is_file():
+        return None
+    overall = {}
+    per_conc = []
+    for line in md_path.read_text().splitlines():
+        m = re.match(r"Overall supported MAPE: TPOT ([\d.]+)%, E2EL ([\d.]+)%", line)
+        if m:
+            overall["tpot"] = float(m.group(1))
+            overall["e2el"] = float(m.group(2))
+            continue
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) < 8:
+            continue
+        cols = parts[1:-1]
+        if len(cols) != 6:
+            continue
+        try:
+            conc = int(cols[0])
+            bs_eff = float(cols[1])
+            ttft = float(cols[2].rstrip("%"))
+            tpot = float(cols[3].rstrip("%"))
+            e2el = float(cols[4].rstrip("%"))
+            n = int(cols[5])
+        except (ValueError, IndexError):
+            continue
+        per_conc.append({
+            "conc": conc, "bs_eff": bs_eff,
+            "ttft_mape": ttft, "tpot_mape": tpot, "e2el_mape": e2el, "n": n,
+        })
+    if not per_conc and not overall:
+        return None
+    return {"overall": overall, "per_conc": per_conc}
+
 def _load_results(repo_root: Path) -> dict:
     """Best-effort: read training_report.json files and wallclock markdown reports."""
     results: dict = {"per_kernel": {}, "per_op": {}, "wallclock": {},
-                     "serving_e2e": {}, "serving_e2e_perop": {}}
+                     "serving_e2e": {}, "serving_e2e_perop": {}, "serving_e2e_conc": {}}
     pk_path = repo_root / "llm_predict/training/per_kernel/reports/training_report.json"
     po_path = repo_root / "llm_predict/training/per_op/reports/training_report.json"
     pk_reports = repo_root / "llm_predict" / "training" / "per_kernel" / "reports"
@@ -201,6 +238,14 @@ def _load_results(repo_root: Path) -> dict:
                 po_profiles[profile] = parsed
         if po_profiles:
             results["serving_e2e_perop"][gpu] = po_profiles
+        # per-kernel serving_e2e concurrency sweeps
+        conc_profiles = {}
+        for profile in _SERVING_PROFILES:
+            parsed = _parse_serving_e2e_conc(pk_reports / f"{gpu}_serving_e2e_conc_{profile}.md")
+            if parsed is not None:
+                conc_profiles[profile] = parsed
+        if conc_profiles:
+            results["serving_e2e_conc"][gpu] = conc_profiles
     if pk_path.is_file():
         try:
             pk = json.loads(pk_path.read_text())
