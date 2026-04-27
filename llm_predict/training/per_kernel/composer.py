@@ -49,10 +49,13 @@ def predict_layer_ms(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
     # FFN
     if cfg.is_moe:
         tokens_per_expert = max(1, int(M * k / max(E, 1)))
-        for _ in range(k):
-            layer_ms += max(0.0, pred.predict_gemm(M=tokens_per_expert, N=ffn_local, K=d))
-            layer_ms += max(0.0, pred.predict_gemm(M=tokens_per_expert, N=ffn_local, K=d))
-            layer_ms += max(0.0, pred.predict_gemm(M=tokens_per_expert, N=d, K=ffn_local))
+        # Grouped GEMM: all E experts run with partial parallelism.
+        # Efficiency 0.585 calibrated from gpt-oss-20b A100 wall-clock.
+        moe_eff = 0.585
+        for _ in range(E):
+            layer_ms += max(0.0, pred.predict_gemm(M=tokens_per_expert, N=ffn_local, K=d)) * moe_eff
+            layer_ms += max(0.0, pred.predict_gemm(M=tokens_per_expert, N=ffn_local, K=d)) * moe_eff
+            layer_ms += max(0.0, pred.predict_gemm(M=tokens_per_expert, N=d, K=ffn_local)) * moe_eff
     else:
         layer_ms += max(0.0, pred.predict_gemm(M=M, N=ffn_local, K=d))  # gate
         layer_ms += max(0.0, pred.predict_gemm(M=M, N=ffn_local, K=d))  # up
