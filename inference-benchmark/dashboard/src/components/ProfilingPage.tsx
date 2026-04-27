@@ -205,10 +205,212 @@ function AblationSection({ results }: { results: PredictorResults }) {
 }
 
 function PredictorResultsSection({ results }: { results?: PredictorResults }) {
-  if (!results || (!results.per_kernel && !results.per_op && !results.wallclock && !results.serving_e2e && !results.serving_e2e_perop)) return null;
-  const pkGpus = Object.keys(results.per_kernel ?? {}).sort();
-  const poGpus = Object.keys(results.per_op ?? {}).sort();
-  const wcGpus = Object.keys(results.wallclock ?? {}).sort();
+  if (!results || (!results.serving_e2e && !results.serving_e2e_perop)) return null;
+  const hasServing = Object.keys(results.serving_e2e ?? {}).length > 0 || Object.keys(results.serving_e2e_perop ?? {}).length > 0;
+  const fmt = (v: number | undefined | null) => (v === undefined || v === null || isNaN(v) ? '—' : v.toFixed(2) + '%');
+  return (
+    <div className="space-y-6">
+      <div className="text-sm font-semibold text-[#c9d1d9]">Predictor MAPE</div>
+
+      {hasServing && <AblationSection results={results} />}
+
+      <div className="text-[11px] text-[#8b949e]">{subtitle}</div>
+    </div>
+  );
+}
+
+function AblationSection({ results }: { results: PredictorResults }) {
+  const pkData = results.serving_e2e ?? {};
+  const poData = results.serving_e2e_perop ?? {};
+  const allGpus = [...new Set([...Object.keys(pkData), ...Object.keys(poData)])].sort();
+  if (allGpus.length === 0) return null;
+
+  const allProfiles = new Set<string>();
+  for (const g of allGpus) {
+    for (const p of Object.keys(pkData[g] ?? {})) allProfiles.add(p);
+    for (const p of Object.keys(poData[g] ?? {})) allProfiles.add(p);
+  }
+  const profiles = [...allProfiles].sort();
+
+  const fmt = (v: number | undefined | null) => (v === undefined || v === null || isNaN(v) ? '—' : v.toFixed(2) + '%');
+  const fmtMs = (v: number | undefined | null) => (v === undefined || v === null ? '—' : v.toFixed(2));
+  const fmtPct = (v: number | undefined | null) => (v === undefined || v === null ? '—' : v.toFixed(1) + '%');
+
+  type AblationRow = {
+    gpu: string; model: string; arch: string; profile: string;
+    isl: number; osl: number;
+    meas_ttft: number; meas_tpot?: number; meas_e2el?: number;
+    pk_ttft_err?: number; pk_tpot_err?: number; pk_e2el_err?: number;
+    po_ttft_err?: number; po_tpot_err?: number; po_e2el_err?: number;
+  };
+
+  const ablationRows: AblationRow[] = [];
+  for (const g of allGpus) {
+    for (const p of profiles) {
+      const pkProfile = pkData[g]?.[p];
+      const poProfile = poData[g]?.[p];
+      const pkRows = pkProfile?.rows ?? [];
+      const poRows = poProfile?.rows ?? [];
+      const poByModel = new Map(poRows.map((r: ServingE2ERow) => [r.model, r]));
+
+      for (const pkr of pkRows) {
+        const por = poByModel.get(pkr.model);
+        ablationRows.push({
+          gpu: g, model: pkr.model, arch: pkr.arch, profile: p,
+          isl: pkr.isl, osl: pkr.osl,
+          meas_ttft: pkr.meas_ttft_ms,
+          meas_tpot: pkr.meas_tpot_ms,
+          meas_e2el: pkr.meas_e2el_ms,
+          pk_ttft_err: pkr.ttft_err_pct,
+          pk_tpot_err: pkr.tpot_err_pct,
+          pk_e2el_err: pkr.e2el_err_pct,
+          po_ttft_err: por?.ttft_err_pct,
+          po_tpot_err: por?.tpot_err_pct,
+          po_e2el_err: por?.e2el_err_pct,
+        });
+        poByModel.delete(pkr.model);
+      }
+      for (const [, por] of poByModel) {
+        ablationRows.push({
+          gpu: g, model: por.model, arch: por.arch, profile: p,
+          isl: por.isl, osl: por.osl,
+          meas_ttft: por.meas_ttft_ms,
+          meas_tpot: por.meas_tpot_ms,
+          meas_e2el: por.meas_e2el_ms,
+          po_ttft_err: por.ttft_err_pct,
+          po_tpot_err: por.tpot_err_pct,
+          po_e2el_err: por.e2el_err_pct,
+        });
+      }
+    }
+  }
+
+  return (
+    <div className="space-y-4 rounded-lg border border-[#30363d] p-4">
+      <SubPanelHeader
+        title="Serving E2E — Ablation: per-kernel (ncu) vs per-op (torch.profiler)"
+        subtitle="same model, same benchmark, same integration — different measurement source"
+      />
+
+      <div className="space-y-2">
+        <div className="text-xs text-[#8b949e]">MAPE by GPU × profile (supported architectures only)</div>
+        <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
+          <table className="min-w-full border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-[#21262d] text-[#8b949e]">
+                <th className="px-3 py-2 text-left font-medium" rowSpan={2}>GPU</th>
+                <th className="px-3 py-2 text-left font-medium" rowSpan={2}>Profile</th>
+                <th className="px-3 py-2 text-center font-medium border-l border-[#21262d]" colSpan={2}>TTFT MAPE</th>
+                <th className="px-3 py-2 text-center font-medium border-l border-[#21262d]" colSpan={2}>TPOT MAPE</th>
+                <th className="px-3 py-2 text-center font-medium border-l border-[#21262d]" colSpan={2}>E2EL MAPE</th>
+                <th className="px-3 py-2 text-right font-medium border-l border-[#21262d]" rowSpan={2}>n</th>
+              </tr>
+              <tr className="border-b border-[#21262d] text-[#8b949e]">
+                <th className="px-2 py-1 text-right text-[10px] font-normal border-l border-[#21262d]">per-kernel</th>
+                <th className="px-2 py-1 text-right text-[10px] font-normal">per-op</th>
+                <th className="px-2 py-1 text-right text-[10px] font-normal border-l border-[#21262d]">per-kernel</th>
+                <th className="px-2 py-1 text-right text-[10px] font-normal">per-op</th>
+                <th className="px-2 py-1 text-right text-[10px] font-normal border-l border-[#21262d]">per-kernel</th>
+                <th className="px-2 py-1 text-right text-[10px] font-normal">per-op</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allGpus.flatMap(g => {
+                return profiles.map((p, i) => {
+                  const pkP = pkData[g]?.[p] as ServingE2EProfileResult | undefined;
+                  const poP = poData[g]?.[p] as ServingE2EProfileResult | undefined;
+                  const n = (pkP?.rows ?? poP?.rows ?? []).filter((r: ServingE2ERow) => r.arch === 'supported').length;
+                  if (!pkP && !poP) return null;
+                  return (
+                    <tr key={`${g}-${p}`} className={`border-b border-[#21262d]/50 ${i === 0 ? 'border-t-2 border-t-[#30363d]' : ''}`}>
+                      <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{i === 0 ? g : ''}</td>
+                      <td className="px-3 py-1.5 text-[#c9d1d9]">{p}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#3fb950] border-l border-[#21262d]">{fmt(pkP?.mape.ttft)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#f85149]">{fmt(poP?.mape.ttft)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#3fb950] border-l border-[#21262d]">{fmt(pkP?.mape.tpot)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#f85149]">{fmt(poP?.mape.tpot)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#3fb950] border-l border-[#21262d]">{fmt(pkP?.mape.e2el)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#f85149]">{fmt(poP?.mape.e2el)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#8b949e] border-l border-[#21262d]">{n}</td>
+                    </tr>
+                  );
+                }).filter(Boolean);
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex gap-4 text-[11px] text-[#8b949e]">
+          <span><span className="font-mono text-[#3fb950]">green</span> = per-kernel (ncu)</span>
+          <span><span className="font-mono text-[#f85149]">red</span> = per-op (torch.profiler)</span>
+        </div>
+      </div>
+
+      {ablationRows.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-[#8b949e]">Per-row ablation detail (all architectures)</div>
+          <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
+            <table className="min-w-full border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-[#21262d] text-[#8b949e]">
+                  <th className="px-3 py-2 text-left font-medium" rowSpan={2}>GPU</th>
+                  <th className="px-3 py-2 text-left font-medium" rowSpan={2}>Model</th>
+                  <th className="px-3 py-2 text-left font-medium" rowSpan={2}>arch</th>
+                  <th className="px-3 py-2 text-left font-medium" rowSpan={2}>Profile</th>
+                  <th className="px-3 py-2 text-right font-medium" rowSpan={2}>ISL</th>
+                  <th className="px-3 py-2 text-right font-medium" rowSpan={2}>OSL</th>
+                  <th className="px-3 py-2 text-center font-medium border-l border-[#21262d]" colSpan={3}>TTFT (ms)</th>
+                  <th className="px-3 py-2 text-center font-medium border-l border-[#21262d]" colSpan={3}>TPOT (ms)</th>
+                  <th className="px-3 py-2 text-center font-medium border-l border-[#21262d]" colSpan={3}>E2EL (ms)</th>
+                </tr>
+                <tr className="border-b border-[#21262d] text-[#8b949e]">
+                  <th className="px-2 py-1 text-right text-[10px] font-normal border-l border-[#21262d]">measured</th>
+                  <th className="px-2 py-1 text-right text-[10px] font-normal text-[#3fb950]">PK err</th>
+                  <th className="px-2 py-1 text-right text-[10px] font-normal text-[#f85149]">PO err</th>
+                  <th className="px-2 py-1 text-right text-[10px] font-normal border-l border-[#21262d]">measured</th>
+                  <th className="px-2 py-1 text-right text-[10px] font-normal text-[#3fb950]">PK err</th>
+                  <th className="px-2 py-1 text-right text-[10px] font-normal text-[#f85149]">PO err</th>
+                  <th className="px-2 py-1 text-right text-[10px] font-normal border-l border-[#21262d]">measured</th>
+                  <th className="px-2 py-1 text-right text-[10px] font-normal text-[#3fb950]">PK err</th>
+                  <th className="px-2 py-1 text-right text-[10px] font-normal text-[#f85149]">PO err</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ablationRows.map((r, i) => {
+                  const archColor = r.arch === 'supported' ? 'text-[#c9d1d9]' : 'text-[#8b949e]';
+                  return (
+                    <tr key={`${r.gpu}-${r.profile}-${r.model}-${i}`} className="border-b border-[#21262d]/50">
+                      <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{r.gpu}</td>
+                      <td className={`px-3 py-1.5 font-mono ${archColor}`}>{r.model}</td>
+                      <td className={`px-3 py-1.5 font-mono ${archColor}`}>{r.arch}</td>
+                      <td className="px-3 py-1.5 text-[#c9d1d9]">{r.profile}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">{r.isl}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">{r.osl}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#c9d1d9] border-l border-[#21262d]">{fmtMs(r.meas_ttft)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#3fb950]">{fmtPct(r.pk_ttft_err)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#f85149]">{fmtPct(r.po_ttft_err)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#c9d1d9] border-l border-[#21262d]">{fmtMs(r.meas_tpot)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#3fb950]">{fmtPct(r.pk_tpot_err)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#f85149]">{fmtPct(r.po_tpot_err)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#c9d1d9] border-l border-[#21262d]">{fmtMs(r.meas_e2el)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#3fb950]">{fmtPct(r.pk_e2el_err)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-[#f85149]">{fmtPct(r.po_e2el_err)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="text-[11px] text-[#8b949e]">
+            <span className="text-[#3fb950]">PK</span> = per-kernel (ncu-based XGBoost) · <span className="text-[#f85149]">PO</span> = per-op (torch.profiler XGBoost) · same 8-point trapezoidal decode integration
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PredictorResultsSection({ results }: { results?: PredictorResults }) {
+  if (!results || (!results.serving_e2e && !results.serving_e2e_perop)) return null;
   const allFamilies: string[] = [];
   for (const g of pkGpus) {
     const fams = Object.keys(results.per_kernel![g]?.heldout_mape_per_family ?? {});
@@ -219,7 +421,6 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
     const ms = Object.keys(results.per_kernel![g]?.aggregate_err_per_model ?? {});
     for (const m of ms) if (!heldModels.includes(m)) heldModels.push(m);
   }
-  const hasMicrobench = pkGpus.length > 0 || poGpus.length > 0 || wcGpus.length > 0;
   const hasServing = Object.keys(results.serving_e2e ?? {}).length > 0 || Object.keys(results.serving_e2e_perop ?? {}).length > 0;
   const fmt = (v: number | undefined | null) => (v === undefined || v === null || isNaN(v) ? '—' : v.toFixed(2) + '%');
   return (
