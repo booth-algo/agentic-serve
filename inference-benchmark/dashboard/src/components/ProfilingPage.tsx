@@ -1,4 +1,4 @@
-import type { PredictorResults, ServingE2ERow, ServingE2EProfileResult } from '../types-profiling';
+import type { PredictorResults, ServingE2ERow } from '../types-profiling';
 
 interface ProfilingPageProps {
   profilingState: { results?: PredictorResults } | null;
