@@ -731,12 +731,3 @@ function labelForStatus(s: StatusModel['status']): string {
     default:           return 'untested';
   }
 }
-
-// --- Predictor coverage sub-views ---
-
-interface SubTabsProps {
-  view: CoverageView;
-  onChange: (v: CoverageView) => void;
-  predictorCoverage: PredictorCoverage | null;
-}
-
