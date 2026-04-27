@@ -88,6 +88,9 @@ _DIR_TO_JSON: dict[str, str] = {
     "Llama-3.1-70B-Instruct": "llama-3.1-70b",
     "Qwen2.5-72B-Instruct":   "qwen2.5-72b",
     "gpt-oss-20b":            "gpt-oss-20b",
+    "Yi-1.5-34B-Chat":        "yi-34b",
+    "granite-3.0-8b-instruct": "granite-8b",
+    "gemma-2-9b-it":          "gemma-9b",
 }
 
 # Canonical short name per directory (used as training-data `model` column).
@@ -101,6 +104,9 @@ _DIR_TO_SHORT: dict[str, str] = {
     "gpt-oss-20b":            "gpt-oss-20b",
     "Mixtral-8x7B-Instruct":  "Mixtral",
     "Qwen2.5-7B-Instruct":    "Qwen-7B",
+    "Yi-1.5-34B-Chat":       "Yi-34B",
+    "granite-3.0-8b-instruct": "Granite-8B",
+    "gemma-2-9b-it":         "Gemma-9B",
 }
 
 
@@ -120,6 +126,9 @@ _VOCAB_OVERRIDE: dict[str, int] = {
     "Llama-70B":      128256,
     "Qwen-72B":       152064,
     "gpt-oss-20b":    131072,
+    "Yi-34B":         64000,
+    "Granite-8B":     49155,
+    "Gemma-9B":       256000,
 }
 
 
