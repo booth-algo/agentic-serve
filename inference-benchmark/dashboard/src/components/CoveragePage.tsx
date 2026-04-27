@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { BenchmarkResult } from '../types';
 import type { SweepCell, SweepState } from '../types-sweep';
 

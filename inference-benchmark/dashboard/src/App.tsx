@@ -14,7 +14,6 @@ import { RooflinePage } from './components/RooflinePage';
 import { CoveragePage } from './components/CoveragePage';
 import { ProfilingPage } from './components/ProfilingPage';
 import { useProfilingState } from './hooks/useProfilingState';
-import { usePredictorCoverage } from './hooks/usePredictorCoverage';
 import type { TabId } from './types';
 import './index.css';
 
