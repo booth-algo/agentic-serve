@@ -1411,6 +1411,894 @@
           ]
         }
       }
+    },
+    "serving_e2e_conc": {
+      "A100": {
+        "chat-short": {
+          "overall": {
+            "tpot": 13.3,
+            "e2el": 11.3
+          },
+          "per_conc": [
+            {
+              "conc": 1,
+              "bs_eff": 1.0,
+              "ttft_mape": 0.0,
+              "tpot_mape": 1.8,
+              "e2el_mape": 3.6,
+              "n": 1
+            },
+            {
+              "conc": 10,
+              "bs_eff": 9.8,
+              "ttft_mape": 10.0,
+              "tpot_mape": 19.4,
+              "e2el_mape": 18.1,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.7,
+              "ttft_mape": 1.3,
+              "tpot_mape": 22.2,
+              "e2el_mape": 24.6,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.3,
+              "ttft_mape": 5.5,
+              "tpot_mape": 9.9,
+              "e2el_mape": 10.5,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.0,
+              "ttft_mape": 16.0,
+              "tpot_mape": 1.5,
+              "e2el_mape": 3.6,
+              "n": 1
+            },
+            {
+              "conc": 160,
+              "bs_eff": 158.3,
+              "ttft_mape": 45.7,
+              "tpot_mape": 8.3,
+              "e2el_mape": 0.9,
+              "n": 1
+            },
+            {
+              "conc": 200,
+              "bs_eff": 197.6,
+              "ttft_mape": 21.8,
+              "tpot_mape": 27.5,
+              "e2el_mape": 21.1,
+              "n": 1
+            },
+            {
+              "conc": 256,
+              "bs_eff": 253.5,
+              "ttft_mape": 3.0,
+              "tpot_mape": 15.6,
+              "e2el_mape": 8.2,
+              "n": 1
+            }
+          ]
+        },
+        "chat-medium": {
+          "overall": {
+            "tpot": 11.6,
+            "e2el": 9.5
+          },
+          "per_conc": [
+            {
+              "conc": 1,
+              "bs_eff": 1.0,
+              "ttft_mape": 0.4,
+              "tpot_mape": 1.9,
+              "e2el_mape": 3.0,
+              "n": 1
+            },
+            {
+              "conc": 10,
+              "bs_eff": 9.9,
+              "ttft_mape": 5.7,
+              "tpot_mape": 18.4,
+              "e2el_mape": 16.6,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.8,
+              "ttft_mape": 3.9,
+              "tpot_mape": 21.0,
+              "e2el_mape": 19.2,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.7,
+              "ttft_mape": 1.3,
+              "tpot_mape": 8.3,
+              "e2el_mape": 4.9,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.5,
+              "ttft_mape": 16.3,
+              "tpot_mape": 1.9,
+              "e2el_mape": 2.5,
+              "n": 1
+            },
+            {
+              "conc": 160,
+              "bs_eff": 158.9,
+              "ttft_mape": 64.3,
+              "tpot_mape": 4.1,
+              "e2el_mape": 5.4,
+              "n": 1
+            },
+            {
+              "conc": 200,
+              "bs_eff": 198.5,
+              "ttft_mape": 11.4,
+              "tpot_mape": 24.7,
+              "e2el_mape": 19.5,
+              "n": 1
+            },
+            {
+              "conc": 256,
+              "bs_eff": 254.4,
+              "ttft_mape": 25.3,
+              "tpot_mape": 12.6,
+              "e2el_mape": 5.0,
+              "n": 1
+            }
+          ]
+        },
+        "chat-long": {
+          "overall": {
+            "tpot": 13.8,
+            "e2el": 10.1
+          },
+          "per_conc": [
+            {
+              "conc": 1,
+              "bs_eff": 1.0,
+              "ttft_mape": 2.0,
+              "tpot_mape": 1.7,
+              "e2el_mape": 0.8,
+              "n": 1
+            },
+            {
+              "conc": 10,
+              "bs_eff": 9.9,
+              "ttft_mape": 32.3,
+              "tpot_mape": 19.0,
+              "e2el_mape": 13.6,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.9,
+              "ttft_mape": 28.5,
+              "tpot_mape": 22.9,
+              "e2el_mape": 19.1,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.8,
+              "ttft_mape": 33.5,
+              "tpot_mape": 14.1,
+              "e2el_mape": 9.6,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.6,
+              "ttft_mape": 71.3,
+              "tpot_mape": 5.5,
+              "e2el_mape": 1.5,
+              "n": 1
+            },
+            {
+              "conc": 160,
+              "bs_eff": 159.4,
+              "ttft_mape": 22.3,
+              "tpot_mape": 4.6,
+              "e2el_mape": 5.1,
+              "n": 1
+            },
+            {
+              "conc": 200,
+              "bs_eff": 199.1,
+              "ttft_mape": 26.7,
+              "tpot_mape": 25.7,
+              "e2el_mape": 20.0,
+              "n": 1
+            },
+            {
+              "conc": 256,
+              "bs_eff": 255.1,
+              "ttft_mape": 50.2,
+              "tpot_mape": 17.0,
+              "e2el_mape": 11.3,
+              "n": 1
+            }
+          ]
+        },
+        "chat-multiturn-short": {
+          "overall": {
+            "tpot": 13.6,
+            "e2el": 14.9
+          },
+          "per_conc": [
+            {
+              "conc": 1,
+              "bs_eff": 1.0,
+              "ttft_mape": 3.6,
+              "tpot_mape": 1.7,
+              "e2el_mape": 1.3,
+              "n": 1
+            },
+            {
+              "conc": 10,
+              "bs_eff": 9.9,
+              "ttft_mape": 17.6,
+              "tpot_mape": 19.8,
+              "e2el_mape": 17.9,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.7,
+              "ttft_mape": 21.4,
+              "tpot_mape": 23.5,
+              "e2el_mape": 23.9,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.5,
+              "ttft_mape": 233.7,
+              "tpot_mape": 16.6,
+              "e2el_mape": 13.8,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.2,
+              "ttft_mape": 47.1,
+              "tpot_mape": 19.4,
+              "e2el_mape": 18.6,
+              "n": 1
+            },
+            {
+              "conc": 120,
+              "bs_eff": 119.0,
+              "ttft_mape": 29.5,
+              "tpot_mape": 11.3,
+              "e2el_mape": 14.3,
+              "n": 1
+            },
+            {
+              "conc": 160,
+              "bs_eff": 158.8,
+              "ttft_mape": 70.9,
+              "tpot_mape": 3.1,
+              "e2el_mape": 14.2,
+              "n": 1
+            }
+          ]
+        },
+        "chat-multiturn-medium": {
+          "overall": {
+            "tpot": 22.4,
+            "e2el": 18.3
+          },
+          "per_conc": [
+            {
+              "conc": 10,
+              "bs_eff": 9.8,
+              "ttft_mape": 10.1,
+              "tpot_mape": 17.1,
+              "e2el_mape": 14.2,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.6,
+              "ttft_mape": 11.5,
+              "tpot_mape": 18.7,
+              "e2el_mape": 17.4,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.3,
+              "ttft_mape": 233.0,
+              "tpot_mape": 8.1,
+              "e2el_mape": 1.3,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 78.9,
+              "ttft_mape": 4.3,
+              "tpot_mape": 2.5,
+              "e2el_mape": 4.2,
+              "n": 1
+            },
+            {
+              "conc": 120,
+              "bs_eff": 118.6,
+              "ttft_mape": 23.7,
+              "tpot_mape": 30.9,
+              "e2el_mape": 23.5,
+              "n": 1
+            },
+            {
+              "conc": 160,
+              "bs_eff": 158.3,
+              "ttft_mape": 17.0,
+              "tpot_mape": 57.2,
+              "e2el_mape": 49.2,
+              "n": 1
+            }
+          ]
+        },
+        "chat-multiturn-long": {
+          "overall": {
+            "tpot": 43.6,
+            "e2el": 44.9
+          },
+          "per_conc": [
+            {
+              "conc": 10,
+              "bs_eff": 9.6,
+              "ttft_mape": 31.4,
+              "tpot_mape": 13.9,
+              "e2el_mape": 6.9,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.4,
+              "ttft_mape": 585.6,
+              "tpot_mape": 13.4,
+              "e2el_mape": 9.7,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 38.9,
+              "ttft_mape": 130.9,
+              "tpot_mape": 4.6,
+              "e2el_mape": 16.1,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 78.5,
+              "ttft_mape": 71.5,
+              "tpot_mape": 36.9,
+              "e2el_mape": 42.1,
+              "n": 1
+            },
+            {
+              "conc": 120,
+              "bs_eff": 118.1,
+              "ttft_mape": 129.2,
+              "tpot_mape": 77.5,
+              "e2el_mape": 81.2,
+              "n": 1
+            },
+            {
+              "conc": 160,
+              "bs_eff": 157.9,
+              "ttft_mape": 93.1,
+              "tpot_mape": 115.5,
+              "e2el_mape": 113.6,
+              "n": 1
+            }
+          ]
+        }
+      },
+      "RTX3090": {
+        "chat-short": {
+          "overall": {
+            "tpot": 12.2,
+            "e2el": 13.8
+          },
+          "per_conc": [
+            {
+              "conc": 1,
+              "bs_eff": 1.0,
+              "ttft_mape": 43.1,
+              "tpot_mape": 1.6,
+              "e2el_mape": 2.4,
+              "n": 1
+            },
+            {
+              "conc": 10,
+              "bs_eff": 9.8,
+              "ttft_mape": 13.1,
+              "tpot_mape": 13.3,
+              "e2el_mape": 14.9,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.7,
+              "ttft_mape": 9.6,
+              "tpot_mape": 15.3,
+              "e2el_mape": 17.9,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.4,
+              "ttft_mape": 46.7,
+              "tpot_mape": 14.6,
+              "e2el_mape": 20.0,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.0,
+              "ttft_mape": 20.6,
+              "tpot_mape": 16.3,
+              "e2el_mape": 14.0,
+              "n": 1
+            }
+          ]
+        },
+        "chat-medium": {
+          "overall": {
+            "tpot": 12.5,
+            "e2el": 11.0
+          },
+          "per_conc": [
+            {
+              "conc": 1,
+              "bs_eff": 1.0,
+              "ttft_mape": 51.3,
+              "tpot_mape": 1.8,
+              "e2el_mape": 2.1,
+              "n": 1
+            },
+            {
+              "conc": 10,
+              "bs_eff": 9.9,
+              "ttft_mape": 6.4,
+              "tpot_mape": 11.6,
+              "e2el_mape": 8.3,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.8,
+              "ttft_mape": 0.4,
+              "tpot_mape": 14.4,
+              "e2el_mape": 11.2,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.7,
+              "ttft_mape": 7.4,
+              "tpot_mape": 16.3,
+              "e2el_mape": 18.4,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.4,
+              "ttft_mape": 24.8,
+              "tpot_mape": 18.3,
+              "e2el_mape": 14.9,
+              "n": 1
+            }
+          ]
+        },
+        "chat-long": {
+          "overall": {
+            "tpot": 17.7,
+            "e2el": 13.0
+          },
+          "per_conc": [
+            {
+              "conc": 1,
+              "bs_eff": 1.0,
+              "ttft_mape": 48.1,
+              "tpot_mape": 1.9,
+              "e2el_mape": 1.9,
+              "n": 1
+            },
+            {
+              "conc": 10,
+              "bs_eff": 9.9,
+              "ttft_mape": 3.5,
+              "tpot_mape": 12.9,
+              "e2el_mape": 4.1,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.8,
+              "ttft_mape": 8.6,
+              "tpot_mape": 21.8,
+              "e2el_mape": 17.0,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.6,
+              "ttft_mape": 34.0,
+              "tpot_mape": 27.0,
+              "e2el_mape": 22.3,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.4,
+              "ttft_mape": 21.2,
+              "tpot_mape": 25.1,
+              "e2el_mape": 19.7,
+              "n": 1
+            }
+          ]
+        },
+        "chat-multiturn-short": {
+          "overall": {
+            "tpot": 25.6,
+            "e2el": 34.0
+          },
+          "per_conc": [
+            {
+              "conc": 10,
+              "bs_eff": 9.7,
+              "ttft_mape": 28.3,
+              "tpot_mape": 22.6,
+              "e2el_mape": 19.8,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.4,
+              "ttft_mape": 553.5,
+              "tpot_mape": 31.5,
+              "e2el_mape": 16.0,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 38.9,
+              "ttft_mape": 7.6,
+              "tpot_mape": 39.4,
+              "e2el_mape": 35.8,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 78.4,
+              "ttft_mape": 75.4,
+              "tpot_mape": 24.9,
+              "e2el_mape": 49.5,
+              "n": 1
+            },
+            {
+              "conc": 120,
+              "bs_eff": 118.1,
+              "ttft_mape": 86.7,
+              "tpot_mape": 9.5,
+              "e2el_mape": 48.9,
+              "n": 1
+            }
+          ]
+        },
+        "chat-multiturn-medium": {
+          "overall": {
+            "tpot": 25.1,
+            "e2el": 26.2
+          },
+          "per_conc": [
+            {
+              "conc": 10,
+              "bs_eff": 9.5,
+              "ttft_mape": 21.6,
+              "tpot_mape": 25.2,
+              "e2el_mape": 23.8,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.1,
+              "ttft_mape": 569.9,
+              "tpot_mape": 34.2,
+              "e2el_mape": 12.9,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 38.6,
+              "ttft_mape": 13.9,
+              "tpot_mape": 35.6,
+              "e2el_mape": 30.8,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 77.8,
+              "ttft_mape": 41.7,
+              "tpot_mape": 24.4,
+              "e2el_mape": 36.2,
+              "n": 1
+            },
+            {
+              "conc": 120,
+              "bs_eff": 117.2,
+              "ttft_mape": 47.2,
+              "tpot_mape": 5.8,
+              "e2el_mape": 27.1,
+              "n": 1
+            }
+          ]
+        },
+        "chat-multiturn-long": {
+          "overall": {
+            "tpot": 21.7,
+            "e2el": 12.1
+          },
+          "per_conc": [
+            {
+              "conc": 10,
+              "bs_eff": 9.2,
+              "ttft_mape": 654.0,
+              "tpot_mape": 23.8,
+              "e2el_mape": 20.8,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 18.5,
+              "ttft_mape": 484.1,
+              "tpot_mape": 28.8,
+              "e2el_mape": 3.5,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 37.5,
+              "ttft_mape": 98.2,
+              "tpot_mape": 28.5,
+              "e2el_mape": 16.1,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 76.1,
+              "ttft_mape": 71.4,
+              "tpot_mape": 4.4,
+              "e2el_mape": 0.0,
+              "n": 1
+            },
+            {
+              "conc": 120,
+              "bs_eff": 115.6,
+              "ttft_mape": 77.6,
+              "tpot_mape": 23.1,
+              "e2el_mape": 19.9,
+              "n": 1
+            }
+          ]
+        }
+      },
+      "RTX2080Ti": {
+        "chat-short": {
+          "overall": {
+            "tpot": 7.8,
+            "e2el": 19.4
+          },
+          "per_conc": [
+            {
+              "conc": 1,
+              "bs_eff": 1.0,
+              "ttft_mape": 41.2,
+              "tpot_mape": 0.5,
+              "e2el_mape": 0.6,
+              "n": 1
+            },
+            {
+              "conc": 10,
+              "bs_eff": 9.9,
+              "ttft_mape": 70.9,
+              "tpot_mape": 18.2,
+              "e2el_mape": 37.8,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.6,
+              "ttft_mape": 18.2,
+              "tpot_mape": 4.8,
+              "e2el_mape": 21.8,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.3,
+              "ttft_mape": 314.9,
+              "tpot_mape": 7.6,
+              "e2el_mape": 17.4,
+              "n": 1
+            }
+          ]
+        },
+        "chat-medium": {
+          "overall": {
+            "tpot": 43.8,
+            "e2el": 44.8
+          },
+          "per_conc": [
+            {
+              "conc": 1,
+              "bs_eff": 1.0,
+              "ttft_mape": 29.4,
+              "tpot_mape": 0.2,
+              "e2el_mape": 5.5,
+              "n": 1
+            },
+            {
+              "conc": 10,
+              "bs_eff": 10.0,
+              "ttft_mape": 54.4,
+              "tpot_mape": 41.3,
+              "e2el_mape": 49.2,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.9,
+              "ttft_mape": 41.5,
+              "tpot_mape": 66.0,
+              "e2el_mape": 57.3,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.9,
+              "ttft_mape": 67.3,
+              "tpot_mape": 67.7,
+              "e2el_mape": 67.2,
+              "n": 1
+            }
+          ]
+        },
+        "chat-multiturn-short": {
+          "overall": {
+            "tpot": 11.9,
+            "e2el": 28.9
+          },
+          "per_conc": [
+            {
+              "conc": 10,
+              "bs_eff": 9.9,
+              "ttft_mape": 72.8,
+              "tpot_mape": 0.4,
+              "e2el_mape": 1.6,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.9,
+              "ttft_mape": 72.7,
+              "tpot_mape": 18.6,
+              "e2el_mape": 22.1,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.8,
+              "ttft_mape": 95.5,
+              "tpot_mape": 22.2,
+              "e2el_mape": 41.7,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.6,
+              "ttft_mape": 97.3,
+              "tpot_mape": 6.3,
+              "e2el_mape": 50.2,
+              "n": 1
+            }
+          ]
+        },
+        "chat-multiturn-medium": {
+          "overall": {
+            "tpot": 37.2,
+            "e2el": 21.9
+          },
+          "per_conc": [
+            {
+              "conc": 10,
+              "bs_eff": 9.8,
+              "ttft_mape": 38.4,
+              "tpot_mape": 56.3,
+              "e2el_mape": 55.0,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.7,
+              "ttft_mape": 44.6,
+              "tpot_mape": 25.5,
+              "e2el_mape": 16.5,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.6,
+              "ttft_mape": 59.9,
+              "tpot_mape": 21.4,
+              "e2el_mape": 2.3,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.2,
+              "ttft_mape": 73.7,
+              "tpot_mape": 45.6,
+              "e2el_mape": 13.7,
+              "n": 1
+            }
+          ]
+        },
+        "chat-multiturn-long": {
+          "overall": {
+            "tpot": 55.0,
+            "e2el": 26.4
+          },
+          "per_conc": [
+            {
+              "conc": 10,
+              "bs_eff": 9.9,
+              "ttft_mape": 67.3,
+              "tpot_mape": 64.6,
+              "e2el_mape": 64.0,
+              "n": 1
+            },
+            {
+              "conc": 20,
+              "bs_eff": 19.7,
+              "ttft_mape": 81.2,
+              "tpot_mape": 34.2,
+              "e2el_mape": 19.9,
+              "n": 1
+            },
+            {
+              "conc": 40,
+              "bs_eff": 39.5,
+              "ttft_mape": 68.0,
+              "tpot_mape": 44.9,
+              "e2el_mape": 4.4,
+              "n": 1
+            },
+            {
+              "conc": 80,
+              "bs_eff": 79.3,
+              "ttft_mape": 66.5,
+              "tpot_mape": 76.4,
+              "e2el_mape": 17.1,
+              "n": 1
+            }
+          ]
+        }
+      }
     }
   }
 }

@@ -68,12 +68,31 @@ export interface ServingE2EProfileResult {
   rows: ServingE2ERow[];
 }
 
+
+export interface ServingE2EConcRow {
+  conc: number;
+  bs_eff: number;
+  ttft_mape: number;
+  tpot_mape: number;
+  e2el_mape: number;
+  n: number;
+}
+
+export interface ServingE2EConcResult {
+  overall: {
+    tpot?: number;
+    e2el?: number;
+  };
+  per_conc: ServingE2EConcRow[];
+}
+
 export interface PredictorResults {
   per_kernel?: Record<string, PerKernelResults>;
   per_op?: Record<string, PerOpResults>;
   wallclock?: Record<string, WallclockResults>;
   serving_e2e?: Record<string, Record<string, ServingE2EProfileResult>>;
   serving_e2e_perop?: Record<string, Record<string, ServingE2EProfileResult>>;
+  serving_e2e_conc?: Record<string, Record<string, ServingE2EConcResult>>;
 }
 
 export interface ProfilingState {
