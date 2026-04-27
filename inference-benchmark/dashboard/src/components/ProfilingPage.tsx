@@ -1,4 +1,4 @@
-import type { PredictorResults, ServingE2ERow, ServingE2EConcResult } from '../types-profiling';
+import type { PredictorResults, ServingE2EConcResult } from '../types-profiling';
 
 interface ProfilingPageProps {
   profilingState: { results?: PredictorResults } | null;
@@ -14,8 +14,6 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
   if (!hasConcData && !hasPkData) return null;
 
   const fmt = (v: number | undefined | null) => (v === undefined || v === null || isNaN(v) ? '—' : v.toFixed(1) + '%');
-  const fmtMs = (v: number | undefined | null) => (v === undefined || v === null ? '—' : v.toFixed(2));
-  const fmtPct = (v: number | undefined | null) => (v === undefined || v === null ? '—' : v.toFixed(1) + '%');
 
   const concGpus = Object.keys(concData).sort();
 
@@ -90,9 +88,9 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
                         <tr key={row.conc} className="border-b border-[#21262d]/50">
                           <td className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">{row.conc}</td>
                           <td className="px-3 py-1.5 text-right font-mono text-[#8b949e]">{row.bs_eff.toFixed(1)}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">{fmtPct(row.ttft_mape)}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-[#3fb950]">{fmtPct(row.tpot_mape)}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-[#3fb950]">{fmtPct(row.e2el_mape)}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">{row.ttft_mape.toFixed(1) + "%"}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-[#3fb950]">{row.tpot_mape.toFixed(1) + "%"}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-[#3fb950]">{row.e2el_mape.toFixed(1) + "%"}</td>
                         </tr>
                       ))}
                     </tbody>
