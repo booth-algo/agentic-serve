@@ -11,11 +11,6 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
   const allGpus = Object.keys(pkData).sort();
   if (allGpus.length === 0) return null;
 
-  const allProfiles = new Set<string>();
-  for (const g of allGpus) {
-    for (const p of Object.keys(pkData[g] ?? {})) allProfiles.add(p);
-  }
-  const profiles = [...allProfiles].sort();
 
   const fmt = (v: number | undefined | null) => (v === undefined || v === null || isNaN(v) ? '\u2014' : v.toFixed(2) + '%');
   const fmtMs = (v: number | undefined | null) => (v === undefined || v === null ? '\u2014' : v.toFixed(2));
