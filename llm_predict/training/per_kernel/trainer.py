@@ -29,8 +29,8 @@ import pandas as pd
 import xgboost as xgb
 
 from . import model_specs  # noqa: F401  (kept for parity with labeler; used indirectly)
-from .feature_spec import (
 from llm_predict.training.per_kernel.ensure_data import ensure_kernels_csv
+from .feature_spec import (
     FAMILY_CONFIG,
     FAMILY_EXCLUDED_MODELS,
     MISC_FAMILIES,
