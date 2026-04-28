@@ -1,6 +1,6 @@
 """Concurrency-aware steady-state model for serving_e2e.
 
-Pure-function module implementing Little's Law batch size estimation,
+Pure-function module implementing steady-state batch size estimation,
 TTFT queuing model, and KV cache saturation detection. No I/O or
 XGBoost dependencies — keeps serving_e2e.py clean.
 """
