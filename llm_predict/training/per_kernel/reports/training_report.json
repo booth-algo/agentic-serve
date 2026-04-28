@@ -2,13 +2,16 @@
   "H100": {
     "heldout_mape": {
       "gemm": NaN,
-      "flash_attn": null,
-      "elementwise": null,
-      "misc": null
+      "flash_attn": NaN,
+      "elementwise": NaN,
+      "misc": NaN
     },
     "aggregate_err_pct": {},
     "saved_pkls": [
-      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_kernel/perkernel_gemm_shape_v2.pkl"
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_kernel/perkernel_gemm_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_kernel/perkernel_elementwise_shape_v2.pkl",
+      "/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_kernel/perkernel_misc_shape_v2.pkl"
     ]
   }
 }

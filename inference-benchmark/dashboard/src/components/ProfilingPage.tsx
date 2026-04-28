@@ -35,6 +35,7 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
                 <thead><tr className="border-b border-[#21262d] text-[#8b949e]">
                   <th className="px-3 py-2 text-left font-medium">GPU</th>
                   <th className="px-3 py-2 text-left font-medium">Profile</th>
+                  <th className="px-3 py-2 text-right font-medium">TTFT MAPE</th>
                   <th className="px-3 py-2 text-right font-medium">TPOT MAPE</th>
                   <th className="px-3 py-2 text-right font-medium">E2EL MAPE</th>
                   <th className="px-3 py-2 text-right font-medium">Conc levels</th>
@@ -45,12 +46,15 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
                     const profileNames = Object.keys(gpuProfiles).sort();
                     return profileNames.map((p, i) => {
                       const pr = gpuProfiles[p] as ServingE2EConcResult;
+                      const ttftMean = pr.per_conc.length > 0 ? pr.per_conc.reduce((s, r) => s + r.ttft_mape, 0) / pr.per_conc.length : null;
+                      const ttftColor = (ttftMean ?? 100) < 15 ? "text-[#3fb950]" : (ttftMean ?? 100) < 30 ? "text-[#ff9800]" : "text-[#f85149]";
                       const tpotColor = (pr.overall.tpot ?? 100) < 15 ? 'text-[#3fb950]' : (pr.overall.tpot ?? 100) < 30 ? 'text-[#ff9800]' : 'text-[#f85149]';
                       const e2elColor = (pr.overall.e2el ?? 100) < 15 ? 'text-[#3fb950]' : (pr.overall.e2el ?? 100) < 30 ? 'text-[#ff9800]' : 'text-[#f85149]';
                       return (
                         <tr key={`${g}-${p}`} className={`border-b border-[#21262d]/50 ${i === 0 ? 'border-t-2 border-t-[#30363d]' : ''}`}>
                           <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{i === 0 ? g : ''}</td>
                           <td className="px-3 py-1.5 text-[#c9d1d9]">{p}</td>
+                          <td className={`px-3 py-1.5 text-right font-mono ${ttftColor}`}>{fmt(ttftMean)}</td>
                           <td className={`px-3 py-1.5 text-right font-mono ${tpotColor}`}>{fmt(pr.overall.tpot)}</td>
                           <td className={`px-3 py-1.5 text-right font-mono ${e2elColor}`}>{fmt(pr.overall.e2el)}</td>
                           <td className="px-3 py-1.5 text-right font-mono text-[#8b949e]">{pr.per_conc.length}</td>
