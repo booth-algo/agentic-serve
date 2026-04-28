@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { PredictorResults, ServingE2EConcResult, GemmExtrapResult } from '../types-profiling';
 
 interface ProfilingPageProps {
@@ -5,17 +6,135 @@ interface ProfilingPageProps {
   loading: boolean;
 }
 
+type Metric = 'e2el' | 'tpot' | 'ttft';
+
+function mapeColor(v: number | null | undefined): string {
+  if (v === null || v === undefined || isNaN(v)) return 'text-[#484f58]';
+  if (v < 15) return 'text-[#3fb950]';
+  if (v < 30) return 'text-[#ff9800]';
+  return 'text-[#f85149]';
+}
+
+function mapeBg(v: number | null | undefined): string {
+  if (v === null || v === undefined || isNaN(v)) return '';
+  if (v < 15) return 'bg-[#3fb950]/10';
+  if (v < 30) return 'bg-[#ff9800]/10';
+  return 'bg-[#f85149]/10';
+}
+
+function fmt(v: number | null | undefined): string {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return v.toFixed(1) + '%';
+}
+
+function ConcHeatmap({ concData }: { concData: Record<string, Record<string, ServingE2EConcResult>> }) {
+  const [metric, setMetric] = useState<Metric>('e2el');
+
+  const allConcs = new Set<number>();
+  const gpus = Object.keys(concData).sort();
+  for (const g of gpus) {
+    for (const p of Object.keys(concData[g])) {
+      const pr = concData[g][p] as ServingE2EConcResult;
+      for (const row of pr.per_conc) allConcs.add(row.conc);
+    }
+  }
+  const concs = Array.from(allConcs).sort((a, b) => a - b);
+
+  const rows: { gpu: string; profile: string; pr: ServingE2EConcResult; isFirstInGpu: boolean }[] = [];
+  for (const g of gpus) {
+    const profiles = Object.keys(concData[g]).sort();
+    profiles.forEach((p, i) => {
+      rows.push({ gpu: g, profile: p, pr: concData[g][p] as ServingE2EConcResult, isFirstInGpu: i === 0 });
+    });
+  }
+
+  const getValue = (pr: ServingE2EConcResult, conc: number): number | null => {
+    const row = pr.per_conc.find(r => r.conc === conc);
+    if (!row) return null;
+    if (metric === 'e2el') return row.e2el_mape;
+    if (metric === 'tpot') return row.tpot_mape;
+    return row.ttft_mape;
+  };
+
+  const getAvg = (pr: ServingE2EConcResult): number | null => {
+    const vals = pr.per_conc.map(r => metric === 'e2el' ? r.e2el_mape : metric === 'tpot' ? r.tpot_mape : r.ttft_mape).filter(v => v !== null && !isNaN(v));
+    if (vals.length === 0) return null;
+    return vals.reduce((s, v) => s + v, 0) / vals.length;
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-[#8b949e]">Metric:</span>
+        {(['e2el', 'tpot', 'ttft'] as Metric[]).map(m => (
+          <button
+            key={m}
+            onClick={() => setMetric(m)}
+            className={`rounded px-2 py-0.5 text-xs font-mono transition-colors ${
+              metric === m
+                ? 'bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/40'
+                : 'text-[#8b949e] border border-[#30363d] hover:text-[#c9d1d9]'
+            }`}
+          >
+            {m.toUpperCase()}
+          </button>
+        ))}
+        <span className="ml-4 text-[11px] text-[#484f58]">
+          <span className="text-[#3fb950]">&lt;15%</span>{' · '}
+          <span className="text-[#ff9800]">15–30%</span>{' · '}
+          <span className="text-[#f85149]">&gt;30%</span>
+        </span>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
+        <table className="min-w-full border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-[#21262d] text-[#8b949e]">
+              <th className="px-2 py-2 text-left font-medium sticky left-0 bg-[#161b22] z-10">GPU</th>
+              <th className="px-2 py-2 text-left font-medium sticky left-[60px] bg-[#161b22] z-10">Profile</th>
+              <th className="px-2 py-2 text-right font-medium">Avg</th>
+              {concs.map(c => (
+                <th key={c} className="px-2 py-2 text-right font-medium min-w-[52px]">C={c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ gpu, profile, pr, isFirstInGpu }) => {
+              const avg = getAvg(pr);
+              return (
+                <tr key={`${gpu}-${profile}`} className={`border-b border-[#21262d]/50 ${isFirstInGpu ? 'border-t-2 border-t-[#30363d]' : ''}`}>
+                  <td className="px-2 py-1 font-mono text-[#c9d1d9] sticky left-0 bg-[#161b22] z-10 whitespace-nowrap">
+                    {isFirstInGpu ? gpu : ''}
+                  </td>
+                  <td className="px-2 py-1 text-[#c9d1d9] sticky left-[60px] bg-[#161b22] z-10 whitespace-nowrap">{profile}</td>
+                  <td className={`px-2 py-1 text-right font-mono font-semibold ${mapeColor(avg)} ${mapeBg(avg)}`}>
+                    {fmt(avg)}
+                  </td>
+                  {concs.map(c => {
+                    const v = getValue(pr, c);
+                    return (
+                      <td key={c} className={`px-2 py-1 text-right font-mono ${mapeColor(v)} ${mapeBg(v)}`}>
+                        {fmt(v)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="text-[11px] text-[#484f58]">
+        Steady-state batch size model, validated across C=1–500. Supported architectures only (excludes MoE, hybrid attention).
+      </div>
+    </div>
+  );
+}
+
 function PredictorResultsSection({ results }: { results?: PredictorResults }) {
   if (!results) return null;
   const concData = results.serving_e2e_conc ?? {};
-  const pkData = results.serving_e2e ?? {};
   const hasConcData = Object.keys(concData).length > 0;
-  const hasPkData = Object.keys(pkData).length > 0;
-  if (!hasConcData && !hasPkData) return null;
-
-  const fmt = (v: number | undefined | null) => (v === undefined || v === null || isNaN(v) ? '—' : v.toFixed(1) + '%');
-
-  const concGpus = Object.keys(concData).sort();
 
   return (
     <div className="space-y-6">
@@ -25,120 +144,8 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
         <div className="space-y-4 rounded-lg border border-[#30363d] p-4">
           <div className="flex items-baseline gap-3">
             <div className="text-xs font-semibold text-[#58a6ff] uppercase tracking-wider">Per-kernel (ncu) × Concurrency</div>
-            <div className="text-[11px] text-[#8b949e]">Little&apos;s Law bs_eff model, validated across C=1–500</div>
           </div>
-
-          <div className="space-y-2">
-            <div className="text-xs text-[#8b949e]">Overall MAPE by GPU × profile (supported architectures, all concurrencies)</div>
-            <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
-              <table className="min-w-full border-collapse text-xs">
-                <thead><tr className="border-b border-[#21262d] text-[#8b949e]">
-                  <th className="px-3 py-2 text-left font-medium">GPU</th>
-                  <th className="px-3 py-2 text-left font-medium">Profile</th>
-                  <th className="px-3 py-2 text-right font-medium">TTFT MAPE</th>
-                  <th className="px-3 py-2 text-right font-medium">TPOT MAPE</th>
-                  <th className="px-3 py-2 text-right font-medium">E2EL MAPE</th>
-                  <th className="px-3 py-2 text-right font-medium">Conc levels</th>
-                </tr></thead>
-                <tbody>
-                  {concGpus.flatMap(g => {
-                    const gpuProfiles = concData[g];
-                    const profileNames = Object.keys(gpuProfiles).sort();
-                    return profileNames.map((p, i) => {
-                      const pr = gpuProfiles[p] as ServingE2EConcResult;
-                      const ttftMean = pr.per_conc.length > 0 ? pr.per_conc.reduce((s, r) => s + r.ttft_mape, 0) / pr.per_conc.length : null;
-                      const ttftColor = (ttftMean ?? 100) < 15 ? "text-[#3fb950]" : (ttftMean ?? 100) < 30 ? "text-[#ff9800]" : "text-[#f85149]";
-                      const tpotColor = (pr.overall.tpot ?? 100) < 15 ? 'text-[#3fb950]' : (pr.overall.tpot ?? 100) < 30 ? 'text-[#ff9800]' : 'text-[#f85149]';
-                      const e2elColor = (pr.overall.e2el ?? 100) < 15 ? 'text-[#3fb950]' : (pr.overall.e2el ?? 100) < 30 ? 'text-[#ff9800]' : 'text-[#f85149]';
-                      return (
-                        <tr key={`${g}-${p}`} className={`border-b border-[#21262d]/50 ${i === 0 ? 'border-t-2 border-t-[#30363d]' : ''}`}>
-                          <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{i === 0 ? g : ''}</td>
-                          <td className="px-3 py-1.5 text-[#c9d1d9]">{p}</td>
-                          <td className={`px-3 py-1.5 text-right font-mono ${ttftColor}`}>{fmt(ttftMean)}</td>
-                          <td className={`px-3 py-1.5 text-right font-mono ${tpotColor}`}>{fmt(pr.overall.tpot)}</td>
-                          <td className={`px-3 py-1.5 text-right font-mono ${e2elColor}`}>{fmt(pr.overall.e2el)}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-[#8b949e]">{pr.per_conc.length}</td>
-                        </tr>
-                      );
-                    });
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="text-[11px] text-[#8b949e]">
-              <span className="text-[#3fb950]">&lt;15%</span> · <span className="text-[#ff9800]">15–30%</span> · <span className="text-[#f85149]">&gt;30%</span>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs text-[#8b949e]">Per-concurrency breakdown (sample: first GPU)</div>
-            {concGpus.slice(0, 1).map(g => {
-              const firstProfile = Object.keys(concData[g]).sort()[0];
-              if (!firstProfile) return null;
-              const pr = concData[g][firstProfile] as ServingE2EConcResult;
-              return (
-                <div key={g} className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
-                  <div className="px-3 py-1.5 text-[11px] text-[#8b949e] border-b border-[#21262d]">{g} — {firstProfile}</div>
-                  <table className="min-w-full border-collapse text-xs">
-                    <thead><tr className="border-b border-[#21262d] text-[#8b949e]">
-                      <th className="px-3 py-2 text-right font-medium">Concurrency</th>
-                      <th className="px-3 py-2 text-right font-medium">bs_eff</th>
-                      <th className="px-3 py-2 text-right font-medium">TTFT MAPE</th>
-                      <th className="px-3 py-2 text-right font-medium">TPOT MAPE</th>
-                      <th className="px-3 py-2 text-right font-medium">E2EL MAPE</th>
-                    </tr></thead>
-                    <tbody>
-                      {pr.per_conc.map(row => (
-                        <tr key={row.conc} className="border-b border-[#21262d]/50">
-                          <td className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">{row.conc}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-[#8b949e]">{row.bs_eff.toFixed(1)}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-[#c9d1d9]">{row.ttft_mape.toFixed(1) + "%"}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-[#3fb950]">{row.tpot_mape.toFixed(1) + "%"}</td>
-                          <td className="px-3 py-1.5 text-right font-mono text-[#3fb950]">{row.e2el_mape.toFixed(1) + "%"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {hasPkData && !hasConcData && (
-        <div className="space-y-4 rounded-lg border border-[#30363d] p-4">
-          <div className="flex items-baseline gap-3">
-            <div className="text-xs font-semibold text-[#58a6ff] uppercase tracking-wider">Per-kernel (ncu) Predictions</div>
-            <div className="text-[11px] text-[#8b949e]">C=1 only (no concurrency sweep data)</div>
-          </div>
-          <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
-            <table className="min-w-full border-collapse text-xs">
-              <thead><tr className="border-b border-[#21262d] text-[#8b949e]">
-                <th className="px-3 py-2 text-left font-medium">GPU</th>
-                <th className="px-3 py-2 text-left font-medium">Profile</th>
-                <th className="px-3 py-2 text-right font-medium">TTFT MAPE</th>
-                <th className="px-3 py-2 text-right font-medium">TPOT MAPE</th>
-                <th className="px-3 py-2 text-right font-medium">E2EL MAPE</th>
-              </tr></thead>
-              <tbody>
-                {Object.keys(pkData).sort().flatMap(g =>
-                  Object.keys(pkData[g]).sort().map((p, i) => {
-                    const pr = pkData[g][p];
-                    return (
-                      <tr key={`${g}-${p}`} className={`border-b border-[#21262d]/50 ${i === 0 ? 'border-t-2 border-t-[#30363d]' : ''}`}>
-                        <td className="px-3 py-1.5 font-mono text-[#c9d1d9]">{i === 0 ? g : ''}</td>
-                        <td className="px-3 py-1.5 text-[#c9d1d9]">{p}</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-[#3fb950]">{fmt(pr.mape.ttft)}</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-[#3fb950]">{fmt(pr.mape.tpot)}</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-[#3fb950]">{fmt(pr.mape.e2el)}</td>
-                      </tr>
-                    );
-                  }),
-                )}
-              </tbody>
-            </table>
-          </div>
+          <ConcHeatmap concData={concData} />
         </div>
       )}
 
