@@ -61,20 +61,33 @@ def iterative_bs_eff(concurrency: int,
     return max(1.0, min(float(concurrency), bs))
 
 
+_PREFILL_SATURATION_K: dict[str, float] = {
+    "A100": 1.8,
+    "RTX3090": 1.8,
+    "RTX2080Ti": 1.8,
+    "H100": 0.6,
+}
+
+_PLATEAU_BASE: dict[str, float] = {
+    "A100": 8.0,
+    "RTX3090": 8.0,
+    "RTX2080Ti": 8.0,
+    "H100": 4.0,
+}
+
+
 def ttft_queuing_factor(concurrency: int, ttft_ms: float, tpot_ms: float,
                         osl: int, gpu: str = "A100") -> float:
     if concurrency <= 1:
         return 1.0
-    # Workload-aware threshold: longer decode = higher C before prefill
-    # queue saturates. k=1.8 calibrated from A100 Llama-8B chat-short/medium/long.
-    PREFILL_SATURATION_K = 1.8
+    k = _PREFILL_SATURATION_K.get(gpu, 1.8)
+    plateau = _PLATEAU_BASE.get(gpu, 8.0)
     LOW_SLOPE = 0.025
-    PLATEAU_BASE = 8.0
     PLATEAU_EXP = 0.1
-    c_thresh = max(5, osl * tpot_ms / max(ttft_ms, 1e-9) / PREFILL_SATURATION_K)
+    c_thresh = max(5, osl * tpot_ms / max(ttft_ms, 1e-9) / k)
     if concurrency < c_thresh:
         return 1.0 + LOW_SLOPE * (concurrency - 1)
-    return PLATEAU_BASE * (concurrency / c_thresh) ** PLATEAU_EXP
+    return plateau * (concurrency / c_thresh) ** PLATEAU_EXP
 
 
 def estimate_kv_memory_gb(bs_eff: float, max_kv_len: int, n_layers: int,
