@@ -83,7 +83,12 @@ export interface ServingE2EConcResult {
     tpot?: number;
     e2el?: number;
   };
+  overall_moe?: {
+    tpot?: number;
+    e2el?: number;
+  };
   per_conc: ServingE2EConcRow[];
+  per_conc_moe?: ServingE2EConcRow[];
 }
 
 export interface PredictorResults {

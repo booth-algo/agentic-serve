@@ -174,20 +174,14 @@ def _parse_serving_e2e(md_path: Path) -> dict | None:
 
 
 
-def _parse_serving_e2e_conc(md_path):
-    """Parse {gpu}_serving_e2e_conc_{profile}.md -> {overall, per_conc}."""
-    if not md_path.is_file():
-        return None
-    overall = {}
-    per_conc = []
-    for line in md_path.read_text().splitlines():
-        m = re.match(r"Overall supported MAPE: TPOT ([\d.]+)%, E2EL ([\d.]+)%", line)
-        if m:
-            overall["tpot"] = float(m.group(1))
-            overall["e2el"] = float(m.group(2))
-            continue
+def _parse_conc_table(lines, start_idx):
+    """Parse a per-concurrency MAPE table starting at start_idx."""
+    rows = []
+    for line in lines[start_idx:]:
         parts = [p.strip() for p in line.split("|")]
         if len(parts) < 8:
+            if rows:
+                break
             continue
         cols = parts[1:-1]
         if len(cols) != 6:
@@ -201,13 +195,44 @@ def _parse_serving_e2e_conc(md_path):
             n = int(cols[5])
         except (ValueError, IndexError):
             continue
-        per_conc.append({
+        rows.append({
             "conc": conc, "bs_eff": bs_eff,
             "ttft_mape": ttft, "tpot_mape": tpot, "e2el_mape": e2el, "n": n,
         })
+    return rows
+
+
+def _parse_serving_e2e_conc(md_path):
+    """Parse {gpu}_serving_e2e_conc_{profile}.md -> {overall, per_conc, per_conc_moe}."""
+    if not md_path.is_file():
+        return None
+    overall = {}
+    overall_moe = {}
+    per_conc = []
+    per_conc_moe = []
+    lines = md_path.read_text().splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(r"Overall supported MAPE: TPOT ([\d.]+)%, E2EL ([\d.]+)%", line)
+        if m:
+            overall["tpot"] = float(m.group(1))
+            overall["e2el"] = float(m.group(2))
+            continue
+        m2 = re.match(r"Overall MoE MAPE: TPOT ([\d.]+)%, E2EL ([\d.]+)%", line)
+        if m2:
+            overall_moe["tpot"] = float(m2.group(1))
+            overall_moe["e2el"] = float(m2.group(2))
+            continue
+        if "Per-concurrency MAPE (supported" in line:
+            per_conc = _parse_conc_table(lines, i + 3)
+        if "Per-concurrency MAPE (MoE" in line:
+            per_conc_moe = _parse_conc_table(lines, i + 3)
     if not per_conc and not overall:
         return None
-    return {"overall": overall, "per_conc": per_conc}
+    out = {"overall": overall, "per_conc": per_conc}
+    if per_conc_moe:
+        out["overall_moe"] = overall_moe
+        out["per_conc_moe"] = per_conc_moe
+    return out
 
 def _load_results(repo_root: Path) -> dict:
     """Best-effort: read training_report.json files and wallclock markdown reports."""
