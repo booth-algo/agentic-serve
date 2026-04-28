@@ -237,7 +237,8 @@ def _parse_serving_e2e_conc(md_path):
 def _load_results(repo_root: Path) -> dict:
     """Best-effort: read training_report.json files and wallclock markdown reports."""
     results: dict = {"per_kernel": {}, "per_op": {}, "wallclock": {},
-                     "serving_e2e": {}, "serving_e2e_perop": {}, "serving_e2e_conc": {}}
+                     "serving_e2e": {}, "serving_e2e_perop": {}, "serving_e2e_conc": {},
+                     "gemm_extrapolation": {}}
     pk_path = repo_root / "llm_predict/training/per_kernel/reports/training_report.json"
     po_path = repo_root / "llm_predict/training/per_op/reports/training_report.json"
     pk_reports = repo_root / "llm_predict" / "training" / "per_kernel" / "reports"
@@ -292,6 +293,12 @@ def _load_results(repo_root: Path) -> dict:
                 }
         except Exception as e:
             print(f'[warn] per_op report parse failed: {e}', file=sys.stderr)
+    # GEMM extrapolation (static JSON from one-time test runs)
+    gemm_extrap_path = pk_reports / "gemm_extrapolation.json"
+    if gemm_extrap_path.is_file():
+        import json as _json
+        results["gemm_extrapolation"] = _json.loads(gemm_extrap_path.read_text())
+
     return results
 
 
