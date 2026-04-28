@@ -217,7 +217,7 @@ def _load_results(repo_root: Path) -> dict:
     po_path = repo_root / "llm_predict/training/per_op/reports/training_report.json"
     pk_reports = repo_root / "llm_predict" / "training" / "per_kernel" / "reports"
     po_reports = repo_root / "llm_predict" / "training" / "per_op" / "reports"
-    for gpu in ("A100", "RTX3090", "RTX2080Ti"):
+    for gpu in ("A100", "RTX3090", "RTX2080Ti", "H100"):
         wc_path = pk_reports / f"{gpu}_wallclock_validation_seq167.md"
         wc = _parse_wallclock(wc_path)
         if wc is not None:
