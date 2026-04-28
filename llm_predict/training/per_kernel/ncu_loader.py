@@ -33,8 +33,10 @@ TARGET_METRIC = "gpu__time_duration.sum"
 _TIME_UNIT_TO_MS = {
     "ns": 1e-6,
     "nsec": 1e-6,
+    "nsecond": 1e-6,
     "us": 1e-3,
     "usec": 1e-3,
+    "usecond": 1e-3,
     "ms": 1.0,
     "msec": 1.0,
     "s": 1e3,
