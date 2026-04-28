@@ -30,6 +30,7 @@ import xgboost as xgb
 
 from . import model_specs  # noqa: F401  (kept for parity with labeler; used indirectly)
 from .feature_spec import (
+from llm_predict.training.per_kernel.ensure_data import ensure_kernels_csv
     FAMILY_CONFIG,
     FAMILY_EXCLUDED_MODELS,
     MISC_FAMILIES,
@@ -355,6 +356,7 @@ def main() -> None:
     pkg_dir = Path(__file__).resolve().parent
     llm_predict_dir = pkg_dir.parents[1]   # llm_predict/ — matches PerKernelPredictor._pkl_dir()
     data_csv = Path(args.data) if args.data else pkg_dir / "data" / "kernels_labeled.csv"
+    data_csv = ensure_kernels_csv(data_csv)
     out_dir  = Path(args.out_dir) if args.out_dir else llm_predict_dir / "profiling" / "data"
     report   = Path(args.report) if args.report else pkg_dir / "reports" / "training_report.md"
 

@@ -45,6 +45,7 @@ import pandas as pd
 from llm_predict.predictors.per_kernel.predictor import PerKernelPredictor
 
 from . import composer, model_specs, serving_e2e
+from llm_predict.training.per_kernel.ensure_data import ensure_kernels_csv
 
 
 # Inverse of _DIR_TO_SHORT — CSV `model` column (short) → dir_name for ModelConfig.
@@ -720,6 +721,7 @@ def main() -> None:
 
     pkg_dir = Path(__file__).resolve().parent
     data_csv = Path(args.data) if args.data else pkg_dir / "data" / "kernels_labeled.csv"
+    data_csv = ensure_kernels_csv(data_csv)
     report_dir = Path(args.report_dir) if args.report_dir else pkg_dir / "reports"
     gpus = [args.gpu] if args.gpu else args.gpus
 
