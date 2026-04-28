@@ -40,15 +40,25 @@ function ConcHeatmap({ concData }: { concData: Record<string, Record<string, Ser
   }
   const concs = Array.from(allConcs).sort((a, b) => a - b);
 
-  const rows: { gpu: string; profile: string; pr: ServingE2EConcResult; isFirstInGpu: boolean }[] = [];
+  const ALL_PROFILES = [
+    'chat-short', 'chat-medium', 'chat-long',
+    'chat-multiturn-short', 'chat-multiturn-medium', 'chat-multiturn-long',
+    'coding-agent', 'prefill-heavy', 'decode-heavy',
+    'terminalbench-multiturn-short', 'terminalbench-multiturn-medium',
+    'swebench-multiturn-short', 'swebench-multiturn-medium',
+    'osworld-multiturn-short', 'osworld-multiturn-medium',
+  ];
+
+  const rows: { gpu: string; profile: string; pr: ServingE2EConcResult | null; isFirstInGpu: boolean }[] = [];
   for (const g of gpus) {
-    const profiles = Object.keys(concData[g]).sort();
-    profiles.forEach((p, i) => {
-      rows.push({ gpu: g, profile: p, pr: concData[g][p] as ServingE2EConcResult, isFirstInGpu: i === 0 });
+    ALL_PROFILES.forEach((p, i) => {
+      const pr = concData[g]?.[p] as ServingE2EConcResult | undefined;
+      rows.push({ gpu: g, profile: p, pr: pr ?? null, isFirstInGpu: i === 0 });
     });
   }
 
-  const getValue = (pr: ServingE2EConcResult, conc: number): number | null => {
+  const getValue = (pr: ServingE2EConcResult | null, conc: number): number | null => {
+    if (!pr) return null;
     const row = pr.per_conc.find(r => r.conc === conc);
     if (!row) return null;
     if (metric === 'e2el') return row.e2el_mape;
@@ -56,7 +66,8 @@ function ConcHeatmap({ concData }: { concData: Record<string, Record<string, Ser
     return row.ttft_mape;
   };
 
-  const getAvg = (pr: ServingE2EConcResult): number | null => {
+  const getAvg = (pr: ServingE2EConcResult | null): number | null => {
+    if (!pr) return null;
     const vals = pr.per_conc.map(r => metric === 'e2el' ? r.e2el_mape : metric === 'tpot' ? r.tpot_mape : r.ttft_mape).filter(v => v !== null && !isNaN(v));
     if (vals.length === 0) return null;
     return vals.reduce((s, v) => s + v, 0) / vals.length;
