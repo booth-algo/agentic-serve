@@ -32,7 +32,7 @@ from typing import Optional
 KERNEL_PATTERNS: list[tuple[str, str]] = [
     ("splitk_reduce",   r"splitKreduce|splitK_reduce"),
     ("gemv",            r"gemmk1_kernel|gemvx_kernel"),
-    ("gemm",            r"(ampere|hopper|turing|volta|maxwell|pascal|kepler|sm\d+).*gemm|cublas.*gemm|cutlass.*gemm|magma_sgemm"),
+    ("gemm",            r"(ampere|hopper|turing|volta|maxwell|pascal|kepler|sm\d+).*gemm|cublas.*gemm|cutlass.*gemm|magma_sgemm|nvjet_tst_"),
     ("flash_attn",      r"flash_fwd|flash_bwd|fmha|pytorch_flash"),
     ("silu",            r"silu_kernel|silu.*kernel"),
     ("rmsnorm_reduce",  r"MeanOps.*reduce_kernel|reduce_kernel.*MeanOps"),

@@ -618,32 +618,7 @@
   ],
   "results": {
     "per_kernel": {
-      "A100": {
-        "heldout_mape_per_family": {
-          "gemm": 396.4594535004887,
-          "flash_attn": 2.7456165579344507,
-          "elementwise": 13.732536183062749,
-          "misc": 15.186435984188556
-        },
-        "aggregate_err_per_model": {
-          "Llama-3.3-70B": 81.69315068078932,
-          "Llama-70B": 81.35024983972414,
-          "Qwen-72B": 77.51795810526775
-        }
-      },
-      "RTX3090": {
-        "heldout_mape_per_family": {
-          "gemm": 15.64799765978061,
-          "flash_attn": 1.1068823962039893,
-          "elementwise": 18.989324590834254,
-          "misc": 18.481483967260175
-        },
-        "aggregate_err_per_model": {
-          "Llama-70B": 0.0774145509210991,
-          "Qwen-72B": 0.3250229388678918
-        }
-      },
-      "RTX2080Ti": {
+      "H100": {
         "heldout_mape_per_family": {
           "gemm": null,
           "flash_attn": null,
@@ -780,7 +755,7 @@
       "A100": {
         "chat-short": {
           "mape": {
-            "ttft": 0.0,
+            "ttft": 0.2,
             "tpot": 1.77,
             "e2el": 3.59
           },
@@ -792,15 +767,15 @@
               "isl": 150,
               "osl": 171,
               "bs": 1,
-              "pred_ttft_ms": 28.31,
+              "pred_ttft_ms": 11.93,
               "meas_ttft_ms": 32.99,
-              "ttft_err_pct": 14.2,
+              "ttft_err_pct": 63.8,
               "pred_tpot_ms": 4.72,
               "meas_tpot_ms": 4.93,
               "tpot_err_pct": 4.2,
-              "pred_e2el_ms": 836.14,
+              "pred_e2el_ms": 819.75,
               "meas_e2el_ms": 979.27,
-              "e2el_err_pct": 14.6
+              "e2el_err_pct": 16.3
             },
             {
               "model": "Llama-8B",
@@ -809,13 +784,13 @@
               "isl": 127,
               "osl": 149,
               "bs": 1,
-              "pred_ttft_ms": 35.18,
+              "pred_ttft_ms": 35.25,
               "meas_ttft_ms": 35.18,
-              "ttft_err_pct": 0.0,
+              "ttft_err_pct": 0.2,
               "pred_tpot_ms": 12.66,
               "meas_tpot_ms": 12.89,
               "tpot_err_pct": 1.8,
-              "pred_e2el_ms": 1921.75,
+              "pred_e2el_ms": 1921.82,
               "meas_e2el_ms": 1993.33,
               "e2el_err_pct": 3.6
             },
@@ -826,13 +801,13 @@
               "isl": 95,
               "osl": 172,
               "bs": 1,
-              "pred_ttft_ms": 29.6,
+              "pred_ttft_ms": 29.66,
               "meas_ttft_ms": 89.43,
-              "ttft_err_pct": 66.9,
+              "ttft_err_pct": 66.8,
               "pred_tpot_ms": 22.33,
               "meas_tpot_ms": 13.76,
               "tpot_err_pct": 62.2,
-              "pred_e2el_ms": 3869.78,
+              "pred_e2el_ms": 3869.84,
               "meas_e2el_ms": 2752.05,
               "e2el_err_pct": 40.6
             }
@@ -840,7 +815,7 @@
         },
         "chat-medium": {
           "mape": {
-            "ttft": 0.35,
+            "ttft": 0.15,
             "tpot": 1.86,
             "e2el": 3.02
           },
@@ -852,15 +827,15 @@
               "isl": 159,
               "osl": 270,
               "bs": 1,
-              "pred_ttft_ms": 28.5,
+              "pred_ttft_ms": 12.02,
               "meas_ttft_ms": 33.49,
-              "ttft_err_pct": 14.9,
+              "ttft_err_pct": 64.1,
               "pred_tpot_ms": 4.74,
               "meas_tpot_ms": 4.94,
               "tpot_err_pct": 4.1,
-              "pred_e2el_ms": 1307.57,
+              "pred_e2el_ms": 1291.09,
               "meas_e2el_ms": 1336.96,
-              "e2el_err_pct": 2.2
+              "e2el_err_pct": 3.4
             },
             {
               "model": "Llama-8B",
@@ -869,13 +844,13 @@
               "isl": 120,
               "osl": 257,
               "bs": 1,
-              "pred_ttft_ms": 34.69,
+              "pred_ttft_ms": 34.76,
               "meas_ttft_ms": 34.81,
-              "ttft_err_pct": 0.4,
+              "ttft_err_pct": 0.1,
               "pred_tpot_ms": 12.71,
               "meas_tpot_ms": 12.95,
               "tpot_err_pct": 1.9,
-              "pred_e2el_ms": 3300.27,
+              "pred_e2el_ms": 3300.34,
               "meas_e2el_ms": 3203.68,
               "e2el_err_pct": 3.0
             },
@@ -886,13 +861,13 @@
               "isl": 103,
               "osl": 271,
               "bs": 1,
-              "pred_ttft_ms": 30.46,
+              "pred_ttft_ms": 30.52,
               "meas_ttft_ms": 89.55,
-              "ttft_err_pct": 66.0,
+              "ttft_err_pct": 65.9,
               "pred_tpot_ms": 22.39,
               "meas_tpot_ms": 13.78,
               "tpot_err_pct": 62.4,
-              "pred_e2el_ms": 6096.92,
+              "pred_e2el_ms": 6096.98,
               "meas_e2el_ms": 3594.96,
               "e2el_err_pct": 69.6
             }
@@ -900,7 +875,7 @@
         },
         "chat-long": {
           "mape": {
-            "ttft": 2.01,
+            "ttft": 2.09,
             "tpot": 1.66,
             "e2el": 0.82
           },
@@ -912,15 +887,15 @@
               "isl": 258,
               "osl": 299,
               "bs": 1,
-              "pred_ttft_ms": 23.65,
+              "pred_ttft_ms": 13.2,
               "meas_ttft_ms": 33.67,
-              "ttft_err_pct": 29.8,
+              "ttft_err_pct": 60.8,
               "pred_tpot_ms": 4.74,
               "meas_tpot_ms": 4.94,
               "tpot_err_pct": 4.0,
-              "pred_e2el_ms": 1442.34,
+              "pred_e2el_ms": 1431.89,
               "meas_e2el_ms": 1399.07,
-              "e2el_err_pct": 3.1
+              "e2el_err_pct": 2.3
             },
             {
               "model": "Llama-8B",
@@ -929,13 +904,13 @@
               "isl": 218,
               "osl": 285,
               "bs": 1,
-              "pred_ttft_ms": 33.92,
+              "pred_ttft_ms": 33.89,
               "meas_ttft_ms": 34.62,
-              "ttft_err_pct": 2.0,
+              "ttft_err_pct": 2.1,
               "pred_tpot_ms": 12.73,
               "meas_tpot_ms": 12.95,
               "tpot_err_pct": 1.7,
-              "pred_e2el_ms": 3662.85,
+              "pred_e2el_ms": 3662.83,
               "meas_e2el_ms": 3633.09,
               "e2el_err_pct": 0.8
             },
@@ -946,13 +921,13 @@
               "isl": 206,
               "osl": 300,
               "bs": 1,
-              "pred_ttft_ms": 19.22,
+              "pred_ttft_ms": 19.19,
               "meas_ttft_ms": 87.58,
               "ttft_err_pct": 78.1,
               "pred_tpot_ms": 22.42,
               "meas_tpot_ms": 13.78,
               "tpot_err_pct": 62.6,
-              "pred_e2el_ms": 6744.08,
+              "pred_e2el_ms": 6744.04,
               "meas_e2el_ms": 3920.65,
               "e2el_err_pct": 72.0
             }
