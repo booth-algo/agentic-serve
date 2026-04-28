@@ -36,6 +36,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import feature_spec
+from llm_predict.training.per_kernel.ensure_data import ensure_kernels_csv
 
 
 MIN_ROWS = 5
@@ -203,6 +204,7 @@ def main() -> None:
 
     pkg = Path(__file__).resolve().parent
     data = Path(args.data) if args.data else pkg / "data" / "kernels_labeled.csv"
+    data = ensure_kernels_csv(data)
     out_dir = Path(args.out_dir) if args.out_dir else pkg / "data" / "per_family"
     report = Path(args.report) if args.report else pkg / "reports" / "per_family_split_report.md"
 
