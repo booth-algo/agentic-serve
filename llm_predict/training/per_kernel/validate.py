@@ -583,7 +583,7 @@ def validate_serving_e2e_conc_gpu(gpu, data_json_path, report_path,
     lines = [
         "# %s -- serving_e2e Concurrency Sweep: %s" % (gpu, profile_name),
         "",
-        "- Predictor: Little's Law concurrency model + per-kernel XGBoost",
+        "- Predictor: steady-state batch size model + per-kernel XGBoost",
         "- Concurrencies: %s" % concs,
         "",
         "## Per-concurrency MAPE (supported architectures)",
