@@ -93,6 +93,26 @@ export interface PredictorResults {
   serving_e2e?: Record<string, Record<string, ServingE2EProfileResult>>;
   serving_e2e_perop?: Record<string, Record<string, ServingE2EProfileResult>>;
   serving_e2e_conc?: Record<string, Record<string, ServingE2EConcResult>>;
+  gemm_extrapolation?: Record<string, GemmExtrapResult>;
+}
+
+
+export interface GemmExtrapRow {
+  M: number;
+  N: number;
+  K: number;
+  pred_ms: number;
+  meas_ms: number;
+  err_pct: number;
+}
+
+export interface GemmExtrapResult {
+  gpu: string;
+  n_shapes: number;
+  mape: number;
+  median_err: number;
+  within_20pct: number;
+  rows: GemmExtrapRow[];
 }
 
 export interface ProfilingState {
