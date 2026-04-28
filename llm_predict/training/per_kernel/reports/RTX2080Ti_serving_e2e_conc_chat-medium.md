@@ -1,6 +1,6 @@
 # RTX2080Ti -- serving_e2e Concurrency Sweep: chat-medium
 
-- Predictor: Little's Law concurrency model + per-kernel XGBoost
+- Predictor: steady-state batch size model + per-kernel XGBoost
 - Concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500]
 
 ## Per-concurrency MAPE (supported architectures)

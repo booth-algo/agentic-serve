@@ -51,7 +51,8 @@ def predict_layer_ms(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
         tokens_per_expert = max(1, int(M * k / max(E, 1)))
         # Grouped GEMM: all E experts run with partial parallelism.
         # Efficiency 0.585 calibrated from gpt-oss-20b A100 wall-clock.
-        moe_eff = 0.585
+        _MOE_EFF = {"A100": 0.585, "RTX3090": 0.585, "RTX2080Ti": 0.585, "H100": 0.15}
+        moe_eff = _MOE_EFF.get(pred.gpu, 0.585)
         for _ in range(E):
             layer_ms += max(0.0, pred.predict_gemm(M=tokens_per_expert, N=ffn_local, K=d)) * moe_eff
             layer_ms += max(0.0, pred.predict_gemm(M=tokens_per_expert, N=ffn_local, K=d)) * moe_eff
