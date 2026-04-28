@@ -16,8 +16,8 @@
 |---|---|---:|---:|---:|
 | H100 | gemm | 3602 | 0 | no-heldout (train only) |
 | H100 | flash_attn | 20 | 0 | no-heldout (train only) |
-| H100 | elementwise | 108 | 0 | no-heldout (train only) |
-| H100 | misc | 68 | 0 | no-heldout (train only) |
+| H100 | elementwise | 912 | 0 | no-heldout (train only) |
+| H100 | misc | 672 | 0 | no-heldout (train only) |
 
 ## Leave-one-model-out CV
 
@@ -25,7 +25,8 @@
 
 | held-out | gemm | flash_attn | elementwise | misc |
 |---|---:|---:|---:|---:|
-| Llama-8B | 52.0% (n=32) | n/a | n/a | n/a |
+| Llama-8B | 52.0% (n=32) | n/a | 39.6% (n=108) | 146.0% (n=68) |
+| gpt-oss-20b | n/a | n/a | 40.7% (n=804) | 47.9% (n=604) |
 | roofline | 77.7% (n=3570) | n/a | n/a | n/a |
 
 ## Saved pkls
