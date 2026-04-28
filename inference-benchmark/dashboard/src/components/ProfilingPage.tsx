@@ -1,4 +1,4 @@
-import type { PredictorResults, ServingE2EConcResult } from '../types-profiling';
+import type { PredictorResults, ServingE2EConcResult, GemmExtrapResult } from '../types-profiling';
 
 interface ProfilingPageProps {
   profilingState: { results?: PredictorResults } | null;
@@ -139,6 +139,55 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {results.gemm_extrapolation && Object.keys(results.gemm_extrapolation).length > 0 && (
+        <div className="space-y-4 rounded-lg border border-[#30363d] p-4">
+          <div className="flex items-baseline gap-3">
+            <div className="text-xs font-semibold text-[#58a6ff] uppercase tracking-wider">GEMM Shape Extrapolation</div>
+            <div className="text-[11px] text-[#8b949e]">50 random unseen (M,N,K) shapes — proves XGBoost generalizes, not memorizes</div>
+          </div>
+          {Object.keys(results.gemm_extrapolation).sort().map(gpu => {
+            const ex = results.gemm_extrapolation![gpu] as GemmExtrapResult;
+            return (
+              <div key={gpu} className="space-y-2">
+                <div className="flex gap-6 text-xs text-[#8b949e]">
+                  <span>{gpu}: {ex.n_shapes} shapes</span>
+                  <span>MAPE: <span className="font-mono text-[#3fb950]">{ex.mape}%</span></span>
+                  <span>Median: <span className="font-mono text-[#3fb950]">{ex.median_err}%</span></span>
+                  <span>Within 20%: <span className="font-mono text-[#3fb950]">{ex.within_20pct}%</span></span>
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22] max-h-64 overflow-y-auto">
+                  <table className="min-w-full border-collapse text-xs">
+                    <thead className="sticky top-0 bg-[#161b22]"><tr className="border-b border-[#21262d] text-[#8b949e]">
+                      <th className="px-3 py-2 text-right font-medium">M</th>
+                      <th className="px-3 py-2 text-right font-medium">N</th>
+                      <th className="px-3 py-2 text-right font-medium">K</th>
+                      <th className="px-3 py-2 text-right font-medium">Predicted (ms)</th>
+                      <th className="px-3 py-2 text-right font-medium">Measured (ms)</th>
+                      <th className="px-3 py-2 text-right font-medium">Error</th>
+                    </tr></thead>
+                    <tbody>
+                      {ex.rows.map((r, i) => {
+                        const errColor = r.err_pct < 15 ? 'text-[#3fb950]' : r.err_pct < 30 ? 'text-[#ff9800]' : 'text-[#f85149]';
+                        return (
+                          <tr key={i} className="border-b border-[#21262d]/50">
+                            <td className="px-3 py-1 text-right font-mono text-[#c9d1d9]">{r.M}</td>
+                            <td className="px-3 py-1 text-right font-mono text-[#c9d1d9]">{r.N}</td>
+                            <td className="px-3 py-1 text-right font-mono text-[#c9d1d9]">{r.K}</td>
+                            <td className="px-3 py-1 text-right font-mono text-[#c9d1d9]">{r.pred_ms.toFixed(4)}</td>
+                            <td className="px-3 py-1 text-right font-mono text-[#c9d1d9]">{r.meas_ms.toFixed(4)}</td>
+                            <td className={`px-3 py-1 text-right font-mono ${errColor}`}>{r.err_pct.toFixed(1)}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
