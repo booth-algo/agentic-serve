@@ -14,15 +14,23 @@
 
 | GPU | family | n_train | n_test | MAPE |
 |---|---|---:|---:|---:|
-| H100 | gemm | 3570 | 0 | no-heldout (train only) |
-| H100 | flash_attn | 0 | 0 | skipped (n_train=0 < 5) |
-| H100 | elementwise | 0 | 0 | skipped (n_train=0 < 5) |
-| H100 | misc | 0 | 0 | skipped (n_train=0 < 5) |
+| H100 | gemm | 3602 | 0 | no-heldout (train only) |
+| H100 | flash_attn | 20 | 0 | no-heldout (train only) |
+| H100 | elementwise | 108 | 0 | no-heldout (train only) |
+| H100 | misc | 68 | 0 | no-heldout (train only) |
 
 ## Leave-one-model-out CV
 
-### H100 — skipped (<2 training models)
+### H100
+
+| held-out | gemm | flash_attn | elementwise | misc |
+|---|---:|---:|---:|---:|
+| Llama-8B | 52.0% (n=32) | n/a | n/a | n/a |
+| roofline | 77.7% (n=3570) | n/a | n/a | n/a |
 
 ## Saved pkls
 - **H100**
   - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_kernel/perkernel_gemm_shape_v2.pkl`
+  - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_kernel/perkernel_flash_attn_shape_v2.pkl`
+  - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_kernel/perkernel_elementwise_shape_v2.pkl`
+  - `/home/kevinlau/agentic-serve/llm_predict/profiling/data/H100/trained/per_kernel/perkernel_misc_shape_v2.pkl`
