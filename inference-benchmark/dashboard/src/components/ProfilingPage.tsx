@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { PredictorResults, ServingE2EConcResult, GemmExtrapResult } from '../types-profiling';
+import type { PredictorResults, ServingE2EConcResult, ServingE2EConcRow, GemmExtrapResult } from '../types-profiling';
 
 interface ProfilingPageProps {
   profilingState: { results?: PredictorResults } | null;
@@ -27,15 +27,17 @@ function fmt(v: number | null | undefined): string {
   return v.toFixed(1) + '%';
 }
 
-function ConcHeatmap({ concData }: { concData: Record<string, Record<string, ServingE2EConcResult>> }) {
+function ConcHeatmap({ concData, kind = 'dense' }: { concData: Record<string, Record<string, ServingE2EConcResult>>; kind?: 'dense' | 'moe' }) {
   const [metric, setMetric] = useState<Metric>('e2el');
 
   const allConcs = new Set<number>();
   const gpus = Object.keys(concData).sort();
+  const getConc = (pr: ServingE2EConcResult | null): ServingE2EConcRow[] =>
+    kind === 'moe' ? (pr?.per_conc_moe ?? []) : (pr?.per_conc ?? []);
   for (const g of gpus) {
     for (const p of Object.keys(concData[g])) {
       const pr = concData[g][p] as ServingE2EConcResult;
-      for (const row of pr.per_conc) allConcs.add(row.conc);
+      for (const row of getConc(pr)) allConcs.add(row.conc);
     }
   }
   const concs = Array.from(allConcs).sort((a, b) => a - b);
@@ -51,15 +53,19 @@ function ConcHeatmap({ concData }: { concData: Record<string, Record<string, Ser
 
   const rows: { gpu: string; profile: string; pr: ServingE2EConcResult | null; isFirstInGpu: boolean }[] = [];
   for (const g of gpus) {
-    ALL_PROFILES.forEach((p, i) => {
+    let first = true;
+    for (const p of ALL_PROFILES) {
       const pr = concData[g]?.[p] as ServingE2EConcResult | undefined;
-      rows.push({ gpu: g, profile: p, pr: pr ?? null, isFirstInGpu: i === 0 });
-    });
+      if (kind === 'moe' && !pr?.per_conc_moe?.length) continue;
+      rows.push({ gpu: g, profile: p, pr: pr ?? null, isFirstInGpu: first });
+      first = false;
+    }
   }
+  if (rows.length === 0) return null;
 
   const getValue = (pr: ServingE2EConcResult | null, conc: number): number | null => {
     if (!pr) return null;
-    const row = pr.per_conc.find(r => r.conc === conc);
+    const row = getConc(pr).find(r => r.conc === conc);
     if (!row) return null;
     if (metric === 'e2el') return row.e2el_mape;
     if (metric === 'tpot') return row.tpot_mape;
@@ -68,7 +74,7 @@ function ConcHeatmap({ concData }: { concData: Record<string, Record<string, Ser
 
   const getAvg = (pr: ServingE2EConcResult | null): number | null => {
     if (!pr) return null;
-    const vals = pr.per_conc.map(r => metric === 'e2el' ? r.e2el_mape : metric === 'tpot' ? r.tpot_mape : r.ttft_mape).filter(v => v !== null && !isNaN(v));
+    const vals = getConc(pr).map(r => metric === 'e2el' ? r.e2el_mape : metric === 'tpot' ? r.tpot_mape : r.ttft_mape).filter(v => v !== null && !isNaN(v));
     if (vals.length === 0) return null;
     return vals.reduce((s, v) => s + v, 0) / vals.length;
   };
@@ -136,7 +142,7 @@ function ConcHeatmap({ concData }: { concData: Record<string, Record<string, Ser
         </table>
       </div>
       <div className="text-[11px] text-[#484f58]">
-        Steady-state batch size model, validated across C=1–500. Supported architectures only (excludes MoE, hybrid attention).
+        {kind === 'dense' ? 'Dense architectures only (excludes MoE, hybrid attention).' : 'Mixture-of-Experts architectures (gpt-oss-20b / Mixtral).'}
       </div>
     </div>
   );
@@ -152,11 +158,19 @@ function PredictorResultsSection({ results }: { results?: PredictorResults }) {
       <div className="text-sm font-semibold text-[#c9d1d9]">Serving E2E Predictor — Concurrency Sweep</div>
 
       {hasConcData && (
-        <div className="space-y-4 rounded-lg border border-[#30363d] p-4">
-          <div className="flex items-baseline gap-3">
-            <div className="text-xs font-semibold text-[#58a6ff] uppercase tracking-wider">Per-kernel (ncu) × Concurrency</div>
+        <div className="space-y-6">
+          <div className="space-y-4 rounded-lg border border-[#30363d] p-4">
+            <div className="flex items-baseline gap-3">
+              <div className="text-xs font-semibold text-[#58a6ff] uppercase tracking-wider">Dense Models</div>
+            </div>
+            <ConcHeatmap concData={concData} kind="dense" />
           </div>
-          <ConcHeatmap concData={concData} />
+          <div className="space-y-4 rounded-lg border border-[#30363d] p-4">
+            <div className="flex items-baseline gap-3">
+              <div className="text-xs font-semibold text-[#58a6ff] uppercase tracking-wider">MoE Models</div>
+            </div>
+            <ConcHeatmap concData={concData} kind="moe" />
+          </div>
         </div>
       )}
 

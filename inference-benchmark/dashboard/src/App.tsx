@@ -10,14 +10,13 @@ import { ThroughputChart } from './components/charts/ThroughputChart';
 import { ComparisonChart } from './components/charts/ComparisonChart';
 import { PerTurnChart } from './components/charts/PerTurnChart';
 import { DataTable } from './components/DataTable';
-import { RooflinePage } from './components/RooflinePage';
 import { CoveragePage } from './components/CoveragePage';
 import { ProfilingPage } from './components/ProfilingPage';
 import { useProfilingState } from './hooks/useProfilingState';
 import type { TabId } from './types';
 import './index.css';
 
-type PageId = 'benchmark' | 'roofline' | 'coverage' | 'profiling';
+type PageId = 'benchmark' | 'coverage' | 'profiling';
 
 function App() {
   const {
@@ -57,8 +56,6 @@ function App() {
     <Layout totalRuns={allData.length} loading={loading} activePage={activePage} onPageChange={setActivePage}>
       {activePage === 'profiling' ? (
         <ProfilingPage profilingState={profilingState} loading={profilingLoading} />
-      ) : activePage === 'roofline' ? (
-        <RooflinePage />
       ) : activePage === 'coverage' ? (
         <CoveragePage
           allData={allData}

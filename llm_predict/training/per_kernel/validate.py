@@ -609,6 +609,27 @@ def validate_serving_e2e_conc_gpu(gpu, data_json_path, report_path,
     lines.append("Overall supported MAPE: TPOT %s, E2EL %s" % (_m(sup_tpot), _m(sup_e2el)))
     lines.append("")
 
+    moe = [r for r in out_rows if r["arch"] == "moe"]
+    if moe:
+        lines.append("## Per-concurrency MAPE (MoE architectures)")
+        lines.append("")
+        lines.append("| Conc | bs_eff | TTFT MAPE | TPOT MAPE | E2EL MAPE | n |")
+        lines.append("|---:|---:|---:|---:|---:|---:|")
+        for conc in concs:
+            cr = [r for r in out_rows if r["conc"] == conc and r["arch"] == "moe"]
+            if not cr:
+                continue
+            te = [r["ttft_err"] for r in cr]
+            pe = [r["tpot_err"] for r in cr if r["tpot_err"] is not None]
+            ee = [r["e2el_err"] for r in cr if r["e2el_err"] is not None]
+            bs = sum(r["bs_eff"] for r in cr) / len(cr)
+            lines.append("| %d | %.1f | %s | %s | %s | %d |" % (conc, bs, _m(te), _m(pe), _m(ee), len(cr)))
+        lines.append("")
+        moe_tpot = [r["tpot_err"] for r in moe if r["tpot_err"] is not None]
+        moe_e2el = [r["e2el_err"] for r in moe if r["e2el_err"] is not None]
+        lines.append("Overall MoE MAPE: TPOT %s, E2EL %s" % (_m(moe_tpot), _m(moe_e2el)))
+        lines.append("")
+
     lines.append("## Per-row detail")
     lines.append("")
     lines.append("| Model | arch | Conc | ISL | OSL | bs_eff "

@@ -20,6 +20,23 @@
 
 Overall supported MAPE: TPOT 27.3%, E2EL 25.9%
 
+## Per-concurrency MAPE (MoE architectures)
+
+| Conc | bs_eff | TTFT MAPE | TPOT MAPE | E2EL MAPE | n |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 1.0 | 29.8% | 202.3% | 186.8% | 1 |
+| 10 | 9.9 | 39.8% | 26.4% | 20.9% | 1 |
+| 20 | 19.8 | 35.0% | 6.6% | 3.1% | 1 |
+| 40 | 39.6 | 17.5% | 7.8% | 11.3% | 1 |
+| 80 | 79.2 | 12.3% | 27.3% | 31.0% | 1 |
+| 120 | 118.8 | 81.4% | 37.8% | 40.3% | 1 |
+| 160 | 158.5 | 93.4% | 35.3% | 50.5% | 1 |
+| 200 | 198.2 | 88.0% | 72.4% | 69.5% | 1 |
+| 256 | 253.7 | 92.0% | 63.3% | 66.0% | 1 |
+| 320 | 316.9 | 95.7% | 63.0% | 69.3% | 1 |
+
+Overall MoE MAPE: TPOT 54.2%, E2EL 54.9%
+
 ## Per-row detail
 
 | Model | arch | Conc | ISL | OSL | bs_eff | pred TTFT | meas TTFT | TTFT err | pred TPOT | meas TPOT | TPOT err | pred E2EL | meas E2EL | E2EL err |
