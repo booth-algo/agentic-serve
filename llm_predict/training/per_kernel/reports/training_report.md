@@ -14,7 +14,7 @@
 
 | GPU | family | n_train | n_test | MAPE |
 |---|---|---:|---:|---:|
-| H100 | gemm | 4832 | 0 | no-heldout (train only) |
+| H100 | gemm | 9092 | 0 | no-heldout (train only) |
 | H100 | flash_attn | 234 | 0 | no-heldout (train only) |
 | H100 | elementwise | 5530 | 0 | no-heldout (train only) |
 | H100 | misc | 3291 | 0 | no-heldout (train only) |
@@ -25,11 +25,11 @@
 
 | held-out | gemm | flash_attn | elementwise | misc |
 |---|---:|---:|---:|---:|
-| Gemma-9B | 38.1% (n=528) | 51.5% (n=152) | 14.2% (n=2726) | 14.2% (n=1593) |
-| Granite-8B | 95.5% (n=550) | 6.3% (n=78) | 10.9% (n=1892) | 7.1% (n=1026) |
-| Llama-8B | 115.6% (n=32) | 5.1% (n=4) | 8.0% (n=108) | 7.6% (n=68) |
-| gpt-oss-20b | 131.2% (n=152) | n/a | 26.1% (n=804) | 43.3% (n=604) |
-| roofline | 335.9% (n=3570) | n/a | n/a | n/a |
+| Gemma-9B | 137.3% (n=528) | 51.5% (n=152) | 14.2% (n=2726) | 14.2% (n=1593) |
+| Granite-8B | 110.2% (n=550) | 6.3% (n=78) | 10.9% (n=1892) | 7.1% (n=1026) |
+| Llama-8B | 90.5% (n=32) | 5.1% (n=4) | 8.0% (n=108) | 7.6% (n=68) |
+| gpt-oss-20b | 112.0% (n=152) | n/a | 26.1% (n=804) | 43.3% (n=604) |
+| roofline | 137.1% (n=7830) | n/a | n/a | n/a |
 
 ## Saved pkls
 - **H100**
