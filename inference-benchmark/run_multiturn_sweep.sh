@@ -4,7 +4,7 @@ set -uo pipefail
 export CUDA_VISIBLE_DEVICES=0
 PYTHON="${PYTHON:-$(which python)}"
 PORT=8000; API_KEY="test"; WARMUP=3; TIMEOUT=300; MAX_WAIT=600
-MT_PROFILES="multi-turn-short multi-turn-medium multi-turn-long"
+MT_PROFILES="chat-multiturn-short chat-multiturn-medium chat-multiturn-long"
 CONC_SWEEP="1 10 20 40 80"
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$REPO_ROOT"

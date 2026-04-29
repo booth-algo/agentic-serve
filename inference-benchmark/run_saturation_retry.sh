@@ -68,7 +68,7 @@ run_high_conc() {
     mkdir -p "$results_dir"
 
     for CONC in $CONC_HIGH; do
-        local tag="${model_name}_tp${tp}_${engine}_chatbot-short_conc${CONC}"
+        local tag="${model_name}_tp${tp}_${engine}_chat-singleturn_conc${CONC}"
         local out="${results_dir}/${tag}.json"
 
         if [[ -f "$out" ]] && [[ -s "$out" ]]; then
@@ -76,10 +76,10 @@ run_high_conc() {
             continue
         fi
 
-        log "  chatbot-short conc=$CONC nreq=150"
+        log "  chat-singleturn conc=$CONC nreq=150"
         OPENAI_API_KEY="$API_KEY" "$PYTHON" -m src.benchmark.runner \
             --url "$url" --model "$model_path" --backend "$engine" \
-            --profile chatbot-short --concurrency "$CONC" \
+            --profile chat-singleturn --concurrency "$CONC" \
             --num-requests 150 --warmup "$WARMUP" --timeout "$TIMEOUT" \
             --api-key "$API_KEY" --output "$out" 2>&1 || {
                 err "  FAILED: conc=$CONC"
@@ -108,7 +108,7 @@ for entry in "${MODELS[@]}"; do
         # Check if all 4 high-conc files already exist
         existing=0
         for c in $CONC_HIGH; do
-            [[ -f "${results_dir}/${name}_tp${tp}_${engine}_chatbot-short_conc${c}.json" ]] && existing=$((existing + 1))
+            [[ -f "${results_dir}/${name}_tp${tp}_${engine}_chat-singleturn_conc${c}.json" ]] && existing=$((existing + 1))
         done
         if [[ $existing -eq 4 ]]; then
             log "SKIP $name TP=$tp $engine (all 4 high-conc exist)"

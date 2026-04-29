@@ -91,7 +91,6 @@ export interface FilterState {
   backend: string[];
   agentType: string[];
   turnStyle: string[];
-  servingStyle: string[];
   profile: string[];
 }
 
@@ -103,6 +102,5 @@ export interface FilterOptions {
   backend: string[];
   agentType: string[];
   turnStyle: string[];
-  servingStyle: string[];
   profile: string[];
 }

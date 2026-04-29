@@ -31,12 +31,12 @@ run_conc() {
     local eng=$1 name=$2 path=$3 tp=$4 dir=$5
     mkdir -p "$dir"
     for C in $CONC_HIGH; do
-        local out="$dir/${name}_tp${tp}_${eng}_chatbot-short_conc${C}.json"
+        local out="$dir/${name}_tp${tp}_${eng}_chat-singleturn_conc${C}.json"
         [[ -f "$out" ]] && { log "SKIP $C"; continue; }
         log "conc=$C"
         OPENAI_API_KEY=$API_KEY $PYTHON -m src.benchmark.runner \
             --url http://localhost:$PORT/v1/chat/completions --model "$path" --backend "$eng" \
-            --profile chatbot-short --concurrency "$C" --num-requests 150 \
+            --profile chat-singleturn --concurrency "$C" --num-requests 150 \
             --warmup $WARMUP --timeout $TIMEOUT --api-key $API_KEY --output "$out" 2>&1 || err "FAIL $C"
     done
 }

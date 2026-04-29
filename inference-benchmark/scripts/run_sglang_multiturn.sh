@@ -16,7 +16,7 @@ export PYTHON SERVER_PYTHON
 API_KEY="test"
 WARMUP=5
 TIMEOUT=300
-MT_PROFILES="chat-multiturn-short chat-multiturn-medium chat-multiturn-long swebench-multiturn-short swebench-multiturn-medium terminalbench-multiturn-short terminalbench-multiturn-medium"
+MT_PROFILES="chat-multiturn-short chat-multiturn-medium chat-multiturn-long swebench-multiturn-short swebench-multiturn-medium terminalbench-multiturn-short terminalbench-multiturn-medium osworld-multiturn-short osworld-multiturn-medium"
 CONC_SWEEP_HIGH="5 10 20 40 80 120 160"
 CONC_SWEEP_LOW="5 10 20 40 80"
 MAX_SERVER_WAIT=600
@@ -102,7 +102,7 @@ bench_callback() {
 # =============================================================================
 log "╔══════════════════════════════════════════════════════════╗"
 log "║  SGLANG MULTI-TURN BENCHMARKS                           ║"
-log "║  8 models × 7 profiles × 5-7 conc = ~336 runs           ║"
+log "║  8 models × 9 profiles × 5-7 conc = ~432 runs           ║"
 log "╚══════════════════════════════════════════════════════════╝"
 
 declare -a tp1_jobs=()

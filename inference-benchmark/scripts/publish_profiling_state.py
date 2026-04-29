@@ -111,7 +111,7 @@ def _parse_wallclock(md_path: Path) -> dict | None:
     return out
 
 
-_SERVING_PROFILES = ("chat-short", "chat-medium", "chat-long",
+_SERVING_PROFILES = ("chat-singleturn",
                      "chat-multiturn-short", "chat-multiturn-medium", "chat-multiturn-long",
                      "coding-agent", "prefill-heavy", "decode-heavy",
                      "terminalbench-multiturn-short", "terminalbench-multiturn-medium",

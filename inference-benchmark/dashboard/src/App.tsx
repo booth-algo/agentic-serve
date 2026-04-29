@@ -11,12 +11,11 @@ import { ComparisonChart } from './components/charts/ComparisonChart';
 import { PerTurnChart } from './components/charts/PerTurnChart';
 import { DataTable } from './components/DataTable';
 import { CoveragePage } from './components/CoveragePage';
-import { ProfilingPage } from './components/ProfilingPage';
-import { useProfilingState } from './hooks/useProfilingState';
+import { GemmPage } from './components/GemmPage';
 import type { TabId } from './types';
 import './index.css';
 
-type PageId = 'benchmark' | 'coverage' | 'profiling';
+type PageId = 'benchmark' | 'coverage' | 'predictor';
 
 function App() {
   const {
@@ -31,7 +30,6 @@ function App() {
     clearFilters,
   } = useData();
   const { sweepState } = useSweepState();
-  const { profilingState, loading: profilingLoading } = useProfilingState();
 
   const [activePage, setActivePage] = useState<PageId>('benchmark');
   const [activeTab, setActiveTab] = useState<TabId>('latency');
@@ -54,8 +52,8 @@ function App() {
 
   return (
     <Layout totalRuns={allData.length} loading={loading} activePage={activePage} onPageChange={setActivePage}>
-      {activePage === 'profiling' ? (
-        <ProfilingPage profilingState={profilingState} loading={profilingLoading} />
+      {activePage === 'predictor' ? (
+        <GemmPage />
       ) : activePage === 'coverage' ? (
         <CoveragePage
           allData={allData}

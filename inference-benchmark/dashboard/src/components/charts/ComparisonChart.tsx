@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import type { BenchmarkResult } from '../../types';
+import { profileDisplayName } from '../../profileMeta';
 
 interface ComparisonChartProps {
   seriesData: Map<string, BenchmarkResult[]>;
@@ -30,7 +31,7 @@ const METRIC_OPTIONS = [
 function shortenSeriesKey(key: string): string {
   const parts = key.split(' / ');
   if (parts.length < 4) return key;
-  return `${parts[0]} ${parts[1].replace('Llama-3.1-', '')} ${parts[2]} ${parts[3]}`;
+  return `${parts[0]} ${parts[1].replace('Llama-3.1-', '')} ${parts[2]} ${profileDisplayName(parts[3])}`;
 }
 
 export function ComparisonChart({ seriesData }: ComparisonChartProps) {

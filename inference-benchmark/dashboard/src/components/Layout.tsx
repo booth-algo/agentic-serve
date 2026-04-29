@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-type PageId = 'benchmark' | 'coverage' | 'profiling';
+type PageId = 'benchmark' | 'coverage' | 'predictor';
 
 interface LayoutProps {
   children: ReactNode;
@@ -33,12 +33,12 @@ const NAV_PAGES: Array<{ id: PageId; label: string; icon: ReactNode }> = [
     ),
   },
   {
-    id: 'profiling',
-    label: 'Profiling',
+    id: 'predictor',
+    label: 'Predictor',
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M3 9h18M9 3v18" />
       </svg>
     ),
   },

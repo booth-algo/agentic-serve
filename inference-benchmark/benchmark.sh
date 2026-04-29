@@ -5,8 +5,8 @@
 # This script documents all flags used in official benchmark runs.
 # Edit the CONFIG section for your server, then run a target:
 #
-#   ./benchmark.sh output_short_long    # output-short + output-long sweep
-#   ./benchmark.sh chatbot              # chatbot-short sweep (ShareGPT)
+#   ./benchmark.sh stress               # prefill-heavy + decode-heavy sweep
+#   ./benchmark.sh chatbot              # canonical natural chat sweep (ShareGPT)
 #   ./benchmark.sh production           # all production profiles
 #   ./benchmark.sh cross_validate       # cross-validation profile (random tokens)
 #
@@ -72,7 +72,7 @@ run() {
 # TARGETS
 # =============================================================================
 
-output_short_long() {
+stress() {
     # Synthetic stress test (random tokens, --ignore-eos auto-set by stress-test mode).
     # prefill-heavy: high ISL, stresses prefill throughput.
     # decode-heavy: high OSL, stresses decode throughput.
@@ -103,7 +103,7 @@ chatbot() {
     # ShareGPT real text — different prompt every request → TTFT is valid regardless
     # of prefix caching state (no shared prefix across requests).
     # OSL hit rate ~91-93% on 8B/70B.
-    echo "### chatbot-short sweep (ShareGPT real text) ###"
+    echo "### natural chat single-turn sweep (ShareGPT real text) ###"
     echo "Mode:    single-turn"
     echo "Server:  ./scripts/launch_server.sh single-turn --model $MODEL"
     echo "Model:   $MODEL"
@@ -112,7 +112,7 @@ chatbot() {
     echo ""
 
     for CONC in $CONC_STANDARD; do
-        run "chatbot-short" "$CONC" "200"
+        run "chat-singleturn" "$CONC" "200"
     done
 }
 
@@ -127,7 +127,7 @@ production() {
     echo "Server:  $URL"
     echo ""
 
-    for PROFILE in chat-short chat-medium chat-long coding-agent; do
+    for PROFILE in chat-singleturn coding-agent; do
         for CONC in $CONC_STANDARD; do
             run "$PROFILE" "$CONC" "200"
         done
@@ -151,23 +151,23 @@ cross_validate() {
     echo ""
 
     for CONC in 1 10 40 80; do
-        run "random-inferencex" "$CONC" "100" "--ignore-eos --mode stress-test"
+        run "random-1k" "$CONC" "100" "--ignore-eos --mode stress-test"
     done
 }
 
 # =============================================================================
 # DISPATCH
 # =============================================================================
-TARGET="${1:-output_short_long}"
+TARGET="${1:-stress}"
 
 case "$TARGET" in
-    output_short_long) output_short_long ;;
+    stress)            stress ;;
     chatbot)           chatbot ;;
     production)        production ;;
     cross_validate)    cross_validate ;;
     *)
         echo "Unknown target: $TARGET"
-        echo "Available: output_short_long | chatbot | production | cross_validate"
+        echo "Available: stress | chatbot | production | cross_validate"
         exit 1
         ;;
 esac

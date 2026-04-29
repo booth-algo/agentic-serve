@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { BenchmarkResult, FilterState, FilterOptions } from '../types';
-import { PROFILE_META } from '../profileMeta';
+import { PROFILE_META, isBenchmarkProfile } from '../profileMeta';
 
 declare const __BUILD_HASH__: string;
 
@@ -14,7 +14,6 @@ export function useData() {
     backend: [],
     agentType: [],
     turnStyle: [],
-    servingStyle: [],
     profile: [],
   });
 
@@ -29,9 +28,10 @@ export function useData() {
         setAllData(data);
         // Default to first hardware config to avoid chart clutter
         const hwSet = new Set(data.map((r) => r.hardware));
-        const firstHw = Array.from(hwSet).sort()[0];
-        if (firstHw) {
-          setFilters((prev) => ({ ...prev, hardware: [firstHw] }));
+        const sortedHardware = Array.from(hwSet).sort();
+        const defaultHardware = sortedHardware.includes('H100') ? 'H100' : sortedHardware[0];
+        if (defaultHardware) {
+          setFilters((prev) => ({ ...prev, hardware: [defaultHardware] }));
         }
         setLoading(false);
       })
@@ -47,10 +47,10 @@ export function useData() {
     const backend = new Set<string>();
     const agentType = new Set<string>();
     const turnStyle = new Set<string>();
-    const servingStyle = new Set<string>();
     const profile = new Set<string>();
 
-    for (const r of allData) {
+    const benchmarkData = allData.filter((r) => isBenchmarkProfile(r.config.profile));
+    for (const r of benchmarkData) {
       hw.add(r.hardware);
       model.add(r.modelShort);
       backend.add(r.config.backend);
@@ -59,7 +59,6 @@ export function useData() {
       if (meta) {
         agentType.add(meta.agentType);
         turnStyle.add(meta.turnStyle);
-        servingStyle.add(meta.servingStyle);
       }
     }
 
@@ -69,13 +68,13 @@ export function useData() {
       backend: Array.from(backend).sort(),
       agentType: Array.from(agentType).sort(),
       turnStyle: Array.from(turnStyle).sort(),
-      servingStyle: Array.from(servingStyle).sort(),
       profile: Array.from(profile).sort(),
     };
   }, [allData]);
 
   const filteredData = useMemo(() => {
     return allData.filter((r) => {
+      if (!isBenchmarkProfile(r.config.profile)) return false;
       if (filters.hardware.length > 0 && !filters.hardware.includes(r.hardware)) return false;
       if (filters.model.length > 0 && !filters.model.includes(r.modelShort)) return false;
       if (filters.backend.length > 0 && !filters.backend.includes(r.config.backend)) return false;
@@ -86,15 +85,18 @@ export function useData() {
       if (meta) {
         if (filters.agentType.length > 0 && !filters.agentType.includes(meta.agentType)) return false;
         if (filters.turnStyle.length > 0 && !filters.turnStyle.includes(meta.turnStyle)) return false;
-        if (filters.servingStyle.length > 0 && !filters.servingStyle.includes(meta.servingStyle)) return false;
       } else {
-        // If no metadata, exclude when tag filters are active
-        if (filters.agentType.length > 0 || filters.turnStyle.length > 0 || filters.servingStyle.length > 0) return false;
+        if (filters.agentType.length > 0 || filters.turnStyle.length > 0) return false;
       }
 
       return true;
     });
   }, [allData, filters]);
+
+  const benchmarkAllData = useMemo(
+    () => allData.filter((r) => isBenchmarkProfile(r.config.profile)),
+    [allData],
+  );
 
   // Group data by series key for chart rendering
   const seriesData = useMemo(() => {
@@ -120,11 +122,11 @@ export function useData() {
   }, []);
 
   const clearFilters = useCallback(() => {
-    setFilters({ hardware: [], model: [], backend: [], agentType: [], turnStyle: [], servingStyle: [], profile: [] });
+    setFilters({ hardware: [], model: [], backend: [], agentType: [], turnStyle: [], profile: [] });
   }, []);
 
   return {
-    allData,
+    allData: benchmarkAllData,
     data: filteredData,
     seriesData,
     loading,

@@ -9,7 +9,7 @@
 #       [PY] [GPU_MEM] [MAX_LEN]
 #
 # Example:
-#   bash run_one_bench.sh /data/models/Llama-3.1-8B-Instruct 1 Llama-3.1-8B vllm chat-short 10 50 \
+#   bash run_one_bench.sh /data/models/Llama-3.1-8B-Instruct 1 Llama-3.1-8B vllm chat-singleturn 10 50 \
 #       /tmp/results/a100_Llama-8B_tp1_vllm /data/kevinlau/miniconda3/bin/python 0.85 8192
 set -euo pipefail
 

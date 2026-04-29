@@ -1,8 +1,8 @@
-# RTX3090 — serving_e2e Validation: chat-long
+# RTX3090 — serving_e2e Validation: chat-singleturn
 
 - Predictor track: **serving_e2e** (ISL/OSL → TTFT + TPOT + E2EL)
 - Predictor: RTX3090 pkls (['elementwise', 'flash_attn', 'gemm', 'misc'])
-- Profile: `chat-long` (concurrency=1)
+- Profile: `chat-singleturn` (concurrency=1)
 - Ground truth: `summary.{median_ttft_ms, median_tpot_ms, median_e2el_ms}`
 - Headline MAPE = supported architectures only.
 

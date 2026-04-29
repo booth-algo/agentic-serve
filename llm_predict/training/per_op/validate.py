@@ -7,7 +7,7 @@ the per-kernel `validate.py --mode serving_e2e`.
 CLI
 ---
     python -m llm_predict.training.per_op.validate \
-        --gpu RTX2080Ti --profile chat-short
+        --gpu RTX2080Ti --profile chat-singleturn
     python -m llm_predict.training.per_op.validate \
         --gpu RTX2080Ti
 """
@@ -20,6 +20,7 @@ from llm_predict.predictors.per_op.predictor import PerOpPredictor
 from llm_predict.training.per_kernel import model_specs
 from llm_predict.training.per_kernel.validate import (
     _load_measured_rows, _MODELSHORT_TO_DIR, _SHORT_TO_DIR,
+    normalize_profile_name,
 )
 
 from .serving_e2e import predict_serving_e2e_perop
@@ -180,9 +181,8 @@ def validate_serving_e2e_perop_gpu(gpu: str,
 
 def run(report_dir: Path, gpus: list[str], data_json: Path,
         profile: str | None = None, concurrency: int = 1) -> None:
-    profiles = [profile] if profile else [
-        "chat-short", "chat-medium", "chat-long",
-    ]
+    profile = normalize_profile_name(profile)
+    profiles = [profile] if profile else ["chat-singleturn"]
     for gpu in gpus:
         for p in profiles:
             validate_serving_e2e_perop_gpu(

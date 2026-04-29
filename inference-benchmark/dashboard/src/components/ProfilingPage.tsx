@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { PredictorResults, ServingE2EConcResult, ServingE2EConcRow, GemmExtrapResult } from '../types-profiling';
+import { profileDisplayName } from '../profileMeta';
 
 interface ProfilingPageProps {
   profilingState: { results?: PredictorResults } | null;
@@ -43,7 +44,7 @@ function ConcHeatmap({ concData, kind = 'dense' }: { concData: Record<string, Re
   const concs = Array.from(allConcs).sort((a, b) => a - b);
 
   const ALL_PROFILES = [
-    'chat-short', 'chat-medium', 'chat-long',
+    'chat-singleturn',
     'chat-multiturn-short', 'chat-multiturn-medium', 'chat-multiturn-long',
     'coding-agent', 'prefill-heavy', 'decode-heavy',
     'terminalbench-multiturn-short', 'terminalbench-multiturn-medium',
@@ -118,12 +119,15 @@ function ConcHeatmap({ concData, kind = 'dense' }: { concData: Record<string, Re
           <tbody>
             {rows.map(({ gpu, profile, pr, isFirstInGpu }) => {
               const avg = getAvg(pr);
+              const displayName = profileDisplayName(profile);
               return (
                 <tr key={`${gpu}-${profile}`} className={`border-b border-[#21262d]/50 ${isFirstInGpu ? 'border-t-2 border-t-[#30363d]' : ''}`}>
                   <td className="px-2 py-1 font-mono text-[#c9d1d9] sticky left-0 bg-[#161b22] z-10 whitespace-nowrap">
                     {isFirstInGpu ? gpu : ''}
                   </td>
-                  <td className="px-2 py-1 text-[#c9d1d9] sticky left-[60px] bg-[#161b22] z-10 whitespace-nowrap">{profile}</td>
+                  <td className="px-2 py-1 text-[#c9d1d9] sticky left-[60px] bg-[#161b22] z-10 whitespace-nowrap" title={profile}>
+                    {displayName}
+                  </td>
                   <td className={`px-2 py-1 text-right font-mono font-semibold ${mapeColor(avg)} ${mapeBg(avg)}`}>
                     {fmt(avg)}
                   </td>

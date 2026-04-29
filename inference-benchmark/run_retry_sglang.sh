@@ -8,7 +8,7 @@ API_KEY="test"
 WARMUP=5
 TIMEOUT=300
 CONC_SWEEP="1 10 20 40 80 120 160 200 256 320"
-PROFILES="chatbot-short rag-retrieval rag-heavy coding-assist coding-heavy"
+PROFILES="chat-singleturn coding-agent"
 MAX_SERVER_WAIT=1200  # 20 min for large models
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"

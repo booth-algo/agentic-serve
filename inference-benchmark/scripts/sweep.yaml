@@ -80,37 +80,37 @@ presets:
     max_len: 32768
     gpu_mem: 0.85
     concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500]
-    profiles: [chat-short, chat-medium, chat-long]
+    profiles: [chat-singleturn]
   single_medium:
     max_len: 16384
     gpu_mem: 0.85
     concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256]
-    profiles: [chat-short, chat-medium, chat-long]
+    profiles: [chat-singleturn]
   single_large:
     max_len: 8192
     gpu_mem: 0.90
     concurrencies: [1, 10, 20, 40, 80, 120, 160, 200]
-    profiles: [chat-short, chat-medium, chat-long]
+    profiles: [chat-singleturn]
   single_tight:
     max_len: 4096
     gpu_mem: 0.92
     concurrencies: [1, 10, 20, 40, 80, 120, 160]
-    profiles: [chat-short, chat-medium]
+    profiles: [chat-singleturn]
   multi_small:
     max_len: 32768
     gpu_mem: 0.85
     concurrencies: [5, 10, 20, 40, 80, 120, 160]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, swebench-multiturn-short, swebench-multiturn-medium, terminalbench-multiturn-short, terminalbench-multiturn-medium, osworld-multiturn-short, osworld-multiturn-medium]
   multi_medium:
     max_len: 8192
     gpu_mem: 0.85
     concurrencies: [5, 10, 20, 40, 80, 120, 160]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, swebench-multiturn-short, swebench-multiturn-medium, terminalbench-multiturn-short, terminalbench-multiturn-medium, osworld-multiturn-short, osworld-multiturn-medium]
   multi_tight:
     max_len: 8192
     gpu_mem: 0.85
     concurrencies: [5, 10, 20, 40, 80]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, swebench-multiturn-short, swebench-multiturn-medium, terminalbench-multiturn-short, terminalbench-multiturn-medium, osworld-multiturn-short, osworld-multiturn-medium]
   # multi_saturation — only the high-concurrency end (200/256/320) for measuring
   # plateau / saturated TPOT in multi-turn workloads. Paired with existing
   # multi_small/multi_medium runs to fill the saturation regime.
@@ -118,7 +118,7 @@ presets:
     max_len: 16384
     gpu_mem: 0.85
     concurrencies: [200, 256, 320]
-    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, terminalbench-multiturn-short, osworld-multiturn-short, osworld-multiturn-medium]
+    profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long, swebench-multiturn-short, swebench-multiturn-medium, terminalbench-multiturn-short, terminalbench-multiturn-medium, osworld-multiturn-short, osworld-multiturn-medium]
 
 # --------------------------------------------------------------------------
 # Feasibility rule (mirrors CoveragePage.tsx checkFeasibility)
@@ -159,7 +159,7 @@ cells:
   # tp1
   - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: single, preset: single_small }
   - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: multi,  preset: multi_small }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 1, mode: single, preset: single_tight, gpu_mem: 0.90, max_len: 4096, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256], profiles: [chat-short, chat-medium, chat-long] }
+  - { host: gpu-4, model: Qwen3.5-9B,     tp: 1, mode: single, preset: single_tight, gpu_mem: 0.90, max_len: 4096, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256], profiles: [chat-singleturn] }
   - { host: gpu-4, model: gpt-oss-20b,    tp: 1, mode: single, preset: single_large, max_len: 8192, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256] }
   # tp2
   - { host: gpu-4, model: Qwen3.5-9B,     tp: 2, mode: single, preset: single_large, max_len: 8192, gpu_mem: 0.90 }
@@ -169,7 +169,7 @@ cells:
   - { host: gpu-4, model: Mixtral-8x7B,   tp: 4, mode: multi,  preset: multi_medium }
   - { host: gpu-4, model: Llama-3.1-70B,  tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 8192 }
   - { host: gpu-4, model: Llama-3.3-70B,  tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 8192 }
-  - { host: gpu-4, model: Qwen2.5-72B,    tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 4096, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-short, chat-medium] }
+  - { host: gpu-4, model: Qwen2.5-72B,    tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 4096, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-singleturn] }
   - { host: gpu-4, model: Qwen3.5-9B,     tp: 4, mode: single, preset: single_medium }
   - { host: gpu-4, model: gpt-oss-20b,    tp: 4, mode: single, preset: single_large, max_len: 8192, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256] }
   # tp8 — full A100-40GBx8 column
@@ -187,12 +187,12 @@ cells:
   - { host: 3090,  model: Llama-3.1-8B,   tp: 1, mode: multi,  preset: multi_small, concurrencies: [5, 10, 20, 40, 80, 120], profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long] }
   - { host: 3090,  model: Qwen3.5-9B,     tp: 2, mode: single, preset: single_large, max_len: 8192, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320] }
   - { host: 3090,  model: Qwen3.5-9B,     tp: 2, mode: multi,  preset: multi_medium, concurrencies: [5, 10, 20, 40, 80, 120], profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long] }
-  - { host: 3090,  model: Qwen3.5-27B,    tp: 4, mode: single, preset: single_large, max_len: 8192, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-short, chat-medium] }
+  - { host: 3090,  model: Qwen3.5-27B,    tp: 4, mode: single, preset: single_large, max_len: 8192, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-singleturn] }
   # Gap fillers added 2026-04-24 after GPU5 unbricking: gpt-oss-20b (MXFP4
   # ~12 GB fits easily on 3090 tp1) and sglang sibling for Qwen3.5-27B tp4.
   - { host: 3090,  model: gpt-oss-20b,    tp: 1, mode: single, preset: single_small, max_len: 8192, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256] }
   - { host: 3090,  model: gpt-oss-20b,    tp: 1, mode: single, backend: sglang, preset: single_small, max_len: 8192, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256] }
-  - { host: 3090,  model: Qwen3.5-27B,    tp: 4, mode: single, backend: sglang, preset: single_large, max_len: 8192, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-short, chat-medium] }
+  - { host: 3090,  model: Qwen3.5-27B,    tp: 4, mode: single, backend: sglang, preset: single_large, max_len: 8192, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-singleturn] }
   # More 3090 vllm cells added 2026-04-24: exploring tp scaling for 8B/9B
   # models, plus new big-model entries at tp8.
   - { host: 3090,  model: Llama-3.1-8B,   tp: 2, mode: single, preset: single_small, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320] }
@@ -203,18 +203,18 @@ cells:
   - { host: 3090,  model: Mixtral-8x7B,   tp: 8, mode: single, preset: single_large, max_len: 8192, gpu_mem: 0.90 }
   # Llama-3.1-70B tp8 on 3090 PCIe is tight (140 GB / 172.8 GB budget); short
   # max_len to leave headroom for KV + activations.
-  - { host: 3090,  model: Llama-3.1-70B,  tp: 8, mode: single, preset: single_large, max_len: 4096, gpu_mem: 0.92, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-short, chat-medium] }
+  - { host: 3090,  model: Llama-3.1-70B,  tp: 8, mode: single, preset: single_large, max_len: 4096, gpu_mem: 0.92, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-singleturn] }
 
   # === More 2080Ti vllm cells — 2026-04-24 ===
   # 6 GPUs idle (0 and 5 have other users). Stay within tp4.
-  - { host: 2080ti, model: Llama-3.1-8B,  tp: 2, mode: single, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-short, chat-medium, chat-long, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=1,2 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
-  - { host: 2080ti, model: Llama-3.1-8B,  tp: 4, mode: single, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-short, chat-medium, chat-long, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Llama-3.1-8B,  tp: 2, mode: single, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-singleturn, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=1,2 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Llama-3.1-8B,  tp: 4, mode: single, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-singleturn, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 4, mode: multi,  preset: multi_small, concurrencies: [5, 10, 20, 40, 80, 120], profiles: [chat-multiturn-short, chat-multiturn-medium, chat-multiturn-long], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
 
   # === RTX 2080Ti ===
-  - { host: 2080ti, model: Llama-3.1-8B,  tp: 1, mode: single, preset: single_tight, max_len: 32768, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-short, chat-medium, chat-long, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Llama-3.1-8B,  tp: 1, mode: single, preset: single_tight, max_len: 32768, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-singleturn, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Llama-3.1-8B,  tp: 1, mode: multi,  preset: multi_tight, extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
-  - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: single, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-short, chat-medium, chat-long, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: single, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-singleturn, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: multi,  preset: multi_tight, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
 
   # === Multi-turn SATURATION cells (added 2026-04-25) ===
@@ -307,18 +307,18 @@ cells:
   # === vllm fill-in on 2080Ti — 2026-04-24 ===
   # gpt-oss-20b MXFP4 ~12 GB fits single 2080Ti (22 GB budget). Pin to GPU5
   # (shared box).
-  - { host: 2080ti, model: gpt-oss-20b,   tp: 1, mode: single, preset: single_small, max_len: 8192, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-short, chat-medium, chat-long], extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: gpt-oss-20b,   tp: 1, mode: single, preset: single_small, max_len: 8192, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120, 160], profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   # Qwen3.5-9B additional tp shapes on 2080ti (tp2 already done). tp1 is
   # tight (18 GB weights / 22 GB budget; short max_len); tp4 gives comms
   # overhead data on Turing PCIe. Pin to currently-idle GPUs on the
   # shared box (1,2,3,4).
-  - { host: 2080ti, model: Qwen3.5-9B,    tp: 1, mode: single, preset: single_tight, max_len: 4096, gpu_mem: 0.90, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-short, chat-medium], extra_env: "CUDA_VISIBLE_DEVICES=1 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
-  - { host: 2080ti, model: Qwen3.5-9B,    tp: 4, mode: single, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-short, chat-medium, chat-long, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Qwen3.5-9B,    tp: 1, mode: single, preset: single_tight, max_len: 4096, gpu_mem: 0.90, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Qwen3.5-9B,    tp: 4, mode: single, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-singleturn, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
 
   # === sglang fill-in on A100 (gpu-4) — 2026-04-24 ===
   # Mirrors the vllm single-turn coverage to enable backend comparison.
   # Same max_len / gpu_mem as the matching vllm cells where practical.
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 1, mode: single, backend: sglang, preset: single_tight, gpu_mem: 0.90, max_len: 4096, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256], profiles: [chat-short, chat-medium, chat-long] }
+  - { host: gpu-4, model: Qwen3.5-9B,     tp: 1, mode: single, backend: sglang, preset: single_tight, gpu_mem: 0.90, max_len: 4096, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256], profiles: [chat-singleturn] }
   - { host: gpu-4, model: gpt-oss-20b,    tp: 1, mode: single, backend: sglang, preset: single_large, max_len: 8192, concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256] }
   - { host: gpu-4, model: Llama-3.1-8B,   tp: 4, mode: single, backend: sglang, preset: single_small }
   - { host: gpu-4, model: Mixtral-8x7B,   tp: 4, mode: single, backend: sglang, preset: single_small, max_len: 8192 }
@@ -332,5 +332,5 @@ cells:
 
   # === sglang fill-in on 2080Ti — 2026-04-24 ===
   # Pin to same GPU IDs as vllm counterparts (shared box with other users).
-  - { host: 2080ti, model: Llama-3.1-8B,  tp: 1, mode: single, backend: sglang, preset: single_tight, max_len: 32768, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-short, chat-medium, chat-long, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
-  - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: single, backend: sglang, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-short, chat-medium, chat-long, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
+  - { host: 2080ti, model: Llama-3.1-8B,  tp: 1, mode: single, backend: sglang, preset: single_tight, max_len: 32768, gpu_mem: 0.85, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-singleturn, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
+  - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: single, backend: sglang, preset: single_small, max_len: 32768, concurrencies: [1, 10, 20, 40, 80, 120], profiles: [chat-singleturn, coding-agent], extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }

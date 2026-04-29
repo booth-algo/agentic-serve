@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quick smoke test — 5 requests, concurrency 2, profile=output-short.
+# Quick smoke test — 5 requests, concurrency 2, profile=chat-singleturn.
 # Use this to verify everything works after code changes.
 #
 # Usage:
@@ -32,7 +32,7 @@ OPENAI_API_KEY="$API_KEY" "$PYTHON" -m src.benchmark.runner \
   --url "$URL" \
   --model "$MODEL" \
   --backend "$BACKEND" \
-  --profile output-short \
+  --profile chat-singleturn \
   --concurrency 2 \
   --num-requests 5 \
   --warmup 2 \

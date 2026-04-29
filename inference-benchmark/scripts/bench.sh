@@ -6,7 +6,7 @@
 #
 # Examples:
 #   ./scripts/bench.sh
-#   ./scripts/bench.sh --profile output-long --concurrency 20
+#   ./scripts/bench.sh --profile decode-heavy --concurrency 20
 #   ./scripts/bench.sh --backend trtllm --url http://localhost:8000/generate_stream
 #
 set -euo pipefail
@@ -18,7 +18,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 URL="http://localhost:8000/v1/chat/completions"
 MODEL="meta-llama/Llama-3.1-8B-Instruct"
 BACKEND="vllm"
-PROFILE="output-short"
+PROFILE="chat-singleturn"
 CONCURRENCY=10
 NUM_REQUESTS=100
 WARMUP=5

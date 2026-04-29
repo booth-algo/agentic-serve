@@ -1,7 +1,7 @@
 # Baseline benchmark config for local A6000 with vLLM
 # Run a single profile (--config sweep not yet implemented, use CLI args):
 # python -m src.benchmark.runner --url http://localhost:8000/v1/chat/completions \
-#   --model meta-llama/Llama-3.1-8B-Instruct --profile output-short --concurrency 10 --num-requests 100
+#   --model meta-llama/Llama-3.1-8B-Instruct --profile chat-singleturn --concurrency 10 --num-requests 100
 
 engine: vllm
 engine_version: "0.7.3"
@@ -15,11 +15,10 @@ server_url: "http://localhost:8000/v1/chat/completions"
 
 # Profiles to sweep
 workload_profiles:
-  - output-short
-  - output-long
-  - chatbot-short
-  - rag-retrieval
-  - coding-assist
+  - chat-singleturn
+  - coding-agent
+  - prefill-heavy
+  - decode-heavy
 
 arrival_pattern: steady  # steady | poisson | ramp
 

@@ -13,6 +13,7 @@ import {
   ZAxis,
 } from 'recharts';
 import type { BenchmarkResult } from '../../types';
+import { profileDisplayName } from '../../profileMeta';
 
 interface PerTurnChartProps {
   data: BenchmarkResult[];
@@ -25,7 +26,8 @@ const COLORS = [
 
 function shortenKey(key: string): string {
   const parts = key.split(' / ');
-  return parts[parts.length - 1] || key;
+  const profile = parts[parts.length - 1] || key;
+  return profileDisplayName(profile);
 }
 
 // Unique key per result: include concurrency to distinguish runs

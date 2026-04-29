@@ -15,7 +15,7 @@ _DECODE_CORRECTION: dict[str, float] = {
     "A100": 1.497,
     "RTX3090": 0.832,
     "RTX2080Ti": 0.605,
-    "H100": 1.84,
+    "H100": 1.48,
 }
 
 _GEMM_INTERP_THRESHOLD = 128
@@ -147,7 +147,7 @@ def predict_serving_e2e(pred: PerKernelPredictor, cfg: model_specs.ModelConfig,
         "A100": -0.13,
         "RTX3090": -0.02,
         "RTX2080Ti": -0.25,
-        "H100": -0.15,
+        "H100": -0.08,
     }
     _DECODE_ALPHA_FLOOR = {
         "RTX2080Ti": 0.32,

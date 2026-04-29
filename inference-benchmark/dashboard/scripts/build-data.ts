@@ -148,33 +148,17 @@ function shortenModel(model: string): string {
   return short;
 }
 
-// Old → new profile name mapping (matches profiles.py PROFILE_ALIASES)
-const PROFILE_ALIASES: Record<string, string> = {
-  'chatbot-short': 'chat-short',
-  'chatbot-multi-turn': 'chat-medium',
-  'chatbot-multi-turn': 'chat-medium',
-  'rag-retrieval': 'chat-medium',
-  'rag-heavy': 'chat-medium',
-  'coding-assist': 'chat-medium',
-  'coding-heavy': 'chat-medium',
-  'summarization': 'chat-medium',
-  'agentic-tool-use': 'chat-medium',
-  'computer-use-basic': 'chat-short',
-  'customer-support-basic': 'chat-short',
-  'output-short': 'prefill-heavy',
-  'output-long': 'decode-heavy',
-  'random-inferencex': 'random-1k',
-  'random-inferencex-legacy': 'random-1k',
-  'random-inferencex-doublewrap': 'random-1k',
+// Historical result JSONs still carry a few pre-rename profile tags.
+// Normalize them at ingestion so the dashboard only exposes current names.
+const HISTORICAL_PROFILE_ALIASES: Record<string, string> = {
+  'chat-long': 'chat-singleturn',
   'multi-turn-short': 'chat-multiturn-short',
-  'multi-turn-medium': 'chat-multiturn-medium',
-  'multi-turn-long': 'chat-multiturn-long',
 };
 
 function normalizeProfile(profile: string): string {
   // Normalize underscores to hyphens, then resolve aliases
   const normalized = profile.replace(/_/g, '-');
-  return PROFILE_ALIASES[normalized] ?? normalized;
+  return HISTORICAL_PROFILE_ALIASES[normalized] ?? normalized;
 }
 
 function detectBackendFromFilename(filename: string, configBackend: string): string {
@@ -249,7 +233,7 @@ function main() {
       const raw = JSON.parse(fs.readFileSync(fullPath, 'utf-8')) as RawResult;
 
       // Validate required fields
-      if (!raw.config || !raw.summary || !raw.config.model || !raw.summary.median_ttft_ms === undefined) {
+      if (!raw.config || !raw.summary || !raw.config.model || raw.summary.median_ttft_ms === undefined) {
         skipped++;
         continue;
       }

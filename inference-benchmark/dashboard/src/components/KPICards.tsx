@@ -13,24 +13,11 @@ export function KPICards({ data, allData }: KPICardsProps) {
   const models = new Set(data.map((r) => r.modelShort)).size;
   const allModels = new Set(allData.map((r) => r.modelShort)).size;
 
-  const medianThroughput =
-    data.length > 0
-      ? (() => {
-          const vals = data
-            .map((r) => r.summary.output_token_throughput)
-            .filter((v) => v > 0)
-            .sort((a, b) => a - b);
-          if (vals.length === 0) return 0;
-          const mid = Math.floor(vals.length / 2);
-          return vals.length % 2 === 0 ? (vals[mid - 1] + vals[mid]) / 2 : vals[mid];
-        })()
-      : 0;
-
   const isFiltered = data.length !== allData.length;
 
   // Count distinct profiles by agent type in filtered data
   const profilesInData = new Set(data.map((r) => r.config.profile));
-  const typeCounts: Record<string, number> = { 'chat': 0, 'coding': 0, 'terminal': 0 };
+  const typeCounts: Record<string, number> = { 'chat': 0, 'coding': 0, 'terminal': 0, 'computer-use': 0, 'stress': 0 };
   for (const profile of profilesInData) {
     const meta = PROFILE_META[profile];
     if (meta) typeCounts[meta.agentType] = (typeCounts[meta.agentType] ?? 0) + 1;
@@ -55,23 +42,19 @@ export function KPICards({ data, allData }: KPICardsProps) {
       suffix: isFiltered ? ` / ${allModels}` : '',
       accent: '#a855f7',
     },
-    {
-      label: 'Median Out Tok/s',
-      value: medianThroughput.toFixed(1),
-      suffix: '',
-      accent: '#3fb950',
-    },
   ];
 
   const typeLabels: Array<{ key: string; short: string }> = [
     { key: 'chat', short: 'Chat' },
     { key: 'coding', short: 'Coding' },
     { key: 'terminal', short: 'Terminal' },
+    { key: 'computer-use', short: 'Computer Use' },
+    { key: 'stress', short: 'Stress' },
   ];
 
   return (
     <div className="mb-6 space-y-3">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         {cards.map((card) => (
           <div
             key={card.label}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Multi-Turn Phase 2: Fill gaps for xl/long profiles and missing models
+# Multi-Turn Phase 2: Fill gaps for long profiles and missing models
 # Uses GPU parallelism: TP=1 runs 4 models, TP=2 runs 2
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -16,7 +16,7 @@ source scripts/gpu_scheduler.sh
 log() { echo -e "\033[0;32m[MT2]\033[0m $1"; }
 
 # Multi-turn profiles to run
-MT_PROFILES="chat-multiturn-short chat-multiturn-medium chat-multiturn-long chat-multiturn-xl swebench-multiturn-short swebench-multiturn-medium terminalbench-multiturn-short terminalbench-multiturn-medium"
+MT_PROFILES="chat-multiturn-short chat-multiturn-medium chat-multiturn-long swebench-multiturn-short swebench-multiturn-medium terminalbench-multiturn-short terminalbench-multiturn-medium osworld-multiturn-short osworld-multiturn-medium"
 
 # Models that need multi-turn runs
 declare -a MODELS=(
@@ -92,7 +92,7 @@ bench_callback() {
 }
 
 log "╔══════════════════════════════════════════════════════════╗"
-log "║  MULTI-TURN PHASE 2 — Fill xl/long gaps                 ║"
+log "║  MULTI-TURN PHASE 2 — Fill long-profile gaps            ║"
 log "║  Profiles: $MT_PROFILES"
 log "╚══════════════════════════════════════════════════════════╝"
 

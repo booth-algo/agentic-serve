@@ -1,4 +1,4 @@
-# A100 -- serving_e2e Concurrency Sweep: chat-long
+# A100 -- serving_e2e Concurrency Sweep: chat-singleturn
 
 - Predictor: steady-state batch size model + per-kernel XGBoost
 - Concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500]

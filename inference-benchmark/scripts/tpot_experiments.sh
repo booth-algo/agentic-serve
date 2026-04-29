@@ -7,7 +7,7 @@
 #   3. Chunked prefill (on vs off)
 #   4. Smaller model (8B) where KV cache is proportionally larger
 #
-# Each experiment runs chat-short across the transition zone (80-320)
+# Each experiment runs chat-singleturn across the transition zone (80-320)
 # =============================================================================
 set -uo pipefail
 
@@ -16,7 +16,7 @@ cd "$REPO_ROOT"
 
 PYTHON="${PYTHON:-/root/miniconda3/bin/python}"
 API_KEY="test"
-PROFILE="chat-short"
+PROFILE="chat-singleturn"
 WARMUP=5
 TIMEOUT=300
 
