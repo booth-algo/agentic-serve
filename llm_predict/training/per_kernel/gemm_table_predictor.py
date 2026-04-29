@@ -45,40 +45,66 @@ class GemmTable:
 
     def predict(self, M: float, N: int, K: int) -> Optional[float]:
         """Predict GEMM time in ms. Returns None if outside coverage."""
+        M_int = int(round(M))
         key = (N, K)
-        if key not in self._table:
+
+        if key in self._table:
+            entries = self._table[key]
+
+            # Exact match — always preferred
+            for m, ms in entries:
+                if m == M_int:
+                    return ms
+
+            if M_int <= 2:
+                # Decode regime: nearest M at same (N,K), no interpolation.
+                # cuBLAS tile dispatch is discontinuous at small M.
+                best_m, best_ms = min(entries, key=lambda x: abs(x[0] - M_int))
+                return best_ms
+
+            # M >= 3: linear interpolation between bracketing M values
+            ms_below = ms_above = None
+            m_below = m_above = None
+            for m, ms in entries:
+                if m <= M_int:
+                    m_below, ms_below = m, ms
+                if m >= M_int and m_above is None:
+                    m_above, ms_above = m, ms
+
+            if ms_below is not None and ms_above is not None and m_below != m_above:
+                frac = (M - m_below) / (m_above - m_below)
+                return ms_below + frac * (ms_above - ms_below)
+
+            if ms_below is not None:
+                return ms_below * (M / max(m_below, 1))
+            if ms_above is not None:
+                return ms_above * (M / max(m_above, 1))
+
             return None
 
-        entries = self._table[key]
-        M_int = int(round(M))
-
-        # Exact match
-        for m, ms in entries:
-            if m == M_int:
-                return ms
-
-        # Interpolation: find bracketing M values
-        ms_below = ms_above = None
-        m_below = m_above = None
-        for m, ms in entries:
-            if m <= M_int:
-                m_below, ms_below = m, ms
-            if m >= M_int and m_above is None:
-                m_above, ms_above = m, ms
-
-        if ms_below is not None and ms_above is not None and m_below != m_above:
-            # Log-linear interpolation in M (GEMM scales ~linearly in M for large M,
-            # but sub-linearly for small M due to launch overhead)
-            frac = (M - m_below) / (m_above - m_below)
-            return ms_below + frac * (ms_above - ms_below)
-
-        # Extrapolation from nearest point using linear scaling
-        if ms_below is not None:
-            return ms_below * (M / max(m_below, 1))
-        if ms_above is not None:
-            return ms_above * (M / max(m_above, 1))
+        # (N,K) not in table
+        if M_int <= 2:
+            # Nearest (N,K) at same M — dispatch-sensitive, don't interpolate
+            result = self._nearest_nk(M_int, N, K)
+            return result if result is not None else None  # will fall to XGBoost
 
         return None
+
+    def _nearest_nk(self, M: int, N: int, K: int, max_rel_dist: float = 0.5) -> Optional[float]:
+        """Find nearest (N,K) group that has this M, return its timing.
+        Returns None if nearest is >max_rel_dist away (relative)."""
+        best_dist = float("inf")
+        best_ms = None
+        for (tn, tk), entries in self._table.items():
+            for m, ms in entries:
+                if m == M:
+                    dist = abs(tn - N) / max(N, 1) + abs(tk - K) / max(K, 1)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_ms = ms
+        if best_dist > max_rel_dist:
+            return None
+        return best_ms
 
     def coverage_distance(self, M: int, N: int, K: int) -> float:
         """Return 0 if exact match, >0 if interpolated, inf if outside."""

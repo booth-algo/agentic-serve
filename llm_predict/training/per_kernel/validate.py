@@ -58,6 +58,8 @@ _SHORT_TO_DIR = {
     "Qwen3.5-27B":    "Qwen3.5-27B",
     "gpt-oss-20b":    "gpt-oss-20b",
     "Mixtral-8x7B":   "Mixtral-8x7B-Instruct",
+    "Gemma-9B":       "gemma-2-9b-it",
+    "Granite-8B":     "granite-3.0-8b-instruct",
 }
 
 
@@ -83,6 +85,8 @@ _MODELSHORT_TO_DIR = {
     "Qwen3.5-27B":    "Qwen3.5-27B",
     "gpt-oss-20b":    "gpt-oss-20b",
     "Mixtral-8x7B":   "Mixtral-8x7B-Instruct",
+    "Gemma-9B":       "gemma-2-9b-it",
+    "Granite-8B":     "granite-3.0-8b-instruct",
 }
 
 
