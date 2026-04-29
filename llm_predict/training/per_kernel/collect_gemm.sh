@@ -30,7 +30,7 @@ echo "[*] out_base=$OUT_BASE"
     --target-processes all \
     --metrics "gpu__time_duration.sum,dram__bytes.sum,launch__grid_size,launch__block_size,launch__registers_per_thread" \
     --kernel-name-base "demangled" \
-    --kernel-name "regex:gemm|GEMM|sgemm|hgemm|fmha|flash" \
+    --kernel-name "regex:gemm|GEMM|sgemm|hgemm|fmha|flash|nvjet" \
     -o "$OUT_BASE" --force-overwrite \
     "$PY" "$SCRIPT_DIR/sweep_gemm.py" \
         --dtype "$DTYPE" \
