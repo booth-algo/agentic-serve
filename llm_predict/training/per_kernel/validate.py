@@ -18,7 +18,7 @@ Three comparison modes:
    `serving_e2e.predict_serving_e2e(model, isl, osl, bs)` vs
    `summary.{median_ttft_ms, median_tpot_ms, median_e2el_ms}` from
    `data.json`, filtered to the specified workload profile (e.g.
-   chat-short, chat-medium, chat-long). Validates the full ISL/OSL →
+   chat-singleturn). Validates the full ISL/OSL →
    TTFT + TPOT + E2EL prediction pipeline.
 
 The two-column "overhead %" on the microbench_ttft report is
@@ -32,7 +32,7 @@ CLI
     python -m llm_predict.training.per_kernel.validate --vs-measured \\
         --target-seq 128 --seq-tolerance 16
     python -m llm_predict.training.per_kernel.validate \\
-        --mode serving_e2e --profile chat-medium --gpu A100
+        --mode serving_e2e --profile chat-singleturn --gpu A100
 """
 from __future__ import annotations
 
@@ -46,6 +46,17 @@ from llm_predict.predictors.per_kernel.predictor import PerKernelPredictor
 
 from . import composer, model_specs, serving_e2e
 from llm_predict.training.per_kernel.ensure_data import ensure_kernels_csv
+
+
+PROFILE_ALIASES = {
+    "chat-long": "chat-singleturn",
+}
+
+
+def normalize_profile_name(profile: str | None) -> str | None:
+    if profile is None:
+        return None
+    return PROFILE_ALIASES.get(profile, profile)
 
 
 # Inverse of _DIR_TO_SHORT — CSV `model` column (short) → dir_name for ModelConfig.
@@ -674,13 +685,12 @@ def run(data_csv: Path, report_dir: Path, gpus: list[str], seq: int = 128,
         concurrency: int = 1,
         target_seq: int | None = None, seq_tolerance: int = 16,
         mode: str | None = None, profile: str | None = None) -> None:
+    profile = normalize_profile_name(profile)
     df = pd.read_csv(data_csv)
 
     for gpu in gpus:
         if mode == "serving_e2e_conc":
-            profiles_list = [profile] if profile else [
-                "chat-short", "chat-medium", "chat-long",
-            ]
+            profiles_list = [profile] if profile else ["chat-singleturn"]
             for p in profiles_list:
                 validate_serving_e2e_conc_gpu(
                     gpu, data_json,
@@ -692,8 +702,7 @@ def run(data_csv: Path, report_dir: Path, gpus: list[str], seq: int = 128,
                 print(f"[{gpu}][serving_e2e] --data-json required")
                 continue
             profiles = [profile] if profile else [
-                "chat-short", "chat-medium", "chat-long",
-                "coding-agent", "prefill-heavy", "decode-heavy",
+                "chat-singleturn", "coding-agent", "prefill-heavy", "decode-heavy",
             ]
             for p in profiles:
                 validate_serving_e2e_gpu(
@@ -727,8 +736,8 @@ def main() -> None:
                     help="Validation mode: microbench_ttft (prefill-only TTFT, default "
                          "when --vs-measured) or serving_e2e (ISL/OSL → TTFT+TPOT+E2EL).")
     ap.add_argument("--profile", default=None,
-                    help="Workload profile for --mode serving_e2e (e.g. chat-short, "
-                         "chat-medium, chat-long). If omitted, validates all standard profiles.")
+                    help="Workload profile for --mode serving_e2e (e.g. chat-singleturn). "
+                         "If omitted, validates canonical standard profiles.")
 
     ap.add_argument("--vs-measured", action="store_true",
                     help="microbench_ttft mode: compare composer.predict_ttft_ms against "

@@ -9,7 +9,13 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import type { BenchmarkResult } from '../../types';
-import { PROFILE_META, AGENT_TYPE_COLORS, DATA_SOURCE_COLORS } from '../../profileMeta';
+import {
+  PROFILE_META,
+  AGENT_TYPE_COLORS,
+  DATA_SOURCE_COLORS,
+  FALLBACK_META_COLORS,
+  profileDisplayName,
+} from '../../profileMeta';
 
 interface ThroughputChartProps {
   seriesData: Map<string, BenchmarkResult[]>;
@@ -89,7 +95,11 @@ function shortenSeriesKey(key: string, allKeys: string[]): string {
   }
 
   const labels: string[] = [];
-  const partNames = parts.map((p, i) => (i === 1 ? p.replace('Llama-3.1-', '') : p));
+  const partNames = parts.map((p, i) => {
+    if (i === 1) return p.replace('Llama-3.1-', '');
+    if (i === 3) return profileDisplayName(p);
+    return p;
+  });
 
   for (let i = 0; i < 4; i++) {
     if (partSets[i].size > 1) labels.push(partNames[i]);
@@ -235,14 +245,17 @@ export function ThroughputChart({ seriesData }: ThroughputChartProps) {
   return (
     <div className="flex gap-4">
       <div className="min-w-0 flex-1">
-        {singleMeta && (
+        {singleMeta && singleProfile && (
           <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="max-w-full truncate text-xs font-semibold text-[#e6edf3]" title={profileDisplayName(singleProfile)}>
+              {profileDisplayName(singleProfile)}
+            </span>
             <span
               className="inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium"
               style={{
-                backgroundColor: (AGENT_TYPE_COLORS[singleMeta.agentType] ?? { bg: 'rgba(139,148,158,0.12)', text: '#8b949e', border: 'rgba(139,148,158,0.3)' }).bg,
-                color: (AGENT_TYPE_COLORS[singleMeta.agentType] ?? { bg: 'rgba(139,148,158,0.12)', text: '#8b949e', border: 'rgba(139,148,158,0.3)' }).text,
-                borderColor: (AGENT_TYPE_COLORS[singleMeta.agentType] ?? { bg: 'rgba(139,148,158,0.12)', text: '#8b949e', border: 'rgba(139,148,158,0.3)' }).border,
+                backgroundColor: (AGENT_TYPE_COLORS[singleMeta.agentType] ?? FALLBACK_META_COLORS).bg,
+                color: (AGENT_TYPE_COLORS[singleMeta.agentType] ?? FALLBACK_META_COLORS).text,
+                borderColor: (AGENT_TYPE_COLORS[singleMeta.agentType] ?? FALLBACK_META_COLORS).border,
               }}
             >
               {singleMeta.agentType}
@@ -250,9 +263,9 @@ export function ThroughputChart({ seriesData }: ThroughputChartProps) {
             <span
               className="inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium"
               style={{
-                backgroundColor: (DATA_SOURCE_COLORS[singleMeta.dataSource] ?? { bg: 'rgba(139,148,158,0.12)', text: '#8b949e', border: 'rgba(139,148,158,0.3)' }).bg,
-                color: (DATA_SOURCE_COLORS[singleMeta.dataSource] ?? { bg: 'rgba(139,148,158,0.12)', text: '#8b949e', border: 'rgba(139,148,158,0.3)' }).text,
-                borderColor: (DATA_SOURCE_COLORS[singleMeta.dataSource] ?? { bg: 'rgba(139,148,158,0.12)', text: '#8b949e', border: 'rgba(139,148,158,0.3)' }).border,
+                backgroundColor: (DATA_SOURCE_COLORS[singleMeta.dataSource] ?? FALLBACK_META_COLORS).bg,
+                color: (DATA_SOURCE_COLORS[singleMeta.dataSource] ?? FALLBACK_META_COLORS).text,
+                borderColor: (DATA_SOURCE_COLORS[singleMeta.dataSource] ?? FALLBACK_META_COLORS).border,
               }}
             >
               {singleMeta.dataSource}

@@ -1,8 +1,8 @@
-# H100 — per-op serving_e2e Validation: chat-long
+# H100 — per-op serving_e2e Validation: chat-singleturn
 
 - Predictor track: **per-op serving_e2e** (ablation vs per-kernel)
 - Predictor: H100 perop_v5_shape.pkl
-- Profile: `chat-long` (concurrency=1)
+- Profile: `chat-singleturn` (concurrency=1)
 - Ground truth: `summary.{median_ttft_ms, median_tpot_ms, median_e2el_ms}`
 - Headline MAPE = supported architectures only.
 

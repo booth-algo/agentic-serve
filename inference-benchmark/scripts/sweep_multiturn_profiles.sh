@@ -24,7 +24,7 @@ PY="${6:-python}"
 GPU_MEM="${7:-0.85}"
 MAX_LEN="${8:-32768}"
 CONCS="${9:-5 10 20 40 80 120 160}"
-PROFILES="${10:-chat-multiturn-short chat-multiturn-medium chat-multiturn-long terminalbench-multiturn-short}"
+PROFILES="${10:-chat-multiturn-short chat-multiturn-medium chat-multiturn-long swebench-multiturn-short swebench-multiturn-medium terminalbench-multiturn-short terminalbench-multiturn-medium osworld-multiturn-short osworld-multiturn-medium}"
 WARMUP="${11:-3}"
 
 PORT="${PORT:-8089}"

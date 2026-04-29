@@ -408,7 +408,7 @@ class RandomTokenDatasetDoubleWrap(RandomTokenDataset):
 
     This class reproduces that exact behavior so we can measure the TTFT
     increase caused by the double-wrap vs our correct single-wrap approach.
-    Use alongside random-inferencex profile to confirm the theory.
+    Use alongside random-1k profile to confirm the theory.
     """
 
     def _load(self):

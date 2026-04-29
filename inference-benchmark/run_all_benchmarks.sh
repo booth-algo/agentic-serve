@@ -18,7 +18,7 @@ WARMUP=5
 TIMEOUT=300
 CONC_SWEEP="1 10 20 40 80 120 160 200 256 320"
 CONC_SWEEP_LOW="1 10 20 40 80"  # For memory-constrained configs (tight KV budget)
-PROFILES="chat-short chat-medium chat-long coding-agent prefill-heavy decode-heavy random-1k"
+PROFILES="chat-singleturn coding-agent prefill-heavy decode-heavy random-1k"
 MAX_SERVER_WAIT=1800  # 30 min for large MoE models
 
 # Source the GPU scheduler

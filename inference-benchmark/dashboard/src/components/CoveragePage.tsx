@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { BenchmarkResult } from '../types';
 import type { SweepCell, SweepState } from '../types-sweep';
+import { profileDisplayName } from '../profileMeta';
 
 
 interface CoveragePageProps {
@@ -10,16 +11,16 @@ interface CoveragePageProps {
 }
 
 const SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
-const MULTI_CONCS = [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320];
+const MULTI_CONCS = [5, 10, 20, 40, 80, 120, 160, 200, 256, 320];
 
 const ALL_SINGLE_PROFILES = [
-  'chat-short', 'chat-medium', 'chat-long',
+  'chat-singleturn',
   'coding-agent', 'prefill-heavy', 'decode-heavy', 'random-1k',
 ];
 const ALL_MULTI_PROFILES = [
   'chat-multiturn-short', 'chat-multiturn-medium', 'chat-multiturn-long',
-  'terminalbench-multiturn-short', 'terminalbench-multiturn-medium',
-  'swebench-multiturn-short', 'swebench-multiturn-medium',
+  'swebench-multiturn-short', 'swebench-multiturn-medium', 'swebench-multiturn-long',
+  'terminalbench-multiturn-short', 'terminalbench-multiturn-medium', 'terminalbench-multiturn-long',
   'osworld-multiturn-short', 'osworld-multiturn-medium', 'osworld-multiturn-long',
 ];
 
@@ -334,44 +335,48 @@ export function CoveragePage({
   const pct = grand.totalNeed > 0
     ? ((grand.totalHave / grand.totalNeed) * 100).toFixed(1)
     : '0.0';
+  const inFlight = grand.running + grand.pending;
+  const blocked = grand.skipped + grand.oom + grand.infeasible;
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-        <SummaryCell label="Overall" value={`${pct}%`} sub={`${grand.totalHave}/${grand.totalNeed} cells`} color="#00bcd4" />
-        <SummaryCell label="Complete" value={`${grand.complete}`} sub="all concs present" color="#3fb950" />
-        <SummaryCell label="Partial" value={`${grand.partial}`} sub="some missing" color="#ff9800" />
-        <SummaryCell label="Running" value={`${grand.running}`} sub="in progress" color="#58a6ff" />
-        <SummaryCell label="Pending" value={`${grand.pending}`} sub="queued" color="#a5b4fc" />
-        <SummaryCell label="Skipped" value={`${grand.skipped}`} sub="not attempted / blocked" color="#f97583" />
-        <SummaryCell label="OOM" value={`${grand.oom}`} sub="structurally blocked" color="#e040fb" />
-        <SummaryCell label="Infeasible" value={`${grand.infeasible}`} sub="VRAM too small" color="#64b5f6" />
+      <div className="rounded-lg border border-[#21262d] bg-[#161b22] p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#8b949e]">
+              <span className="font-medium uppercase tracking-wide text-[#00bcd4]">Sweep coverage</span>
+              <span>{hardwareList.length} hardware targets</span>
+              {sweepMtime && <span>updated {new Date(sweepMtime).toLocaleTimeString()}</span>}
+            </div>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="font-mono text-3xl font-semibold text-[#e6edf3]">{pct}%</span>
+              <span className="font-mono text-sm text-[#8b949e]">{grand.totalHave}/{grand.totalNeed} expected cells</span>
+            </div>
+            <CoverageProgress value={Number(pct)} />
+          </div>
+
+          <div className="grid min-w-[min(100%,520px)] grid-cols-2 gap-2 sm:grid-cols-3">
+            <StatusPill label="Complete" value={grand.complete} tone="good" />
+            <StatusPill label="Partial" value={grand.partial} tone="warn" />
+            <StatusPill label="In flight" value={inFlight} tone="active" title={`${grand.running} running, ${grand.pending} pending`} />
+            <StatusPill label="Blocked" value={blocked} tone="blocked" title={`${grand.skipped} skipped, ${grand.oom} OOM, ${grand.infeasible} infeasible`} />
+            <StatusPill label="Untested" value={grand.untested} tone="muted" />
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={expandAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-[11px] font-medium text-[#c9d1d9] transition-colors hover:border-[#58a6ff] hover:text-[#58a6ff]">Expand</button>
+              <button onClick={collapseAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-[11px] font-medium text-[#c9d1d9] transition-colors hover:border-[#f97583] hover:text-[#f97583]">Collapse</button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 rounded-md border border-[#21262d] bg-[#161b22] px-4 py-2 text-xs text-[#8b949e]">
-        <span className="flex items-center gap-1.5"><Cell state="present" />present</span>
-        <span className="flex items-center gap-1.5"><Cell state="missing" />expected &amp; missing</span>
-        <span className="flex items-center gap-1.5"><Cell state="na" />not expected</span>
-        <span className="flex items-center gap-1.5"><StatusBadge kind="running" />running</span>
-        <span className="flex items-center gap-1.5"><StatusBadge kind="pending" />pending</span>
-        <span className="flex items-center gap-1.5"><StatusBadge kind="skipped" />skipped</span>
-        <span className="flex items-center gap-1.5"><StatusBadge kind="oom" />OOM</span>
-        <span className="flex items-center gap-1.5"><StatusBadge kind="infeasible" />infeasible</span>
-        <span className="flex items-center gap-1.5"><StatusBadge kind="untested" />untested</span>
-        <span className="ml-auto flex items-center gap-3 font-mono">
-          <button onClick={expandAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1 text-[11px] font-medium text-[#c9d1d9] shadow-sm transition-all hover:border-[#58a6ff] hover:bg-[#58a6ff]/10 hover:text-[#58a6ff] active:scale-95">▼ Expand All</button>
-          <button onClick={collapseAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1 text-[11px] font-medium text-[#c9d1d9] shadow-sm transition-all hover:border-[#f97583] hover:bg-[#f97583]/10 hover:text-[#f97583] active:scale-95">▲ Collapse All</button>
-          <span>hardware: {hardwareList.length}</span>
-          {sweepMtime && <span>· sweep-state: {new Date(sweepMtime).toLocaleTimeString()}</span>}
-        </span>
-      </div>
+      <CoverageLegend />
 
       <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
         <table className="min-w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10 bg-[#161b22]">
             <tr className="border-b border-[#21262d] text-[#8b949e]">
               <th className="w-[160px] px-3 py-2 text-left font-medium">Hardware / Model</th>
-              <th className="px-3 py-2 text-left font-medium">Profile</th>
+              <th className="px-3 py-2 text-left font-medium">Profile / status</th>
               {allConcs.map((c) => (
                 <th key={c} className="px-1.5 py-2 text-center font-mono font-normal">{c}</th>
               ))}
@@ -397,18 +402,6 @@ export function CoveragePage({
         </table>
       </div>
 
-      <div className="space-y-1 text-xs text-[#8b949e]">
-        <p>
-          Sweep matrix sourced from <code className="rounded bg-[#21262d] px-1">scripts/sweep.yaml</code> via
-          <code className="ml-1 rounded bg-[#21262d] px-1">sweep-state.json</code>; runtime status updates every
-          orchestrator cron tick (every 30 min).
-        </p>
-        <p>
-          <span className="text-[#64b5f6]">Infeasible</span> is auto-computed from sweep-state feasibility_ratio.
-          <span className="ml-1 text-[#e040fb]">OOM</span> is reserved for structural failures declared in
-          <code className="ml-1 rounded bg-[#21262d] px-1">known_oom</code>.
-        </p>
-      </div>
     </div>
   );
 }
@@ -429,16 +422,15 @@ function GroupRows({ group, hwOpen, expandedModel, onToggleHw, onToggleModel, al
   const pct = g.summary.totalNeed > 0
     ? Math.round((g.summary.totalHave / g.summary.totalNeed) * 100)
     : 0;
-  const chips: [number, string, string][] = [
-    [g.summary.complete,   'complete',   'text-[#3fb950]'],
-    [g.summary.partial,    'partial',    'text-[#ff9800]'],
-    [g.summary.running,    'running',    'text-[#58a6ff]'],
-    [g.summary.pending,    'pending',    'text-[#a5b4fc]'],
-    [g.summary.skipped,  'skipped',  'text-[#f97583]'],
-    [g.summary.oom,        'OOM',        'text-[#e040fb]'],
-    [g.summary.infeasible, 'infeasible', 'text-[#64b5f6]'],
-    [g.summary.untested,   'untested',   'text-[#ff9800]'],
-  ].filter(([n]) => (n as number) > 0) as [number, string, string][];
+  const active = g.summary.running + g.summary.pending;
+  const blocked = g.summary.skipped + g.summary.oom + g.summary.infeasible;
+  const chips = ([
+    { count: g.summary.complete, label: 'complete', tone: 'good' },
+    { count: g.summary.partial, label: 'partial', tone: 'warn' },
+    { count: active, label: 'in flight', tone: 'active', title: `${g.summary.running} running, ${g.summary.pending} pending` },
+    { count: blocked, label: 'blocked', tone: 'blocked', title: `${g.summary.skipped} skipped, ${g.summary.oom} OOM, ${g.summary.infeasible} infeasible` },
+    { count: g.summary.untested, label: 'untested', tone: 'muted' },
+  ] satisfies Array<{ count: number; label: string; tone: StatusTone; title?: string }>).filter(({ count }) => count > 0);
 
   return (
     <>
@@ -449,12 +441,9 @@ function GroupRows({ group, hwOpen, expandedModel, onToggleHw, onToggleModel, al
         <td colSpan={2} className="px-3 py-2">
           <span className="mr-2 inline-block w-4 text-[#8b949e]">{hwOpen ? '▼' : '▶'}</span>
           <span className="font-mono text-sm font-semibold text-[#c9d1d9]">{g.hardware}</span>
-          <span className="ml-3 text-[#8b949e]">
-            {chips.map(([n, label, cls], i) => (
-              <span key={label} className={cls}>
-                {i > 0 && <span className="mx-1 text-[#30363d]">·</span>}
-                {n} {label}
-              </span>
+          <span className="ml-3 inline-flex flex-wrap items-center gap-1.5 text-[#8b949e]">
+            {chips.map(({ count, label, tone, title }) => (
+              <GroupChip key={label} count={count} label={label} tone={tone} title={title} />
             ))}
           </span>
         </td>
@@ -508,13 +497,13 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
           {model.model}
           <BackendBadge backend={model.backend} />
         </td>
-        <td colSpan={allConcs.length + 1} className="whitespace-nowrap px-3 py-1.5">
-          <div className="flex items-center gap-2">
+        <td colSpan={allConcs.length + 1} className="px-3 py-1.5">
+          <div className="flex min-w-0 items-center gap-2">
             <StatusBadge kind={model.status} />
-            <span className={txt}>
+            <span className={`min-w-0 ${txt}`}>
               {label}
               {model.attempt !== undefined && model.attempt > 0 && <span className="ml-1 text-[#8b949e]">· attempt {model.attempt}</span>}
-              {model.reason && <span className="ml-1 text-[#8b949e]">— {model.reason}</span>}
+              {model.reason && <span className="ml-1 inline-block max-w-[720px] truncate align-bottom text-[#8b949e]" title={model.reason}>— {model.reason}</span>}
               {model.updatedAt && <span className="ml-1 text-[#8b949e]">· since {new Date(model.updatedAt).toLocaleTimeString()}</span>}
             </span>
           </div>
@@ -581,13 +570,15 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
         const need = p.expected.length;
         const profPct = need > 0 ? Math.round((have / need) * 100) : 0;
         const profUntested = have === 0;
+        const displayName = profileDisplayName(p.profile);
         return (
           <tr key={`${hwName}|${model.model}|${p.profile}`} className="border-b border-[#21262d]/50 bg-[#0d1117]/50">
             <td className="whitespace-nowrap px-3 py-1.5 pl-16 text-[#8b949e]">
               {/* empty — hw/model context established by parent rows */}
             </td>
             <td className="whitespace-nowrap px-3 py-1.5 text-[#8b949e]">
-              {p.profile}
+              <span className="text-[#c9d1d9]" title={p.profile}>{displayName}</span>
+              {displayName !== p.profile && <span className="ml-1 text-[10px] text-[#6e7681]">{p.profile}</span>}
               {p.isMultiTurn && <span className="ml-1 rounded bg-[#8b5cf6]/20 px-1 text-[10px] text-[#8b5cf6]">mt</span>}
               {profUntested && <span className="ml-1 rounded border border-[#ff9800]/40 bg-[#ff9800]/10 px-1 text-[10px] text-[#ff9800] uppercase">todo</span>}
             </td>
@@ -618,13 +609,105 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
 
 // --- UI helpers ---
 
-function SummaryCell({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
+type StatusTone = 'good' | 'warn' | 'active' | 'blocked' | 'muted';
+
+const TONE_CLASS: Record<StatusTone, string> = {
+  good: 'border-[#3fb950]/35 bg-[#3fb950]/10 text-[#3fb950]',
+  warn: 'border-[#ff9800]/35 bg-[#ff9800]/10 text-[#ffb74d]',
+  active: 'border-[#58a6ff]/35 bg-[#58a6ff]/10 text-[#58a6ff]',
+  blocked: 'border-[#f97583]/35 bg-[#f97583]/10 text-[#f97583]',
+  muted: 'border-[#30363d] bg-[#21262d]/60 text-[#8b949e]',
+};
+
+function CoverageProgress({ value }: { value: number }) {
   return (
-    <div className="rounded-lg border border-[#21262d] bg-[#161b22] p-3">
-      <div className="text-xs uppercase tracking-wide text-[#8b949e]">{label}</div>
-      <div className="mt-1 font-mono text-xl font-semibold" style={{ color }}>{value}</div>
-      <div className="text-[11px] text-[#8b949e]">{sub}</div>
+    <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#0d1117]">
+      <div
+        className="h-full rounded-full bg-[#00bcd4]"
+        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+      />
     </div>
+  );
+}
+
+function StatusPill({
+  label,
+  value,
+  tone,
+  title,
+}: {
+  label: string;
+  value: number;
+  tone: StatusTone;
+  title?: string;
+}) {
+  return (
+    <div
+      className={`rounded-md border px-3 py-2 ${TONE_CLASS[tone]}`}
+      title={title}
+    >
+      <div className="text-[10px] font-medium uppercase tracking-wide opacity-80">{label}</div>
+      <div className="mt-0.5 font-mono text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function GroupChip({
+  count,
+  label,
+  tone,
+  title,
+}: {
+  count: number;
+  label: string;
+  tone: StatusTone;
+  title?: string;
+}) {
+  return (
+    <span
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${TONE_CLASS[tone]}`}
+      title={title}
+    >
+      {count} {label}
+    </span>
+  );
+}
+
+function CoverageLegend() {
+  return (
+    <details className="rounded-md border border-[#21262d] bg-[#161b22] px-4 py-2 text-xs text-[#8b949e]">
+      <summary className="cursor-pointer select-none text-[#c9d1d9]">
+        Legend and sweep notes
+        <span className="ml-2 text-[#8b949e]">cell states, run status, and matrix source</span>
+      </summary>
+      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr]">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="flex items-center gap-1.5"><Cell state="present" />present</span>
+          <span className="flex items-center gap-1.5"><Cell state="missing" />expected and missing</span>
+          <span className="flex items-center gap-1.5"><Cell state="na" />not expected</span>
+          <span className="flex items-center gap-1.5"><StatusBadge kind="running" />running</span>
+          <span className="flex items-center gap-1.5"><StatusBadge kind="pending" />pending</span>
+          <span className="flex items-center gap-1.5"><StatusBadge kind="skipped" />skipped</span>
+          <span className="flex items-center gap-1.5"><StatusBadge kind="oom" />OOM</span>
+          <span className="flex items-center gap-1.5"><StatusBadge kind="infeasible" />infeasible</span>
+          <span className="flex items-center gap-1.5"><StatusBadge kind="untested" />untested</span>
+        </div>
+        <div className="space-y-1 leading-relaxed">
+          <p>
+            Live job state comes from <code className="rounded bg-[#21262d] px-1">scripts/sweep.yaml</code> via
+            <code className="ml-1 rounded bg-[#21262d] px-1">sweep-state.json</code>; expected cells use the active paper profile surface.
+          </p>
+          <p>
+            In multi-turn profiles, short/medium/long mean turn depth buckets; they do not guarantee increasing ISL or OSL.
+          </p>
+          <p>
+            <span className="text-[#64b5f6]">Infeasible</span> is derived from feasibility_ratio;
+            <span className="ml-1 text-[#e040fb]">OOM</span> is reserved for explicit
+            <code className="ml-1 rounded bg-[#21262d] px-1">known_oom</code> entries.
+          </p>
+        </div>
+      </div>
+    </details>
   );
 }
 

@@ -9,7 +9,7 @@ Client requirements:
   - --ignore-eos: REQUIRED for FP8 models (without it, OSL hit rate ~37-51%)
   - For bfloat16 models, --ignore-eos is still recommended for correctness
 
-Profiles: random-inferencex, random-inferencex-legacy
+Profiles: prefill-heavy, decode-heavy, random-1k
 """
 
 REQUIRED_CLIENT_FLAGS = ["--ignore-eos"]

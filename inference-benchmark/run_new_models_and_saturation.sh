@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Phase 1: Qwen3-32B on SGLang + vLLM
-# Phase 2: High concurrency saturation sweep (400,512,640,768) on chatbot-short
+# Phase 2: High concurrency saturation sweep (400,512,640,768) on chat-singleturn
 # =============================================================================
 set -uo pipefail
 
@@ -10,7 +10,7 @@ PORT=8000
 API_KEY="test"
 WARMUP=5
 TIMEOUT=300
-PROFILES="chatbot-short rag-retrieval rag-heavy coding-assist coding-heavy"
+PROFILES="chat-singleturn coding-agent"
 CONC_SWEEP="1 10 20 40 80 120 160 200 256 320"
 CONC_HIGH="400 512 640 768"
 MAX_SERVER_WAIT=1800
@@ -122,7 +122,7 @@ else
 fi
 
 # ═══════════════════════════════════════════════════
-# PHASE 2: High concurrency saturation (chatbot-short only)
+# PHASE 2: High concurrency saturation (chat-singleturn only)
 # ═══════════════════════════════════════════════════
 log "╔══════════════════════════════════════════╗"
 log "║  PHASE 2: High Concurrency Saturation   ║"
@@ -147,7 +147,7 @@ for entry in "${SAT_MODELS[@]}"; do
     log "══ SGLang saturation: $name TP=$tp ══"
     start_sglang "$path" "$tp" "$sglang_extra" "$max_len" "$gpu_mem" "${name}_tp${tp}_sglang_sat"
     if wait_for_server; then
-        run_suite "sglang" "$name" "$path" "$tp" "results/${name}_tp${tp}_sglang" "chatbot-short" "$CONC_HIGH"
+        run_suite "sglang" "$name" "$path" "$tp" "results/${name}_tp${tp}_sglang" "chat-singleturn" "$CONC_HIGH"
         log "DONE: $name SGLang saturation"
     else
         err "Server failed: $name SGLang saturation"
@@ -158,7 +158,7 @@ for entry in "${SAT_MODELS[@]}"; do
     log "══ vLLM saturation: $name TP=$tp ══"
     start_vllm "$path" "$tp" "$vllm_extra" "$max_len" "$gpu_mem" "${name}_tp${tp}_vllm_sat"
     if wait_for_server; then
-        run_suite "vllm" "$name" "$path" "$tp" "results/${name}_tp${tp}_vllm" "chatbot-short" "$CONC_HIGH"
+        run_suite "vllm" "$name" "$path" "$tp" "results/${name}_tp${tp}_vllm" "chat-singleturn" "$CONC_HIGH"
         log "DONE: $name vLLM saturation"
     else
         err "Server failed: $name vLLM saturation"

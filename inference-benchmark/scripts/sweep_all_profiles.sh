@@ -27,7 +27,7 @@ PY="${6:-python}"
 GPU_MEM="${7:-0.85}"
 MAX_LEN="${8:-8192}"
 CONCS="${9:-1 10 20 40 80 120 160 200 256 320 500}"
-PROFILES="${10:-chat-short chat-medium chat-long coding-agent prefill-heavy decode-heavy random-1k}"
+PROFILES="${10:-chat-singleturn coding-agent prefill-heavy decode-heavy random-1k}"
 NREQ="${11:-100}"
 
 PORT="${PORT:-8089}"

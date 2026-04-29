@@ -14,7 +14,7 @@ from typing import Optional
 
 
 # Valid tag values
-AGENT_TYPES = ["chat", "coding", "terminal", "computer-use"]
+AGENT_TYPES = ["chat", "coding", "terminal", "computer-use", "stress"]
 TURN_STYLES = ["single-turn", "multi-turn"]
 SERVING_STYLES = ["disaggregated", "not-disaggregated"]
 DATA_SOURCES = ["sharegpt", "swebench", "terminalbench", "osworld", "file", "random", "test"]
@@ -40,6 +40,7 @@ class WorkloadProfile:
     turn_style: str = "single-turn"  # "single-turn" | "multi-turn"
     serving_style: str = "not-disaggregated"  # "disaggregated" | "not-disaggregated"
     data_source: str = ""          # "sharegpt" | "swebench" | "terminalbench" | "file" | "random" | "test"
+    active: bool = True            # False = legacy/runnable, hidden from default sweeps/profile lists
 
 
 # ---------------------------------------------------------------------------
@@ -52,13 +53,14 @@ PROFILES: dict[str, WorkloadProfile] = {
     # Group 1: Real Agent Data
     # ===================================================================
 
-    # Single-turn planning-model call — real SWE-Bench prompts (~17K ISL)
+    # Single-turn planning-model call — real SWE-Bench prompts. The JSONL
+    # drives actual token lengths; isl_tokens/osl_tokens are metadata caps.
     "coding-agent": WorkloadProfile(
         name="coding-agent",
         isl_tokens=17000,
         osl_tokens=800,
         isl_stddev=0.0,
-        description="Real coding-agent prompts captured from SWE-Bench runs (planning-model calls, ~17K ISL, ~800 OSL)",
+        description="Real coding-agent single-turn prompts captured from SWE-Bench-style planning calls",
         dataset="jsonl",
         file_path="data/coding_agent_prompts.jsonl",
         system_prompt="",  # system prompt is embedded in the JSONL
@@ -132,26 +134,6 @@ PROFILES: dict[str, WorkloadProfile] = {
         serving_style="not-disaggregated",
         data_source="swebench",
     ),
-    "swebench-multiturn-xl": WorkloadProfile(
-        name="swebench-multiturn-xl",
-        isl_tokens=131072,
-        osl_tokens=2000,
-        isl_stddev=0.0,
-        description="Real SWEBench coding agent: 150+ step sessions (longest available)",
-        dataset="swebench-multi-turn",
-        file_path="data/swebench_trajectories.jsonl",
-        system_prompt="",
-        mode="multi-turn",
-        prefix_caching_required=True,
-        min_turns=150,
-        max_turns=400,
-        num_sessions=30,
-        agent_type="coding",
-        turn_style="multi-turn",
-        serving_style="not-disaggregated",
-        data_source="swebench",
-    ),
-
     # Multi-turn TerminalBench CLI agent — real trajectories from harbor/jobs/
     # Note: "turns" here are agent steps (tool calls), not logical conversation rounds.
     # TerminalBench sessions have min=2, median=61, max=876 steps.
@@ -214,26 +196,6 @@ PROFILES: dict[str, WorkloadProfile] = {
         serving_style="not-disaggregated",
         data_source="terminalbench",
     ),
-    "terminalbench-multiturn-xl": WorkloadProfile(
-        name="terminalbench-multiturn-xl",
-        isl_tokens=131072,
-        osl_tokens=2000,
-        isl_stddev=0.0,
-        description="Real TerminalBench CLI agent: 150+ step sessions (longest available)",
-        dataset="terminalbench-multi-turn",
-        file_path="data/terminalbench_trajectories.jsonl",
-        system_prompt="",
-        mode="multi-turn",
-        prefix_caching_required=True,
-        min_turns=150,
-        max_turns=1000,
-        num_sessions=30,
-        agent_type="terminal",
-        turn_style="multi-turn",
-        serving_style="not-disaggregated",
-        data_source="terminalbench",
-    ),
-
     # Multi-turn OSWorld computer-use agent — real WebArena trajectories
     # Note: "turns" here are agent steps (browser actions).
     # OSWorld sessions have min=1, median=8, max=30 steps.
@@ -307,7 +269,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         isl_tokens=500,
         osl_tokens=300,
         isl_stddev=0.15,
-        description="Short Q&A chat — most common pattern (ShareGPT, ISL≤500, OSL≤300)",
+        description="Legacy ShareGPT single-turn chat, short-answer bucket (retired from default sweeps)",
         dataset="sharegpt",
         mode="single-turn",
         prefix_caching_required=True,
@@ -315,13 +277,14 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="sharegpt",
+        active=False,
     ),
     "chat-medium": WorkloadProfile(
         name="chat-medium",
         isl_tokens=2000,
         osl_tokens=1000,
         isl_stddev=0.15,
-        description="Medium chat — longer conversations and detailed answers (ShareGPT, ISL≤2000, OSL≤1000)",
+        description="Legacy ShareGPT single-turn chat, medium-answer bucket (retired from default sweeps)",
         dataset="sharegpt",
         mode="single-turn",
         prefix_caching_required=True,
@@ -329,13 +292,16 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="sharegpt",
+        active=False,
     ),
-    "chat-long": WorkloadProfile(
-        name="chat-long",
-        isl_tokens=8000,
-        osl_tokens=2000,
+    "chat-singleturn": WorkloadProfile(
+        name="chat-singleturn",
+        # Runtime caps are deliberately natural-chat sized so this profile is
+        # safe for 4K-context sweep cells.
+        isl_tokens=2048,
+        osl_tokens=1024,
         isl_stddev=0.15,
-        description="Long chat — longest natural ShareGPT conversations (ISL≤8000, OSL≤2000)",
+        description="Canonical natural ShareGPT single-turn chat (not a long-context prefill stress workload)",
         dataset="sharegpt",
         mode="single-turn",
         prefix_caching_required=True,
@@ -352,7 +318,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         isl_tokens=8192,
         osl_tokens=1000,
         isl_stddev=0.0,
-        description="ShareGPT multi-turn chat: 3-5 turns, moderate growing context",
+        description="Natural ShareGPT multi-turn chat: 3-5 turns. Short/medium/long denote turn depth, not monotonic ISL or OSL.",
         dataset="sharegpt-multi-turn",
         mode="multi-turn",
         prefix_caching_required=True,
@@ -369,7 +335,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         isl_tokens=16384,
         osl_tokens=1500,
         isl_stddev=0.0,
-        description="ShareGPT multi-turn chat: 5-10 turns, large growing context",
+        description="Natural ShareGPT multi-turn chat: 5-10 turns. Short/medium/long denote turn depth, not monotonic ISL or OSL.",
         dataset="sharegpt-multi-turn",
         mode="multi-turn",
         prefix_caching_required=True,
@@ -386,7 +352,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         isl_tokens=32768,
         osl_tokens=2000,
         isl_stddev=0.0,
-        description="ShareGPT multi-turn chat: 10-20 turns, deep KV cache stress",
+        description="Natural ShareGPT multi-turn chat: 10-20 turns. Short/medium/long denote turn depth, not monotonic ISL or OSL.",
         dataset="sharegpt-multi-turn",
         mode="multi-turn",
         prefix_caching_required=True,
@@ -398,24 +364,6 @@ PROFILES: dict[str, WorkloadProfile] = {
         serving_style="not-disaggregated",
         data_source="sharegpt",
     ),
-    "chat-multiturn-xl": WorkloadProfile(
-        name="chat-multiturn-xl",
-        isl_tokens=65536,
-        osl_tokens=2000,
-        isl_stddev=0.0,
-        description="ShareGPT multi-turn chat: 20-30 turns, extreme context length stress",
-        dataset="sharegpt-multi-turn",
-        mode="multi-turn",
-        prefix_caching_required=True,
-        min_turns=20,
-        max_turns=30,
-        num_sessions=30,
-        agent_type="chat",
-        turn_style="multi-turn",
-        serving_style="not-disaggregated",
-        data_source="sharegpt",
-    ),
-
     # ===================================================================
     # Group 3: Synthetic Stress Tests
     # ===================================================================
@@ -430,7 +378,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         tokenizer_name="meta-llama/Llama-3.1-8B-Instruct",
         mode="stress-test",
         prefix_caching_required=False,
-        agent_type="chat",
+        agent_type="stress",
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="random",
@@ -445,7 +393,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         tokenizer_name="meta-llama/Llama-3.1-8B-Instruct",
         mode="stress-test",
         prefix_caching_required=False,
-        agent_type="chat",
+        agent_type="stress",
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="random",
@@ -460,7 +408,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         tokenizer_name="meta-llama/Llama-3.1-8B-Instruct",
         mode="stress-test",
         prefix_caching_required=False,
-        agent_type="chat",
+        agent_type="stress",
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="random",
@@ -482,7 +430,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         tokenizer_name="meta-llama/Llama-3.1-8B-Instruct",
         mode="stress-test",
         prefix_caching_required=False,
-        agent_type="chat",
+        agent_type="stress",
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="random",
@@ -510,31 +458,13 @@ PROFILES: dict[str, WorkloadProfile] = {
 
 
 # ---------------------------------------------------------------------------
-# Old → new profile name mapping (for backward compat with existing results)
+# Historical profile names accepted for archived result ingestion and a narrow
+# CLI compatibility path. New scripts should use canonical profile names.
 # ---------------------------------------------------------------------------
 
 PROFILE_ALIASES: dict[str, str] = {
-    # Old ShareGPT profiles → chat-short (they were all ~200 ISL anyway)
-    "chatbot-short": "chat-short",
-    "chatbot-multi-turn": "chat-medium",
-    "rag-retrieval": "chat-medium",
-    "rag-heavy": "chat-medium",
-    "coding-assist": "chat-medium",
-    "coding-heavy": "chat-medium",
-    "summarization": "chat-medium",
-    "agentic-tool-use": "chat-medium",
-    "computer-use-basic": "chat-short",
-    "customer-support-basic": "chat-short",
-    # Old synthetic profiles
-    "output-short": "prefill-heavy",
-    "output-long": "decode-heavy",
-    "random-inferencex": "random-1k",
-    "random-inferencex-legacy": "random-1k",
-    "random-inferencex-doublewrap": "random-1k",
-    # Old multi-turn
+    "chat-long": "chat-singleturn",
     "multi-turn-short": "chat-multiturn-short",
-    "multi-turn-medium": "chat-multiturn-medium",
-    "multi-turn-long": "chat-multiturn-long",
 }
 
 
@@ -548,10 +478,13 @@ def filter_profiles(
     serving_style: Optional[str] = None,
     data_source: Optional[str] = None,
     mode: Optional[str] = None,
+    include_inactive: bool = False,
 ) -> dict:
     """Filter profiles by tag values. None means 'any'."""
     result = {}
     for name, p in PROFILES.items():
+        if not include_inactive and not p.active:
+            continue
         if agent_type is not None and p.agent_type != agent_type:
             continue
         if turn_style is not None and p.turn_style != turn_style:

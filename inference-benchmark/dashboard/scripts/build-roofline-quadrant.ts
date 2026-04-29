@@ -30,25 +30,26 @@ const MODEL_PARAMS: Record<string, ModelParams> = {
 
 // ── Avg sequence lengths per profile (input + output) ────────────────────────
 const PROFILE_AVG_SEQ: Record<string, number> = {
-  'chat-short': 400,
-  'chat-medium': 1500,
-  'chat-long': 5000,
-  'coding-agent': 9000,
+  // Canonical natural chat ST. chat-short/chat-medium are retired from the
+  // main sweep because they mostly differ by output length.
+  'chat-singleturn': 486,
+  'coding-agent': 6600,
   'prefill-heavy': 4200,
   'decode-heavy': 2200,
   'random-1k': 1024,
   'chat-multiturn-short': 4500,
   'chat-multiturn-medium': 8000,
   'chat-multiturn-long': 16000,
-  'chat-multiturn-xl': 32000,
   'swebench-multiturn-short': 16000,
   'swebench-multiturn-medium': 32000,
   'swebench-multiturn-long': 64000,
-  'swebench-multiturn-xl': 64000,
   'terminalbench-multiturn-short': 16000,
   'terminalbench-multiturn-medium': 32000,
   'terminalbench-multiturn-long': 64000,
-  'terminalbench-multiturn-xl': 64000,
+};
+
+const HISTORICAL_PROFILE_ALIASES: Record<string, string> = {
+  'chat-long': 'chat-singleturn',
 };
 
 const BYTES_PER_PARAM = 2; // BF16
@@ -241,7 +242,7 @@ function main() {
         continue;
       }
 
-      const profile = raw.config.profile;
+      const profile = HISTORICAL_PROFILE_ALIASES[raw.config.profile] ?? raw.config.profile;
       const concurrency = raw.config.concurrency;
       if (!concurrency || concurrency < 1) continue;
 

@@ -9,7 +9,7 @@ cd "$REPO_ROOT"
 PYTHON="${PYTHON:-/root/miniconda3/bin/python}"
 MODEL="/workspace/models/Qwen3.5-27B"
 API_KEY="test"
-PROFILES="chat-short prefill-heavy"
+PROFILES="chat-singleturn prefill-heavy"
 NREQ=200
 WARMUP=5
 TIMEOUT=300

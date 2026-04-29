@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vLLM-only high concurrency saturation (chatbot-short at 400,512,640,768)
+# vLLM-only high concurrency saturation (chat-singleturn at 400,512,640,768)
 set -uo pipefail
 PYTHON="${PYTHON:-$(which python)}"
 PORT=8000; API_KEY="test"; WARMUP=5; TIMEOUT=300; MAX_SERVER_WAIT=1800
@@ -24,13 +24,13 @@ run_high_conc() {
     local url="http://localhost:${PORT}/v1/chat/completions"
     mkdir -p "$results_dir"
     for CONC in $CONC_HIGH; do
-        local tag="${model_name}_tp${tp}_vllm_chatbot-short_conc${CONC}"
+        local tag="${model_name}_tp${tp}_vllm_chat-singleturn_conc${CONC}"
         local out="${results_dir}/${tag}.json"
         [[ -f "$out" ]] && [[ -s "$out" ]] && { log "  SKIP conc=$CONC"; continue; }
         log "  conc=$CONC nreq=150"
         OPENAI_API_KEY="$API_KEY" "$PYTHON" -m src.benchmark.runner \
             --url "$url" --model "$model_path" --backend vllm \
-            --profile chatbot-short --concurrency "$CONC" \
+            --profile chat-singleturn --concurrency "$CONC" \
             --num-requests 150 --warmup "$WARMUP" --timeout "$TIMEOUT" \
             --api-key "$API_KEY" --output "$out" 2>&1 || err "  FAILED conc=$CONC"
     done

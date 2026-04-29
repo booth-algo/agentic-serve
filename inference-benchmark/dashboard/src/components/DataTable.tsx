@@ -1,6 +1,12 @@
 import { useState, useMemo } from 'react';
 import type { BenchmarkResult } from '../types';
-import { PROFILE_META, AGENT_TYPE_COLORS, DATA_SOURCE_COLORS } from '../profileMeta';
+import {
+  PROFILE_META,
+  AGENT_TYPE_COLORS,
+  DATA_SOURCE_COLORS,
+  FALLBACK_META_COLORS,
+  profileDisplayName,
+} from '../profileMeta';
 
 interface DataTableProps {
   data: BenchmarkResult[];
@@ -80,7 +86,7 @@ function getValue(r: BenchmarkResult, field: SortField): string | number {
     case 'backend':
       return r.config.backend;
     case 'profile':
-      return r.config.profile;
+      return profileDisplayName(r.config.profile);
     case 'type':
       return PROFILE_META[r.config.profile]?.agentType ?? '';
     case 'source':
@@ -180,7 +186,7 @@ export function DataTable({ data }: DataTableProps) {
               >
                 {COLUMNS.map((col) => {
                   if (col.key === 'type' && meta) {
-                    const colors = AGENT_TYPE_COLORS[meta.agentType] ?? { bg: 'rgba(139,148,158,0.12)', text: '#8b949e', border: 'rgba(139,148,158,0.3)' };
+                    const colors = AGENT_TYPE_COLORS[meta.agentType] ?? FALLBACK_META_COLORS;
                     return (
                       <td key={col.key} className="whitespace-nowrap px-3 py-2 text-left">
                         <span
@@ -193,7 +199,7 @@ export function DataTable({ data }: DataTableProps) {
                     );
                   }
                   if (col.key === 'source' && meta) {
-                    const colors = DATA_SOURCE_COLORS[meta.dataSource] ?? { bg: 'rgba(139,148,158,0.12)', text: '#8b949e', border: 'rgba(139,148,158,0.3)' };
+                    const colors = DATA_SOURCE_COLORS[meta.dataSource] ?? FALLBACK_META_COLORS;
                     return (
                       <td key={col.key} className="whitespace-nowrap px-3 py-2 text-left">
                         <span
@@ -207,6 +213,19 @@ export function DataTable({ data }: DataTableProps) {
                   }
                   if ((col.key === 'type' || col.key === 'source') && !meta) {
                     return <td key={col.key} className="whitespace-nowrap px-3 py-2 text-left text-[#8b949e]">—</td>;
+                  }
+                  if (col.key === 'profile') {
+                    const displayName = profileDisplayName(r.config.profile);
+                    return (
+                      <td key={col.key} className="whitespace-nowrap px-3 py-2 text-left text-[#e6edf3]">
+                        <div className="max-w-[220px] truncate" title={displayName}>{displayName}</div>
+                        {displayName !== r.config.profile && (
+                          <div className="max-w-[220px] truncate text-[10px] text-[#6e7681]" title={r.config.profile}>
+                            {r.config.profile}
+                          </div>
+                        )}
+                      </td>
+                    );
                   }
                   return (
                     <td

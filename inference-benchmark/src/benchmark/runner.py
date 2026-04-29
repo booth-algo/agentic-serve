@@ -6,7 +6,7 @@ Usage:
         --url http://localhost:8000/v1/chat/completions \
         --model meta-llama/Llama-3.1-8B-Instruct \
         --backend vllm \
-        --profile output-short \
+        --profile chat-singleturn \
         --concurrency 10 \
         --num-requests 100 \
         --api-key test \
@@ -17,7 +17,7 @@ Usage:
         --url http://localhost:8000/generate_stream \
         --model meta-llama/Llama-3.1-8B-Instruct \
         --backend trtllm \
-        --profile output-short \
+        --profile chat-singleturn \
         --concurrency 10 \
         --num-requests 100
 """
@@ -236,7 +236,7 @@ def get_args():
     parser.add_argument("--model", required=False)
     parser.add_argument("--backend", default="vllm", choices=SUPPORTED_BACKENDS,
                         help="Backend type (vllm/sglang/openai → /v1/chat/completions, trtllm → /generate_stream)")
-    parser.add_argument("--profile", default="output-short", help="Workload profile name")
+    parser.add_argument("--profile", default="chat-singleturn", help="Workload profile name")
     parser.add_argument("--concurrency", type=int, default=10)
     parser.add_argument("--num-requests", type=int, default=100)
     parser.add_argument("--api-key", default="test")
@@ -293,14 +293,14 @@ if __name__ == "__main__":
     if args.mode:
         if args.mode == "multi-turn":
             print("NOTE: multi-turn mode requires server launched with --enable-prefix-caching (vLLM)")
-            if args.profile == "output-short":  # default — override for multi-turn
+            if args.profile == "chat-singleturn":  # default — override for multi-turn
                 args.profile = "chat-multiturn-short"
         if args.mode == "stress-test":
             if not args.ignore_eos:
                 print("NOTE: stress-test mode auto-enables --ignore-eos (required for FP8 models)")
                 args.ignore_eos = True
-            if args.profile == "output-short":  # default — override for stress-test
-                args.profile = "random-inferencex"
+            if args.profile == "chat-singleturn":  # default — override for stress-test
+                args.profile = "random-1k"
         if args.mode == "single-turn":
             print("NOTE: single-turn mode requires server launched with --enable-prefix-caching (vLLM)")
             print("      or radix cache (SGLang default). See scripts/launch_server.sh")
