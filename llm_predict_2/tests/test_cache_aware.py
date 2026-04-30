@@ -87,6 +87,30 @@ class CacheAwareTests(unittest.TestCase):
         self.assertEqual(feature.new_prefill_tokens, 100)
         self.assertAlmostEqual(feature.cache_hit_rate, 50 / 150)
 
+    def test_derive_turn_prefers_runner_cache_telemetry(self):
+        features = derive_turn_cache_features([
+            {
+                "turn_index": 3,
+                "successful": 7,
+                "avg_input_tokens": 1000,
+                "avg_output_tokens": 200,
+                "median_input_tokens": 900,
+                "median_output_tokens": 180,
+                "median_new_prefill_tokens": 125,
+                "median_cached_context_tokens": 775,
+                "median_cache_hit_rate": 0.8611,
+            },
+        ])
+
+        self.assertEqual(len(features), 1)
+        feature = features[0]
+        self.assertEqual(feature.turn_index, 3)
+        self.assertEqual(feature.total_context_tokens, 900)
+        self.assertEqual(feature.output_tokens, 180)
+        self.assertEqual(feature.new_prefill_tokens, 125)
+        self.assertEqual(feature.cached_context_tokens, 775)
+        self.assertAlmostEqual(feature.cache_hit_rate, 0.8611)
+
     def test_predict_serving_prefills_new_tokens_but_decodes_full_context(self):
         composer = FakeComposer()
         cfg = SimpleNamespace(name="fake", is_moe=False)

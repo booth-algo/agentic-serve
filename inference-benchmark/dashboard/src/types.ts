@@ -63,6 +63,14 @@ export interface PerTurnEntry {
   median_e2el_ms: number;
   avg_input_tokens: number;
   avg_output_tokens: number;
+  median_input_tokens?: number;
+  median_output_tokens?: number;
+  avg_new_prefill_tokens?: number;
+  median_new_prefill_tokens?: number;
+  avg_cached_context_tokens?: number;
+  median_cached_context_tokens?: number;
+  avg_cache_hit_rate?: number;
+  median_cache_hit_rate?: number;
 }
 
 export interface ScatterPoint {

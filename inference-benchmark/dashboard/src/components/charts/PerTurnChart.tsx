@@ -24,6 +24,8 @@ const COLORS = [
   '#79c0ff', '#d2a8ff', '#ffa657', '#7ee787', '#ff7b72',
 ];
 
+const MAX_SCATTER_POINTS = 2500;
+
 function shortenKey(key: string): string {
   const parts = key.split(' / ');
   const profile = parts[parts.length - 1] || key;
@@ -33,6 +35,12 @@ function shortenKey(key: string): string {
 // Unique key per result: include concurrency to distinguish runs
 function perTurnKey(r: BenchmarkResult): string {
   return `${shortenKey(r.seriesKey)} conc=${r.config.concurrency}`;
+}
+
+function sampleEvenly<T>(items: T[], limit: number): T[] {
+  if (items.length <= limit) return items;
+  const step = items.length / limit;
+  return Array.from({ length: limit }, (_, i) => items[Math.floor(i * step)]);
 }
 
 export function PerTurnChart({ data }: PerTurnChartProps) {
@@ -78,9 +86,10 @@ export function PerTurnChart({ data }: PerTurnChartProps) {
   const tpotData = Array.from({ length: maxTurns }, (_, i) => {
     const point: Record<string, number> = { turn: i + 1 };
     for (const r of multiTurnResults) {
+      const key = perTurnKey(r);
       const entry = r.perTurn![i];
       if (entry) {
-        point[perTurnKey(r)] = Math.round(entry.median_tpot_ms * 100) / 100;
+        point[`${key}_tpot`] = Math.round(entry.median_tpot_ms * 100) / 100;
       }
     }
     return point;
@@ -236,13 +245,13 @@ export function PerTurnChart({ data }: PerTurnChartProps) {
             <Tooltip
               contentStyle={tooltipStyle}
               labelFormatter={(v) => `Turn ${v}`}
-              formatter={(value: unknown, name: unknown) => [`${(value as number).toFixed(1)} ms`, name as string]}
+              formatter={(value: unknown, name: unknown) => [`${(value as number).toFixed(1)} ms`, (name as string).replace(/_tpot$/, '')]}
             />
             {seriesKeys.map((key, i) => (
               <Line
                 key={key}
                 type="monotone"
-                dataKey={key}
+                dataKey={`${key}_tpot`}
                 stroke={COLORS[i % COLORS.length]}
                 strokeWidth={2}
                 dot={{ r: 3, fill: COLORS[i % COLORS.length] }}
@@ -256,9 +265,10 @@ export function PerTurnChart({ data }: PerTurnChartProps) {
 
       {/* TTFT vs ISL scatter — per-request level */}
       {(() => {
-        const allScatter = multiTurnResults.flatMap((r) =>
+        const allScatterRaw = multiTurnResults.flatMap((r) =>
           (r.scatterData || []).map((p) => ({ ...p, series: shortenKey(r.seriesKey) }))
         );
+        const allScatter = sampleEvenly(allScatterRaw, MAX_SCATTER_POINTS);
         if (allScatter.length === 0) return null;
 
         // Group by turn index for coloring
