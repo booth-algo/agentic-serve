@@ -408,6 +408,7 @@ function main() {
   const CONFIG_KEEP = new Set([
     'backend', 'profile', 'concurrency', 'model', 'mode', 'num_requests',
     'benchmark_schema_version', 'workload_schema_version', 'dashboard_scope',
+    'profile_metadata', 'prediction_metadata',
   ]);
   const SUMMARY_KEEP = new Set([
     'concurrency', 'num_requests', 'duration_s', 'successful_requests', 'failed_requests',

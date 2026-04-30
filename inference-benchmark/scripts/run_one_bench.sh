@@ -27,6 +27,7 @@ MAX_LEN="${11:-8192}"
 
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
+CONTEXT_SAFETY_MARGIN_TOKENS="${CONTEXT_SAFETY_MARGIN_TOKENS:-256}"
 
 mkdir -p "$OUT_DIR"
 OUT_FILE="$OUT_DIR/${SHORT}_tp${TP}_${BACKEND}_${PROFILE}_conc${CONC}.json"
@@ -63,6 +64,16 @@ for i in $(seq 1 120); do
 done
 
 cd /tmp/inference-benchmark
+
+RUNNER_MODE_ARGS=(--mode single-turn)
+if [[ "$PROFILE" == *multiturn* ]]; then
+    RUNNER_MODE_ARGS=(
+        --mode multi-turn
+        --max-context-tokens "$MAX_LEN"
+        --context-safety-margin-tokens "$CONTEXT_SAFETY_MARGIN_TOKENS"
+    )
+fi
+
 OPENAI_API_KEY="$API_KEY" "$PY" -m src.benchmark.runner \
     --url        "http://localhost:$PORT/v1/chat/completions" \
     --model      "$MODEL_PATH" \
@@ -70,6 +81,12 @@ OPENAI_API_KEY="$API_KEY" "$PY" -m src.benchmark.runner \
     --profile    "$PROFILE" \
     --concurrency "$CONC" \
     --num-requests "$NUM_REQ" \
+    --prefix-caching-state on \
+    --chunked-prefill on \
+    --max-model-len "$MAX_LEN" \
+    --gpu-memory-utilization "$GPU_MEM" \
+    --tensor-parallel-size "$TP" \
+    "${RUNNER_MODE_ARGS[@]}" \
     --warmup     2 \
     --timeout    300 \
     --api-key    "$API_KEY" \

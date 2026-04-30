@@ -12,7 +12,7 @@ import asyncio
 import threading
 import random
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
@@ -22,6 +22,7 @@ import numpy as np
 class BenchmarkRequest:
     messages: list[dict]
     max_tokens: int
+    metadata: dict = field(default_factory=dict)
 
 
 class BaseDataset(ABC):
@@ -721,12 +722,14 @@ class DistributionalMultiTurnDataset(BaseDataset):
         num_sessions: int = 10,
         random_seed: int = 42,
         max_context_tokens: Optional[int] = None,
+        context_safety_margin_tokens: int = 256,
         system_prompt: str = "",
     ):
         self.filepath = filepath
         self.num_sessions = num_sessions
         self.random_seed = random_seed
         self.max_context_tokens = max_context_tokens
+        self.context_safety_margin_tokens = context_safety_margin_tokens
         self.system_prompt = system_prompt
         self._sessions: Optional[list[MultiTurnSession]] = None
         self._session_specs: Optional[dict[int, list]] = None
@@ -749,6 +752,7 @@ class DistributionalMultiTurnDataset(BaseDataset):
                 distribution,
                 seed=self.random_seed,
                 max_context_tokens=self.max_context_tokens,
+                context_safety_margin_tokens=self.context_safety_margin_tokens,
                 system_prompt=self.system_prompt,
             )
             synthetic_sessions = sampler.sample_sessions(self.num_sessions)
@@ -797,7 +801,12 @@ class DistributionalMultiTurnDataset(BaseDataset):
             return self._flat_available.pop(0)
 
 
-def make_dataset(profile, max_context_tokens: Optional[int] = None) -> BaseDataset:
+def make_dataset(
+    profile,
+    max_context_tokens: Optional[int] = None,
+    random_seed: int = 42,
+    context_safety_margin_tokens: int = 256,
+) -> BaseDataset:
     """Factory: create the right dataset for a workload profile."""
     from .profiles import WorkloadProfile
     if profile.dataset == "test":
@@ -811,6 +820,7 @@ def make_dataset(profile, max_context_tokens: Optional[int] = None) -> BaseDatas
     elif profile.dataset == "sharegpt":
         return ShareGPTDataset(
             num_prompts=1000,
+            random_seed=random_seed,
             system_prompt=profile.system_prompt,
             max_isl_tokens=profile.isl_tokens,
             max_osl_tokens=profile.osl_tokens,
@@ -821,6 +831,7 @@ def make_dataset(profile, max_context_tokens: Optional[int] = None) -> BaseDatas
             input_len=profile.isl_tokens,
             output_len=profile.osl_tokens,
             num_prompts=500,
+            seed=random_seed,
         )
     elif profile.dataset == "random-legacy":
         return RandomTokenDatasetLegacy(
@@ -828,6 +839,7 @@ def make_dataset(profile, max_context_tokens: Optional[int] = None) -> BaseDatas
             input_len=profile.isl_tokens,
             output_len=profile.osl_tokens,
             num_prompts=500,
+            seed=random_seed,
         )
     elif profile.dataset == "random-doublewrap":
         return RandomTokenDatasetDoubleWrap(
@@ -835,12 +847,14 @@ def make_dataset(profile, max_context_tokens: Optional[int] = None) -> BaseDatas
             input_len=profile.isl_tokens,
             output_len=profile.osl_tokens,
             num_prompts=500,
+            seed=random_seed,
         )
     elif profile.dataset == "sharegpt-multi-turn":
         return ShareGPTMultiTurnDataset(
             min_turns=profile.min_turns,
             max_turns=profile.max_turns,
             num_sessions=profile.num_sessions,
+            random_seed=random_seed,
             system_prompt=profile.system_prompt,
             max_isl_tokens=profile.isl_tokens,
             max_osl_tokens=profile.osl_tokens,
@@ -851,6 +865,7 @@ def make_dataset(profile, max_context_tokens: Optional[int] = None) -> BaseDatas
             min_turns=profile.min_turns,
             max_turns=profile.max_turns,
             num_sessions=profile.num_sessions,
+            random_seed=random_seed,
             max_isl_tokens=profile.isl_tokens,
             max_osl_tokens=profile.osl_tokens,
         )
@@ -858,12 +873,15 @@ def make_dataset(profile, max_context_tokens: Optional[int] = None) -> BaseDatas
         return DistributionalMultiTurnDataset(
             filepath=profile.file_path,
             num_sessions=profile.num_sessions,
+            random_seed=random_seed,
             max_context_tokens=max_context_tokens or profile.isl_tokens,
+            context_safety_margin_tokens=context_safety_margin_tokens,
             system_prompt=profile.system_prompt,
         )
     elif profile.dataset == "jsonl":
         return JsonlDataset(
             filepath=profile.file_path,
+            random_seed=random_seed,
         )
     else:
         raise ValueError(f"Unknown dataset type: {profile.dataset}")

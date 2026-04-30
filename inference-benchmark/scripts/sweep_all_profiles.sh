@@ -26,7 +26,7 @@ OUT_DIR="${5:?out dir}"
 PY="${6:-python}"
 GPU_MEM="${7:-0.85}"
 MAX_LEN="${8:-32768}"
-CONCS="${9:-1 10 20 40 80 120 160 200 256 320 500}"
+CONCS="${9:-1 10 20 40 80 160 256 320}"
 PROFILES="${10:-chat-singleturn coding-singleturn}"
 NREQ="${11:-100}"
 
@@ -94,6 +94,11 @@ for PROFILE in $PROFILES; do
             --profile    "$PROFILE" \
             --concurrency "$CONC" \
             --num-requests "$local_nreq" \
+            --prefix-caching-state on \
+            --chunked-prefill on \
+            --max-model-len "$MAX_LEN" \
+            --gpu-memory-utilization "$GPU_MEM" \
+            --tensor-parallel-size "$TP" \
             --warmup     2 \
             --timeout    300 \
             --api-key    "$API_KEY" \

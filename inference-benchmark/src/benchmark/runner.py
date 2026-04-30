@@ -34,6 +34,7 @@ from .metrics import (
     aggregate,
     aggregate_per_turn,
     annotate_multi_turn_cache_estimate,
+    annotate_request_observability,
     print_summary,
     print_multi_turn_summary,
 )
@@ -43,7 +44,7 @@ from ..workloads.arrival import make_arrival_times
 
 
 SUPPORTED_BACKENDS = ["openai", "vllm", "sglang", "trtllm"]
-BENCHMARK_SCHEMA_VERSION = 2
+BENCHMARK_SCHEMA_VERSION = 3
 WORKLOAD_SCHEMA_VERSION = "distributional-synthetic-v1"
 
 
@@ -62,6 +63,7 @@ async def run_benchmark(
     timeout: int = 120,
     ignore_eos: bool = False,
     max_context_tokens: int | None = None,
+    context_safety_margin_tokens: int = 256,
 ):
     """
     Run a benchmark and return (results, duration).
@@ -71,7 +73,12 @@ async def run_benchmark(
 
     backend = get_backend(backend_name)
     profile = get_profile(profile_name)
-    dataset = make_dataset(profile, max_context_tokens=max_context_tokens)
+    dataset = make_dataset(
+        profile,
+        max_context_tokens=max_context_tokens,
+        random_seed=seed,
+        context_safety_margin_tokens=context_safety_margin_tokens,
+    )
     arrival_times = make_arrival_times(
         pattern=arrival_pattern,
         num_requests=num_requests,
@@ -102,7 +109,9 @@ async def run_benchmark(
                 await asyncio.sleep(delay)
 
             request = dataset.get_next_request()
+            dispatch_started_at_s = time.perf_counter() - benchmark_start
             async with semaphore:
+                semaphore_acquired_at_s = time.perf_counter() - benchmark_start
                 result = await backend.send_request(
                     session=session,
                     url=url,
@@ -112,6 +121,16 @@ async def run_benchmark(
                     api_key=api_key,
                     ignore_eos=ignore_eos,
                 )
+            completed_at_s = time.perf_counter() - benchmark_start
+            annotate_request_observability(
+                result,
+                request_index=i,
+                request=request,
+                scheduled_at_s=dispatch_time,
+                dispatch_started_at_s=dispatch_started_at_s,
+                semaphore_acquired_at_s=semaphore_acquired_at_s,
+                completed_at_s=completed_at_s,
+            )
             results[i] = result
 
         tasks = [dispatch(i, t) for i, t in enumerate(arrival_times)]
@@ -132,6 +151,9 @@ async def run_multi_turn_benchmark(
     timeout: int = 120,
     ignore_eos: bool = False,
     max_context_tokens: int | None = None,
+    context_safety_margin_tokens: int = 256,
+    seed: int = 42,
+    cache_block_size: int | None = 16,
 ):
     """
     Run a multi-turn benchmark with interleaved round-robin scheduling.
@@ -154,7 +176,12 @@ async def run_multi_turn_benchmark(
 
     backend = get_backend(backend_name)
     profile = get_profile(profile_name)
-    dataset = make_dataset(profile, max_context_tokens=max_context_tokens)
+    dataset = make_dataset(
+        profile,
+        max_context_tokens=max_context_tokens,
+        random_seed=seed,
+        context_safety_margin_tokens=context_safety_margin_tokens,
+    )
 
     if not isinstance(dataset, (DistributionalMultiTurnDataset, ShareGPTMultiTurnDataset, TrajectoryMultiTurnDataset)):
         raise ValueError(f"Profile '{profile_name}' does not use a multi-turn dataset")
@@ -182,8 +209,16 @@ async def run_multi_turn_benchmark(
         previous_context_by_session: dict[int, int] = {}
         benchmark_start = time.perf_counter()
 
-        async def dispatch(session_id: int, request, t_idx: int, previous_context_tokens: int):
+        async def dispatch(
+            session_id: int,
+            request,
+            t_idx: int,
+            previous_context_tokens: int,
+            request_index: int,
+        ):
+            dispatch_started_at_s = time.perf_counter() - benchmark_start
             async with semaphore:
+                semaphore_acquired_at_s = time.perf_counter() - benchmark_start
                 result = await backend.send_request(
                     session=session_http,
                     url=url,
@@ -193,11 +228,22 @@ async def run_multi_turn_benchmark(
                     api_key=api_key,
                     ignore_eos=ignore_eos,
                 )
+            completed_at_s = time.perf_counter() - benchmark_start
+            annotate_request_observability(
+                result,
+                request_index=request_index,
+                request=request,
+                scheduled_at_s=None,
+                dispatch_started_at_s=dispatch_started_at_s,
+                semaphore_acquired_at_s=semaphore_acquired_at_s,
+                completed_at_s=completed_at_s,
+            )
             annotate_multi_turn_cache_estimate(
                 result,
                 session_id=session_id,
                 turn_index=t_idx,
                 previous_context_tokens=previous_context_tokens,
+                cache_block_size=cache_block_size,
             )
             return session_id, t_idx, result
 
@@ -213,14 +259,16 @@ async def run_multi_turn_benchmark(
 
             print(f"  Turn {turn_idx + 1}/{max_turns}: dispatching {len(turn_requests)} requests...")
 
+            request_offset = sum(len(v) for v in results_by_turn.values())
             tasks = [
                 dispatch(
                     sid,
                     req,
                     turn_idx,
                     previous_context_by_session.get(sid, 0),
+                    request_index=request_offset + i,
                 )
-                for sid, req in turn_requests
+                for i, (sid, req) in enumerate(turn_requests)
             ]
             completed = await asyncio.gather(*tasks)
 
@@ -258,6 +306,28 @@ def save_results(summary, results, output_path: str, config: dict):
                 "input_tokens": r.input_tokens,
                 "output_tokens": r.output_tokens,
                 "error": r.error,
+                **({"request_index": r.request_index}
+                   if r.request_index is not None else {}),
+                **({"max_tokens_requested": r.max_tokens_requested}
+                   if r.max_tokens_requested is not None else {}),
+                **({"message_count": r.message_count}
+                   if r.message_count is not None else {}),
+                **({"prompt_chars": r.prompt_chars}
+                   if r.prompt_chars is not None else {}),
+                **({"scheduled_at_ms": round(r.scheduled_at_s * 1000, 2)}
+                   if r.scheduled_at_s is not None else {}),
+                **({"dispatch_started_at_ms": round(r.dispatch_started_at_s * 1000, 2)}
+                   if r.dispatch_started_at_s is not None else {}),
+                **({"semaphore_acquired_at_ms": round(r.semaphore_acquired_at_s * 1000, 2)}
+                   if r.semaphore_acquired_at_s is not None else {}),
+                **({"completed_at_ms": round(r.completed_at_s * 1000, 2)}
+                   if r.completed_at_s is not None else {}),
+                **({"client_schedule_delay_ms": round(r.client_schedule_delay_s * 1000, 2)}
+                   if r.client_schedule_delay_s is not None else {}),
+                **({"client_queue_wait_ms": round(r.client_queue_wait_s * 1000, 2)}
+                   if r.client_queue_wait_s is not None else {}),
+                **({"client_request_wall_ms": round(r.client_request_wall_s * 1000, 2)}
+                   if r.client_request_wall_s is not None else {}),
                 **({"session_id": r.session_id} if r.session_id is not None else {}),
                 **({"turn_index": r.turn_index} if r.turn_index is not None else {}),
                 **({"previous_context_tokens": r.previous_context_tokens}
@@ -272,6 +342,24 @@ def save_results(summary, results, output_path: str, config: dict):
                    if r.cache_hit_rate is not None else {}),
                 **({"cache_estimate_source": r.cache_estimate_source}
                    if r.cache_estimate_source is not None else {}),
+                **({"cache_block_size": r.cache_block_size}
+                   if r.cache_block_size is not None else {}),
+                **({"block_aligned_cached_context_tokens": r.block_aligned_cached_context_tokens}
+                   if r.block_aligned_cached_context_tokens is not None else {}),
+                **({"block_aligned_new_prefill_tokens": r.block_aligned_new_prefill_tokens}
+                   if r.block_aligned_new_prefill_tokens is not None else {}),
+                **({"block_aligned_cache_hit_rate": round(r.block_aligned_cache_hit_rate, 4)}
+                   if r.block_aligned_cache_hit_rate is not None else {}),
+                **({"uncached_prefix_tail_tokens": r.uncached_prefix_tail_tokens}
+                   if r.uncached_prefix_tail_tokens is not None else {}),
+                **({"total_context_blocks": r.total_context_blocks}
+                   if r.total_context_blocks is not None else {}),
+                **({"cached_context_blocks": r.cached_context_blocks}
+                   if r.cached_context_blocks is not None else {}),
+                **({"new_prefill_blocks": r.new_prefill_blocks}
+                   if r.new_prefill_blocks is not None else {}),
+                **({"request_metadata": r.request_metadata}
+                   if r.request_metadata else {}),
             }
             for r in results if r is not None
         ],
@@ -279,6 +367,21 @@ def save_results(summary, results, output_path: str, config: dict):
     with open(output_path, "w") as f:
         json.dump(output, f, indent=2)
     print(f"Results saved to: {output_path}")
+
+
+def _resolve_cache_state(cli_value: str, profile) -> tuple[str, str]:
+    if cli_value != "auto":
+        return cli_value, "cli"
+    return (
+        "expected_on" if profile.prefix_caching_required else "expected_off",
+        "profile_default",
+    )
+
+
+def _resolve_tri_state(cli_value: str) -> tuple[str, str]:
+    if cli_value != "auto":
+        return cli_value, "cli"
+    return "unknown", "not_reported"
 
 
 def get_args():
@@ -299,6 +402,30 @@ def get_args():
     parser.add_argument("--output", default="results/latest.json")
     parser.add_argument("--max-context-tokens", type=int, default=None,
                         help="Optional cap for distributional multi-turn synthetic prompt context")
+    parser.add_argument("--context-safety-margin-tokens", type=int, default=256,
+                        help="Reserved token headroom under --max-context-tokens for output and tokenizer mismatch")
+    parser.add_argument("--prefix-cache-block-size", type=int, default=16,
+                        help="KV prefix-cache block size in tokens for block-aligned cache estimates")
+    parser.add_argument("--prefix-caching-state", choices=["auto", "on", "off", "unknown"],
+                        default="auto",
+                        help="Metadata only: actual server prefix-cache state when known")
+    parser.add_argument("--chunked-prefill", choices=["auto", "on", "off", "unknown"],
+                        default="auto",
+                        help="Metadata only: actual server chunked-prefill state when known")
+    parser.add_argument("--max-model-len", type=int, default=None,
+                        help="Metadata only: server --max-model-len")
+    parser.add_argument("--gpu-memory-utilization", type=float, default=None,
+                        help="Metadata only: server GPU memory utilization target")
+    parser.add_argument("--tensor-parallel-size", type=int, default=None,
+                        help="Metadata only: server tensor parallel size")
+    parser.add_argument("--dtype", default=None,
+                        help="Metadata only: server compute dtype")
+    parser.add_argument("--kv-cache-dtype", default=None,
+                        help="Metadata only: server KV-cache dtype")
+    parser.add_argument("--max-num-batched-tokens", type=int, default=None,
+                        help="Metadata only: server max_num_batched_tokens")
+    parser.add_argument("--max-num-seqs", type=int, default=None,
+                        help="Metadata only: server max_num_seqs")
     parser.add_argument("--ignore-eos", action="store_true",
                         help="Pass ignore_eos=true to vLLM (needed for FP8 models with random token workloads)")
     parser.add_argument("--mode", choices=["stress-test", "single-turn", "multi-turn"],
@@ -364,6 +491,13 @@ if __name__ == "__main__":
 
     profile = get_profile(args.profile)
     profile_name = profile.name
+    prefix_caching_state, prefix_caching_state_source = _resolve_cache_state(
+        args.prefix_caching_state,
+        profile,
+    )
+    chunked_prefill_state, chunked_prefill_state_source = _resolve_tri_state(
+        args.chunked_prefill,
+    )
     config = {
         **vars(args),
         "profile": profile_name,
@@ -371,6 +505,39 @@ if __name__ == "__main__":
         "benchmark_schema_version": BENCHMARK_SCHEMA_VERSION,
         "workload_schema_version": WORKLOAD_SCHEMA_VERSION,
         "dashboard_scope": "current" if profile.active else "archive",
+        "profile_metadata": {
+            "dataset": profile.dataset,
+            "agent_type": profile.agent_type,
+            "turn_style": profile.turn_style,
+            "serving_style": profile.serving_style,
+            "data_source": profile.data_source,
+            "active": profile.active,
+            "prefix_caching_required": profile.prefix_caching_required,
+            "isl_tokens": profile.isl_tokens,
+            "osl_tokens": profile.osl_tokens,
+            "min_turns": profile.min_turns,
+            "max_turns": profile.max_turns,
+            "num_sessions": profile.num_sessions,
+        },
+        "prediction_metadata": {
+            "prefix_caching_state": prefix_caching_state,
+            "prefix_caching_state_source": prefix_caching_state_source,
+            "prefix_cache_block_size": args.prefix_cache_block_size,
+            "chunked_prefill": chunked_prefill_state,
+            "chunked_prefill_source": chunked_prefill_state_source,
+            "max_context_tokens": args.max_context_tokens,
+            "context_safety_margin_tokens": args.context_safety_margin_tokens,
+            "max_model_len": args.max_model_len,
+            "gpu_memory_utilization": args.gpu_memory_utilization,
+            "tensor_parallel_size": args.tensor_parallel_size,
+            "dtype": args.dtype,
+            "kv_cache_dtype": args.kv_cache_dtype,
+            "max_num_batched_tokens": args.max_num_batched_tokens,
+            "max_num_seqs": args.max_num_seqs,
+            "logical_cache_estimate": "previous_prompt_tokens",
+            "block_aligned_cache_estimate": "floor(previous_context / block_size) * block_size",
+            "engine_cache_telemetry": "not_available",
+        },
     }
 
     if profile.mode == "multi-turn":
@@ -385,6 +552,9 @@ if __name__ == "__main__":
             timeout=args.timeout,
             ignore_eos=args.ignore_eos,
             max_context_tokens=args.max_context_tokens,
+            context_safety_margin_tokens=args.context_safety_margin_tokens,
+            seed=args.seed,
+            cache_block_size=args.prefix_cache_block_size,
         ))
 
         summary = aggregate(
@@ -427,6 +597,7 @@ if __name__ == "__main__":
             timeout=args.timeout,
             ignore_eos=args.ignore_eos,
             max_context_tokens=args.max_context_tokens,
+            context_safety_margin_tokens=args.context_safety_margin_tokens,
         ))
 
         summary = aggregate(

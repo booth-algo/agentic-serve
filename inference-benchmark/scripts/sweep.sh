@@ -23,6 +23,14 @@ CONCURRENCY_LEVELS="1 5 10 20 40"
 NUM_REQUESTS=100
 WARMUP=5
 API_KEY="test"
+MODE=""
+MAX_CONTEXT_TOKENS=""
+CONTEXT_SAFETY_MARGIN_TOKENS="${CONTEXT_SAFETY_MARGIN_TOKENS:-256}"
+PREFIX_CACHING_STATE="${PREFIX_CACHING_STATE:-auto}"
+CHUNKED_PREFILL="${CHUNKED_PREFILL:-auto}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-}"
+GPU_MEM="${GPU_MEM:-}"
+TP="${TP:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -34,6 +42,14 @@ while [[ $# -gt 0 ]]; do
     --num-requests) NUM_REQUESTS="$2"; shift 2 ;;
     --warmup)       WARMUP="$2"; shift 2 ;;
     --api-key)      API_KEY="$2"; shift 2 ;;
+    --mode)         MODE="$2"; shift 2 ;;
+    --max-context-tokens) MAX_CONTEXT_TOKENS="$2"; shift 2 ;;
+    --context-safety-margin-tokens) CONTEXT_SAFETY_MARGIN_TOKENS="$2"; shift 2 ;;
+    --prefix-caching-state) PREFIX_CACHING_STATE="$2"; shift 2 ;;
+    --chunked-prefill) CHUNKED_PREFILL="$2"; shift 2 ;;
+    --max-model-len) MAX_MODEL_LEN="$2"; shift 2 ;;
+    --gpu-memory-utilization) GPU_MEM="$2"; shift 2 ;;
+    --tensor-parallel-size) TP="$2"; shift 2 ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
@@ -58,16 +74,46 @@ for PROFILE in $PROFILES; do
   for CONC in $CONCURRENCY_LEVELS; do
     OUT="$RESULTS_DIR/${PROFILE}_conc${CONC}.json"
     echo "--- $PROFILE | concurrency=$CONC ---"
-    OPENAI_API_KEY="$API_KEY" "$PYTHON" -m src.benchmark.runner \
-      --url "$URL" \
-      --model "$MODEL" \
-      --backend "$BACKEND" \
-      --profile "$PROFILE" \
-      --concurrency "$CONC" \
-      --num-requests "$NUM_REQUESTS" \
-      --warmup "$WARMUP" \
-      --api-key "$API_KEY" \
+    profile_mode="$MODE"
+    if [[ -z "$profile_mode" && "$PROFILE" == *multiturn* ]]; then
+      profile_mode="multi-turn"
+    elif [[ -z "$profile_mode" ]]; then
+      profile_mode="single-turn"
+    fi
+
+    RUNNER_ARGS=(
+      --url "$URL"
+      --model "$MODEL"
+      --backend "$BACKEND"
+      --profile "$PROFILE"
+      --concurrency "$CONC"
+      --num-requests "$NUM_REQUESTS"
+      --warmup "$WARMUP"
+      --api-key "$API_KEY"
+      --prefix-caching-state "$PREFIX_CACHING_STATE"
+      --chunked-prefill "$CHUNKED_PREFILL"
+      --context-safety-margin-tokens "$CONTEXT_SAFETY_MARGIN_TOKENS"
+      --mode "$profile_mode"
       --output "$OUT"
+    )
+
+    if [[ -n "$MAX_CONTEXT_TOKENS" ]]; then
+      RUNNER_ARGS+=(--max-context-tokens "$MAX_CONTEXT_TOKENS")
+    elif [[ "$profile_mode" == "multi-turn" && -n "$MAX_MODEL_LEN" ]]; then
+      RUNNER_ARGS+=(--max-context-tokens "$MAX_MODEL_LEN")
+    fi
+    if [[ -n "$MAX_MODEL_LEN" ]]; then
+      RUNNER_ARGS+=(--max-model-len "$MAX_MODEL_LEN")
+    fi
+    if [[ -n "$GPU_MEM" ]]; then
+      RUNNER_ARGS+=(--gpu-memory-utilization "$GPU_MEM")
+    fi
+    if [[ -n "$TP" ]]; then
+      RUNNER_ARGS+=(--tensor-parallel-size "$TP")
+    fi
+
+    OPENAI_API_KEY="$API_KEY" "$PYTHON" -m src.benchmark.runner \
+      "${RUNNER_ARGS[@]}"
     echo ""
   done
 done
