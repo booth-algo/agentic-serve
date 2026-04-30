@@ -1,10 +1,17 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { BenchmarkResult, FilterState, FilterOptions } from '../types';
-import { PROFILE_META, isBenchmarkProfile } from '../profileMeta';
+import {
+  PROFILE_META,
+  type DataScope,
+  isProfileInScope,
+  normalizeProfileName,
+} from '../profileMeta';
 
 declare const __BUILD_HASH__: string;
 
-export function useData() {
+const R2_JSON_BASE = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current';
+
+export function useData(dataScope: DataScope) {
   const [allData, setAllData] = useState<BenchmarkResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,15 +26,26 @@ export function useData() {
 
   useEffect(() => {
     // Cache-bust with build-time hash so deploys always serve fresh data
-    fetch(`https://pub-38e30ed030784867856634f1625c7130.r2.dev/data.json?v=${__BUILD_HASH__}`)
+    fetch(`${R2_JSON_BASE}/data.json?v=${__BUILD_HASH__}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((data: BenchmarkResult[]) => {
-        setAllData(data);
+        const normalized = data.map((r) => {
+          const profile = normalizeProfileName(r.config.profile);
+          const dataScope = r.dataScope ?? 'archive';
+          if (profile === r.config.profile && dataScope === r.dataScope) return r;
+          return {
+            ...r,
+            config: { ...r.config, profile },
+            seriesKey: `${r.hardware} / ${r.modelShort} ${r.quant} / ${r.config.backend} / ${profile}`,
+            dataScope,
+          };
+        });
+        setAllData(normalized);
         // Default to first hardware config to avoid chart clutter
-        const hwSet = new Set(data.map((r) => r.hardware));
+        const hwSet = new Set(normalized.map((r) => r.hardware));
         const sortedHardware = Array.from(hwSet).sort();
         const defaultHardware = sortedHardware.includes('H100') ? 'H100' : sortedHardware[0];
         if (defaultHardware) {
@@ -41,6 +59,11 @@ export function useData() {
       });
   }, []);
 
+  const scopedData = useMemo(
+    () => allData.filter((r) => (r.dataScope ?? 'archive') === dataScope && isProfileInScope(r.config.profile, dataScope)),
+    [allData, dataScope],
+  );
+
   const filterOptions = useMemo<FilterOptions>(() => {
     const hw = new Set<string>();
     const model = new Set<string>();
@@ -49,8 +72,7 @@ export function useData() {
     const turnStyle = new Set<string>();
     const profile = new Set<string>();
 
-    const benchmarkData = allData.filter((r) => isBenchmarkProfile(r.config.profile));
-    for (const r of benchmarkData) {
+    for (const r of scopedData) {
       hw.add(r.hardware);
       model.add(r.modelShort);
       backend.add(r.config.backend);
@@ -70,11 +92,10 @@ export function useData() {
       turnStyle: Array.from(turnStyle).sort(),
       profile: Array.from(profile).sort(),
     };
-  }, [allData]);
+  }, [scopedData]);
 
   const filteredData = useMemo(() => {
-    return allData.filter((r) => {
-      if (!isBenchmarkProfile(r.config.profile)) return false;
+    return scopedData.filter((r) => {
       if (filters.hardware.length > 0 && !filters.hardware.includes(r.hardware)) return false;
       if (filters.model.length > 0 && !filters.model.includes(r.modelShort)) return false;
       if (filters.backend.length > 0 && !filters.backend.includes(r.config.backend)) return false;
@@ -91,12 +112,7 @@ export function useData() {
 
       return true;
     });
-  }, [allData, filters]);
-
-  const benchmarkAllData = useMemo(
-    () => allData.filter((r) => isBenchmarkProfile(r.config.profile)),
-    [allData],
-  );
+  }, [scopedData, filters]);
 
   // Group data by series key for chart rendering
   const seriesData = useMemo(() => {
@@ -125,8 +141,12 @@ export function useData() {
     setFilters({ hardware: [], model: [], backend: [], agentType: [], turnStyle: [], profile: [] });
   }, []);
 
+  const clearWorkloadFilters = useCallback(() => {
+    setFilters((prev) => ({ ...prev, agentType: [], turnStyle: [], profile: [] }));
+  }, []);
+
   return {
-    allData: benchmarkAllData,
+    allData: scopedData,
     data: filteredData,
     seriesData,
     loading,
@@ -135,5 +155,6 @@ export function useData() {
     filterOptions,
     toggleFilter,
     clearFilters,
+    clearWorkloadFilters,
   };
 }

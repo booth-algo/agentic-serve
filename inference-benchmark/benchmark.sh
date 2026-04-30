@@ -118,7 +118,7 @@ chatbot() {
 
 production() {
     # New production profiles (real text, varied ISL/OSL).
-    # Requires server max_model_len >= 17000 for coding-agent (ISL ~17K).
+    # Requires server max_model_len >= 17000 for coding-singleturn (ISL ~17K).
     # TTFT valid (varied prompts, no shared prefix).
     echo "### New production profiles ###"
     echo "Mode:    single-turn"
@@ -127,7 +127,7 @@ production() {
     echo "Server:  $URL"
     echo ""
 
-    for PROFILE in chat-singleturn coding-agent; do
+    for PROFILE in chat-singleturn coding-singleturn; do
         for CONC in $CONC_STANDARD; do
             run "$PROFILE" "$CONC" "200"
         done

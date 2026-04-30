@@ -6,8 +6,8 @@ record by reading /tmp/bench_jobs/state/<job_id>.status. Cells without a state
 file get status "pending". known_oom entries override runtime status.
 
 Output is written to dashboard/public/sweep-state.json and optionally uploaded
-to R2 at s3://agent-bench/sweep-state.json so the live dashboard can fetch it
-from https://pub-38e30ed030784867856634f1625c7130.r2.dev/sweep-state.json.
+to R2 at s3://agent-bench/json/current/sweep-state.json so the live dashboard
+can fetch it from the generated JSON prefix.
 
 Run locally (no upload):
     python scripts/publish_sweep_state.py --no-upload
@@ -34,7 +34,7 @@ OUTPUT_FILE = HERE.parent / "dashboard" / "public" / "sweep-state.json"
 
 R2_ENDPOINT_DEFAULT = "https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com"
 R2_BUCKET_DEFAULT = "agent-bench"
-R2_KEY = "sweep-state.json"
+R2_KEY = "json/current/sweep-state.json"
 
 
 def hw_label(host_cfg: dict, tp: int) -> str:

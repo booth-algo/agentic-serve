@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fill SGLang 70B TP2 conc=80 gaps for coding-agent, prefill-heavy, decode-heavy
+# Fill SGLang 70B TP2 conc=80 gaps for canonical single-turn profiles.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -16,7 +16,7 @@ MODELS=(
     "Llama-3.3-70B|/workspace/models/Llama-3.3-70B-Instruct|--disable-piecewise-cuda-graph"
     "Qwen2.5-72B|/workspace/models/Qwen2.5-72B-Instruct|--trust-remote-code --disable-piecewise-cuda-graph"
 )
-PROFILES="coding-agent prefill-heavy decode-heavy"
+PROFILES="chat-singleturn coding-singleturn"
 CONC=80
 NREQ=200
 

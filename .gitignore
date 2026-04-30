@@ -8,9 +8,9 @@
 inference-benchmark/results/
 *.egg-info/
 *.ncu-rep
-llm_predict/profiling/data/**/*.pkl
-llm_predict/profiling/data/**/trained/
-llm_predict/training/per_kernel/data/kernels_labeled.csv
+llm_predict_legacy/profiling/data/**/*.pkl
+llm_predict_legacy/profiling/data/**/trained/
+llm_predict_legacy/training/per_kernel/data/kernels_labeled.csv
 mobile_sys/__pycache__/*.pkl
 __pycache__/
 **/__pycache__/

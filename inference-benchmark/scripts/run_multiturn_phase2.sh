@@ -15,8 +15,8 @@ source scripts/gpu_scheduler.sh
 
 log() { echo -e "\033[0;32m[MT2]\033[0m $1"; }
 
-# Multi-turn profiles to run
-MT_PROFILES="chat-multiturn-short chat-multiturn-medium chat-multiturn-long swebench-multiturn-short swebench-multiturn-medium terminalbench-multiturn-short terminalbench-multiturn-medium osworld-multiturn-short osworld-multiturn-medium"
+# Canonical distributional multi-turn paper profiles.
+MT_PROFILES="chat-multiturn swebench-multiturn terminalbench-multiturn osworld-multiturn"
 
 # Models that need multi-turn runs
 declare -a MODELS=(
@@ -80,6 +80,8 @@ bench_callback() {
                 --backend "$engine" \
                 --profile "$PROFILE" \
                 --concurrency "$CONC" \
+                --mode multi-turn \
+                --max-context-tokens "$max_len" \
                 --num-requests "$NREQ" \
                 --warmup "$WARMUP" \
                 --timeout "$TIMEOUT" \

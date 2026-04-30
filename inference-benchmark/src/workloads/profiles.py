@@ -17,7 +17,16 @@ from typing import Optional
 AGENT_TYPES = ["chat", "coding", "terminal", "computer-use", "stress"]
 TURN_STYLES = ["single-turn", "multi-turn"]
 SERVING_STYLES = ["disaggregated", "not-disaggregated"]
-DATA_SOURCES = ["sharegpt", "swebench", "terminalbench", "osworld", "file", "random", "test"]
+DATA_SOURCES = [
+    "sharegpt",
+    "swebench",
+    "terminalbench",
+    "osworld",
+    "distributional",
+    "file",
+    "random",
+    "test",
+]
 
 
 @dataclass
@@ -55,12 +64,12 @@ PROFILES: dict[str, WorkloadProfile] = {
 
     # Single-turn planning-model call — real SWE-Bench prompts. The JSONL
     # drives actual token lengths; isl_tokens/osl_tokens are metadata caps.
-    "coding-agent": WorkloadProfile(
-        name="coding-agent",
+    "coding-singleturn": WorkloadProfile(
+        name="coding-singleturn",
         isl_tokens=17000,
         osl_tokens=800,
         isl_stddev=0.0,
-        description="Real coding-agent single-turn prompts captured from SWE-Bench-style planning calls",
+        description="Real coding single-turn prompts captured from SWE-Bench-style planning calls",
         dataset="jsonl",
         file_path="data/coding_agent_prompts.jsonl",
         system_prompt="",  # system prompt is embedded in the JSONL
@@ -70,6 +79,67 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="swebench",
+    ),
+
+    # Canonical distributional multi-turn profiles.
+    "swebench-multiturn": WorkloadProfile(
+        name="swebench-multiturn",
+        isl_tokens=131072,
+        osl_tokens=2000,
+        isl_stddev=0.0,
+        description="Distributional synthetic SWE-bench agent sessions sampled from empirical turn/input/output traces",
+        dataset="distributional-multi-turn",
+        file_path="data/distributions/swebench_multiturn.json",
+        system_prompt="",
+        mode="multi-turn",
+        prefix_caching_required=True,
+        min_turns=1,
+        max_turns=320,
+        num_sessions=10,
+        agent_type="coding",
+        turn_style="multi-turn",
+        serving_style="not-disaggregated",
+        data_source="distributional",
+    ),
+
+    "terminalbench-multiturn": WorkloadProfile(
+        name="terminalbench-multiturn",
+        isl_tokens=131072,
+        osl_tokens=2000,
+        isl_stddev=0.0,
+        description="Distributional synthetic TerminalBench CLI-agent sessions sampled from empirical turn/input/output traces",
+        dataset="distributional-multi-turn",
+        file_path="data/distributions/terminalbench_multiturn.json",
+        system_prompt="",
+        mode="multi-turn",
+        prefix_caching_required=True,
+        min_turns=1,
+        max_turns=876,
+        num_sessions=10,
+        agent_type="terminal",
+        turn_style="multi-turn",
+        serving_style="not-disaggregated",
+        data_source="distributional",
+    ),
+
+    "osworld-multiturn": WorkloadProfile(
+        name="osworld-multiturn",
+        isl_tokens=65536,
+        osl_tokens=500,
+        isl_stddev=0.0,
+        description="Distributional synthetic OSWorld computer-use sessions sampled from empirical turn/input/output traces",
+        dataset="distributional-multi-turn",
+        file_path="data/distributions/osworld_multiturn.json",
+        system_prompt="",
+        mode="multi-turn",
+        prefix_caching_required=True,
+        min_turns=1,
+        max_turns=30,
+        num_sessions=10,
+        agent_type="computer-use",
+        turn_style="multi-turn",
+        serving_style="not-disaggregated",
+        data_source="distributional",
     ),
 
     # Multi-turn SWEBench coding agent — real trajectories from harbor/jobs/
@@ -95,6 +165,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="swebench",
+        active=False,
     ),
     "swebench-multiturn-medium": WorkloadProfile(
         name="swebench-multiturn-medium",
@@ -114,6 +185,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="swebench",
+        active=False,
     ),
     "swebench-multiturn-long": WorkloadProfile(
         name="swebench-multiturn-long",
@@ -133,6 +205,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="swebench",
+        active=False,
     ),
     # Multi-turn TerminalBench CLI agent — real trajectories from harbor/jobs/
     # Note: "turns" here are agent steps (tool calls), not logical conversation rounds.
@@ -157,6 +230,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="terminalbench",
+        active=False,
     ),
     "terminalbench-multiturn-medium": WorkloadProfile(
         name="terminalbench-multiturn-medium",
@@ -176,6 +250,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="terminalbench",
+        active=False,
     ),
     "terminalbench-multiturn-long": WorkloadProfile(
         name="terminalbench-multiturn-long",
@@ -195,6 +270,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="terminalbench",
+        active=False,
     ),
     # Multi-turn OSWorld computer-use agent — real WebArena trajectories
     # Note: "turns" here are agent steps (browser actions).
@@ -218,6 +294,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="osworld",
+        active=False,
     ),
     "osworld-multiturn-medium": WorkloadProfile(
         name="osworld-multiturn-medium",
@@ -237,6 +314,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="osworld",
+        active=False,
     ),
     "osworld-multiturn-long": WorkloadProfile(
         name="osworld-multiturn-long",
@@ -256,6 +334,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="osworld",
+        active=False,
     ),
 
     # ===================================================================
@@ -313,6 +392,25 @@ PROFILES: dict[str, WorkloadProfile] = {
 
     # --- Multi-turn ---
 
+    "chat-multiturn": WorkloadProfile(
+        name="chat-multiturn",
+        isl_tokens=32768,
+        osl_tokens=2000,
+        isl_stddev=0.0,
+        description="Distributional synthetic ShareGPT multi-turn chat sampled from empirical turn/input/output summaries",
+        dataset="distributional-multi-turn",
+        file_path="data/distributions/chat_multiturn.json",
+        mode="multi-turn",
+        prefix_caching_required=True,
+        min_turns=1,
+        max_turns=20,
+        num_sessions=10,
+        agent_type="chat",
+        turn_style="multi-turn",
+        serving_style="not-disaggregated",
+        data_source="distributional",
+    ),
+
     "chat-multiturn-short": WorkloadProfile(
         name="chat-multiturn-short",
         isl_tokens=8192,
@@ -329,6 +427,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="sharegpt",
+        active=False,
     ),
     "chat-multiturn-medium": WorkloadProfile(
         name="chat-multiturn-medium",
@@ -346,6 +445,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="sharegpt",
+        active=False,
     ),
     "chat-multiturn-long": WorkloadProfile(
         name="chat-multiturn-long",
@@ -363,6 +463,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="multi-turn",
         serving_style="not-disaggregated",
         data_source="sharegpt",
+        active=False,
     ),
     # ===================================================================
     # Group 3: Synthetic Stress Tests
@@ -382,6 +483,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="random",
+        active=False,
     ),
     "decode-heavy": WorkloadProfile(
         name="decode-heavy",
@@ -397,6 +499,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="random",
+        active=False,
     ),
     "random-1k": WorkloadProfile(
         name="random-1k",
@@ -412,6 +515,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="random",
+        active=False,
     ),
 
     # Fixed-shape profiles for per-kernel/per-op predictor validation.
@@ -434,6 +538,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="random",
+        active=False,
     ),
 
     # ===================================================================
@@ -453,6 +558,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         turn_style="single-turn",
         serving_style="not-disaggregated",
         data_source="test",
+        active=False,
     ),
 }
 
@@ -464,6 +570,7 @@ PROFILES: dict[str, WorkloadProfile] = {
 
 PROFILE_ALIASES: dict[str, str] = {
     "chat-long": "chat-singleturn",
+    "coding-agent": "coding-singleturn",
     "multi-turn-short": "chat-multiturn-short",
 }
 

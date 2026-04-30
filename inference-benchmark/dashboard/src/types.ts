@@ -14,6 +14,9 @@ export interface BenchmarkConfig {
   output?: string;
   ignore_eos?: boolean;
   mode?: string | null;
+  benchmark_schema_version?: number;
+  workload_schema_version?: string;
+  dashboard_scope?: 'current' | 'archive';
 }
 
 export interface BenchmarkSummary {
@@ -89,6 +92,7 @@ export interface BenchmarkResult {
   seriesKey: string;
   filename: string;
   engineVersion?: string;  // "0.19.0" — from _engine_version.txt sidecar or fallback
+  dataScope?: 'current' | 'archive';
   perTurn?: PerTurnEntry[];
   scatterData?: ScatterPoint[];
 }

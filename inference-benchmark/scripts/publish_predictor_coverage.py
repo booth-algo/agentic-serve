@@ -26,13 +26,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
-KERNEL_CSV = REPO_ROOT / "llm_predict" / "training" / "per_kernel" / "data" / "kernels_labeled.csv"
-PEROP_CSV = REPO_ROOT / "llm_predict" / "training" / "per_op" / "data" / "per_op_labeled.csv"
+KERNEL_CSV = REPO_ROOT / "llm_predict_legacy" / "training" / "per_kernel" / "data" / "kernels_labeled.csv"
+PEROP_CSV = REPO_ROOT / "llm_predict_legacy" / "training" / "per_op" / "data" / "per_op_labeled.csv"
 OUTPUT_FILE = HERE.parent / "dashboard" / "public" / "predictor-coverage.json"
 
 R2_ENDPOINT_DEFAULT = "https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com"
 R2_BUCKET_DEFAULT = "agent-bench"
-R2_KEY = "predictor-coverage.json"
+R2_KEY = "json/current/predictor-coverage.json"
 
 # Source-name suffix matching: anything ending in "_prefill" is per-model
 # prefill ncu data; "roofline_sweep" / "misc_sweep" / "flash_sweep" are

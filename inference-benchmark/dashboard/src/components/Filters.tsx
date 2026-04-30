@@ -6,12 +6,15 @@ import {
   DATA_SOURCE_COLORS,
   FALLBACK_META_COLORS,
   profileDisplayName,
-  isBenchmarkProfile,
+  CURRENT_PROFILES,
+  ARCHIVE_PROFILES,
+  type DataScope,
 } from '../profileMeta';
 
 interface FiltersProps {
   filters: FilterState;
   options: FilterOptions;
+  dataScope: DataScope;
   onToggle: (category: keyof FilterState, value: string) => void;
   onClear: () => void;
 }
@@ -28,6 +31,10 @@ const CATEGORY_COLORS: Record<keyof FilterState, string> = {
 const PROFILE_GROUP_ORDER = [
   'Natural chat ST',
   'Natural chat MT',
+  'Agentic coding ST',
+  'Agentic coding MT',
+  'Agentic terminal MT',
+  'Computer-use MT',
   'Agentic coding',
   'Agentic terminal',
   'Computer-use',
@@ -37,10 +44,20 @@ const PROFILE_GROUP_ORDER = [
 
 const PROFILE_ORDER = [
   'chat-singleturn',
+  'coding-singleturn',
+  'chat-multiturn',
+  'swebench-multiturn',
+  'terminalbench-multiturn',
+  'osworld-multiturn',
+  'chat-short',
+  'chat-medium',
+  'fixed-seq128',
+  'prefill-heavy',
+  'decode-heavy',
+  'random-1k',
   'chat-multiturn-short',
   'chat-multiturn-medium',
   'chat-multiturn-long',
-  'coding-agent',
   'swebench-multiturn-short',
   'swebench-multiturn-medium',
   'swebench-multiturn-long',
@@ -50,27 +67,34 @@ const PROFILE_ORDER = [
   'osworld-multiturn-short',
   'osworld-multiturn-medium',
   'osworld-multiturn-long',
-  'prefill-heavy',
-  'decode-heavy',
-  'random-1k',
 ];
 
 const GROUP_LABELS: Record<string, string> = {
   'Natural chat ST': 'Natural chat',
   'Natural chat MT': 'Natural chat, multi-turn',
+  'Agentic coding ST': 'Agentic coding',
+  'Agentic coding MT': 'Agentic coding, multi-turn',
+  'Agentic terminal MT': 'Agentic terminal, multi-turn',
+  'Computer-use MT': 'Computer-use, multi-turn',
   'Agentic coding': 'Agentic coding',
   'Agentic terminal': 'Agentic terminal',
   'Computer-use': 'Computer-use',
   Stress: 'Stress',
+  'Legacy chat ST': 'Legacy chat',
 };
 
 const GROUP_ACCENTS: Record<string, string> = {
   'Natural chat ST': '#3fb950',
   'Natural chat MT': '#3fb950',
+  'Agentic coding ST': '#00bcd4',
+  'Agentic coding MT': '#00bcd4',
+  'Agentic terminal MT': '#f97583',
+  'Computer-use MT': '#ec4899',
   'Agentic coding': '#00bcd4',
   'Agentic terminal': '#f97583',
   'Computer-use': '#ec4899',
   Stress: '#ff9800',
+  'Legacy chat ST': '#8b949e',
 };
 
 interface MetaBadgeProps {
@@ -170,17 +194,17 @@ function turnBadgeLabel(turnStyle: string) {
   return turnStyle === 'multi-turn' ? 'MT' : 'ST';
 }
 
-export function Filters({ filters, options, onToggle, onClear }: FiltersProps) {
+export function Filters({ filters, options, dataScope, onToggle, onClear }: FiltersProps) {
   const [expandedProfile, setExpandedProfile] = useState<string | null>(null);
   const [profileQuery, setProfileQuery] = useState('');
   const hasActiveFilters = Object.values(filters).some((arr) => arr.length > 0);
   const normalizedQuery = profileQuery.trim().toLowerCase();
 
   const allProfiles = useMemo(
-    () => Object.keys(PROFILE_META)
-      .filter(isBenchmarkProfile)
+    () => Array.from(dataScope === 'current' ? CURRENT_PROFILES : ARCHIVE_PROFILES)
+      .filter((profile) => PROFILE_META[profile])
       .sort((a, b) => profileRank(a) - profileRank(b) || a.localeCompare(b)),
-    [],
+    [dataScope],
   );
 
   const profileMatchesFilters = useCallback((profileName: string): boolean => {
@@ -310,7 +334,10 @@ export function Filters({ filters, options, onToggle, onClear }: FiltersProps) {
 
         <div className="relative rounded-md border border-[#30363d] bg-[#0d1117]">
           <div className="pointer-events-none absolute left-0 right-3 top-0 z-10 h-5 rounded-t-md bg-gradient-to-b from-[#0d1117] to-transparent" />
-          <div className="profile-scrollbar max-h-[420px] overflow-y-scroll p-2 pr-3">
+          <div
+            className="profile-scrollbar max-h-[420px] overflow-y-scroll p-2 pr-3"
+            style={{ paddingBottom: '3rem', scrollPaddingBottom: '3rem' }}
+          >
             <div className="grid gap-3 xl:grid-cols-2">
               {profileGroups.map(({ group, profiles }) => {
                 const accent = GROUP_ACCENTS[group] ?? '#8b949e';

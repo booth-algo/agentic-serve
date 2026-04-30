@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Download coding-agent prompts from GCS and save as JSONL.
+Download coding-singleturn prompts from GCS and save as JSONL.
 
 For each of 3 runs:
   1. Download _pllm_full_prompt.md → extract SYSTEM prompt

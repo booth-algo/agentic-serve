@@ -16,7 +16,7 @@ export PYTHON SERVER_PYTHON
 API_KEY="test"
 WARMUP=5
 TIMEOUT=300
-ST_PROFILES="chat-singleturn coding-agent prefill-heavy decode-heavy random-1k"
+ST_PROFILES="chat-singleturn coding-singleturn"
 CONC_SWEEP="200 256 320"
 MAX_SERVER_WAIT=600
 
@@ -87,7 +87,7 @@ bench_callback() {
 # =============================================================================
 log "╔══════════════════════════════════════════════════════════╗"
 log "║  SGLANG HIGH-CONCURRENCY SINGLE-TURN (200/256/320)      ║"
-log "║  4 models × 5 profiles × 3 conc = 60 runs               ║"
+log "║  4 models × 2 profiles × 3 conc = 24 runs               ║"
 log "╚══════════════════════════════════════════════════════════╝"
 
 declare -a tp1_jobs=()

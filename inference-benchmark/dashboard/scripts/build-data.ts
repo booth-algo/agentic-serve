@@ -11,6 +11,7 @@ interface RawResult {
     backend: string;
     profile: string;
     concurrency: number;
+    dashboard_scope?: string;
     [key: string]: unknown;
   };
   summary: Record<string, unknown>;
@@ -55,6 +56,7 @@ interface EnrichedResult {
   seriesKey: string;
   filename: string;
   engineVersion?: string;  // e.g. "0.19.0" — from _engine_version.txt sidecar or fallback
+  dataScope: 'current' | 'archive';
   perTurn?: PerTurnEntry[];
   scatterData?: ScatterPoint[];
 }
@@ -160,6 +162,7 @@ function shortenModel(model: string): string {
 // Normalize them at ingestion so the dashboard only exposes current names.
 const HISTORICAL_PROFILE_ALIASES: Record<string, string> = {
   'chat-long': 'chat-singleturn',
+  'coding-agent': 'coding-singleturn',
   'multi-turn-short': 'chat-multiturn-short',
 };
 
@@ -167,6 +170,13 @@ function normalizeProfile(profile: string): string {
   // Normalize underscores to hyphens, then resolve aliases
   const normalized = profile.replace(/_/g, '-');
   return HISTORICAL_PROFILE_ALIASES[normalized] ?? normalized;
+}
+
+function detectDataScope(raw: RawResult): 'current' | 'archive' {
+  // Anything produced before BENCHMARK_SCHEMA_VERSION=2 did not have the
+  // distributional synthetic run structure. Keep those rows in Archive even
+  // if a historical profile name normalizes to a canonical current name.
+  return raw.config.dashboard_scope === 'current' ? 'current' : 'archive';
 }
 
 function detectBackendFromFilename(filename: string, configBackend: string): string {
@@ -258,6 +268,7 @@ function main() {
       const modelShort = shortenModel(raw.config.model);
       const backend = detectBackendFromFilename(filename, raw.config.backend);
       const profile = normalizeProfile(raw.config.profile || (raw.summary as Record<string, string>).profile || 'unknown');
+      const dataScope = detectDataScope(raw);
 
       // Skip unknown hardware or unknown profiles
       if (hardware === 'Unknown') {
@@ -351,6 +362,7 @@ function main() {
         modelShort,
         seriesKey,
         filename: path.join(relDir, filename),
+        dataScope,
         ...(engineVersion ? { engineVersion } : {}),
         ...(perTurn ? { perTurn } : {}),
         ...(scatterData ? { scatterData } : {}),
@@ -393,7 +405,10 @@ function main() {
   });
 
   // Strip fields not used by the dashboard to reduce payload size
-  const CONFIG_KEEP = new Set(['backend', 'profile', 'concurrency', 'model', 'mode', 'num_requests']);
+  const CONFIG_KEEP = new Set([
+    'backend', 'profile', 'concurrency', 'model', 'mode', 'num_requests',
+    'benchmark_schema_version', 'workload_schema_version', 'dashboard_scope',
+  ]);
   const SUMMARY_KEEP = new Set([
     'concurrency', 'num_requests', 'duration_s', 'successful_requests', 'failed_requests',
     'request_throughput', 'input_token_throughput', 'output_token_throughput', 'total_token_throughput',
@@ -414,7 +429,15 @@ function main() {
     for (const [k, v] of Object.entries(r.summary)) {
       if (SUMMARY_KEEP.has(k)) summary[k] = v;
     }
-    const slim: Record<string, unknown> = { config, summary, hardware: r.hardware, quant: r.quant, modelShort: r.modelShort, seriesKey: r.seriesKey };
+    const slim: Record<string, unknown> = {
+      config,
+      summary,
+      hardware: r.hardware,
+      quant: r.quant,
+      modelShort: r.modelShort,
+      seriesKey: r.seriesKey,
+      dataScope: r.dataScope,
+    };
     if (r.engineVersion) slim.engineVersion = r.engineVersion;
     if ((r as Record<string, unknown>).perTurn) slim.perTurn = (r as Record<string, unknown>).perTurn;
     return slim;

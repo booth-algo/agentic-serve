@@ -46,7 +46,7 @@ function ConcHeatmap({ concData, kind = 'dense' }: { concData: Record<string, Re
   const ALL_PROFILES = [
     'chat-singleturn',
     'chat-multiturn-short', 'chat-multiturn-medium', 'chat-multiturn-long',
-    'coding-agent', 'prefill-heavy', 'decode-heavy',
+    'coding-singleturn', 'prefill-heavy', 'decode-heavy',
     'terminalbench-multiturn-short', 'terminalbench-multiturn-medium',
     'swebench-multiturn-short', 'swebench-multiturn-medium',
     'osworld-multiturn-short', 'osworld-multiturn-medium',

@@ -3,7 +3,7 @@ import type { SweepState } from '../types-sweep';
 
 declare const __BUILD_HASH__: string;
 
-const R2_URL = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/sweep-state.json';
+const R2_URL = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current/sweep-state.json';
 
 export function useSweepState() {
   const [sweepState, setSweepState] = useState<SweepState | null>(null);

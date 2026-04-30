@@ -31,7 +31,7 @@ log "sentry tick start"
 # --- Gather context ---
 
 # Remote sweep-state.json (the dashboard's live source of truth).
-curl -fsSL --max-time 15 "https://pub-38e30ed030784867856634f1625c7130.r2.dev/sweep-state.json" \
+curl -fsSL --max-time 15 "https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current/sweep-state.json" \
     -o "$TMP_DIR/sweep-state.json" 2>>"$LOG" \
     || { log "WARN: R2 fetch failed; falling back to local"; cp "$REPO_ROOT/inference-benchmark/dashboard/public/sweep-state.json" "$TMP_DIR/sweep-state.json" 2>/dev/null || true; }
 

@@ -30,8 +30,6 @@ import time
 import os
 from pathlib import Path
 
-import aiohttp
-
 from .metrics import (
     aggregate,
     aggregate_per_turn,
@@ -42,7 +40,11 @@ from .metrics import (
 from ..workloads.profiles import get_profile
 from ..workloads.dataset import make_dataset
 from ..workloads.arrival import make_arrival_times
-from ..engines import get_backend, SUPPORTED_BACKENDS
+
+
+SUPPORTED_BACKENDS = ["openai", "vllm", "sglang", "trtllm"]
+BENCHMARK_SCHEMA_VERSION = 2
+WORKLOAD_SCHEMA_VERSION = "distributional-synthetic-v1"
 
 
 async def run_benchmark(
@@ -59,13 +61,17 @@ async def run_benchmark(
     seed: int = 42,
     timeout: int = 120,
     ignore_eos: bool = False,
+    max_context_tokens: int | None = None,
 ):
     """
     Run a benchmark and return (results, duration).
     """
+    import aiohttp
+    from ..engines import get_backend
+
     backend = get_backend(backend_name)
     profile = get_profile(profile_name)
-    dataset = make_dataset(profile)
+    dataset = make_dataset(profile, max_context_tokens=max_context_tokens)
     arrival_times = make_arrival_times(
         pattern=arrival_pattern,
         num_requests=num_requests,
@@ -125,6 +131,7 @@ async def run_multi_turn_benchmark(
     warmup_requests: int = 3,
     timeout: int = 120,
     ignore_eos: bool = False,
+    max_context_tokens: int | None = None,
 ):
     """
     Run a multi-turn benchmark with interleaved round-robin scheduling.
@@ -136,13 +143,20 @@ async def run_multi_turn_benchmark(
     Returns (results_by_turn, duration) where results_by_turn is a dict
     mapping turn_index → list[RequestResult].
     """
-    from ..workloads.dataset import ShareGPTMultiTurnDataset, TrajectoryMultiTurnDataset
+    import aiohttp
+    from ..engines import get_backend
+
+    from ..workloads.dataset import (
+        DistributionalMultiTurnDataset,
+        ShareGPTMultiTurnDataset,
+        TrajectoryMultiTurnDataset,
+    )
 
     backend = get_backend(backend_name)
     profile = get_profile(profile_name)
-    dataset = make_dataset(profile)
+    dataset = make_dataset(profile, max_context_tokens=max_context_tokens)
 
-    if not isinstance(dataset, (ShareGPTMultiTurnDataset, TrajectoryMultiTurnDataset)):
+    if not isinstance(dataset, (DistributionalMultiTurnDataset, ShareGPTMultiTurnDataset, TrajectoryMultiTurnDataset)):
         raise ValueError(f"Profile '{profile_name}' does not use a multi-turn dataset")
 
     sessions = dataset.sessions
@@ -283,12 +297,16 @@ def get_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--output", default="results/latest.json")
+    parser.add_argument("--max-context-tokens", type=int, default=None,
+                        help="Optional cap for distributional multi-turn synthetic prompt context")
     parser.add_argument("--ignore-eos", action="store_true",
                         help="Pass ignore_eos=true to vLLM (needed for FP8 models with random token workloads)")
     parser.add_argument("--mode", choices=["stress-test", "single-turn", "multi-turn"],
                         help="Benchmark mode (sets profile defaults and required flags). "
                              "Use --profile for a specific profile within a mode.")
     parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
+    parser.add_argument("--include-inactive", action="store_true",
+                        help="With --list-profiles, include legacy/inactive profiles")
     parser.add_argument("--agent-type", type=str, default=None, help="Filter profiles by agent type")
     parser.add_argument("--turn-style", type=str, default=None, help="Filter profiles by turn style")
     parser.add_argument("--serving-style", type=str, default=None, help="Filter profiles by serving style")
@@ -306,12 +324,14 @@ if __name__ == "__main__":
             turn_style=args.turn_style,
             serving_style=args.serving_style,
             data_source=args.data_source,
+            include_inactive=args.include_inactive,
         )
         print(f"\n{'Name':<30} {'Agent Type':<18} {'Turn Style':<14} {'Serving':<20} {'Data Source':<12} {'ISL':<6} {'OSL':<6}")
         print("-" * 110)
         for name, p in sorted(filtered.items()):
             print(f"{name:<30} {p.agent_type:<18} {p.turn_style:<14} {p.serving_style:<20} {p.data_source:<12} {p.isl_tokens:<6} {p.osl_tokens:<6}")
-        print(f"\n{len(filtered)} profiles shown (of {len(PROFILES)} total)")
+        inactive_note = " including inactive" if args.include_inactive else ""
+        print(f"\n{len(filtered)} profiles shown{inactive_note} (of {len(PROFILES)} total)")
         if any([args.agent_type, args.turn_style, args.serving_style, args.data_source]):
             active = []
             if args.agent_type: active.append(f"agent_type={args.agent_type}")
@@ -331,7 +351,7 @@ if __name__ == "__main__":
         if args.mode == "multi-turn":
             print("NOTE: multi-turn mode requires server launched with --enable-prefix-caching (vLLM)")
             if args.profile == "chat-singleturn":  # default — override for multi-turn
-                args.profile = "chat-multiturn-short"
+                args.profile = "chat-multiturn"
         if args.mode == "stress-test":
             if not args.ignore_eos:
                 print("NOTE: stress-test mode auto-enables --ignore-eos (required for FP8 models)")
@@ -342,27 +362,36 @@ if __name__ == "__main__":
             print("NOTE: single-turn mode requires server launched with --enable-prefix-caching (vLLM)")
             print("      or radix cache (SGLang default). See scripts/launch_server.sh")
 
-    config = {**vars(args), "mode": args.mode}
     profile = get_profile(args.profile)
+    profile_name = profile.name
+    config = {
+        **vars(args),
+        "profile": profile_name,
+        "mode": args.mode or profile.mode,
+        "benchmark_schema_version": BENCHMARK_SCHEMA_VERSION,
+        "workload_schema_version": WORKLOAD_SCHEMA_VERSION,
+        "dashboard_scope": "current" if profile.active else "archive",
+    }
 
     if profile.mode == "multi-turn":
         all_results, results_by_turn, duration = asyncio.run(run_multi_turn_benchmark(
             url=args.url,
             model=args.model,
-            profile_name=args.profile,
+            profile_name=profile_name,
             concurrency=args.concurrency,
             backend_name=args.backend,
             api_key=args.api_key,
             warmup_requests=args.warmup,
             timeout=args.timeout,
             ignore_eos=args.ignore_eos,
+            max_context_tokens=args.max_context_tokens,
         ))
 
         summary = aggregate(
             results=[r for r in all_results if r is not None],
             duration_s=duration,
             model=args.model,
-            profile=args.profile,
+            profile=profile_name,
             concurrency=args.concurrency,
         )
 
@@ -386,7 +415,7 @@ if __name__ == "__main__":
         results, duration = asyncio.run(run_benchmark(
             url=args.url,
             model=args.model,
-            profile_name=args.profile,
+            profile_name=profile_name,
             concurrency=args.concurrency,
             num_requests=args.num_requests,
             backend_name=args.backend,
@@ -397,13 +426,14 @@ if __name__ == "__main__":
             seed=args.seed,
             timeout=args.timeout,
             ignore_eos=args.ignore_eos,
+            max_context_tokens=args.max_context_tokens,
         ))
 
         summary = aggregate(
             results=[r for r in results if r is not None],
             duration_s=duration,
             model=args.model,
-            profile=args.profile,
+            profile=profile_name,
             concurrency=args.concurrency,
         )
 

@@ -8,7 +8,7 @@ API_KEY="test"
 WARMUP=5
 TIMEOUT=300
 CONC_SWEEP="1 10 20 40 80 120 160 200 256 320"
-PROFILES="chat-singleturn coding-agent"
+PROFILES="chat-singleturn coding-singleturn"
 MAX_SERVER_WAIT=1200  # 20 min for large models
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"

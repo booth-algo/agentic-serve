@@ -16,9 +16,11 @@ server_url: "http://localhost:8000/v1/chat/completions"
 # Profiles to sweep
 workload_profiles:
   - chat-singleturn
-  - coding-agent
-  - prefill-heavy
-  - decode-heavy
+  - coding-singleturn
+  - chat-multiturn
+  - swebench-multiturn
+  - terminalbench-multiturn
+  - osworld-multiturn
 
 arrival_pattern: steady  # steady | poisson | ramp
 
