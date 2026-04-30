@@ -17,6 +17,10 @@ LOG="/tmp/bench_orchestrator.log"
 EP="${R2_ENDPOINT:-https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com}"
 BUCKET="${R2_BUCKET:-agent-bench}"
 PROFILE="${AWS_PROFILE:-r2}"
+# Raw benchmark outputs are namespaced so the new distributional/current runs
+# cannot overwrite historical flat-prefix artifacts in R2. Override only for
+# one-off maintenance, e.g. RESULT_SCOPE=archive/foo.
+RESULT_SCOPE="${RESULT_SCOPE:-current}"
 
 mkdir -p "$STATE_DIR"
 
@@ -88,9 +92,13 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
     JID=$(job_id "$HOST" "$SHORT" "$TP" "$MODE" "$BACKEND")
     STATUS=$(read_status "$JID")
     PREFIX=$(host_prefix "$HOST")
-    OUT_DIR_REMOTE="/tmp/results/${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
-    OUT_DIR_LOCAL="/tmp/bench_${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
-    R2_DIR="${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
+    RESULT_DIR_NAME="${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
+    OUT_DIR_REMOTE="/tmp/results/${RESULT_SCOPE}/${RESULT_DIR_NAME}"
+    # Fallback for jobs launched before RESULT_SCOPE existed; completed jobs
+    # still upload into the current R2 namespace to avoid legacy collisions.
+    LEGACY_OUT_DIR_REMOTE="/tmp/results/${RESULT_DIR_NAME}"
+    OUT_DIR_LOCAL="/tmp/bench_${RESULT_SCOPE//\//_}_${RESULT_DIR_NAME}"
+    R2_DIR="${RESULT_SCOPE}/${RESULT_DIR_NAME}"
 
     case "$STATUS" in
         done|skipped|failed)
@@ -121,14 +129,15 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             # loop must close stdin (`< /dev/null`), otherwise they consume
             # the jobs file and iteration ends early — 2080ti rows were
             # silently skipped on any tick that also dispatched a 3090 job.
-            COUNT=$(ssh "$HOST" "ls $OUT_DIR_REMOTE 2>/dev/null | wc -l" < /dev/null)
-            if [[ "$COUNT" -gt 0 ]]; then
+            REMOTE_SYNC_DIR=$(ssh "$HOST" "if [ -d '$OUT_DIR_REMOTE' ] && [ \$(ls -1 '$OUT_DIR_REMOTE' 2>/dev/null | wc -l) -gt 0 ]; then echo '$OUT_DIR_REMOTE'; elif [ -d '$LEGACY_OUT_DIR_REMOTE' ] && [ \$(ls -1 '$LEGACY_OUT_DIR_REMOTE' 2>/dev/null | wc -l) -gt 0 ]; then echo '$LEGACY_OUT_DIR_REMOTE'; fi" < /dev/null)
+            if [[ -n "$REMOTE_SYNC_DIR" ]]; then
+                COUNT=$(ssh "$HOST" "ls '$REMOTE_SYNC_DIR' 2>/dev/null | wc -l" < /dev/null)
                 mkdir -p "$OUT_DIR_LOCAL"
-                rsync -az "$HOST:$OUT_DIR_REMOTE/" "$OUT_DIR_LOCAL/" < /dev/null >> "$LOG" 2>&1
+                rsync -az "$HOST:$REMOTE_SYNC_DIR/" "$OUT_DIR_LOCAL/" < /dev/null >> "$LOG" 2>&1
                 aws --profile "$PROFILE" --endpoint-url "$EP" s3 sync \
                     "$OUT_DIR_LOCAL/" "s3://$BUCKET/results/$R2_DIR/" < /dev/null >> "$LOG" 2>&1
                 write_status "$JID" done
-                log "$JID: DONE ($COUNT files uploaded)"
+                log "$JID: DONE ($COUNT files uploaded to results/$R2_DIR)"
             else
                 # Widen detection to include vLLM's KV-cache budget failure
                 # ("Available KV cache memory: -...", "No available memory for
