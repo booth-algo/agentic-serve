@@ -24,6 +24,18 @@ class RequestResult:
     output_tokens: int = 0
     error: Optional[str] = None
     turn_index: Optional[int] = None      # multi-turn: which turn (0-indexed)
+    session_id: Optional[int] = None      # multi-turn: conversation/session id
+
+    # Multi-turn cache estimate fields. These are inferred from exact
+    # per-session prompt-token deltas observed by the benchmark runner. They are
+    # not engine-reported prefix-cache hits, but they are much better than
+    # reconstructing cache state from per-turn averages after the fact.
+    previous_context_tokens: Optional[int] = None
+    total_context_tokens: Optional[int] = None
+    new_prefill_tokens: Optional[int] = None
+    cached_context_tokens: Optional[int] = None
+    cache_hit_rate: Optional[float] = None
+    cache_estimate_source: Optional[str] = None
 
     @property
     def tpot(self) -> Optional[float]:
@@ -39,6 +51,39 @@ class RequestResult:
             decode_time = self.e2el - self.ttft
             return decode_time / (self.output_tokens - 1)
         return None
+
+
+def annotate_multi_turn_cache_estimate(
+    result: RequestResult,
+    session_id: int,
+    turn_index: int,
+    previous_context_tokens: int,
+) -> RequestResult:
+    """Attach per-session cache-estimate metadata to a multi-turn result.
+
+    The serving API does not expose actual prefix-cache hit/miss telemetry.
+    Instead, record the exact prompt-token delta observed for each session:
+    previous prompt tokens are the reusable prefix estimate, and the current
+    prompt-token delta is the newly-prefilled estimate.
+    """
+    result.session_id = session_id
+    result.turn_index = turn_index
+    result.previous_context_tokens = max(0, int(previous_context_tokens or 0))
+
+    if not result.success or result.input_tokens <= 0:
+        result.cache_estimate_source = "unavailable"
+        return result
+
+    total_context = int(result.input_tokens)
+    cached_context = min(result.previous_context_tokens, total_context)
+    new_prefill = max(0, total_context - cached_context)
+
+    result.total_context_tokens = total_context
+    result.cached_context_tokens = cached_context
+    result.new_prefill_tokens = new_prefill
+    result.cache_hit_rate = cached_context / total_context if total_context > 0 else 0.0
+    result.cache_estimate_source = "previous_prompt_tokens"
+    return result
 
 
 @dataclass
@@ -210,6 +255,14 @@ class TurnSummary:
     median_e2el_ms: float = 0.0
     avg_input_tokens: float = 0.0
     avg_output_tokens: float = 0.0
+    median_input_tokens: float = 0.0
+    median_output_tokens: float = 0.0
+    avg_new_prefill_tokens: float = 0.0
+    median_new_prefill_tokens: float = 0.0
+    avg_cached_context_tokens: float = 0.0
+    median_cached_context_tokens: float = 0.0
+    avg_cache_hit_rate: float = 0.0
+    median_cache_hit_rate: float = 0.0
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()
@@ -231,6 +284,9 @@ def aggregate_per_turn(results_by_turn: dict[int, list]) -> list[TurnSummary]:
         e2els = []
         input_toks = []
         output_toks = []
+        new_prefill_toks = []
+        cached_context_toks = []
+        cache_hit_rates = []
 
         for r in results:
             if r.success:
@@ -243,6 +299,12 @@ def aggregate_per_turn(results_by_turn: dict[int, list]) -> list[TurnSummary]:
                     e2els.append(r.e2el * 1000)
                 input_toks.append(r.input_tokens)
                 output_toks.append(r.output_tokens)
+                if r.new_prefill_tokens is not None:
+                    new_prefill_toks.append(r.new_prefill_tokens)
+                if r.cached_context_tokens is not None:
+                    cached_context_toks.append(r.cached_context_tokens)
+                if r.cache_hit_rate is not None:
+                    cache_hit_rates.append(r.cache_hit_rate)
 
         if ttfts:
             ts.mean_ttft_ms = statistics.mean(ttfts)
@@ -257,8 +319,19 @@ def aggregate_per_turn(results_by_turn: dict[int, list]) -> list[TurnSummary]:
             ts.median_e2el_ms = statistics.median(e2els)
         if input_toks:
             ts.avg_input_tokens = statistics.mean(input_toks)
+            ts.median_input_tokens = statistics.median(input_toks)
         if output_toks:
             ts.avg_output_tokens = statistics.mean(output_toks)
+            ts.median_output_tokens = statistics.median(output_toks)
+        if new_prefill_toks:
+            ts.avg_new_prefill_tokens = statistics.mean(new_prefill_toks)
+            ts.median_new_prefill_tokens = statistics.median(new_prefill_toks)
+        if cached_context_toks:
+            ts.avg_cached_context_tokens = statistics.mean(cached_context_toks)
+            ts.median_cached_context_tokens = statistics.median(cached_context_toks)
+        if cache_hit_rates:
+            ts.avg_cache_hit_rate = statistics.mean(cache_hit_rates)
+            ts.median_cache_hit_rate = statistics.median(cache_hit_rates)
 
         summaries.append(ts)
     return summaries
@@ -267,16 +340,20 @@ def aggregate_per_turn(results_by_turn: dict[int, list]) -> list[TurnSummary]:
 def print_multi_turn_summary(turn_summaries: list, overall: BenchmarkSummary) -> None:
     """Print per-turn metrics table for multi-turn benchmarks."""
     print_summary(overall)
-    print(f"{'=' * 72}")
+    print(f"{'=' * 98}")
     print(f" Per-Turn Breakdown (prefix cache effect visible in TTFT trend)")
-    print(f"{'=' * 72}")
-    print(f" {'Turn':>4}  {'Reqs':>5}  {'Avg ISL':>8}  {'TTFT p50':>9}  {'TTFT p90':>9}  {'TPOT p50':>9}  {'E2EL p50':>9}")
-    print(f" {'─' * 4}  {'─' * 5}  {'─' * 8}  {'─' * 9}  {'─' * 9}  {'─' * 9}  {'─' * 9}")
+    print(f"{'=' * 98}")
+    print(f" {'Turn':>4}  {'Reqs':>5}  {'Avg ISL':>8}  {'New p50':>8}  {'Cache p50':>9}  "
+          f"{'Hit p50':>7}  {'TTFT p50':>9}  {'TTFT p90':>9}  {'TPOT p50':>9}  {'E2EL p50':>9}")
+    print(f" {'─' * 4}  {'─' * 5}  {'─' * 8}  {'─' * 8}  {'─' * 9}  {'─' * 7}  "
+          f"{'─' * 9}  {'─' * 9}  {'─' * 9}  {'─' * 9}")
     for ts in turn_summaries:
         print(f" {ts.turn_index + 1:>4}  {ts.successful:>5}  {ts.avg_input_tokens:>8.0f}  "
+              f"{ts.median_new_prefill_tokens:>8.0f}  {ts.median_cached_context_tokens:>9.0f}  "
+              f"{ts.median_cache_hit_rate * 100:>6.0f}%  "
               f"{ts.median_ttft_ms:>8.1f}ms  {ts.p90_ttft_ms:>8.1f}ms  "
               f"{ts.median_tpot_ms:>8.1f}ms  {ts.median_e2el_ms:>8.1f}ms")
-    print(f"{'=' * 72}\n")
+    print(f"{'=' * 98}\n")
 
 
 def print_summary(s: BenchmarkSummary) -> None:

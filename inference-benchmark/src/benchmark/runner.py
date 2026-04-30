@@ -32,7 +32,13 @@ from pathlib import Path
 
 import aiohttp
 
-from .metrics import aggregate, aggregate_per_turn, print_summary, print_multi_turn_summary
+from .metrics import (
+    aggregate,
+    aggregate_per_turn,
+    annotate_multi_turn_cache_estimate,
+    print_summary,
+    print_multi_turn_summary,
+)
 from ..workloads.profiles import get_profile
 from ..workloads.dataset import make_dataset
 from ..workloads.arrival import make_arrival_times
@@ -159,9 +165,10 @@ async def run_multi_turn_benchmark(
         semaphore = asyncio.Semaphore(concurrency)
         # results_by_turn[turn_idx] = list of RequestResult
         results_by_turn: dict[int, list] = {i: [] for i in range(max_turns)}
+        previous_context_by_session: dict[int, int] = {}
         benchmark_start = time.perf_counter()
 
-        async def dispatch(session_id: int, request, t_idx: int):
+        async def dispatch(session_id: int, request, t_idx: int, previous_context_tokens: int):
             async with semaphore:
                 result = await backend.send_request(
                     session=session_http,
@@ -172,7 +179,13 @@ async def run_multi_turn_benchmark(
                     api_key=api_key,
                     ignore_eos=ignore_eos,
                 )
-            return t_idx, result
+            annotate_multi_turn_cache_estimate(
+                result,
+                session_id=session_id,
+                turn_index=t_idx,
+                previous_context_tokens=previous_context_tokens,
+            )
+            return session_id, t_idx, result
 
         # Interleaved round-robin: process all sessions' turn N before turn N+1
         for turn_idx in range(max_turns):
@@ -186,11 +199,21 @@ async def run_multi_turn_benchmark(
 
             print(f"  Turn {turn_idx + 1}/{max_turns}: dispatching {len(turn_requests)} requests...")
 
-            tasks = [dispatch(sid, req, turn_idx) for sid, req in turn_requests]
+            tasks = [
+                dispatch(
+                    sid,
+                    req,
+                    turn_idx,
+                    previous_context_by_session.get(sid, 0),
+                )
+                for sid, req in turn_requests
+            ]
             completed = await asyncio.gather(*tasks)
 
-            for t_idx, result in completed:
+            for sid, t_idx, result in completed:
                 results_by_turn[t_idx].append(result)
+                if result.success and result.input_tokens > 0:
+                    previous_context_by_session[sid] = int(result.input_tokens)
 
     benchmark_duration = time.perf_counter() - benchmark_start
 
@@ -198,7 +221,8 @@ async def run_multi_turn_benchmark(
     all_results = []
     for turn_idx in sorted(results_by_turn.keys()):
         for r in results_by_turn[turn_idx]:
-            r.turn_index = turn_idx
+            if r.turn_index is None:
+                r.turn_index = turn_idx
             all_results.append(r)
 
     return all_results, results_by_turn, benchmark_duration
@@ -220,7 +244,20 @@ def save_results(summary, results, output_path: str, config: dict):
                 "input_tokens": r.input_tokens,
                 "output_tokens": r.output_tokens,
                 "error": r.error,
+                **({"session_id": r.session_id} if r.session_id is not None else {}),
                 **({"turn_index": r.turn_index} if r.turn_index is not None else {}),
+                **({"previous_context_tokens": r.previous_context_tokens}
+                   if r.previous_context_tokens is not None else {}),
+                **({"total_context_tokens": r.total_context_tokens}
+                   if r.total_context_tokens is not None else {}),
+                **({"new_prefill_tokens": r.new_prefill_tokens}
+                   if r.new_prefill_tokens is not None else {}),
+                **({"cached_context_tokens": r.cached_context_tokens}
+                   if r.cached_context_tokens is not None else {}),
+                **({"cache_hit_rate": round(r.cache_hit_rate, 4)}
+                   if r.cache_hit_rate is not None else {}),
+                **({"cache_estimate_source": r.cache_estimate_source}
+                   if r.cache_estimate_source is not None else {}),
             }
             for r in results if r is not None
         ],
