@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useData } from './hooks/useData';
 import { useSweepState } from './hooks/useSweepState';
 import { Layout } from './components/Layout';
@@ -13,11 +13,21 @@ import { DataTable } from './components/DataTable';
 import { CoveragePage } from './components/CoveragePage';
 import { GemmPage } from './components/GemmPage';
 import type { TabId } from './types';
+import type { DataScope } from './profileMeta';
 import './index.css';
 
 type PageId = 'benchmark' | 'coverage' | 'predictor';
+const DATA_SCOPE_STORAGE_KEY = 'inference-dashboard-data-scope';
+
+function initialDataScope(): DataScope {
+  const params = new URLSearchParams(window.location.search);
+  const urlScope = params.get('scope');
+  if (urlScope === 'archive' || urlScope === 'current') return urlScope;
+  return window.localStorage.getItem(DATA_SCOPE_STORAGE_KEY) === 'archive' ? 'archive' : 'current';
+}
 
 function App() {
+  const [dataScope, setDataScopeState] = useState<DataScope>(initialDataScope);
   const {
     allData,
     data,
@@ -28,15 +38,36 @@ function App() {
     filterOptions,
     toggleFilter,
     clearFilters,
-  } = useData();
+    clearWorkloadFilters,
+  } = useData(dataScope);
   const { sweepState } = useSweepState();
 
   const [activePage, setActivePage] = useState<PageId>('benchmark');
   const [activeTab, setActiveTab] = useState<TabId>('latency');
 
+  const setDataScope = useCallback((scope: DataScope) => {
+    setDataScopeState(scope);
+    window.localStorage.setItem(DATA_SCOPE_STORAGE_KEY, scope);
+    const url = new URL(window.location.href);
+    if (scope === 'archive') {
+      url.searchParams.set('scope', 'archive');
+    } else {
+      url.searchParams.delete('scope');
+    }
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    clearWorkloadFilters();
+  }, [clearWorkloadFilters]);
+
   if (error) {
     return (
-      <Layout totalRuns={0} loading={false} activePage={activePage} onPageChange={setActivePage}>
+      <Layout
+        totalRuns={0}
+        loading={false}
+        activePage={activePage}
+        onPageChange={setActivePage}
+        dataScope={dataScope}
+        onDataScopeChange={setDataScope}
+      >
         <div className="flex h-64 items-center justify-center rounded-lg border border-[#f97583]/30 bg-[#f97583]/10 text-[#f97583]">
           <div className="text-center">
             <div className="mb-2 text-lg font-semibold">Failed to load data</div>
@@ -51,14 +82,22 @@ function App() {
   }
 
   return (
-    <Layout totalRuns={allData.length} loading={loading} activePage={activePage} onPageChange={setActivePage}>
+    <Layout
+      totalRuns={allData.length}
+      loading={loading}
+      activePage={activePage}
+      onPageChange={setActivePage}
+      dataScope={dataScope}
+      onDataScopeChange={setDataScope}
+    >
       {activePage === 'predictor' ? (
-        <GemmPage />
+        <GemmPage dataScope={dataScope} />
       ) : activePage === 'coverage' ? (
         <CoveragePage
           allData={allData}
           sweepState={sweepState}
           loading={loading}
+          dataScope={dataScope}
         />
       ) : loading ? (
         <div className="flex h-64 items-center justify-center">
@@ -70,6 +109,7 @@ function App() {
           <Filters
             filters={filters}
             options={filterOptions}
+            dataScope={dataScope}
             onToggle={toggleFilter}
             onClear={clearFilters}
           />

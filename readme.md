@@ -44,11 +44,12 @@ AgentServe-Bench provides:
 
 | Tier | Profile | ISL | OSL | Source |
 |------|---------|----:|----:|--------|
-| Agentic | coding-agent | 17K | 800 | SWE-Bench |
-| Agentic | swebench-multiturn | 65K | 2K | SWE-Bench |
-| Agentic | terminalbench-multiturn | 65K | 2K | TerminalBench |
-| Chat | chat-short / medium / long | 500–8K | 300–2K | ShareGPT |
-| Synthetic | decode-heavy / prefill-heavy | 256–8K | 256–4K | Random |
+| Chat | chat-singleturn | sampled | sampled | ShareGPT |
+| Agentic | coding-singleturn | 17K | 800 | SWE-Bench |
+| Chat | chat-multiturn | sampled | sampled | ShareGPT |
+| Agentic | swebench-multiturn | sampled | sampled | SWE-Bench |
+| Agentic | terminalbench-multiturn | sampled | sampled | TerminalBench |
+| Agentic | osworld-multiturn | sampled | sampled | OSWorld |
 
 ## Repository Structure
 
@@ -59,19 +60,16 @@ agentic-serve/
 │   ├── results/             # A100 + H100 benchmark JSONs
 │   ├── dashboard/           # React dashboard (GitHub Pages)
 │   └── configs/             # Benchmark configurations
-├── llm_predict/             # GPU performance models and predictors
+├── llm_predict/             # Current cache-aware serving predictor
+│   ├── kernels/             # GEMM, flash attention, elementwise predictors
+│   ├── training/            # Current calibration/training scripts
+│   ├── configs/             # GPU and model configs
+│   └── data/                # Current predictor artifacts
+├── llm_predict_legacy/      # Legacy GPU performance models and predictors
 │   ├── models/              # Hardware, software, serving, and cost models
 │   ├── predictors/          # Per-kernel and per-op predictor runtimes
 │   ├── training/            # Predictor labeling, training, and validation
 │   └── profiling/           # Predictor artifacts and profiling data
-├── llm_predict_2/           # Current serving predictor experiments
-├── experiment/              # Historical profiling scripts + ncu data
-│   ├── ncu_*.csv            # Kernel-level hardware counter data
-│   ├── reprofile_v4.py      # CUDA events profiler
-│   └── validate_model.py    # Historical model validation
-├── device_configs/          # GPU hardware specifications
-├── model_configs/           # LLM architecture configs
-└── search/                  # TP/DP parallelism search
 ```
 
 ## Quick Start
@@ -89,20 +87,11 @@ python -m src.benchmark.runner \
   --url http://localhost:8000/v1/chat/completions \
   --model meta-llama/Llama-3.1-8B-Instruct \
   --backend vllm \
-  --profile coding-agent \
+  --profile coding-singleturn \
   --concurrency 40 \
   --num-requests 50 \
   --api-key test \
   --output results/my_run.json
-```
-
-### Run ncu profiling
-
-```bash
-# Requires RmProfilingAdminOnly=0 (see experiment/ncu_setup.md)
-ncu --set full --target-processes all \
-  -o profile_output \
-  python experiment/reprofile_v4.py cuda:0 /path/to/model 1 512
 ```
 
 ## Citation

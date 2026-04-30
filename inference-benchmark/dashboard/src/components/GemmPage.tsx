@@ -1,5 +1,14 @@
 import { Fragment, useState, useEffect } from 'react';
-import { profileDisplayName } from '../profileMeta';
+import {
+  type DataScope,
+  isProfileInScope,
+  normalizeProfileName,
+  profileDisplayName,
+} from '../profileMeta';
+
+declare const __BUILD_HASH__: string;
+
+const R2_JSON_BASE = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current';
 
 interface GemmPoint {
   M: number; N: number; K: number;
@@ -27,14 +36,14 @@ function mapeColor(v: number): string {
   return '#f85149';
 }
 
-export function GemmPage() {
+export function GemmPage({ dataScope }: { dataScope: DataScope }) {
   const [data, setData] = useState<GemmEval | null>(null);
   const [gpu, setGpu] = useState('H100');
   const [servingGpu, setServingGpu] = useState('H100');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('gemm-eval.json')
+    fetch(`${R2_JSON_BASE}/gemm-eval.json?v=${__BUILD_HASH__}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
@@ -201,7 +210,7 @@ export function GemmPage() {
           <div>
             <h3 className="text-base font-semibold text-[#e6edf3]">Serving Latency Predictions</h3>
             <p className="text-xs text-[#484f58] mt-1">
-              High-concurrency predictions vs measured benchmark results. Legacy chat-short/chat-medium/chat-long are excluded.
+              High-concurrency predictions vs measured benchmark results. {dataScope === 'current' ? 'Showing the canonical paper profiles.' : 'Showing archived legacy and stress profiles.'}
               Multi-turn TTFT reflects cache-aware serving behavior, not cumulative full-prefill latency.
             </p>
           </div>
@@ -221,7 +230,7 @@ export function GemmPage() {
             ))}
           </div>
         </div>
-        <ServingTable gpu={servingGpu} />
+        <ServingTable gpu={servingGpu} dataScope={dataScope} />
       </div>
     </div>
   );
@@ -238,6 +247,8 @@ function SummaryCard({ label, value, color }: { label: string; value: string; co
 
 interface ServingRow {
   model: string; backend?: string; profile: string; concurrency?: number; isl: number; osl: number;
+  data_scope?: DataScope;
+  dataScope?: DataScope;
   calibration_status?: string;
   ttft_validation_scope?: string;
   total_context_tokens?: number;
@@ -316,7 +327,14 @@ const SERVING_METRICS: ServingMetric[] = [
 
 const SERVING_PROFILE_ORDER = [
   'chat-singleturn',
-  'coding-agent',
+  'coding-singleturn',
+  'chat-multiturn',
+  'swebench-multiturn',
+  'terminalbench-multiturn',
+  'osworld-multiturn',
+  'chat-short',
+  'chat-medium',
+  'fixed-seq128',
   'prefill-heavy',
   'decode-heavy',
   'random-1k',
@@ -335,34 +353,38 @@ const SERVING_PROFILE_ORDER = [
 ];
 
 function servingProfileRank(profile: string): number {
-  const index = SERVING_PROFILE_ORDER.indexOf(profile);
+  const index = SERVING_PROFILE_ORDER.indexOf(normalizeProfileName(profile));
   if (index >= 0) return index;
   if (profile.includes('multiturn')) return 1000;
   return 500;
 }
 
-function ServingTable({ gpu }: { gpu: string }) {
+function ServingTable({ gpu, dataScope }: { gpu: string; dataScope: DataScope }) {
   const [rows, setRows] = useState<ServingRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('serving-predictions.json')
+    setLoading(true);
+    fetch(`${R2_JSON_BASE}/serving-predictions.json?v=${__BUILD_HASH__}`)
       .then(r => r.json())
       .then((d: Record<string, ServingRow[]>) => {
-        setRows(d[gpu] ?? []);
+        const scopedRows = (d[gpu] ?? [])
+          .map(row => ({ ...row, profile: normalizeProfileName(row.profile) }))
+          .filter(row => (row.data_scope ?? row.dataScope ?? 'archive') === dataScope && isProfileInScope(row.profile, dataScope));
+        setRows(scopedRows);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [gpu]);
+  }, [dataScope, gpu]);
 
   if (loading) return <div className="text-[#484f58] text-sm py-4 text-center">Loading...</div>;
 
   if (rows.length === 0) {
     return (
       <div className="py-8 text-center">
-        <div className="text-[#484f58] text-sm mb-2">No serving predictions available yet</div>
+        <div className="text-[#484f58] text-sm mb-2">No {dataScope} serving predictions available yet</div>
         <div className="text-[#30363d] text-xs">
-          Run <code className="bg-[#21262d] px-1 rounded">python3 -m llm_predict_2.validate</code> to generate predictions
+          Run <code className="bg-[#21262d] px-1 rounded">python3 -m llm_predict.validate</code> to generate predictions
         </div>
       </div>
     );

@@ -87,7 +87,7 @@ class JsonlDataset(BaseDataset):
 
     Each line: {"system": "...", "user": "...", "osl_tokens": N}
     Returns per-request max_tokens from osl_tokens field.
-    Used for coding-agent profile with real SWEBench PLLM prompts.
+    Used for the coding-singleturn profile with real SWE-bench PLLM prompts.
     """
 
     def __init__(self, filepath: str, random_seed: int = 42):
@@ -706,7 +706,98 @@ class TrajectoryMultiTurnDataset(BaseDataset):
             return self._flat_available.pop(0)
 
 
-def make_dataset(profile) -> BaseDataset:
+class DistributionalMultiTurnDataset(BaseDataset):
+    """
+    Builds synthetic growing-history sessions from compact trace distributions.
+
+    This keeps the benchmark runner's existing multi-turn scheduling path while
+    replacing expensive real-trace replay with sampled turn counts, input
+    deltas, and output lengths.
+    """
+
+    def __init__(
+        self,
+        filepath: str,
+        num_sessions: int = 10,
+        random_seed: int = 42,
+        max_context_tokens: Optional[int] = None,
+        system_prompt: str = "",
+    ):
+        self.filepath = filepath
+        self.num_sessions = num_sessions
+        self.random_seed = random_seed
+        self.max_context_tokens = max_context_tokens
+        self.system_prompt = system_prompt
+        self._sessions: Optional[list[MultiTurnSession]] = None
+        self._session_specs: Optional[dict[int, list]] = None
+        self._flat_requests: Optional[list[BenchmarkRequest]] = None
+        self._flat_available: Optional[list[BenchmarkRequest]] = None
+        self._lock = threading.Lock()
+
+    def _load(self):
+        if self._sessions is not None:
+            return
+        with self._lock:
+            if self._sessions is not None:
+                return
+
+            from .distributional import DistributionalSampler
+            from .trace_distributions import load_trace_distribution
+
+            distribution = load_trace_distribution(self.filepath)
+            sampler = DistributionalSampler(
+                distribution,
+                seed=self.random_seed,
+                max_context_tokens=self.max_context_tokens,
+                system_prompt=self.system_prompt,
+            )
+            synthetic_sessions = sampler.sample_sessions(self.num_sessions)
+            self._sessions = [
+                MultiTurnSession(session_id=s.session_id, turns=s.turns)
+                for s in synthetic_sessions
+                if s.turns
+            ]
+            self._session_specs = {
+                s.session_id: s.specs
+                for s in synthetic_sessions
+                if s.turns
+            }
+            self._build_flat_requests()
+
+    def _build_flat_requests(self):
+        """Build interleaved round-robin: [A1, B1, C1, A2, B2, C2, ...]"""
+        if not self._sessions:
+            self._flat_requests = []
+            self._flat_available = []
+            return
+        max_num_turns = max(len(s.turns) for s in self._sessions)
+        flat = []
+        for turn_idx in range(max_num_turns):
+            for session in self._sessions:
+                if turn_idx < len(session.turns):
+                    flat.append(session.turns[turn_idx])
+        self._flat_requests = flat
+        self._flat_available = list(flat)
+
+    @property
+    def sessions(self) -> list[MultiTurnSession]:
+        self._load()
+        return self._sessions
+
+    @property
+    def session_specs(self) -> dict[int, list]:
+        self._load()
+        return self._session_specs or {}
+
+    def get_next_request(self) -> BenchmarkRequest:
+        self._load()
+        with self._lock:
+            if not self._flat_available:
+                self._flat_available = list(self._flat_requests)
+            return self._flat_available.pop(0)
+
+
+def make_dataset(profile, max_context_tokens: Optional[int] = None) -> BaseDataset:
     """Factory: create the right dataset for a workload profile."""
     from .profiles import WorkloadProfile
     if profile.dataset == "test":
@@ -762,6 +853,13 @@ def make_dataset(profile) -> BaseDataset:
             num_sessions=profile.num_sessions,
             max_isl_tokens=profile.isl_tokens,
             max_osl_tokens=profile.osl_tokens,
+        )
+    elif profile.dataset == "distributional-multi-turn":
+        return DistributionalMultiTurnDataset(
+            filepath=profile.file_path,
+            num_sessions=profile.num_sessions,
+            max_context_tokens=max_context_tokens or profile.isl_tokens,
+            system_prompt=profile.system_prompt,
         )
     elif profile.dataset == "jsonl":
         return JsonlDataset(

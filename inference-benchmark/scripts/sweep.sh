@@ -7,7 +7,7 @@
 #
 # Examples:
 #   ./scripts/sweep.sh
-#   ./scripts/sweep.sh --profiles "prefill-heavy decode-heavy" --concurrency "1 5 10 20 40"
+#   ./scripts/sweep.sh --profiles "chat-singleturn coding-singleturn" --concurrency "1 5 10 20 40"
 #   ./scripts/sweep.sh --backend trtllm --url http://localhost:8000/generate_stream
 #
 set -euo pipefail
@@ -18,7 +18,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 URL="http://localhost:8000/v1/chat/completions"
 MODEL="meta-llama/Llama-3.1-8B-Instruct"
 BACKEND="vllm"
-PROFILES="prefill-heavy decode-heavy chat-singleturn"
+PROFILES="chat-singleturn coding-singleturn"
 CONCURRENCY_LEVELS="1 5 10 20 40"
 NUM_REQUESTS=100
 WARMUP=5

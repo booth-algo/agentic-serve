@@ -3,7 +3,7 @@ import type { ProfilingState } from '../types-profiling';
 
 declare const __BUILD_HASH__: string;
 
-const PROFILING_URL = `${import.meta.env.BASE_URL}profiling-state.json`;
+const PROFILING_URL = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current/profiling-state.json';
 
 export function useProfilingState() {
   const [profilingState, setProfilingState] = useState<ProfilingState | null>(null);

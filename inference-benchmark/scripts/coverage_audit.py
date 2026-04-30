@@ -20,13 +20,13 @@ from urllib.request import urlopen
 
 SINGLE_PROFILES = [
     'chat-singleturn',
-    'coding-agent', 'prefill-heavy', 'decode-heavy', 'random-1k',
+    'coding-singleturn',
 ]
 MULTI_PROFILES = [
-    'chat-multiturn-short', 'chat-multiturn-medium', 'chat-multiturn-long',
-    'terminalbench-multiturn-short', 'terminalbench-multiturn-medium',
-    'swebench-multiturn-short', 'swebench-multiturn-medium',
-    'osworld-multiturn-short', 'osworld-multiturn-medium', 'osworld-multiturn-long',
+    'chat-multiturn',
+    'swebench-multiturn',
+    'terminalbench-multiturn',
+    'osworld-multiturn',
 ]
 SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500]
 MULTI_CONCS = [5, 10, 20, 40, 80, 120, 160, 200, 256, 320]

@@ -1,30 +1,43 @@
 import { useMemo, useState } from 'react';
 import type { BenchmarkResult } from '../types';
 import type { SweepCell, SweepState } from '../types-sweep';
-import { profileDisplayName } from '../profileMeta';
+import { profileDisplayName, type DataScope } from '../profileMeta';
 
 
 interface CoveragePageProps {
   allData: BenchmarkResult[];
   sweepState: SweepState | null;
   loading: boolean;
+  dataScope: DataScope;
 }
 
-const SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
-const MULTI_CONCS = [5, 10, 20, 40, 80, 120, 160, 200, 256, 320];
+const CURRENT_SINGLE_CONCS = [1, 10, 20, 40, 80, 160, 256, 320];
+const CURRENT_MULTI_CONCS = [5, 20, 40, 80, 160];
+const ARCHIVE_SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
+const ARCHIVE_MULTI_CONCS = [5, 10, 20, 40, 80, 120, 160, 200, 256, 320];
 
-const ALL_SINGLE_PROFILES = [
+const CURRENT_SINGLE_PROFILES = [
   'chat-singleturn',
-  'coding-agent', 'prefill-heavy', 'decode-heavy', 'random-1k',
+  'coding-singleturn',
 ];
-const ALL_MULTI_PROFILES = [
+const CURRENT_MULTI_PROFILES = [
+  'chat-multiturn',
+  'swebench-multiturn',
+  'terminalbench-multiturn',
+  'osworld-multiturn',
+];
+const ARCHIVE_SINGLE_PROFILES = [
+  'chat-short', 'chat-medium', 'chat-singleturn',
+  'coding-singleturn', 'prefill-heavy', 'decode-heavy', 'random-1k', 'fixed-seq128',
+];
+const ARCHIVE_MULTI_PROFILES = [
   'chat-multiturn-short', 'chat-multiturn-medium', 'chat-multiturn-long',
   'swebench-multiturn-short', 'swebench-multiturn-medium', 'swebench-multiturn-long',
   'terminalbench-multiturn-short', 'terminalbench-multiturn-medium', 'terminalbench-multiturn-long',
   'osworld-multiturn-short', 'osworld-multiturn-medium', 'osworld-multiturn-long',
 ];
 
-const TP_OPTIONS = [1, 2, 4, 8];
+const TP_OPTIONS = [1, 2, 4];
 
 // Backends we always want a coverage row for. sglang is active now that
 // the orchestrator routes by backend and all three hosts have sglang 0.5.9
@@ -33,13 +46,26 @@ const TP_OPTIONS = [1, 2, 4, 8];
 const ACTIVE_BACKENDS = ['vllm', 'sglang'];
 const KNOWN_BACKENDS = ['vllm', 'sglang'];
 
-// Max feasible cells per (hw, model, backend) — every single+multi profile
-// at every expected concurrency. Used as the denominator for cells that
-// haven't yet produced data (running/pending/skipped/untested) so the
-// "N/M" coverage readout reflects the full target, not just attempted.
-const EXPECTED_CELLS_PER_MODEL =
-  ALL_SINGLE_PROFILES.length * SINGLE_CONCS.length +
-  ALL_MULTI_PROFILES.length * MULTI_CONCS.length;
+type ModelFamily = 'Llama' | 'Qwen' | 'GPT-OSS' | 'Mixtral' | 'Gemma' | 'Granite' | 'Other';
+
+const FAMILY_ORDER: ModelFamily[] = ['Llama', 'Qwen', 'GPT-OSS', 'Mixtral', 'Gemma', 'Granite', 'Other'];
+
+function modelFamily(model: string): ModelFamily {
+  const normalized = model.toLowerCase();
+  if (normalized.startsWith('llama')) return 'Llama';
+  if (normalized.startsWith('qwen')) return 'Qwen';
+  if (normalized.startsWith('gpt-oss')) return 'GPT-OSS';
+  if (normalized.startsWith('mixtral')) return 'Mixtral';
+  if (normalized.startsWith('gemma')) return 'Gemma';
+  if (normalized.startsWith('granite')) return 'Granite';
+  return 'Other';
+}
+
+function compareModels(a: string, b: string): number {
+  const familyDelta = FAMILY_ORDER.indexOf(modelFamily(a)) - FAMILY_ORDER.indexOf(modelFamily(b));
+  if (familyDelta !== 0) return familyDelta;
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
 
 interface ProfileRow {
   profile: string;
@@ -126,26 +152,52 @@ function aggregateCells(cells: SweepCell[]): Map<string, SweepCell> {
   return out;
 }
 
+function isMultiTurnProfile(profile: string): boolean {
+  return profile.includes('multiturn') || profile.includes('multi-turn');
+}
+
 export function CoveragePage({
   allData,
   sweepState,
   loading,
+  dataScope,
 }: CoveragePageProps) {
-  const { groups, hardwareList, sweepMtime } = useMemo(() => {
+  const coveragePlan = useMemo(() => {
+    const singleProfiles = dataScope === 'current' ? CURRENT_SINGLE_PROFILES : ARCHIVE_SINGLE_PROFILES;
+    const multiProfiles = dataScope === 'current' ? CURRENT_MULTI_PROFILES : ARCHIVE_MULTI_PROFILES;
+    const singleConcs = dataScope === 'current' ? CURRENT_SINGLE_CONCS : ARCHIVE_SINGLE_CONCS;
+    const multiConcs = dataScope === 'current' ? CURRENT_MULTI_CONCS : ARCHIVE_MULTI_CONCS;
+    return {
+      singleProfiles,
+      multiProfiles,
+      singleConcs,
+      multiConcs,
+      expectedCellsPerModel: singleProfiles.length * singleConcs.length + multiProfiles.length * multiConcs.length,
+    };
+  }, [dataScope]);
+
+  const { groups, hardwareList } = useMemo(() => {
+    const { singleProfiles, multiProfiles, singleConcs, multiConcs, expectedCellsPerModel } = coveragePlan;
     const baseHwLabels = sweepState
       ? Object.values(sweepState.hosts).map((h) => h.hardware_label)
       : ['A100-40GB', '3090', '2080Ti', 'H100'];
-    const expectedHw: string[] = [];
-    for (const base of baseHwLabels) {
-      for (const tp of TP_OPTIONS) expectedHw.push(hwLabel(base, tp));
-    }
     const dataHw = new Set(allData.map((r) => r.hardware));
-    for (const hw of dataHw) if (!expectedHw.includes(hw)) expectedHw.push(hw);
+    const expectedHw: string[] = [];
+    if (dataScope === 'archive') {
+      expectedHw.push(...Array.from(dataHw).sort());
+    } else {
+      for (const base of baseHwLabels) {
+        for (const tp of TP_OPTIONS) expectedHw.push(hwLabel(base, tp));
+      }
+      for (const hw of dataHw) {
+        if (!hw.endsWith('x8') && !expectedHw.includes(hw)) expectedHw.push(hw);
+      }
+    }
 
     const expectedModels = new Set<string>();
-    if (sweepState) for (const m of Object.keys(sweepState.models)) expectedModels.add(m);
+    if (dataScope === 'current' && sweepState) for (const m of Object.keys(sweepState.models)) expectedModels.add(m);
     for (const r of allData) expectedModels.add(r.modelShort);
-    const modelList = Array.from(expectedModels).sort();
+    const modelList = Array.from(expectedModels).sort(compareModels);
 
     const vramByBase = new Map<string, number>();
     if (sweepState) {
@@ -166,6 +218,7 @@ export function CoveragePage({
     const bucket = new Map<string, Set<number>>();
     const mbHasData = new Map<string, Set<string>>();  // hw -> Set<"model|backend">
     const engineVersionByMb = new Map<string, string>();  // "hw|model|backend" -> version
+    const profilesByMb = new Map<string, Set<string>>();  // "hw|model|backend" -> profiles with data
     for (const r of allData) {
       const backend = r.config.backend;
       const k = `${r.hardware}|${r.modelShort}|${backend}|${r.config.profile}`;
@@ -174,6 +227,8 @@ export function CoveragePage({
       if (!mbHasData.has(r.hardware)) mbHasData.set(r.hardware, new Set());
       mbHasData.get(r.hardware)!.add(`${r.modelShort}|${backend}`);
       const mbKey = `${r.hardware}|${r.modelShort}|${backend}`;
+      if (!profilesByMb.has(mbKey)) profilesByMb.set(mbKey, new Set());
+      profilesByMb.get(mbKey)!.add(r.config.profile);
       if (r.engineVersion && !engineVersionByMb.has(mbKey)) {
         engineVersionByMb.set(mbKey, r.engineVersion);
       }
@@ -195,9 +250,17 @@ export function CoveragePage({
       for (const model of modelList) {
         // Always include ACTIVE_BACKENDS (current sweep target) plus any
         // other known backend that actually has data for this (hw, model).
-        const backendSet = new Set<string>(ACTIVE_BACKENDS);
-        for (const b of KNOWN_BACKENDS) {
-          if (mbHasData.get(hw)?.has(`${model}|${b}`)) backendSet.add(b);
+        const backendSet = new Set<string>();
+        if (dataScope === 'current') {
+          for (const b of ACTIVE_BACKENDS) backendSet.add(b);
+          for (const b of KNOWN_BACKENDS) {
+            if (mbHasData.get(hw)?.has(`${model}|${b}`)) backendSet.add(b);
+          }
+        } else {
+          for (const item of mbHasData.get(hw) ?? []) {
+            const [dataModel, dataBackend] = item.split('|');
+            if (dataModel === model && dataBackend) backendSet.add(dataBackend);
+          }
         }
         const backendsForCell = Array.from(backendSet).sort();
         for (const backend of backendsForCell) {
@@ -209,19 +272,31 @@ export function CoveragePage({
             const profiles: ProfileRow[] = [];
             let totalHave = 0;
             let totalNeed = 0;
-            for (const profile of ALL_SINGLE_PROFILES) {
-              const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
-              const have = [...present].filter((c) => SINGLE_CONCS.includes(c)).length;
-              totalHave += have;
-              totalNeed += SINGLE_CONCS.length;
-              profiles.push({ profile, isMultiTurn: false, expected: SINGLE_CONCS, present });
-            }
-            for (const profile of ALL_MULTI_PROFILES) {
-              const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
-              const have = [...present].filter((c) => MULTI_CONCS.includes(c)).length;
-              totalHave += have;
-              totalNeed += MULTI_CONCS.length;
-              profiles.push({ profile, isMultiTurn: true, expected: MULTI_CONCS, present });
+            if (dataScope === 'archive') {
+              const mbKey = `${hw}|${model}|${backend}`;
+              const observedProfiles = Array.from(profilesByMb.get(mbKey) ?? []).sort();
+              for (const profile of observedProfiles) {
+                const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
+                const observedConcs = Array.from(present).sort((a, b) => a - b);
+                totalHave += observedConcs.length;
+                totalNeed += observedConcs.length;
+                profiles.push({ profile, isMultiTurn: isMultiTurnProfile(profile), expected: observedConcs, present });
+              }
+            } else {
+              for (const profile of singleProfiles) {
+                const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
+                const have = [...present].filter((c) => singleConcs.includes(c)).length;
+                totalHave += have;
+                totalNeed += singleConcs.length;
+                profiles.push({ profile, isMultiTurn: false, expected: singleConcs, present });
+              }
+              for (const profile of multiProfiles) {
+                const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
+                const have = [...present].filter((c) => multiConcs.includes(c)).length;
+                totalHave += have;
+                totalNeed += multiConcs.length;
+                profiles.push({ profile, isMultiTurn: true, expected: multiConcs, present });
+              }
             }
             const engineVersion = engineVersionByMb.get(`${hw}|${model}|${backend}`);
             models.push({ kind: 'data', hardware: hw, model, backend, engineVersion, profiles, totalHave, totalNeed });
@@ -241,19 +316,19 @@ export function CoveragePage({
             if (cell.status === 'running') {
               models.push({ kind: 'status', hardware: hw, model, backend, status: 'running', attempt: cell.attempt, updatedAt: cell.updated_at });
               summary.running += 1;
-              summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
+              summary.totalNeed += expectedCellsPerModel;
               continue;
             }
             if (cell.status === 'skipped') {
               models.push({ kind: 'status', hardware: hw, model, backend, status: 'skipped', reason: cell.reason ?? undefined, attempt: cell.attempt });
               summary.skipped += 1;
-              summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
+              summary.totalNeed += expectedCellsPerModel;
               continue;
             }
             if (cell.status === 'pending' || cell.status === 'done') {
-              models.push({ kind: 'status', hardware: hw, model, backend, status: 'pending' });
-              summary.pending += 1;
-              summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'untested' });
+              summary.untested += 1;
+              summary.totalNeed += expectedCellsPerModel;
               continue;
             }
           }
@@ -265,15 +340,15 @@ export function CoveragePage({
           } else {
             models.push({ kind: 'status', hardware: hw, model, backend, status: 'untested' });
             summary.untested += 1;
-            summary.totalNeed += EXPECTED_CELLS_PER_MODEL;
+            summary.totalNeed += expectedCellsPerModel;
           }
         }
       }
       hwGroups.push({ hardware: hw, models, summary });
     }
 
-    return { groups: hwGroups, hardwareList: expectedHw, sweepMtime: sweepState?.generated_at ?? null };
-  }, [allData, sweepState]);
+    return { groups: hwGroups, hardwareList: expectedHw };
+  }, [allData, coveragePlan, dataScope, sweepState]);
 
   const [expandedHw, setExpandedHw] = useState<Set<string>>(new Set());
   const [expandedModel, setExpandedModel] = useState<Set<string>>(new Set());
@@ -295,7 +370,7 @@ export function CoveragePage({
   const expandAll = () => {
     setExpandedHw(new Set(groups.map((g) => g.hardware)));
     const keys = new Set<string>();
-    for (const g of groups) for (const m of g.models) if (m.kind === 'data') keys.add(`${g.hardware}|${m.model}`);
+    for (const g of groups) for (const m of g.models) if (m.kind === 'data') keys.add(`${g.hardware}|${m.model}|${m.backend}`);
     setExpandedModel(keys);
   };
   const collapseAll = () => {
@@ -304,8 +379,15 @@ export function CoveragePage({
   };
 
   const allConcs = useMemo(
-    () => Array.from(new Set([...SINGLE_CONCS, ...MULTI_CONCS])).sort((a, b) => a - b),
-    [],
+    () => {
+      if (dataScope === 'archive') {
+        const observed = new Set<number>();
+        for (const r of allData) observed.add(r.config.concurrency);
+        return Array.from(observed).sort((a, b) => a - b);
+      }
+      return Array.from(new Set([...coveragePlan.singleConcs, ...coveragePlan.multiConcs])).sort((a, b) => a - b);
+    },
+    [allData, coveragePlan, dataScope],
   );
 
   if (loading) {
@@ -335,8 +417,13 @@ export function CoveragePage({
   const pct = grand.totalNeed > 0
     ? ((grand.totalHave / grand.totalNeed) * 100).toFixed(1)
     : '0.0';
-  const inFlight = grand.running + grand.pending;
-  const blocked = grand.skipped + grand.oom + grand.infeasible;
+  const cellSummary = dataScope === 'archive'
+    ? `${grand.totalHave} cells filled`
+    : `${grand.totalHave}/${grand.totalNeed} expected cells`;
+  const primarySummary = dataScope === 'archive' ? `${grand.totalHave} cells filled` : `${pct}%`;
+  const scopeSummary = dataScope === 'current'
+    ? '6 paper profiles'
+    : 'legacy profiles containing full runs of single-turn, short/medium/long multi-turn, and stress workloads';
 
   return (
     <div className="space-y-4">
@@ -344,38 +431,43 @@ export function CoveragePage({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#8b949e]">
-              <span className="font-medium uppercase tracking-wide text-[#00bcd4]">Sweep coverage</span>
+              <span className="font-medium uppercase tracking-wide text-[#00bcd4]">
+                {dataScope === 'current' ? 'Canonical coverage' : 'Archive coverage'}
+              </span>
               <span>{hardwareList.length} hardware targets</span>
-              {sweepMtime && <span>updated {new Date(sweepMtime).toLocaleTimeString()}</span>}
             </div>
             <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="font-mono text-3xl font-semibold text-[#e6edf3]">{pct}%</span>
-              <span className="font-mono text-sm text-[#8b949e]">{grand.totalHave}/{grand.totalNeed} expected cells</span>
+              <span className="font-mono text-3xl font-semibold text-[#e6edf3]">{primarySummary}</span>
+              {dataScope === 'current' && (
+                <span className="font-mono text-sm text-[#8b949e]">{cellSummary}</span>
+              )}
+              <span className="text-xs text-[#8b949e]">{scopeSummary}</span>
             </div>
             <CoverageProgress value={Number(pct)} />
           </div>
 
-          <div className="grid min-w-[min(100%,520px)] grid-cols-2 gap-2 sm:grid-cols-3">
-            <StatusPill label="Complete" value={grand.complete} tone="good" />
-            <StatusPill label="Partial" value={grand.partial} tone="warn" />
-            <StatusPill label="In flight" value={inFlight} tone="active" title={`${grand.running} running, ${grand.pending} pending`} />
-            <StatusPill label="Blocked" value={blocked} tone="blocked" title={`${grand.skipped} skipped, ${grand.oom} OOM, ${grand.infeasible} infeasible`} />
-            <StatusPill label="Untested" value={grand.untested} tone="muted" />
-            <div className="flex items-center justify-end gap-2">
-              <button onClick={expandAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-[11px] font-medium text-[#c9d1d9] transition-colors hover:border-[#58a6ff] hover:text-[#58a6ff]">Expand</button>
-              <button onClick={collapseAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-[11px] font-medium text-[#c9d1d9] transition-colors hover:border-[#f97583] hover:text-[#f97583]">Collapse</button>
-            </div>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={expandAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-[11px] font-medium text-[#c9d1d9] transition-colors hover:border-[#58a6ff] hover:text-[#58a6ff]">Expand</button>
+            <button onClick={collapseAll} className="rounded-md border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-[11px] font-medium text-[#c9d1d9] transition-colors hover:border-[#f97583] hover:text-[#f97583]">Collapse</button>
           </div>
         </div>
       </div>
 
-      <CoverageLegend />
+      <CoverageLegend dataScope={dataScope} />
 
       <div className="overflow-x-auto rounded-lg border border-[#21262d] bg-[#161b22]">
         <table className="min-w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10 bg-[#161b22]">
             <tr className="border-b border-[#21262d] text-[#8b949e]">
-              <th className="w-[160px] px-3 py-2 text-left font-medium">Hardware / Model</th>
+              <th className="px-3 py-1.5 text-left font-medium" colSpan={3}></th>
+              <th className="px-1.5 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-[#8b949e]" colSpan={allConcs.length}>
+                Concurrency
+              </th>
+              <th className="px-3 py-1.5 text-right font-medium"></th>
+            </tr>
+            <tr className="border-b border-[#21262d] text-[#8b949e]">
+              <th className="w-[116px] px-3 py-2 text-left font-medium">Family</th>
+              <th className="w-[220px] px-3 py-2 text-left font-medium">Model</th>
               <th className="px-3 py-2 text-left font-medium">Profile / status</th>
               {allConcs.map((c) => (
                 <th key={c} className="px-1.5 py-2 text-center font-mono font-normal">{c}</th>
@@ -395,6 +487,7 @@ export function CoveragePage({
                   onToggleHw={() => toggleHw(g.hardware)}
                   onToggleModel={toggleModel}
                   allConcs={allConcs}
+                  expectedCellsPerModel={coveragePlan.expectedCellsPerModel}
                 />
               );
             })}
@@ -415,21 +508,19 @@ interface GroupRowsProps {
   onToggleHw: () => void;
   onToggleModel: (key: string) => void;
   allConcs: number[];
+  expectedCellsPerModel: number;
 }
 
-function GroupRows({ group, hwOpen, expandedModel, onToggleHw, onToggleModel, allConcs }: GroupRowsProps) {
+function GroupRows({ group, hwOpen, expandedModel, onToggleHw, onToggleModel, allConcs, expectedCellsPerModel }: GroupRowsProps) {
   const g = group;
   const pct = g.summary.totalNeed > 0
     ? Math.round((g.summary.totalHave / g.summary.totalNeed) * 100)
     : 0;
-  const active = g.summary.running + g.summary.pending;
   const blocked = g.summary.skipped + g.summary.oom + g.summary.infeasible;
   const chips = ([
     { count: g.summary.complete, label: 'complete', tone: 'good' },
-    { count: g.summary.partial, label: 'partial', tone: 'warn' },
-    { count: active, label: 'in flight', tone: 'active', title: `${g.summary.running} running, ${g.summary.pending} pending` },
-    { count: blocked, label: 'blocked', tone: 'blocked', title: `${g.summary.skipped} skipped, ${g.summary.oom} OOM, ${g.summary.infeasible} infeasible` },
-    { count: g.summary.untested, label: 'untested', tone: 'muted' },
+    { count: blocked, label: 'N/A', tone: 'na', title: `${g.summary.skipped} skipped, ${g.summary.oom} OOM, ${g.summary.infeasible} infeasible` },
+    { count: g.summary.untested, label: 'TODO', tone: 'todo' },
   ] satisfies Array<{ count: number; label: string; tone: StatusTone; title?: string }>).filter(({ count }) => count > 0);
 
   return (
@@ -438,7 +529,7 @@ function GroupRows({ group, hwOpen, expandedModel, onToggleHw, onToggleModel, al
         className="cursor-pointer border-b-2 border-t-2 border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
         onClick={onToggleHw}
       >
-        <td colSpan={2} className="px-3 py-2">
+        <td colSpan={3} className="px-3 py-2">
           <span className="mr-2 inline-block w-4 text-[#8b949e]">{hwOpen ? '▼' : '▶'}</span>
           <span className="font-mono text-sm font-semibold text-[#c9d1d9]">{g.hardware}</span>
           <span className="ml-3 inline-flex flex-wrap items-center gap-1.5 text-[#8b949e]">
@@ -460,16 +551,19 @@ function GroupRows({ group, hwOpen, expandedModel, onToggleHw, onToggleModel, al
           </span>
         </td>
       </tr>
-      {hwOpen && g.models.map((m) => {
+      {hwOpen && g.models.map((m, index) => {
         const mKey = `${g.hardware}|${m.model}|${m.backend}`;
+        const showFamily = index === 0 || modelFamily(g.models[index - 1].model) !== modelFamily(m.model);
         return (
           <ModelRows
             key={mKey}
             hwName={g.hardware}
             model={m}
+            showFamily={showFamily}
             open={expandedModel.has(mKey)}
             onToggle={() => onToggleModel(mKey)}
             allConcs={allConcs}
+            expectedCellsPerModel={expectedCellsPerModel}
           />
         );
       })}
@@ -480,19 +574,26 @@ function GroupRows({ group, hwOpen, expandedModel, onToggleHw, onToggleModel, al
 interface ModelRowsProps {
   hwName: string;
   model: ModelEntry;
+  showFamily: boolean;
   open: boolean;
   onToggle: () => void;
   allConcs: number[];
+  expectedCellsPerModel: number;
 }
 
-function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) {
+function ModelRows({ hwName, model, showFamily, open, onToggle, allConcs, expectedCellsPerModel }: ModelRowsProps) {
+  const family = modelFamily(model.model);
+
   if (model.kind === 'status') {
     const bg = bgForStatus(model.status);
     const txt = colorForStatus(model.status);
     const label = labelForStatus(model.status);
     return (
       <tr className={`border-b border-[#21262d]/50 ${bg}`}>
-        <td className="whitespace-nowrap px-3 py-1.5 pl-10 text-[#c9d1d9]">
+        <td className="whitespace-nowrap px-3 py-1.5">
+          <FamilyGroupCell family={family} showLabel={showFamily} />
+        </td>
+        <td className="whitespace-nowrap px-3 py-1.5 text-[#c9d1d9]">
           <span className="mr-2 inline-block w-3 text-[#30363d]">·</span>
           {model.model}
           <BackendBadge backend={model.backend} />
@@ -504,14 +605,13 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
               {label}
               {model.attempt !== undefined && model.attempt > 0 && <span className="ml-1 text-[#8b949e]">· attempt {model.attempt}</span>}
               {model.reason && <span className="ml-1 inline-block max-w-[720px] truncate align-bottom text-[#8b949e]" title={model.reason}>— {model.reason}</span>}
-              {model.updatedAt && <span className="ml-1 text-[#8b949e]">· since {new Date(model.updatedAt).toLocaleTimeString()}</span>}
             </span>
           </div>
         </td>
         <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono">
           {model.status === 'untested' || model.status === 'pending' ||
            model.status === 'running'  || model.status === 'skipped' ? (
-            <span className="text-[#8b949e]">0/{EXPECTED_CELLS_PER_MODEL}</span>
+            <span className="text-[#8b949e]">0/{expectedCellsPerModel}</span>
           ) : (
             <span className="text-[#8b949e]">—</span>
           )}
@@ -540,7 +640,10 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
         className="cursor-pointer border-b border-[#21262d]/50 hover:bg-[#1b222a]"
         onClick={onToggle}
       >
-        <td className="whitespace-nowrap px-3 py-1.5 pl-10 text-[#c9d1d9]">
+        <td className="whitespace-nowrap px-3 py-1.5">
+          <FamilyGroupCell family={family} showLabel={showFamily} />
+        </td>
+        <td className="whitespace-nowrap px-3 py-1.5 text-[#c9d1d9]">
           <span className="mr-2 inline-block w-3 text-[#8b949e]">{open ? '▼' : '▶'}</span>
           {model.model}
           <BackendBadge backend={model.backend} version={model.engineVersion} />
@@ -573,8 +676,11 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
         const displayName = profileDisplayName(p.profile);
         return (
           <tr key={`${hwName}|${model.model}|${p.profile}`} className="border-b border-[#21262d]/50 bg-[#0d1117]/50">
-            <td className="whitespace-nowrap px-3 py-1.5 pl-16 text-[#8b949e]">
-              {/* empty — hw/model context established by parent rows */}
+            <td className="px-3 py-1.5">
+              <span className="inline-block min-w-[82px]" aria-hidden="true" />
+            </td>
+            <td className="whitespace-nowrap px-3 py-1.5 pl-8 text-[#8b949e]">
+              {/* empty — profile rows sit under the model row, matching the predictor table grouping */}
             </td>
             <td className="whitespace-nowrap px-3 py-1.5 text-[#8b949e]">
               <span className="text-[#c9d1d9]" title={p.profile}>{displayName}</span>
@@ -609,13 +715,14 @@ function ModelRows({ hwName, model, open, onToggle, allConcs }: ModelRowsProps) 
 
 // --- UI helpers ---
 
-type StatusTone = 'good' | 'warn' | 'active' | 'blocked' | 'muted';
+type StatusTone = 'good' | 'warn' | 'active' | 'na' | 'todo' | 'muted';
 
 const TONE_CLASS: Record<StatusTone, string> = {
   good: 'border-[#3fb950]/35 bg-[#3fb950]/10 text-[#3fb950]',
   warn: 'border-[#ff9800]/35 bg-[#ff9800]/10 text-[#ffb74d]',
   active: 'border-[#58a6ff]/35 bg-[#58a6ff]/10 text-[#58a6ff]',
-  blocked: 'border-[#f97583]/35 bg-[#f97583]/10 text-[#f97583]',
+  na: 'border-[#64b5f6]/35 bg-[#64b5f6]/10 text-[#64b5f6]',
+  todo: 'border-[#ff9800]/35 bg-[#ff9800]/10 text-[#ff9800]',
   muted: 'border-[#30363d] bg-[#21262d]/60 text-[#8b949e]',
 };
 
@@ -626,28 +733,6 @@ function CoverageProgress({ value }: { value: number }) {
         className="h-full rounded-full bg-[#00bcd4]"
         style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
       />
-    </div>
-  );
-}
-
-function StatusPill({
-  label,
-  value,
-  tone,
-  title,
-}: {
-  label: string;
-  value: number;
-  tone: StatusTone;
-  title?: string;
-}) {
-  return (
-    <div
-      className={`rounded-md border px-3 py-2 ${TONE_CLASS[tone]}`}
-      title={title}
-    >
-      <div className="text-[10px] font-medium uppercase tracking-wide opacity-80">{label}</div>
-      <div className="mt-0.5 font-mono text-lg font-semibold">{value}</div>
     </div>
   );
 }
@@ -673,41 +758,33 @@ function GroupChip({
   );
 }
 
-function CoverageLegend() {
+function CoverageLegend({ dataScope }: { dataScope: DataScope }) {
+  const scopeNote = dataScope === 'current'
+    ? 'Current coverage tracks the canonical paper profile surface and expected concurrency grid.'
+    : 'Archive coverage is inventory-style: it shows historical runs that exist and does not count missing legacy cells.';
+
   return (
-    <details className="rounded-md border border-[#21262d] bg-[#161b22] px-4 py-2 text-xs text-[#8b949e]">
-      <summary className="cursor-pointer select-none text-[#c9d1d9]">
-        Legend and sweep notes
-        <span className="ml-2 text-[#8b949e]">cell states, run status, and matrix source</span>
-      </summary>
-      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr]">
+    <div className="rounded-md border border-[#21262d] bg-[#161b22] px-4 py-3 text-xs text-[#8b949e]">
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="font-medium text-[#c9d1d9]">Coverage legend</span>
+        <span>cell states and scope</span>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="flex items-center gap-1.5"><Cell state="present" />present</span>
-          <span className="flex items-center gap-1.5"><Cell state="missing" />expected and missing</span>
-          <span className="flex items-center gap-1.5"><Cell state="na" />not expected</span>
-          <span className="flex items-center gap-1.5"><StatusBadge kind="running" />running</span>
-          <span className="flex items-center gap-1.5"><StatusBadge kind="pending" />pending</span>
-          <span className="flex items-center gap-1.5"><StatusBadge kind="skipped" />skipped</span>
-          <span className="flex items-center gap-1.5"><StatusBadge kind="oom" />OOM</span>
-          <span className="flex items-center gap-1.5"><StatusBadge kind="infeasible" />infeasible</span>
-          <span className="flex items-center gap-1.5"><StatusBadge kind="untested" />untested</span>
+          {dataScope === 'current' && (
+            <span className="flex items-center gap-1.5"><Cell state="missing" />expected and missing</span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <Cell state="na" />
+            {dataScope === 'current' ? 'not expected' : 'not observed'}
+          </span>
         </div>
         <div className="space-y-1 leading-relaxed">
-          <p>
-            Live job state comes from <code className="rounded bg-[#21262d] px-1">scripts/sweep.yaml</code> via
-            <code className="ml-1 rounded bg-[#21262d] px-1">sweep-state.json</code>; expected cells use the active paper profile surface.
-          </p>
-          <p>
-            In multi-turn profiles, short/medium/long mean turn depth buckets; they do not guarantee increasing ISL or OSL.
-          </p>
-          <p>
-            <span className="text-[#64b5f6]">Infeasible</span> is derived from feasibility_ratio;
-            <span className="ml-1 text-[#e040fb]">OOM</span> is reserved for explicit
-            <code className="ml-1 rounded bg-[#21262d] px-1">known_oom</code> entries.
-          </p>
+          <p>{scopeNote}</p>
         </div>
       </div>
-    </details>
+    </div>
   );
 }
 
@@ -727,6 +804,53 @@ function BackendBadge({ backend, version }: { backend: string; version?: string 
   return (
     <span className={`ml-2 rounded border px-1.5 py-0.5 text-[10px] font-medium lowercase tracking-wide ${cls}`}>
       {backend}{version ? ` ${version}` : ''}
+    </span>
+  );
+}
+
+function familyStyle(family: ModelFamily): { chip: string; mark: string } {
+  const styles: Record<ModelFamily, { chip: string; mark: string }> = {
+    Llama: {
+      chip: 'text-[#9ecbff]',
+      mark: 'bg-[#58a6ff]',
+    },
+    Qwen: {
+      chip: 'text-[#7ee787]',
+      mark: 'bg-[#3fb950]',
+    },
+    'GPT-OSS': {
+      chip: 'text-[#d2a8ff]',
+      mark: 'bg-[#d2a8ff]',
+    },
+    Mixtral: {
+      chip: 'text-[#ffb74d]',
+      mark: 'bg-[#ffb74d]',
+    },
+    Gemma: {
+      chip: 'text-[#00bcd4]',
+      mark: 'bg-[#00bcd4]',
+    },
+    Granite: {
+      chip: 'text-[#f97583]',
+      mark: 'bg-[#f97583]',
+    },
+    Other: {
+      chip: 'text-[#8b949e]',
+      mark: 'bg-[#8b949e]',
+    },
+  };
+  return styles[family];
+}
+
+function FamilyGroupCell({ family, showLabel }: { family: ModelFamily; showLabel: boolean }) {
+  const style = familyStyle(family);
+  if (!showLabel) {
+    return <span className="inline-block min-w-[82px]" aria-hidden="true" />;
+  }
+  return (
+    <span className={`inline-flex min-w-[82px] items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style.chip}`}>
+      <span className={`h-2 w-2 rounded-sm ${style.mark}`} />
+      {family}
     </span>
   );
 }
@@ -756,11 +880,11 @@ type BadgeKind = StatusModel['status'];
 
 function StatusBadge({ kind }: { kind: BadgeKind }) {
   const map: Record<BadgeKind, [string, string]> = {
-    oom:        ['bg-[#e040fb]/15 text-[#e040fb] border-[#e040fb]/40', 'OOM'],
+    oom:        ['bg-[#64b5f6]/15 text-[#64b5f6] border-[#64b5f6]/40', 'N/A'],
     infeasible: ['bg-[#64b5f6]/15 text-[#64b5f6] border-[#64b5f6]/40', 'N/A'],
     running:    ['bg-[#58a6ff]/15 text-[#58a6ff] border-[#58a6ff]/40', 'RUN'],
-    pending:    ['bg-[#a5b4fc]/15 text-[#a5b4fc] border-[#a5b4fc]/40', 'PND'],
-    skipped:  ['bg-[#f97583]/15 text-[#f97583] border-[#f97583]/40', 'SKIP'],
+    pending:    ['bg-[#ff9800]/10 text-[#ff9800] border-[#ff9800]/40', 'TODO'],
+    skipped:  ['bg-[#64b5f6]/15 text-[#64b5f6] border-[#64b5f6]/40', 'N/A'],
     untested:   ['bg-[#ff9800]/10 text-[#ff9800] border-[#ff9800]/40', 'TODO'],
   };
   const [cls, label] = map[kind];
@@ -773,33 +897,33 @@ function StatusBadge({ kind }: { kind: BadgeKind }) {
 
 function bgForStatus(s: StatusModel['status']): string {
   switch (s) {
-    case 'oom':        return 'bg-[#e040fb]/5';
+    case 'oom':        return 'bg-[#64b5f6]/5';
     case 'infeasible': return 'bg-[#64b5f6]/5';
     case 'running':    return 'bg-[#58a6ff]/5';
-    case 'skipped':  return 'bg-[#f97583]/5';
-    case 'pending':    return 'bg-[#a5b4fc]/5';
+    case 'skipped':  return 'bg-[#64b5f6]/5';
+    case 'pending':    return 'bg-[#ff9800]/5';
     default:           return '';
   }
 }
 
 function colorForStatus(s: StatusModel['status']): string {
   switch (s) {
-    case 'oom':        return 'text-[#e040fb]';
+    case 'oom':        return 'text-[#64b5f6]';
     case 'infeasible': return 'text-[#64b5f6]';
     case 'running':    return 'text-[#58a6ff]';
-    case 'skipped':  return 'text-[#f97583]';
-    case 'pending':    return 'text-[#a5b4fc]';
+    case 'skipped':  return 'text-[#64b5f6]';
+    case 'pending':    return 'text-[#ff9800]';
     default:           return 'text-[#8b949e]';
   }
 }
 
 function labelForStatus(s: StatusModel['status']): string {
   switch (s) {
-    case 'oom':        return 'OOM';
-    case 'infeasible': return 'infeasible';
-    case 'running':    return 'running';
-    case 'skipped':  return 'skipped';
-    case 'pending':    return 'pending';
-    default:           return 'untested';
+    case 'oom':        return 'not applicable';
+    case 'infeasible': return 'not applicable';
+    case 'running':    return 'being run';
+    case 'skipped':  return 'not applicable';
+    case 'pending':    return 'TODO';
+    default:           return 'TODO';
   }
 }

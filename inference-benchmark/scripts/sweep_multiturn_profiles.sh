@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Multi-turn sweep variant of sweep_all_profiles.sh — adds --mode multi-turn.
-# Profiles default to the multi-turn set used by run_multiturn_benchmarks.sh.
+# Profiles default to the canonical distributional multi-turn paper suite.
 #
 # Usage:
 #   bash sweep_multiturn_profiles.sh \
@@ -24,7 +24,7 @@ PY="${6:-python}"
 GPU_MEM="${7:-0.85}"
 MAX_LEN="${8:-32768}"
 CONCS="${9:-5 10 20 40 80 120 160}"
-PROFILES="${10:-chat-multiturn-short chat-multiturn-medium chat-multiturn-long swebench-multiturn-short swebench-multiturn-medium terminalbench-multiturn-short terminalbench-multiturn-medium osworld-multiturn-short osworld-multiturn-medium}"
+PROFILES="${10:-chat-multiturn swebench-multiturn terminalbench-multiturn osworld-multiturn}"
 WARMUP="${11:-3}"
 
 PORT="${PORT:-8089}"
@@ -89,6 +89,7 @@ for PROFILE in $PROFILES; do
             --profile    "$PROFILE" \
             --concurrency "$CONC" \
             --mode       multi-turn \
+            --max-context-tokens "$MAX_LEN" \
             --warmup     "$WARMUP" \
             --timeout    300 \
             --api-key    "$API_KEY" \

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build profiling-state.json from profiling_manifest.yaml and write to dashboard/public/.
 
-Reads llm_predict/training/per_kernel/profiling_manifest.yaml (produced by Phase 1).
+Reads llm_predict_legacy/training/per_kernel/profiling_manifest.yaml (produced by Phase 1).
 If the manifest does not exist, prints a warning and leaves the existing stub JSON in place.
 
 The manifest is nested (gpus -> model -> per_kernel|per_op -> status_entry); the dashboard
@@ -27,12 +27,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 # scripts/ is inside inference-benchmark/ ; so HERE.parent is inference-benchmark/.
-MANIFEST = HERE.parent.parent / "llm_predict" / "training" / "per_kernel" / "profiling_manifest.yaml"
+MANIFEST = HERE.parent.parent / "llm_predict_legacy" / "training" / "per_kernel" / "profiling_manifest.yaml"
 OUTPUT_FILE = HERE.parent / "dashboard" / "public" / "profiling-state.json"
 
 R2_ENDPOINT_DEFAULT = "https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com"
 R2_BUCKET_DEFAULT = "agent-bench"
-R2_KEY = "profiling-state.json"
+R2_KEY = "json/current/profiling-state.json"
 
 # Populated by main() before build_state(). Kept at module-level so the builder
 # can pick it up without threading an extra argument through call sites.
@@ -111,12 +111,16 @@ def _parse_wallclock(md_path: Path) -> dict | None:
     return out
 
 
-_SERVING_PROFILES = ("chat-singleturn",
-                     "chat-multiturn-short", "chat-multiturn-medium", "chat-multiturn-long",
-                     "coding-agent", "prefill-heavy", "decode-heavy",
-                     "terminalbench-multiturn-short", "terminalbench-multiturn-medium",
-                     "swebench-multiturn-short", "swebench-multiturn-medium",
-                     "osworld-multiturn-short", "osworld-multiturn-medium")
+_SERVING_PROFILES = (
+    "chat-singleturn", "coding-singleturn",
+    "chat-multiturn", "swebench-multiturn", "terminalbench-multiturn", "osworld-multiturn",
+    # Historical report names kept for archived profiling-state ingestion.
+    "chat-multiturn-short", "chat-multiturn-medium", "chat-multiturn-long",
+    "coding-agent", "prefill-heavy", "decode-heavy",
+    "terminalbench-multiturn-short", "terminalbench-multiturn-medium",
+    "swebench-multiturn-short", "swebench-multiturn-medium",
+    "osworld-multiturn-short", "osworld-multiturn-medium",
+)
 
 
 def _parse_serving_e2e(md_path: Path) -> dict | None:
@@ -239,10 +243,10 @@ def _load_results(repo_root: Path) -> dict:
     results: dict = {"per_kernel": {}, "per_op": {}, "wallclock": {},
                      "serving_e2e": {}, "serving_e2e_perop": {}, "serving_e2e_conc": {},
                      "gemm_extrapolation": {}}
-    pk_path = repo_root / "llm_predict/training/per_kernel/reports/training_report.json"
-    po_path = repo_root / "llm_predict/training/per_op/reports/training_report.json"
-    pk_reports = repo_root / "llm_predict" / "training" / "per_kernel" / "reports"
-    po_reports = repo_root / "llm_predict" / "training" / "per_op" / "reports"
+    pk_path = repo_root / "llm_predict_legacy/training/per_kernel/reports/training_report.json"
+    po_path = repo_root / "llm_predict_legacy/training/per_op/reports/training_report.json"
+    pk_reports = repo_root / "llm_predict_legacy" / "training" / "per_kernel" / "reports"
+    po_reports = repo_root / "llm_predict_legacy" / "training" / "per_op" / "reports"
     for gpu in ("A100", "RTX3090", "RTX2080Ti", "H100"):
         wc_path = pk_reports / f"{gpu}_wallclock_validation_seq167.md"
         wc = _parse_wallclock(wc_path)

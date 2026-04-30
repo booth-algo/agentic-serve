@@ -13,7 +13,7 @@ Client requirements:
 Profiles:
   - chat-singleturn: canonical natural ShareGPT single-turn chat. The historical
     chat-short/chat-medium variants are retired from default sweeps.
-  - coding-agent: real coding-agent single-turn prompts.
+  - coding-singleturn: real SWE-bench-style coding single-turn prompts.
   - prefill-heavy/decode-heavy/random-1k: synthetic stress profiles.
 """
 

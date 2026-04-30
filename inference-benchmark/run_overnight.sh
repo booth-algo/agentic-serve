@@ -22,12 +22,12 @@ MAX_SERVER_WAIT=1200
 # Single-turn + stress-test profiles for the main orchestrator
 # Note: prefill-heavy (ISL=8192) and decode-heavy (OSL=4096) need max_model_len >= 8448
 # They'll be skipped for 70B/72B models (max_model_len=4096)
-PROFILES_STANDARD="chat-singleturn coding-agent"
+PROFILES_STANDARD="chat-singleturn coding-singleturn"
 PROFILES_LONG_CTX="prefill-heavy decode-heavy"
 PROFILES_STRESS="random-1k"
 
 # Multi-turn profiles (run separately with --mode multi-turn)
-MT_PROFILES_CHAT="chat-multiturn-short chat-multiturn-medium"
+MT_PROFILES_CHAT="chat-multiturn"
 
 log() { echo -e "\033[0;32m[OVERNIGHT]\033[0m $(date '+%H:%M:%S') $1"; }
 err() { echo -e "\033[0;31m[ERROR]\033[0m $(date '+%H:%M:%S') $1"; }

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { DataScope } from '../profileMeta';
 
 type PageId = 'benchmark' | 'coverage' | 'predictor';
 
@@ -8,6 +9,8 @@ interface LayoutProps {
   loading: boolean;
   activePage: PageId;
   onPageChange: (page: PageId) => void;
+  dataScope: DataScope;
+  onDataScopeChange: (scope: DataScope) => void;
 }
 
 const NAV_PAGES: Array<{ id: PageId; label: string; icon: ReactNode }> = [
@@ -44,7 +47,15 @@ const NAV_PAGES: Array<{ id: PageId; label: string; icon: ReactNode }> = [
   },
 ];
 
-export function Layout({ children, totalRuns, loading, activePage, onPageChange }: LayoutProps) {
+export function Layout({
+  children,
+  totalRuns,
+  loading,
+  activePage,
+  onPageChange,
+  dataScope,
+  onDataScopeChange,
+}: LayoutProps) {
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
       {/* Sticky nav */}
@@ -86,7 +97,22 @@ export function Layout({ children, totalRuns, loading, activePage, onPageChange 
           </div>
 
           {/* Right: status */}
-          <div className="flex items-center gap-4 text-sm text-[#8b949e]">
+          <div className="flex items-center gap-3 text-sm text-[#8b949e]">
+            <div className="hidden items-center rounded-md border border-[#30363d] bg-[#0d1117] p-0.5 sm:flex">
+              {(['current', 'archive'] as const).map((scope) => (
+                <button
+                  key={scope}
+                  onClick={() => onDataScopeChange(scope)}
+                  className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                    dataScope === scope
+                      ? 'bg-[#1f6feb] text-white'
+                      : 'text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]'
+                  }`}
+                >
+                  {scope}
+                </button>
+              ))}
+            </div>
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#ff9800]" />
@@ -117,6 +143,21 @@ export function Layout({ children, totalRuns, loading, activePage, onPageChange 
               {page.label}
             </button>
           ))}
+          <div className="ml-auto flex items-center rounded-md border border-[#30363d] bg-[#0d1117] p-0.5">
+            {(['current', 'archive'] as const).map((scope) => (
+              <button
+                key={scope}
+                onClick={() => onDataScopeChange(scope)}
+                className={`rounded px-2 py-1 text-xs font-medium capitalize transition-colors ${
+                  dataScope === scope
+                    ? 'bg-[#1f6feb] text-white'
+                    : 'text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]'
+                }`}
+              >
+                {scope}
+              </button>
+            ))}
+          </div>
         </div>
       </nav>
 

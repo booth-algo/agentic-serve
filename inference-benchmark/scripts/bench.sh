@@ -6,7 +6,7 @@
 #
 # Examples:
 #   ./scripts/bench.sh
-#   ./scripts/bench.sh --profile decode-heavy --concurrency 20
+#   ./scripts/bench.sh --profile coding-singleturn --concurrency 20
 #   ./scripts/bench.sh --backend trtllm --url http://localhost:8000/generate_stream
 #
 set -euo pipefail

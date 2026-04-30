@@ -33,10 +33,14 @@ const PROFILE_AVG_SEQ: Record<string, number> = {
   // Canonical natural chat ST. chat-short/chat-medium are retired from the
   // main sweep because they mostly differ by output length.
   'chat-singleturn': 486,
-  'coding-agent': 6600,
+  'coding-singleturn': 6600,
   'prefill-heavy': 4200,
   'decode-heavy': 2200,
   'random-1k': 1024,
+  'chat-multiturn': 8000,
+  'swebench-multiturn': 32000,
+  'terminalbench-multiturn': 32000,
+  'osworld-multiturn': 8000,
   'chat-multiturn-short': 4500,
   'chat-multiturn-medium': 8000,
   'chat-multiturn-long': 16000,
@@ -50,6 +54,7 @@ const PROFILE_AVG_SEQ: Record<string, number> = {
 
 const HISTORICAL_PROFILE_ALIASES: Record<string, string> = {
   'chat-long': 'chat-singleturn',
+  'coding-agent': 'coding-singleturn',
 };
 
 const BYTES_PER_PARAM = 2; // BF16

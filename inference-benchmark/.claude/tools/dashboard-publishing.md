@@ -32,6 +32,7 @@ It's deployed to GitHub Pages at `https://sequrity-ai.github.io/inference-benchm
 cd dashboard && npx tsx scripts/build-data.ts
 ```
 This reads all `results/**/*.json`, enriches each entry (hardware detection, quant, model short name, series key), and writes `dashboard/public/data.json`.
+The deployed dashboard fetches generated bundles from the R2 `json/current/` prefix.
 
 ### 2. Build the site
 ```bash
@@ -61,5 +62,5 @@ npm run dev     # http://localhost:5173/inference-benchmark/
 ## Data Pipeline Summary
 
 ```
-results/*.json → build-data.ts → public/data.json → Vite build → GitHub Pages
+results/*.json → build-data.ts → public/data.json → R2 json/current/data.json → GitHub Pages dashboard
 ```

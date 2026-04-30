@@ -1,5 +1,5 @@
 """
-Virtual GPU scaling analysis using llm_predict.
+Virtual GPU scaling analysis using llm_predict_legacy.
 
 1. Layer scaling curves: predict latency as layers increase from 32→1000
 2. TP/DP parallelism heatmaps: throughput across all valid configurations
@@ -16,12 +16,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from llm_predict.dse.dse import template_to_system, read_architecture_template
-from llm_predict.models.software.transformer import (
+from llm_predict_legacy.dse.dse import template_to_system, read_architecture_template
+from llm_predict_legacy.models.software.transformer import (
     TransformerBlockInitComputationTP,
     TransformerBlockAutoRegressionTP,
 )
-from llm_predict.models.software.utils import Tensor, data_type_dict
+from llm_predict_legacy.models.software.utils import Tensor, data_type_dict
 
 # ── Config ────────────────────────────────────────────────────────────
 
@@ -29,10 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_DIR = REPO_ROOT / "inference-benchmark" / "docs" / "roofline" / "scaling"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-DEVICE_CONFIG = os.environ.get(
-    "DEVICE_CONFIG",
-    str(REPO_ROOT / "device_configs" / "H100.json"),
-)
+DEVICE_CONFIG = os.environ.get("DEVICE_CONFIG")
 
 MODELS = {
     "Llama-3.1-8B": {"d_model": 4096, "n_heads": 32, "n_layers": 32},
@@ -341,7 +338,9 @@ def run_optimal_summary(search_results):
 # ── Main ──────────────────────────────────────────────────────────────
 
 def main():
-    print("Loading H100 system config...")
+    if not DEVICE_CONFIG:
+        raise SystemExit("Set DEVICE_CONFIG=/path/to/hardware_config.json before running scaling.py")
+    print(f"Loading system config: {DEVICE_CONFIG}")
     arch_specs = read_architecture_template(DEVICE_CONFIG)
     system = template_to_system(arch_specs)
     print(f"System: {system.device.compute_module.core_count} cores, "
