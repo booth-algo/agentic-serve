@@ -59,16 +59,16 @@ agentic-serve/
 │   ├── results/             # A100 + H100 benchmark JSONs
 │   ├── dashboard/           # React dashboard (GitHub Pages)
 │   └── configs/             # Benchmark configurations
-├── llmcompass/              # GPU performance simulator
-│   ├── software_model/      # Transformer block models (dense, MoE, MLA)
-│   ├── hardware_model/      # GPU device models (A100, H100)
-│   ├── profiler/            # ML predictor + kernel profiler
-│   └── serving_model/       # Batch + queueing models
-├── experiment/              # Profiling scripts + ncu data + training
+├── llm_predict/             # GPU performance models and predictors
+│   ├── models/              # Hardware, software, serving, and cost models
+│   ├── predictors/          # Per-kernel and per-op predictor runtimes
+│   ├── training/            # Predictor labeling, training, and validation
+│   └── profiling/           # Predictor artifacts and profiling data
+├── llm_predict_2/           # Current serving predictor experiments
+├── experiment/              # Historical profiling scripts + ncu data
 │   ├── ncu_*.csv            # Kernel-level hardware counter data
-│   ├── train_perop_v4.py    # XGBoost predictor training
 │   ├── reprofile_v4.py      # CUDA events profiler
-│   └── validate_model.py    # Model validation
+│   └── validate_model.py    # Historical model validation
 ├── device_configs/          # GPU hardware specifications
 ├── model_configs/           # LLM architecture configs
 └── search/                  # TP/DP parallelism search

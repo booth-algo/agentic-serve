@@ -1,5 +1,5 @@
 """
-Virtual GPU scaling analysis using LLMCompass.
+Virtual GPU scaling analysis using llm_predict.
 
 1. Layer scaling curves: predict latency as layers increase from 32→1000
 2. TP/DP parallelism heatmaps: throughput across all valid configurations
@@ -7,7 +7,6 @@ Virtual GPU scaling analysis using LLMCompass.
 """
 
 import json
-import sys
 import os
 import time
 from pathlib import Path
@@ -17,23 +16,22 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-sys.path.insert(0, os.environ.get("LLMSERVE_ROOT", str(Path(__file__).resolve().parent.parent.parent.parent / "llmserve")))
-
-from llmcompass.design_space_exploration.dse import template_to_system, read_architecture_template
-from llmcompass.software_model.transformer import (
+from llm_predict.dse.dse import template_to_system, read_architecture_template
+from llm_predict.models.software.transformer import (
     TransformerBlockInitComputationTP,
     TransformerBlockAutoRegressionTP,
 )
-from llmcompass.software_model.utils import Tensor, data_type_dict
+from llm_predict.models.software.utils import Tensor, data_type_dict
 
 # ── Config ────────────────────────────────────────────────────────────
 
-OUTPUT_DIR = Path(__file__).resolve().parent.parent.parent / "results" / "roofline" / "scaling"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+OUTPUT_DIR = REPO_ROOT / "inference-benchmark" / "docs" / "roofline" / "scaling"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DEVICE_CONFIG = os.environ.get(
     "DEVICE_CONFIG",
-    str(Path(os.environ.get("LLMSERVE_ROOT", str(Path(__file__).resolve().parent.parent.parent.parent / "llmserve"))) / "device_configs" / "H100.json")
+    str(REPO_ROOT / "device_configs" / "H100.json"),
 )
 
 MODELS = {

@@ -23,7 +23,8 @@ Panel (b) — Capacity footprint:
   y = total observed TFLOP/s per GPU
 
 Generates:
-  roofline_{singleturn,multiturn}_h100.{pdf,png,csv}
+  inference-benchmark/docs/roofline/figures/roofline_{singleturn,multiturn}_h100.{pdf,png}
+  inference-benchmark/docs/roofline/data/roofline_{singleturn,multiturn}_h100_data.csv
 """
 from __future__ import annotations
 
@@ -38,8 +39,10 @@ from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 
-REPO = Path(__file__).resolve().parent
-DATA_JSON = REPO / "inference-benchmark" / "dashboard" / "public" / "data.json"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DATA_JSON = REPO_ROOT / "inference-benchmark" / "dashboard" / "public" / "data.json"
+FIGURES_DIR = REPO_ROOT / "inference-benchmark" / "docs" / "roofline" / "figures"
+DATA_DIR = REPO_ROOT / "inference-benchmark" / "docs" / "roofline" / "data"
 
 # ── H100 SXM5 80 GB ─────────────────────────────────────────────────
 P_PEAK = 989.0   # BF16 TFLOP/s
@@ -282,11 +285,14 @@ def run_set(label, workloads, hw, c_vals, data, out_stem):
         [df.assign(workload=w["label"]) for w, df in zip(workloads, dfs.values())
          if not df.empty],
         ignore_index=True)
-    csv_path = REPO / f"{out_stem}_data.csv"
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    csv_path = DATA_DIR / f"{out_stem}_data.csv"
     all_rows.to_csv(csv_path, index=False, float_format="%.4f")
     print(f"  CSV -> {csv_path}")
 
-    render(workloads, dfs, REPO / f"{out_stem}.pdf")
+    render(workloads, dfs, FIGURES_DIR / f"{out_stem}.pdf")
     return dfs
 
 
