@@ -100,3 +100,24 @@ Only the first 12 turns are shown here so the table stays readable. The distribu
 - New-prefill tokens are much smaller than full ISL after turn 1, which is why prefix-cache-aware benchmarking is required.
 - Chat multi-turn is structurally different from the agentic traces: it has fixed bucketed turn counts and much shorter total context.
 - OSWorld has a high cache-hit estimate after turn 1, but its source includes non-growth/decrease behavior in some turns, so treat the exact delta distribution as approximate unless future runner telemetry is available.
+
+## Current Sampler Check
+
+The canonical distributional profiles currently sample 10 sessions per benchmark row. The sampler draws:
+
+1. `turn_count` from the empirical turn-count distribution.
+2. Per-turn `new_prefill_tokens` and `output_tokens` from empirical samples for the same turn index.
+3. Synthetic growing histories from those deltas, so sampled full ISL is reconstructed rather than independently drawn.
+
+This means the synthetic profile preserves prefix-cache structure: after turn 1, most full context is cached prefix, and only the new prompt delta plus previous assistant output becomes newly prefetched.
+
+Deterministic sample with the current default seed:
+
+| Profile | Sampled sessions | Turn counts | Turns p50/p90/max | ISL p50/p90/p95/max | New prefill p50/p90 | OSL p50/p90/p95/max | Cache hit p50/p90 | Truncated turns |
+|---|---:|---|---:|---:|---:|---:|---:|---:|
+| chat-multiturn | 10 | 10, 5, 5, 18, 18, 10, 10, 18, 5, 18 | 10/18/18 | 1,703/3,220/3,463/3,700 | 182/308 | 167/292/306/317 | 0.86/0.96 | 0 |
+| osworld-multiturn | 10 | 3, 12, 30, 7, 30, 16, 14, 30, 5, 10 | 13/30/30 | 3,316/11,815/12,530/13,162 | 92/611 | 85/105/113/163 | 0.97/0.99 | 0 |
+| swebench-multiturn | 10 | 128, 82, 87, 74, 92, 129, 65, 145, 90, 123 | 91/131/145 | 13,061/27,939/32,151/38,445 | 68/759 | 32/105/190/653 | 0.99/1.00 | 0 |
+| terminalbench-multiturn | 10 | 46, 88, 39, 238, 28, 37, 17, 82, 29, 54 | 43/103/238 | 11,951/50,896/69,863/83,380 | 76/740 | 31/101/226/4,671 | 0.99/1.00 | 0 |
+
+Implementation caveat: `make_dataset(...)` currently uses the dataset default random seed for distributional profiles, so the synthetic sessions are deterministic unless the dataset factory is extended to receive the runner seed.

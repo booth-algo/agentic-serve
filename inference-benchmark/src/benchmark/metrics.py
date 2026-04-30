@@ -23,6 +23,21 @@ class RequestResult:
     input_tokens: int = 0
     output_tokens: int = 0
     error: Optional[str] = None
+
+    # Client-side request shape/timing. These do not replace TTFT/TPOT/E2EL;
+    # they explain scheduler pressure and workload shape for later predictors.
+    request_index: Optional[int] = None
+    max_tokens_requested: Optional[int] = None
+    message_count: Optional[int] = None
+    prompt_chars: Optional[int] = None
+    scheduled_at_s: Optional[float] = None
+    dispatch_started_at_s: Optional[float] = None
+    semaphore_acquired_at_s: Optional[float] = None
+    completed_at_s: Optional[float] = None
+    client_schedule_delay_s: Optional[float] = None
+    client_queue_wait_s: Optional[float] = None
+    client_request_wall_s: Optional[float] = None
+
     turn_index: Optional[int] = None      # multi-turn: which turn (0-indexed)
     session_id: Optional[int] = None      # multi-turn: conversation/session id
 
@@ -36,6 +51,15 @@ class RequestResult:
     cached_context_tokens: Optional[int] = None
     cache_hit_rate: Optional[float] = None
     cache_estimate_source: Optional[str] = None
+    cache_block_size: Optional[int] = None
+    block_aligned_cached_context_tokens: Optional[int] = None
+    block_aligned_new_prefill_tokens: Optional[int] = None
+    block_aligned_cache_hit_rate: Optional[float] = None
+    uncached_prefix_tail_tokens: Optional[int] = None
+    total_context_blocks: Optional[int] = None
+    cached_context_blocks: Optional[int] = None
+    new_prefill_blocks: Optional[int] = None
+    request_metadata: dict = field(default_factory=dict)
 
     @property
     def tpot(self) -> Optional[float]:
@@ -53,11 +77,47 @@ class RequestResult:
         return None
 
 
+def annotate_request_observability(
+    result: RequestResult,
+    *,
+    request_index: Optional[int],
+    request,
+    scheduled_at_s: Optional[float],
+    dispatch_started_at_s: float,
+    semaphore_acquired_at_s: float,
+    completed_at_s: float,
+) -> RequestResult:
+    """Attach client-side request shape and scheduling metadata."""
+    result.request_index = request_index
+    result.max_tokens_requested = int(getattr(request, "max_tokens", 0) or 0)
+    messages = list(getattr(request, "messages", []) or [])
+    result.message_count = len(messages)
+    result.prompt_chars = sum(len(str(m.get("content", ""))) for m in messages)
+    result.scheduled_at_s = scheduled_at_s
+    result.dispatch_started_at_s = dispatch_started_at_s
+    result.semaphore_acquired_at_s = semaphore_acquired_at_s
+    result.completed_at_s = completed_at_s
+    result.client_schedule_delay_s = (
+        dispatch_started_at_s - scheduled_at_s
+        if scheduled_at_s is not None
+        else None
+    )
+    result.client_queue_wait_s = max(0.0, semaphore_acquired_at_s - dispatch_started_at_s)
+    result.client_request_wall_s = max(0.0, completed_at_s - semaphore_acquired_at_s)
+
+    metadata = getattr(request, "metadata", None)
+    if metadata:
+        result.request_metadata = dict(metadata)
+
+    return result
+
+
 def annotate_multi_turn_cache_estimate(
     result: RequestResult,
     session_id: int,
     turn_index: int,
     previous_context_tokens: int,
+    cache_block_size: Optional[int] = None,
 ) -> RequestResult:
     """Attach per-session cache-estimate metadata to a multi-turn result.
 
@@ -83,6 +143,25 @@ def annotate_multi_turn_cache_estimate(
     result.new_prefill_tokens = new_prefill
     result.cache_hit_rate = cached_context / total_context if total_context > 0 else 0.0
     result.cache_estimate_source = "previous_prompt_tokens"
+
+    if cache_block_size is not None and cache_block_size > 0:
+        block_size = int(cache_block_size)
+        aligned_cached = (cached_context // block_size) * block_size
+        aligned_new_prefill = max(0, total_context - aligned_cached)
+        result.cache_block_size = block_size
+        result.block_aligned_cached_context_tokens = aligned_cached
+        result.block_aligned_new_prefill_tokens = aligned_new_prefill
+        result.block_aligned_cache_hit_rate = (
+            aligned_cached / total_context if total_context > 0 else 0.0
+        )
+        result.uncached_prefix_tail_tokens = cached_context - aligned_cached
+        result.total_context_blocks = (total_context + block_size - 1) // block_size
+        result.cached_context_blocks = aligned_cached // block_size
+        result.new_prefill_blocks = (
+            (aligned_new_prefill + block_size - 1) // block_size
+            if aligned_new_prefill > 0
+            else 0
+        )
     return result
 
 
@@ -263,6 +342,15 @@ class TurnSummary:
     median_cached_context_tokens: float = 0.0
     avg_cache_hit_rate: float = 0.0
     median_cache_hit_rate: float = 0.0
+    avg_block_aligned_new_prefill_tokens: float = 0.0
+    median_block_aligned_new_prefill_tokens: float = 0.0
+    avg_block_aligned_cached_context_tokens: float = 0.0
+    median_block_aligned_cached_context_tokens: float = 0.0
+    avg_block_aligned_cache_hit_rate: float = 0.0
+    median_block_aligned_cache_hit_rate: float = 0.0
+    avg_uncached_prefix_tail_tokens: float = 0.0
+    median_uncached_prefix_tail_tokens: float = 0.0
+    median_client_queue_wait_ms: float = 0.0
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()
@@ -287,6 +375,11 @@ def aggregate_per_turn(results_by_turn: dict[int, list]) -> list[TurnSummary]:
         new_prefill_toks = []
         cached_context_toks = []
         cache_hit_rates = []
+        block_new_prefill_toks = []
+        block_cached_context_toks = []
+        block_cache_hit_rates = []
+        uncached_prefix_tail_toks = []
+        client_queue_waits = []
 
         for r in results:
             if r.success:
@@ -305,6 +398,16 @@ def aggregate_per_turn(results_by_turn: dict[int, list]) -> list[TurnSummary]:
                     cached_context_toks.append(r.cached_context_tokens)
                 if r.cache_hit_rate is not None:
                     cache_hit_rates.append(r.cache_hit_rate)
+                if r.block_aligned_new_prefill_tokens is not None:
+                    block_new_prefill_toks.append(r.block_aligned_new_prefill_tokens)
+                if r.block_aligned_cached_context_tokens is not None:
+                    block_cached_context_toks.append(r.block_aligned_cached_context_tokens)
+                if r.block_aligned_cache_hit_rate is not None:
+                    block_cache_hit_rates.append(r.block_aligned_cache_hit_rate)
+                if r.uncached_prefix_tail_tokens is not None:
+                    uncached_prefix_tail_toks.append(r.uncached_prefix_tail_tokens)
+                if r.client_queue_wait_s is not None:
+                    client_queue_waits.append(r.client_queue_wait_s * 1000)
 
         if ttfts:
             ts.mean_ttft_ms = statistics.mean(ttfts)
@@ -332,6 +435,20 @@ def aggregate_per_turn(results_by_turn: dict[int, list]) -> list[TurnSummary]:
         if cache_hit_rates:
             ts.avg_cache_hit_rate = statistics.mean(cache_hit_rates)
             ts.median_cache_hit_rate = statistics.median(cache_hit_rates)
+        if block_new_prefill_toks:
+            ts.avg_block_aligned_new_prefill_tokens = statistics.mean(block_new_prefill_toks)
+            ts.median_block_aligned_new_prefill_tokens = statistics.median(block_new_prefill_toks)
+        if block_cached_context_toks:
+            ts.avg_block_aligned_cached_context_tokens = statistics.mean(block_cached_context_toks)
+            ts.median_block_aligned_cached_context_tokens = statistics.median(block_cached_context_toks)
+        if block_cache_hit_rates:
+            ts.avg_block_aligned_cache_hit_rate = statistics.mean(block_cache_hit_rates)
+            ts.median_block_aligned_cache_hit_rate = statistics.median(block_cache_hit_rates)
+        if uncached_prefix_tail_toks:
+            ts.avg_uncached_prefix_tail_tokens = statistics.mean(uncached_prefix_tail_toks)
+            ts.median_uncached_prefix_tail_tokens = statistics.median(uncached_prefix_tail_toks)
+        if client_queue_waits:
+            ts.median_client_queue_wait_ms = statistics.median(client_queue_waits)
 
         summaries.append(ts)
     return summaries

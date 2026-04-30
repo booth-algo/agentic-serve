@@ -17,6 +17,8 @@ export interface BenchmarkConfig {
   benchmark_schema_version?: number;
   workload_schema_version?: string;
   dashboard_scope?: 'current' | 'archive';
+  profile_metadata?: Record<string, unknown>;
+  prediction_metadata?: Record<string, unknown>;
 }
 
 export interface BenchmarkSummary {
@@ -74,6 +76,15 @@ export interface PerTurnEntry {
   median_cached_context_tokens?: number;
   avg_cache_hit_rate?: number;
   median_cache_hit_rate?: number;
+  avg_block_aligned_new_prefill_tokens?: number;
+  median_block_aligned_new_prefill_tokens?: number;
+  avg_block_aligned_cached_context_tokens?: number;
+  median_block_aligned_cached_context_tokens?: number;
+  avg_block_aligned_cache_hit_rate?: number;
+  median_block_aligned_cache_hit_rate?: number;
+  avg_uncached_prefix_tail_tokens?: number;
+  median_uncached_prefix_tail_tokens?: number;
+  median_client_queue_wait_ms?: number;
 }
 
 export interface ScatterPoint {

@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
-# Multi-turn sweep variant of sweep_all_profiles.sh — adds --mode multi-turn.
-# Profiles default to the canonical distributional multi-turn paper suite.
+# SGLang multi-turn variant of sweep_multiturn_profiles.sh.
+#
+# Same positional-arg shape as the vLLM launcher so bench_orchestrator.sh can
+# dispatch backend=sglang multi-turn cells once sweep.yaml enables them.
 #
 # Usage:
-#   bash sweep_multiturn_profiles.sh \
+#   bash sweep_multiturn_profiles_sglang.sh \
 #       MODEL_PATH TP SHORT_NAME BACKEND OUT_DIR \
 #       [PY] [GPU_MEM] [MAX_LEN] [CONC_LIST] [PROFILE_LIST] [WARMUP]
-set -euo pipefail
+set -uo pipefail
 
-# Include CUDA graph memory in vLLM's pre-flight memory profiler.
-# Without this, vLLM sizes the KV cache greedily and OOMs during cudagraph
-# capture on tight configs (e.g. 70B/72B at TP=4 on 40GB A100). Slightly
-# reduces KV cache headroom in exchange for guaranteed startup; will be
-# vLLM's default in v0.19+.
-export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
+export SGLANG_DISABLE_CUDNN_CHECK=1
+export NCCL_P2P_DISABLE=1
+export NCCL_SHM_DISABLE=1
+export NCCL_DEBUG=WARN
+
+SGLANG_ENV_DIR="$(dirname "$(dirname "${6:-python}")")"
+if [[ -x "$SGLANG_ENV_DIR/bin/nvcc" ]]; then
+    export CUDA_HOME="$SGLANG_ENV_DIR"
+    export PATH="$SGLANG_ENV_DIR/bin:$PATH"
+    export LIBRARY_PATH="$SGLANG_ENV_DIR/lib:$SGLANG_ENV_DIR/targets/x86_64-linux/lib:${LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="$SGLANG_ENV_DIR/lib:$SGLANG_ENV_DIR/targets/x86_64-linux/lib:${LD_LIBRARY_PATH:-}"
+fi
 
 MODEL_PATH="${1:?model path}"
 TP="${2:?tp}"
@@ -32,33 +40,32 @@ PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
 
 mkdir -p "$OUT_DIR"
-echo "[mt-sweep] MODEL=$MODEL_PATH TP=$TP OUT=$OUT_DIR"
-echo "[mt-sweep] concurrencies: $CONCS"
-echo "[mt-sweep] profiles: $PROFILES"
+echo "[mt-sweep-sglang] MODEL=$MODEL_PATH TP=$TP OUT=$OUT_DIR"
+echo "[mt-sweep-sglang] concurrencies: $CONCS"
+echo "[mt-sweep-sglang] profiles: $PROFILES"
 
-"$PY" -m vllm.entrypoints.openai.api_server \
-    --model "$MODEL_PATH" \
+"$PY" -m sglang.launch_server \
+    --model-path "$MODEL_PATH" \
+    --host 0.0.0.0 \
     --port "$PORT" \
     --api-key "$API_KEY" \
-    --enable-prefix-caching \
-    --enable-chunked-prefill \
-    --tensor-parallel-size "$TP" \
-    --gpu-memory-utilization "$GPU_MEM" \
-    --max-model-len "$MAX_LEN" \
+    --tp "$TP" \
+    --mem-fraction-static "$GPU_MEM" \
+    --context-length "$MAX_LEN" \
     --trust-remote-code \
     > /tmp/vllm_${PORT}.log 2>&1 &
 SERVER_PID=$!
-echo "[mt-sweep] vllm PID=$SERVER_PID (port $PORT)"
+echo "[mt-sweep-sglang] sglang PID=$SERVER_PID (port $PORT)"
 
 trap 'kill $SERVER_PID 2>/dev/null; wait $SERVER_PID 2>/dev/null; true' EXIT
 
 for i in $(seq 1 180); do
     if curl -sf "http://localhost:$PORT/v1/models" -H "Authorization: Bearer $API_KEY" > /dev/null 2>&1; then
-        echo "[mt-sweep] server ready after ${i}×5s"
+        echo "[mt-sweep-sglang] server ready after ${i}x5s"
         break
     fi
     if ! kill -0 $SERVER_PID 2>/dev/null; then
-        echo "[mt-sweep] server died; tail log:"
+        echo "[mt-sweep-sglang] server died; tail log:"
         tail -30 /tmp/vllm_${PORT}.log
         exit 1
     fi
@@ -67,12 +74,9 @@ done
 
 cd /tmp/inference-benchmark
 
-# Capture engine version alongside results so the dashboard can attribute
-# each sweep to a specific vllm build. Written once per sweep; applies to
-# every result file in the output dir.
-VLLM_VERSION=$("$PY" -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown")
-echo "backend=vllm version=$VLLM_VERSION" > "$OUT_DIR/_engine_version.txt"
-echo "[sweep] captured engine version: vllm $VLLM_VERSION"
+SGLANG_VERSION=$("$PY" -c "import sglang; print(sglang.__version__)" 2>/dev/null || echo "unknown")
+echo "backend=sglang version=$SGLANG_VERSION" > "$OUT_DIR/_engine_version.txt"
+echo "[mt-sweep-sglang] captured engine version: sglang $SGLANG_VERSION"
 
 for PROFILE in $PROFILES; do
     for CONC in $CONCS; do
@@ -82,7 +86,7 @@ for PROFILE in $PROFILES; do
             continue
         fi
         echo ""
-        echo "=== profile=$PROFILE conc=$CONC (multi-turn) ==="
+        echo "=== profile=$PROFILE conc=$CONC (sglang multi-turn) ==="
         OPENAI_API_KEY="$API_KEY" "$PY" -m src.benchmark.runner \
             --url        "http://localhost:$PORT/v1/chat/completions" \
             --model      "$MODEL_PATH" \
@@ -93,16 +97,16 @@ for PROFILE in $PROFILES; do
             --max-context-tokens "$MAX_LEN" \
             --context-safety-margin-tokens "$CONTEXT_SAFETY_MARGIN_TOKENS" \
             --prefix-caching-state on \
-            --chunked-prefill on \
+            --chunked-prefill unknown \
             --max-model-len "$MAX_LEN" \
             --gpu-memory-utilization "$GPU_MEM" \
             --tensor-parallel-size "$TP" \
             --warmup     "$WARMUP" \
             --timeout    300 \
             --api-key    "$API_KEY" \
-            --output     "$OUT_FILE" || echo "[warn] mt-bench failed for $PROFILE conc=$CONC (continuing)"
+            --output     "$OUT_FILE" || echo "[warn] mt-sglang bench failed for $PROFILE conc=$CONC (continuing)"
     done
 done
 
-echo "[mt-sweep] done; results in $OUT_DIR"
+echo "[mt-sweep-sglang] done; results in $OUT_DIR"
 ls -la "$OUT_DIR" | tail -15
