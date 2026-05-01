@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SweepState } from '../types-sweep';
-
-declare const __BUILD_HASH__: string;
-
-const R2_URL = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current/sweep-state.json';
+import { sweepStateUrl } from '../dataUrls';
 
 export function useSweepState() {
   const [sweepState, setSweepState] = useState<SweepState | null>(null);
@@ -11,7 +8,7 @@ export function useSweepState() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${R2_URL}?v=${__BUILD_HASH__}`)
+    fetch(sweepStateUrl)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

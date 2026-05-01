@@ -42,12 +42,25 @@ jobs:
         working-directory: inference-benchmark
         run: npx tsx dashboard/scripts/build-data.ts
 
+      - name: Validate data.json
+        working-directory: inference-benchmark/dashboard
+        run: npm run validate:data
+
       - name: Upload data.json to R2
         working-directory: inference-benchmark
         run: |
           aws s3 cp dashboard/public/data.json s3://agent-bench/data.json \
             --endpoint-url $R2_ENDPOINT
+          aws s3 cp dashboard/public/data.json s3://agent-bench/json/current/data.json \
+            --endpoint-url $R2_ENDPOINT
           echo "Uploaded data.json ($(du -h dashboard/public/data.json | cut -f1))"
+
+      - name: Verify R2 data.json
+        working-directory: inference-benchmark/dashboard
+        run: |
+          aws s3 cp s3://agent-bench/json/current/data.json /tmp/dashboard-r2-data.json \
+            --endpoint-url $R2_ENDPOINT
+          npm run validate:data -- /tmp/dashboard-r2-data.json
 
       - name: Upload roofline-quadrant.json to R2
         working-directory: inference-benchmark

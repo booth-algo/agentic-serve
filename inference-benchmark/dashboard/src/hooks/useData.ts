@@ -6,10 +6,7 @@ import {
   isProfileInScope,
   normalizeProfileName,
 } from '../profileMeta';
-
-declare const __BUILD_HASH__: string;
-
-const R2_JSON_BASE = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current';
+import { dataJsonUrl } from '../dataUrls';
 
 export function useData(dataScope: DataScope) {
   const [allData, setAllData] = useState<BenchmarkResult[]>([]);
@@ -26,7 +23,7 @@ export function useData(dataScope: DataScope) {
 
   useEffect(() => {
     // Cache-bust with build-time hash so deploys always serve fresh data
-    fetch(`${R2_JSON_BASE}/data.json?v=${__BUILD_HASH__}`)
+    fetch(dataJsonUrl)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

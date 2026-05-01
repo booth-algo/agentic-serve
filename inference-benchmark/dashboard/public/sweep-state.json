@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-29T16:36:18.059168+00:00",
+  "generated_at": "2026-05-01T17:13:14.379845+00:00",
   "feasibility_ratio": 0.9,
   "hosts": {
     "gpu-4": {
@@ -64,7 +64,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-26T22:46:29.913761+00:00"
+      "updated_at": "2026-05-01T14:05:25.545539+00:00"
     },
     {
       "host": "gpu-4",
@@ -77,7 +77,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T05:16:32.283994+00:00"
+      "updated_at": "2026-05-01T14:05:34.668288+00:00"
     },
     {
       "host": "gpu-4",
@@ -90,7 +90,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T05:31:29.754097+00:00"
+      "updated_at": "2026-05-01T14:05:44.022031+00:00"
     },
     {
       "host": "gpu-4",
@@ -103,7 +103,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T06:01:30.232243+00:00"
+      "updated_at": "2026-05-01T14:05:53.446771+00:00"
     },
     {
       "host": "gpu-4",
@@ -116,7 +116,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T06:31:35.995470+00:00"
+      "updated_at": "2026-05-01T14:06:03.114505+00:00"
     },
     {
       "host": "gpu-4",
@@ -129,7 +129,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T07:01:30.312727+00:00"
+      "updated_at": "2026-05-01T14:20:23.977520+00:00"
     },
     {
       "host": "gpu-4",
@@ -142,7 +142,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T07:31:30.839302+00:00"
+      "updated_at": "2026-05-01T14:20:34.245235+00:00"
     },
     {
       "host": "gpu-4",
@@ -155,7 +155,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T09:01:34.213983+00:00"
+      "updated_at": "2026-05-01T14:52:01.327720+00:00"
     },
     {
       "host": "gpu-4",
@@ -165,36 +165,75 @@
       "mode": "single",
       "backend": "vllm",
       "status": "done",
-      "attempt": 1,
-      "max_len_override": 4096,
+      "attempt": 0,
+      "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T09:31:32.631420+00:00"
+      "updated_at": "2026-05-01T14:52:10.690471+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-01T15:47:36.637003+00:00"
     },
     {
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.3-70B",
+      "tp": 4,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-01T15:02:38.052580+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.3-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-01T15:57:28.134811+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen2.5-72B",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
       "status": "skipped",
       "attempt": 0,
       "max_len_override": null,
-      "reason": "cudagraph capture OOM at max_len=8192 and 4096; 140/144 GB weights vs 144 GB tp4 budget too tight",
-      "updated_at": "2026-04-24T14:47:06.134638+00:00"
+      "reason": null,
+      "updated_at": "2026-05-01T16:02:11.671068+00:00"
     },
     {
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen2.5-72B",
       "tp": 4,
-      "mode": "single",
+      "mode": "multi",
       "backend": "vllm",
       "status": "skipped",
-      "attempt": 2,
-      "max_len_override": 2048,
-      "reason": "cudagraph capture OOM; 144 GB weights vs 144 GB tp4 budget infeasible even at max_len=2048",
-      "updated_at": "2026-04-24T14:47:06.145638+00:00"
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-01T16:09:17.714400+00:00"
     },
     {
       "host": "gpu-4",
@@ -207,7 +246,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T10:01:33.783950+00:00"
+      "updated_at": "2026-05-01T16:14:06.076492+00:00"
     },
     {
       "host": "gpu-4",
@@ -220,111 +259,20 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T10:31:32.106078+00:00"
+      "updated_at": "2026-05-01T16:21:07.801918+00:00"
     },
     {
       "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Llama-3.1-8B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T11:01:30.928259+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Llama-3.1-70B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T11:31:31.055568+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Llama-3.3-70B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T12:16:29.783685+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Mixtral-8x7B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T12:46:29.625903+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Qwen2.5-72B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T13:31:30.701272+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Qwen3.5-9B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T14:01:28.738823+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Qwen3.5-27B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T14:31:27.331787+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
+      "hw_label": "A100-40GBx4",
       "model": "gpt-oss-20b",
-      "tp": 8,
-      "mode": "single",
+      "tp": 4,
+      "mode": "multi",
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T15:01:46.686440+00:00"
+      "updated_at": "2026-05-01T16:25:58.085948+00:00"
     },
     {
       "host": "3090",
@@ -337,7 +285,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-26T22:16:28.587783+00:00"
+      "updated_at": "2026-05-01T14:06:17.746102+00:00"
     },
     {
       "host": "3090",
@@ -350,7 +298,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T00:45:57.665339+00:00"
+      "updated_at": "2026-05-01T14:06:27.013847+00:00"
     },
     {
       "host": "3090",
@@ -363,7 +311,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T02:31:00.381672+00:00"
+      "updated_at": "2026-05-01T14:06:36.528585+00:00"
     },
     {
       "host": "3090",
@@ -376,7 +324,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T20:31:04.443529+00:00"
+      "updated_at": "2026-05-01T14:06:45.770331+00:00"
     },
     {
       "host": "3090",
@@ -389,7 +337,20 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T14:15:54.825264+00:00"
+      "updated_at": "2026-05-01T14:20:48.544837+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-01T15:50:25.894342+00:00"
     },
     {
       "host": "3090",
@@ -400,9 +361,22 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
-      "max_len_override": 4096,
+      "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T14:30:59.769784+00:00"
+      "updated_at": "2026-05-01T14:06:59.213961+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-01T14:21:02.337454+00:00"
     },
     {
       "host": "3090",
@@ -415,7 +389,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-24T12:55:37.922819+00:00"
+      "updated_at": "2026-05-01T14:21:13.605140+00:00"
     },
     {
       "host": "3090",
@@ -428,7 +402,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-24T13:34:59.994400+00:00"
+      "updated_at": "2026-05-01T14:52:26.425053+00:00"
     },
     {
       "host": "3090",
@@ -441,7 +415,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T17:30:58.862444+00:00"
+      "updated_at": "2026-05-01T14:21:25.661805+00:00"
     },
     {
       "host": "3090",
@@ -454,20 +428,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T16:01:14.337173+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x8",
-      "model": "Llama-3.1-8B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T23:18:42.251262+00:00"
+      "updated_at": "2026-05-01T15:02:51.747208+00:00"
     },
     {
       "host": "3090",
@@ -480,46 +441,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T19:31:18.121899+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x8",
-      "model": "Qwen3.5-9B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T23:18:42.288261+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x8",
-      "model": "Mixtral-8x7B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T23:18:42.257262+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x8",
-      "model": "Llama-3.1-70B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T23:18:42.231263+00:00"
+      "updated_at": "2026-05-01T15:13:03.397550+00:00"
     },
     {
       "host": "2080ti",
@@ -532,7 +454,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-26T22:46:40.577477+00:00"
+      "updated_at": "2026-05-01T14:07:13.813559+00:00"
     },
     {
       "host": "2080ti",
@@ -541,11 +463,11 @@
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-26T23:31:28.425133+00:00"
+      "updated_at": null
     },
     {
       "host": "2080ti",
@@ -554,11 +476,11 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T11:46:38.625583+00:00"
+      "updated_at": null
     },
     {
       "host": "2080ti",
@@ -571,7 +493,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T12:01:37.820369+00:00"
+      "updated_at": "2026-05-01T14:07:22.887309+00:00"
     },
     {
       "host": "2080ti",
@@ -584,7 +506,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T00:30:58.122062+00:00"
+      "updated_at": "2026-05-01T14:21:36.391507+00:00"
     },
     {
       "host": "2080ti",
@@ -593,11 +515,11 @@
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T01:15:49.866238+00:00"
+      "updated_at": null
     },
     {
       "host": "2080ti",
@@ -606,11 +528,11 @@
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-29T06:16:03.329940+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
@@ -619,11 +541,11 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
@@ -632,11 +554,11 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
@@ -645,128 +567,11 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x8",
-      "model": "Llama-3.1-70B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x8",
-      "model": "Llama-3.3-70B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x8",
-      "model": "Qwen2.5-72B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-26T09:55:34.575718+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GB",
-      "model": "Llama-3.1-8B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T05:16:32.283994+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Llama-3.1-8B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-28T00:31:13.754632+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Llama-3.1-8B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-28T03:45:55.672108+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Mixtral-8x7B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T09:01:34.213983+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Qwen3.5-9B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-28T14:16:11.923795+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090",
-      "model": "Llama-3.1-8B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-28T00:45:57.665339+00:00"
+      "updated_at": null
     },
     {
       "host": "3090",
@@ -779,137 +584,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-29T10:46:05.212785+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x2",
-      "model": "Qwen3.5-9B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-28T20:31:04.443529+00:00"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Ti",
-      "model": "Llama-3.1-8B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-28T00:30:58.122062+00:00"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Tix2",
-      "model": "Qwen3.5-9B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-29T06:16:03.329940+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "Llama-3.1-70B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "Llama-3.3-70B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "Qwen2.5-72B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x8",
-      "model": "Llama-3.1-70B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x8",
-      "model": "Llama-3.3-70B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-26T09:55:34.574718+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x8",
-      "model": "Qwen2.5-72B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-26T09:55:34.575718+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x2",
-      "model": "Llama-3.1-8B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-29T10:46:05.212785+00:00"
+      "updated_at": "2026-05-01T15:24:37.404222+00:00"
     },
     {
       "host": "3090",
@@ -918,24 +593,11 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-29T13:27:57.505713+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x8",
-      "model": "Llama-3.1-8B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T23:18:42.247262+00:00"
+      "updated_at": "2026-05-01T15:36:11.262913+00:00"
     },
     {
       "host": "3090",
@@ -944,24 +606,11 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-29T13:27:57.521712+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x8",
-      "model": "Qwen3.5-9B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-27T23:18:42.285261+00:00"
+      "updated_at": "2026-05-01T15:47:46.386735+00:00"
     },
     {
       "host": "2080ti",
@@ -974,7 +623,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-29T07:31:00.520922+00:00"
+      "updated_at": "2026-05-01T14:21:53.447033+00:00"
     },
     {
       "host": "2080ti",
@@ -987,7 +636,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-29T13:27:57.481713+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
@@ -996,11 +645,11 @@
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-25T13:46:36.230662+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
@@ -1009,141 +658,102 @@
       "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-25T14:16:44.445266+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
       "hw_label": "H100x4",
-      "model": "Llama-3.3-70B",
-      "tp": 4,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-25T14:40:00.401790+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "Llama-3.3-70B",
-      "tp": 4,
-      "mode": "single",
-      "backend": "sglang",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-25T15:01:38.916394+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "Qwen2.5-72B",
-      "tp": 4,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-25T15:31:29.004477+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "Qwen2.5-72B",
-      "tp": 4,
-      "mode": "single",
-      "backend": "sglang",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-25T16:01:38.325917+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x8",
       "model": "Llama-3.1-70B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-25T16:16:57.581887+00:00"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x8",
-      "model": "Llama-3.1-70B",
-      "tp": 8,
-      "mode": "single",
+      "tp": 4,
+      "mode": "multi",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-25T16:31:58.239347+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
-      "hw_label": "H100x8",
+      "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
-      "tp": 8,
+      "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-25T16:47:01.467735+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
-      "hw_label": "H100x8",
+      "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
-      "tp": 8,
+      "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-25T17:01:57.589315+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
-      "hw_label": "H100x8",
+      "hw_label": "H100x4",
+      "model": "Llama-3.3-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
-      "tp": 8,
+      "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-25T17:31:27.035360+00:00"
+      "updated_at": null
     },
     {
       "host": "h100",
-      "hw_label": "H100x8",
+      "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
-      "tp": 8,
+      "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-25T17:47:32.634795+00:00"
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x4",
+      "model": "Qwen2.5-72B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
     },
     {
       "host": "gpu-4",
@@ -1156,7 +766,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-22T01:20:19.860975+00:00"
+      "updated_at": "2026-05-01T14:07:37.103918+00:00"
     },
     {
       "host": "gpu-4",
@@ -1169,7 +779,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-22T02:00:20.249156+00:00"
+      "updated_at": "2026-05-01T16:32:58.396928+00:00"
     },
     {
       "host": "3090",
@@ -1182,7 +792,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-21T23:10:20.495928+00:00"
+      "updated_at": "2026-05-01T15:24:49.763875+00:00"
     },
     {
       "host": "3090",
@@ -1195,7 +805,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-24T12:07:51.766814+00:00"
+      "updated_at": "2026-05-01T16:02:24.158726+00:00"
     },
     {
       "host": "gpu-4",
@@ -1208,20 +818,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T00:31:13.754632+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Llama-3.1-8B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-28T03:45:55.672108+00:00"
+      "updated_at": "2026-05-01T16:37:52.104125+00:00"
     },
     {
       "host": "gpu-4",
@@ -1234,7 +831,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T07:30:58.613006+00:00"
+      "updated_at": "2026-05-01T14:07:46.133669+00:00"
     },
     {
       "host": "gpu-4",
@@ -1247,7 +844,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T11:15:58.033887+00:00"
+      "updated_at": "2026-05-01T16:44:53.075817+00:00"
     },
     {
       "host": "gpu-4",
@@ -1260,46 +857,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T14:16:11.923795+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Qwen3.5-9B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-28T19:46:12.741215+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Qwen3.5-27B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-29T00:16:17.786389+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Mixtral-8x7B",
-      "tp": 8,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-04-29T01:01:09.435008+00:00"
+      "updated_at": "2026-05-01T16:49:56.246626+00:00"
     },
     {
       "host": "gpu-4",
@@ -1312,7 +870,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-28T17:00:59.901423+00:00"
+      "updated_at": "2026-05-01T16:45:02.751556+00:00"
     },
     {
       "host": "2080ti",
@@ -1325,7 +883,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": "MXFP4 needs sm80+; 2080Ti is sm75 (Turing, no hw support)",
-      "updated_at": "2026-04-24T14:47:06.078640+00:00"
+      "updated_at": null
     },
     {
       "host": "2080ti",
@@ -1335,10 +893,10 @@
       "mode": "single",
       "backend": "vllm",
       "status": "skipped",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": "Qwen3.5-9B 18 GB weights + KV cache too tight on 22 GB 2080Ti (num_gpu_blocks=0 at startup)",
-      "updated_at": "2026-04-24T14:47:06.084640+00:00"
+      "attempt": 1,
+      "max_len_override": 2048,
+      "reason": null,
+      "updated_at": "2026-05-01T14:52:35.178819+00:00"
     },
     {
       "host": "2080ti",
@@ -1351,7 +909,7 @@
       "attempt": 0,
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-04-27T23:18:42.216263+00:00"
+      "updated_at": null
     },
     {
       "host": "gpu-4",
@@ -1363,8 +921,8 @@
       "status": "skipped",
       "attempt": 0,
       "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.156638+00:00"
+      "reason": null,
+      "updated_at": "2026-05-01T16:45:07.537427+00:00"
     },
     {
       "host": "gpu-4",
@@ -1376,8 +934,8 @@
       "status": "skipped",
       "attempt": 0,
       "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.107639+00:00"
+      "reason": null,
+      "updated_at": "2026-05-01T16:56:52.446351+00:00"
     },
     {
       "host": "gpu-4",
@@ -1389,8 +947,8 @@
       "status": "skipped",
       "attempt": 0,
       "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.127639+00:00"
+      "reason": null,
+      "updated_at": "2026-05-01T17:01:36.359575+00:00"
     },
     {
       "host": "gpu-4",
@@ -1402,8 +960,8 @@
       "status": "skipped",
       "attempt": 0,
       "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.140638+00:00"
+      "reason": null,
+      "updated_at": "2026-05-01T17:08:32.547589+00:00"
     },
     {
       "host": "gpu-4",
@@ -1415,86 +973,8 @@
       "status": "skipped",
       "attempt": 0,
       "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.162638+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Llama-3.1-8B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "sglang",
-      "status": "skipped",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.131639+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Llama-3.1-70B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "sglang",
-      "status": "skipped",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.117639+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Llama-3.3-70B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "sglang",
-      "status": "skipped",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.136638+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Qwen2.5-72B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "sglang",
-      "status": "skipped",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.147638+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "Qwen3.5-9B",
-      "tp": 8,
-      "mode": "single",
-      "backend": "sglang",
-      "status": "skipped",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.166637+00:00"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx8",
-      "model": "gpt-oss-20b",
-      "tp": 8,
-      "mode": "single",
-      "backend": "sglang",
-      "status": "skipped",
-      "attempt": 0,
-      "max_len_override": null,
-      "reason": "sgl-kernel 0.3.21 missing sm80 binary (Ampere) \u2014 rebuild from source to unblock",
-      "updated_at": "2026-04-24T14:47:06.112639+00:00"
+      "reason": null,
+      "updated_at": "2026-05-01T17:13:14.299668+00:00"
     },
     {
       "host": "2080ti",
@@ -1506,8 +986,8 @@
       "status": "skipped",
       "attempt": 0,
       "max_len_override": null,
-      "reason": "sgl-kernel has no sm75 binary \u2014 Turing unsupported for sglang",
-      "updated_at": "2026-04-24T14:47:06.081640+00:00"
+      "reason": null,
+      "updated_at": "2026-05-01T14:52:40.200686+00:00"
     },
     {
       "host": "2080ti",
@@ -1516,11 +996,11 @@
       "tp": 2,
       "mode": "single",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
       "max_len_override": null,
-      "reason": "sgl-kernel has no sm75 binary \u2014 Turing unsupported for sglang",
-      "updated_at": "2026-04-24T14:47:06.087640+00:00"
+      "reason": null,
+      "updated_at": null
     },
     {
       "host": "gpu-4",
