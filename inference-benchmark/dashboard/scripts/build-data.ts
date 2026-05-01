@@ -70,8 +70,12 @@ const FALLBACK_ENGINE_VERSIONS: Record<string, string> = {
   sglang: '0.5.9',
 };
 
-const RESULTS_DIR = path.resolve(__dirname, '../../results');
-const OUTPUT_FILE = path.resolve(__dirname, '../public/data.json');
+const RESULTS_DIR = path.resolve(
+  process.env.BENCHMARK_RESULTS_DIR ?? path.resolve(__dirname, '../../results'),
+);
+const OUTPUT_FILE = path.resolve(
+  process.env.DASHBOARD_DATA_OUTPUT ?? path.resolve(__dirname, '../public/data.json'),
+);
 
 // Files to skip — test files, debug files, symlinks
 const SKIP_PATTERNS = [
@@ -172,11 +176,12 @@ function normalizeProfile(profile: string): string {
   return HISTORICAL_PROFILE_ALIASES[normalized] ?? normalized;
 }
 
-function detectDataScope(raw: RawResult): 'current' | 'archive' {
-  // Anything produced before BENCHMARK_SCHEMA_VERSION=2 did not have the
-  // distributional synthetic run structure. Keep those rows in Archive even
-  // if a historical profile name normalizes to a canonical current name.
-  return raw.config.dashboard_scope === 'current' ? 'current' : 'archive';
+function detectDataScope(raw: RawResult, relDir: string): 'current' | 'archive' {
+  if (raw.config.dashboard_scope === 'current') return 'current';
+  // Files under the results/current/ R2 namespace are canonical even if
+  // the JSON was produced before the dashboard_scope field existed.
+  if (relDir.startsWith('current/') || relDir.startsWith('current\\')) return 'current';
+  return 'archive';
 }
 
 function detectBackendFromFilename(filename: string, configBackend: string): string {
@@ -268,7 +273,7 @@ function main() {
       const modelShort = shortenModel(raw.config.model);
       const backend = detectBackendFromFilename(filename, raw.config.backend);
       const profile = normalizeProfile(raw.config.profile || (raw.summary as Record<string, string>).profile || 'unknown');
-      const dataScope = detectDataScope(raw);
+      const dataScope = detectDataScope(raw, relDir);
 
       // Skip unknown hardware or unknown profiles
       if (hardware === 'Unknown') {
