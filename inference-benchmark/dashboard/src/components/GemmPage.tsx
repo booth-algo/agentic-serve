@@ -111,7 +111,7 @@ export function GemmPage({ dataScope }: { dataScope: DataScope }) {
         <p className="mb-2">
           In transformer inference, <strong className="text-[#e6edf3]">GEMM (matrix multiply) kernels account for
           92–97% of decode compute time</strong> and 60–80% of prefill time. Predicting GEMM latency accurately
-          is the single most important factor for end-to-end serving latency prediction.
+          is the single most important driver for end-to-end serving latency prediction.
         </p>
         <p className="mb-2">
           We profile each GPU's cuBLAS/cuBLASLt GEMM dispatch by sweeping <code className="text-[#79c0ff] bg-[#21262d] px-1 rounded">nn.Linear</code> across
@@ -311,9 +311,10 @@ interface ServingRow {
   cached_context_tokens?: number;
   cache_hit_rate?: number;
   cache_aware_applied?: boolean;
-  prefix_cache_ttft_factor?: number;
-  prefix_cache_decode_factor?: number;
-  prefix_cache_contention_applied?: boolean;
+  cache_feature_source?: string;
+  cache_prediction_regime?: string;
+  ttft_prediction_supported?: boolean;
+  unsupported_reason?: string;
   multiturn_prediction_mode?: string;
   predicted_turn_count?: number;
   total_successful_turn_requests?: number;
@@ -858,18 +859,19 @@ function ServingMiniMetric({ row, metric }: { row: ServingRow; metric: ServingMe
 }
 
 function cacheTooltip(row: ServingRow): string {
+  if (row.cache_prediction_regime === 'unknown_prefix_cache') {
+    return `prefix cache features missing${row.unsupported_reason ? `; ${row.unsupported_reason}` : ''}`;
+  }
   if (!row.cache_aware_applied) return 'full prefill';
   const hit = row.cache_hit_rate === undefined ? 'n/a' : `${(row.cache_hit_rate * 100).toFixed(0)}%`;
   const total = row.total_context_tokens ?? row.isl;
   const fresh = row.new_prefill_tokens ?? total;
   const cached = row.cached_context_tokens ?? Math.max(0, total - fresh);
-  const contention = row.prefix_cache_contention_applied
-    ? `contention TTFT×${formatFactor(row.prefix_cache_ttft_factor)} TPOT×${formatFactor(row.prefix_cache_decode_factor)}`
-    : 'contention not applied';
+  const source = row.cache_feature_source ? `; source ${row.cache_feature_source}` : '';
   const multiturn = row.multiturn_prediction_mode
     ? `; ${row.multiturn_prediction_mode} ${row.predicted_turn_count ?? 0} turns`
     : '';
-  return `cache hit ${hit}; new/full ${fresh}/${total}; cached ${cached}; ${contention}${multiturn}`;
+  return `cache hit ${hit}; new/full ${fresh}/${total}; cached ${cached}${source}${multiturn}`;
 }
 
 function numericMetric(row: ServingRow, key: ServingMetricKey): number | undefined {
@@ -904,11 +906,6 @@ function formatPercent(value: number | undefined): string {
 function formatCompactPercent(value: number | undefined): string {
   if (value === undefined) return '-';
   return `${value.toFixed(0)}%`;
-}
-
-function formatFactor(value: number | undefined): string {
-  if (value === undefined) return '1.00';
-  return value.toFixed(2);
 }
 
 function formatTokenCount(value: number | undefined): string {

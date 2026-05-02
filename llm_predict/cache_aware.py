@@ -8,7 +8,7 @@ from typing import Any
 
 from .composer import Composer
 from .configs.model_configs import ModelConfig
-from .serving import ServingPrediction, predict_serving
+from .serving import ServingPrediction, decode_interval_count, predict_serving
 
 
 def _optional_int(row: dict[str, Any], *keys: str) -> int | None:
@@ -174,7 +174,9 @@ def weighted_mean(values: list[tuple[float, float]]) -> float:
 def _measured_error(predicted: float, measured: float | None) -> float | None:
     if measured is None or measured <= 0:
         return None
-    return abs(predicted - measured) / measured * 100.0
+    if predicted <= 0:
+        return None
+    return round(abs(predicted - measured) / min(predicted, measured) * 100.0, 1)
 
 
 def _round_optional(value: float | None, ndigits: int = 2) -> float | None:
@@ -189,11 +191,11 @@ def predict_multiturn_from_per_turn(
     gpu: str,
     per_turn: list[dict[str, Any]] | None,
     concurrency: int,
+    tensor_parallel_size: int = 1,
     backend: str | None = None,
     backend_version: str | None = None,
     model_key: str | None = None,
     profile: str | None = None,
-    apply_prefix_contention: bool = True,
 ) -> ServingPrediction | None:
     features = derive_turn_cache_features(per_turn)
     if not features:
@@ -212,7 +214,8 @@ def predict_multiturn_from_per_turn(
             composer, cfg, gpu,
             feature.total_context_tokens,
             feature.output_tokens,
-            concurrency,
+            max(1, feature.successful),
+            tensor_parallel_size=tensor_parallel_size,
             backend=backend,
             backend_version=backend_version,
             model_key=model_key,
@@ -221,7 +224,7 @@ def predict_multiturn_from_per_turn(
             new_prefill_tokens=feature.new_prefill_tokens,
             cached_context_tokens=feature.cached_context_tokens,
             cache_hit_rate=feature.cache_hit_rate,
-            apply_prefix_contention=apply_prefix_contention,
+            cache_feature_source="per_turn",
         )
         turn_rows.append((feature, pred))
 
@@ -234,7 +237,7 @@ def predict_multiturn_from_per_turn(
         for feature, pred in turn_rows
     ])
     output_token_weight = sum(
-        feature.output_tokens * feature.successful
+        decode_interval_count(feature.output_tokens) * feature.successful
         for feature, _ in turn_rows
     )
     ttft_ms = weighted_mean([
@@ -264,6 +267,10 @@ def predict_multiturn_from_per_turn(
             "ttft_pred": round(pred.ttft_ms, 2),
             "tpot_pred": round(pred.tpot_ms, 2),
             "e2el_pred": round(pred.e2el_ms, 2),
+            "ttft_kernel_ms": round(pred.ttft_kernel_ms, 2),
+            "ttft_floor_ms": round(pred.ttft_floor_ms, 2),
+            "ttft_first_decode_ms": round(pred.ttft_first_decode_ms, 2),
+            "ttft_queue_ms": round(pred.ttft_queue_ms, 2),
         }
         if measured_ttft is not None:
             turn_row["ttft_meas"] = round(measured_ttft, 2)
@@ -303,24 +310,18 @@ def predict_multiturn_from_per_turn(
             (pred.ttft_base_ms, feature.successful)
             for feature, pred in turn_rows
         ]),
-        ttft_queue_factor=weighted_mean([
-            (pred.ttft_queue_factor, feature.successful)
+        ttft_floor_ms=weighted_mean([
+            (pred.ttft_floor_ms, feature.successful)
             for feature, pred in turn_rows
         ]),
-        ttft_correction_applied=any(
-            pred.ttft_correction_applied for _, pred in turn_rows
-        ),
-        ttft_queue_applied=any(pred.ttft_queue_applied for _, pred in turn_rows),
-        decode_correction_factor=weighted_mean([
-            (pred.decode_correction_factor, feature.successful)
+        ttft_first_decode_ms=weighted_mean([
+            (pred.ttft_first_decode_ms, feature.successful)
             for feature, pred in turn_rows
         ]),
-        decode_correction_applied=any(
-            pred.decode_correction_applied for _, pred in turn_rows
-        ),
-        moe_decode_correction_applied=any(
-            pred.moe_decode_correction_applied for _, pred in turn_rows
-        ),
+        ttft_queue_ms=weighted_mean([
+            (pred.ttft_queue_ms, feature.successful)
+            for feature, pred in turn_rows
+        ]),
         calibration_status=first_pred.calibration_status,
         total_context_tokens=int(round(weighted_mean([
             (feature.total_context_tokens, feature.successful)
@@ -339,16 +340,14 @@ def predict_multiturn_from_per_turn(
             for feature, _ in turn_rows
         ]),
         cache_aware_applied=any(pred.cache_aware_applied for _, pred in turn_rows),
-        prefix_cache_ttft_factor=weighted_mean([
-            (pred.prefix_cache_ttft_factor, feature.successful)
-            for feature, pred in turn_rows
-        ]),
-        prefix_cache_decode_factor=weighted_mean([
-            (pred.prefix_cache_decode_factor, feature.successful)
-            for feature, pred in turn_rows
-        ]),
-        prefix_cache_contention_applied=any(
-            pred.prefix_cache_contention_applied for _, pred in turn_rows
+        cache_feature_source="per_turn",
+        cache_prediction_regime=(
+            "prefix_cached_prefill"
+            if any(pred.cache_aware_applied for _, pred in turn_rows)
+            else "full_prefill"
+        ),
+        ttft_prediction_supported=all(
+            pred.ttft_prediction_supported for _, pred in turn_rows
         ),
         multiturn_prediction_mode="per_turn_aggregated",
         predicted_turn_count=len(turn_rows),

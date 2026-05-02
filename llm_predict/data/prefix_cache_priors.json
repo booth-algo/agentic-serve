@@ -1,0 +1,20 @@
+{
+  "coding-singleturn": {
+    "system_prompt_chars": 24438,
+    "estimated_system_tokens": 6982,
+    "num_prompts": 500,
+    "distinct_system_prompts": 1,
+    "user_message_chars": {
+      "min": 77,
+      "p25": 617,
+      "p50": 1147,
+      "p75": 1980,
+      "p90": 3106,
+      "max": 24512
+    },
+    "estimated_median_user_tokens": 328,
+    "estimated_median_total_tokens": 7310,
+    "estimated_median_cache_hit_rate": 0.9551,
+    "source": "coding_agent_prompts.jsonl: all 500 prompts share identical system prompt; with prefix caching only the unique user-message suffix needs prefill after the first concurrent request"
+  }
+}

@@ -64,21 +64,28 @@ class Composer:
 
     def predict_layer(self, cfg: ModelConfig, seq_len: int,
                       bs: int = 1, kv_len: int | None = None,
-                      phase: str = "prefill") -> LayerBreakdown:
+                      phase: str = "prefill",
+                      tensor_parallel_size: int = 1) -> LayerBreakdown:
         if kv_len is None:
             kv_len = seq_len
+        tp = max(1, int(tensor_parallel_size))
 
         M = seq_len * bs
         h = cfg.hidden_dim
-        nh = cfg.n_heads
-        nkv = cfg.n_kv_heads
+        nh = max(1, cfg.n_heads // tp)
+        nkv = max(1, cfg.n_kv_heads // tp)
         hd = cfg.head_dim
-        ffn = cfg.intermediate_size
+        ffn = max(1, cfg.intermediate_size // tp)
 
         if phase == "decode":
             M = bs
 
         seq = seq_len if phase == "prefill" else 1
+        attention_phase = (
+            "cached_prefill"
+            if phase == "prefill" and kv_len > seq_len
+            else phase
+        )
 
         # MoE: each token routes to top_k experts. Each expert has its own
         # gate/up/down weights with the same (ffn, h) shape. The total FFN
@@ -94,7 +101,8 @@ class Composer:
             rotary_us=self.rotary.predict_from_shape(nh, hd, seq, bs),
             flash_attn_us=self.flash.predict(
                 seq_len if phase == "prefill" else 1,
-                nh, hd, causal=True, kv_len=kv_len),
+                nh, hd, causal=True, kv_len=kv_len,
+                n_kv_heads=nkv, batch=bs, phase=attention_phase),
             o_proj_us=self.gemm.predict(M, h, nh * hd),
             residual_attn_us=self.residual.predict_from_shape(h, seq, bs),
             rmsnorm_ffn_us=self.rmsnorm.predict_from_shape(h, seq, bs),
@@ -106,20 +114,27 @@ class Composer:
         )
 
     def predict_ttft_us(self, cfg: ModelConfig, isl: int,
-                        bs: int = 1, kv_len: int | None = None) -> float:
+                        bs: int = 1, kv_len: int | None = None,
+                        tensor_parallel_size: int = 1) -> float:
         layer = self.predict_layer(
-            cfg, seq_len=isl, bs=bs, kv_len=kv_len, phase="prefill"
+            cfg, seq_len=isl, bs=bs, kv_len=kv_len, phase="prefill",
+            tensor_parallel_size=tensor_parallel_size,
         )
         return layer.total_us * cfg.n_layers
 
     def predict_ttft_ms(self, cfg: ModelConfig, isl: int,
-                        bs: int = 1, kv_len: int | None = None) -> float:
-        return self.predict_ttft_us(cfg, isl, bs, kv_len) / 1000.0
+                        bs: int = 1, kv_len: int | None = None,
+                        tensor_parallel_size: int = 1) -> float:
+        return self.predict_ttft_us(cfg, isl, bs, kv_len,
+                                     tensor_parallel_size=tensor_parallel_size) / 1000.0
 
     def predict_decode_step_us(self, cfg: ModelConfig, kv_len: int,
-                               bs: int = 1) -> float:
+                               bs: int = 1,
+                               tensor_parallel_size: int = 1) -> float:
         layer = self.predict_layer(
-            cfg, seq_len=1, bs=bs, kv_len=kv_len, phase="decode")
+            cfg, seq_len=1, bs=bs, kv_len=kv_len, phase="decode",
+            tensor_parallel_size=tensor_parallel_size,
+        )
         return layer.total_us * cfg.n_layers
 
     def attribute_tpot(self, cfg: ModelConfig, isl: int, osl: int,

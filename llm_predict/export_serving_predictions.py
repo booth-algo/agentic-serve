@@ -15,11 +15,9 @@ from .configs.model_configs import MODEL_CONFIGS, get_model
 from .composer import Composer
 from .framework_corrections import (
     get_calibration_status,
-    get_correction_note,
-    get_correction_params,
-    prefix_cache_prior,
     ttft_validation_scope,
 )
+from .prefix_cache_priors import get_prefix_cache_prior
 from .serving import predict_serving
 from .validate import BENCH_DATA, _HW_MAP, _actual_isl_osl, _resolve_model
 
@@ -88,6 +86,11 @@ def _predictor_gpu_key(serving_gpu: str) -> str:
     return serving_gpu
 
 
+def _serving_tp_size(raw_hardware: str) -> int:
+    match = re.fullmatch(r".+?x(\d+)", raw_hardware)
+    return int(match.group(1)) if match else 1
+
+
 def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
     cfg_block = entry.get("config", {})
     model_key = _resolve_model(cfg_block.get("model", ""))
@@ -102,39 +105,58 @@ def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
     profile = cfg_block.get("profile", "")
     concurrency = int(cfg_block.get("concurrency", 1))
     data_scope = entry.get("dataScope", "archive")
+    tp_size = _serving_tp_size(entry.get("hardware", ""))
 
     validation_scope = ttft_validation_scope(profile, cfg_block.get("mode"))
     pred = None
+    missing_prefix_cache_features = False
     if validation_scope == "prefix_cache_affected" and entry.get("perTurn"):
         pred = predict_multiturn_from_per_turn(
             composer, cfg, gpu, entry.get("perTurn"), concurrency,
+            tensor_parallel_size=tp_size,
             backend=backend,
             backend_version=backend_version,
             model_key=model_key,
             profile=profile,
         )
     elif validation_scope == "prefix_cache_affected":
-        prior_new_tokens, prior_hit_rate, prior_applied = prefix_cache_prior(
-            gpu, backend, backend_version, model_key, profile, isl
-        )
-        if prior_applied:
+        missing_prefix_cache_features = True
+        prior = get_prefix_cache_prior(profile, model_key, gpu)
+        if prior is not None:
             pred = predict_serving(
-                composer, cfg, gpu, isl, osl, concurrency,
+                composer, cfg, gpu,
+                prior.total_context_tokens, osl, concurrency,
+                tensor_parallel_size=tp_size,
                 backend=backend,
                 backend_version=backend_version,
                 model_key=model_key,
                 profile=profile,
-                total_context_tokens=isl,
-                new_prefill_tokens=prior_new_tokens,
-                cache_hit_rate=prior_hit_rate,
+                total_context_tokens=prior.total_context_tokens,
+                new_prefill_tokens=prior.new_prefill_tokens,
+                cached_context_tokens=prior.cached_context_tokens,
+                cache_hit_rate=prior.cache_hit_rate,
+                cache_feature_source="prefix_cache_prior",
+                cache_prediction_regime="prefix_cached_prefill",
             )
+            missing_prefix_cache_features = False
     if pred is None:
         pred = predict_serving(
             composer, cfg, gpu, isl, osl, concurrency,
+            tensor_parallel_size=tp_size,
             backend=backend,
             backend_version=backend_version,
             model_key=model_key,
             profile=profile,
+            cache_feature_source="missing" if missing_prefix_cache_features else None,
+            cache_prediction_regime=(
+                "unknown_prefix_cache" if missing_prefix_cache_features else None
+            ),
+            ttft_prediction_supported=not missing_prefix_cache_features,
+            unsupported_reason=(
+                "missing_prefix_cache_features"
+                if missing_prefix_cache_features
+                else None
+            ),
         )
 
     row: dict = {
@@ -154,20 +176,18 @@ def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
         "ttft_validation_scope": validation_scope,
         "ttft_kernel_ms": round(pred.ttft_kernel_ms, 2),
         "ttft_base_ms": round(pred.ttft_base_ms, 2),
-        "ttft_queue_factor": round(pred.ttft_queue_factor, 3),
-        "ttft_correction_applied": pred.ttft_correction_applied,
-        "ttft_queue_applied": pred.ttft_queue_applied,
-        "decode_correction_factor": round(pred.decode_correction_factor, 3),
-        "decode_correction_applied": pred.decode_correction_applied,
-        "moe_decode_correction_applied": pred.moe_decode_correction_applied,
+        "ttft_floor_ms": round(pred.ttft_floor_ms, 2),
+        "ttft_first_decode_ms": round(pred.ttft_first_decode_ms, 2),
+        "ttft_queue_ms": round(pred.ttft_queue_ms, 2),
         "total_context_tokens": pred.total_context_tokens,
         "new_prefill_tokens": pred.new_prefill_tokens,
         "cached_context_tokens": pred.cached_context_tokens,
         "cache_hit_rate": round(pred.cache_hit_rate, 4),
         "cache_aware_applied": pred.cache_aware_applied,
-        "prefix_cache_ttft_factor": round(pred.prefix_cache_ttft_factor, 3),
-        "prefix_cache_decode_factor": round(pred.prefix_cache_decode_factor, 3),
-        "prefix_cache_contention_applied": pred.prefix_cache_contention_applied,
+        "cache_feature_source": pred.cache_feature_source,
+        "cache_prediction_regime": pred.cache_prediction_regime,
+        "ttft_prediction_supported": pred.ttft_prediction_supported,
+        "unsupported_reason": pred.unsupported_reason,
     }
     if pred.multiturn_prediction_mode:
         row["multiturn_prediction_mode"] = pred.multiturn_prediction_mode
@@ -181,32 +201,25 @@ def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
         )
         if data_scope == "current":
             row["multiturn_turn_predictions"] = pred.multiturn_turn_predictions
-    corr_params = get_correction_params(gpu, backend, backend_version, model_key)
-    if corr_params:
-        row["ttft_correction_alpha"] = corr_params[0]
-        row["ttft_correction_beta_ms"] = corr_params[1]
-    corr_note = get_correction_note(gpu, backend, backend_version, model_key)
-    if corr_note:
-        row["ttft_correction_note"] = corr_note
-
     measured_ttft = summary.get("median_ttft_ms")
     measured_tpot = summary.get("median_tpot_ms")
     measured_itl = summary.get("median_itl_ms")
     measured_e2el = summary.get("median_e2el_ms")
-    if measured_ttft and measured_ttft > 0:
+    if measured_ttft and measured_ttft > 0 and pred.ttft_prediction_supported:
         row["ttft_pred"] = round(pred.ttft_ms, 2)
         row["ttft_meas"] = round(measured_ttft, 2)
-        row["ttft_err"] = round(abs(pred.ttft_ms - measured_ttft) / measured_ttft * 100, 1)
+        row["ttft_err"] = round(abs(pred.ttft_ms - measured_ttft) / min(pred.ttft_ms, measured_ttft) * 100, 1)
     if measured_tpot and measured_tpot > 0:
         row["tpot_pred"] = round(pred.tpot_ms, 2)
         row["tpot_meas"] = round(measured_tpot, 2)
-        row["tpot_err"] = round(abs(pred.tpot_ms - measured_tpot) / measured_tpot * 100, 1)
+        if pred.tpot_ms > 0:
+            row["tpot_err"] = round(abs(pred.tpot_ms - measured_tpot) / min(pred.tpot_ms, measured_tpot) * 100, 1)
     if measured_itl and measured_itl > 0:
         row["itl_meas"] = round(measured_itl, 2)
-    if measured_e2el and measured_e2el > 0:
+    if measured_e2el and measured_e2el > 0 and pred.ttft_prediction_supported:
         row["e2el_pred"] = round(pred.e2el_ms, 2)
         row["e2el_meas"] = round(measured_e2el, 2)
-        row["e2el_err"] = round(abs(pred.e2el_ms - measured_e2el) / measured_e2el * 100, 1)
+        row["e2el_err"] = round(abs(pred.e2el_ms - measured_e2el) / min(pred.e2el_ms, measured_e2el) * 100, 1)
     return {key: value for key, value in row.items() if value is not None}
 
 
@@ -223,17 +236,19 @@ def _dashboard_row(row: dict) -> dict:
         "ttft_validation_scope": row.get("ttft_validation_scope"),
         "ttft_kernel_ms": row.get("ttft_kernel_ms"),
         "ttft_base_ms": row.get("ttft_base_ms"),
-        "ttft_queue_factor": row.get("ttft_queue_factor"),
-        "decode_correction_factor": row.get("decode_correction_factor"),
+        "ttft_floor_ms": row.get("ttft_floor_ms"),
+        "ttft_first_decode_ms": row.get("ttft_first_decode_ms"),
+        "ttft_queue_ms": row.get("ttft_queue_ms"),
         "itl_meas": row.get("itl_meas"),
         "total_context_tokens": row.get("total_context_tokens"),
         "new_prefill_tokens": row.get("new_prefill_tokens"),
         "cached_context_tokens": row.get("cached_context_tokens"),
         "cache_hit_rate": row.get("cache_hit_rate"),
         "cache_aware_applied": row.get("cache_aware_applied"),
-        "prefix_cache_ttft_factor": row.get("prefix_cache_ttft_factor"),
-        "prefix_cache_decode_factor": row.get("prefix_cache_decode_factor"),
-        "prefix_cache_contention_applied": row.get("prefix_cache_contention_applied"),
+        "cache_feature_source": row.get("cache_feature_source"),
+        "cache_prediction_regime": row.get("cache_prediction_regime"),
+        "ttft_prediction_supported": row.get("ttft_prediction_supported"),
+        "unsupported_reason": row.get("unsupported_reason"),
         "multiturn_prediction_mode": row.get("multiturn_prediction_mode"),
         "predicted_turn_count": row.get("predicted_turn_count"),
         "total_successful_turn_requests": row.get("total_successful_turn_requests"),
