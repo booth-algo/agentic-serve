@@ -291,7 +291,6 @@ interface ServingMatrixRow {
   model: string;
   backend?: string;
   profile: string;
-  calibrationStatus?: string;
   validationScope?: string;
   cells: Record<number, ServingRow>;
 }
@@ -300,7 +299,6 @@ interface ServingProfileGroup {
   key: string;
   profile: string;
   validationScope?: string;
-  hasLowCalibration: boolean;
   backendRows: ServingMatrixRow[];
 }
 
@@ -456,7 +454,6 @@ function ServingTable({
         model: row.model,
         backend: row.backend,
         profile: row.profile,
-        calibrationStatus: row.calibration_status,
         validationScope: row.ttft_validation_scope,
         cells: {},
       };
@@ -486,14 +483,10 @@ function ServingTable({
         key: `${row.model}|${row.profile}`,
         profile: row.profile,
         validationScope: row.validationScope,
-        hasLowCalibration: row.calibrationStatus === 'low_confidence',
         backendRows: [],
       };
     }
     profileGroups[row.profile].backendRows.push(row);
-    if (row.calibrationStatus === 'low_confidence') {
-      profileGroups[row.profile].hasLowCalibration = true;
-    }
   }
 
   const groupedByModel: Record<string, ServingProfileGroup[]> = {};
@@ -555,9 +548,6 @@ function ServingTable({
                               </span>
                               {group.validationScope === 'prefix_cache_affected' && (
                                 <span className="shrink-0 rounded border border-[#f0883e]/30 bg-[#f0883e]/10 px-1 py-0 text-[9px] text-[#f0883e]">cache</span>
-                              )}
-                              {group.hasLowCalibration && (
-                                <span className="shrink-0 rounded border border-[#30363d] bg-[#21262d] px-1 py-0 text-[9px] text-[#8b949e]">low</span>
                               )}
                             </div>
                           </td>
