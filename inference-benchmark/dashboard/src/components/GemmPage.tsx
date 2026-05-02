@@ -33,7 +33,22 @@ function mapeColor(v: number): string {
   return '#f85149';
 }
 
-const SERVING_GPU_ORDER = ['H100', 'H100x2', 'H100x4', 'A100', 'RTX3090', 'RTX2080Ti'];
+const SERVING_GPU_ORDER = [
+  'H100',
+  'H100x2',
+  'H100x4',
+  'A100',
+  'A100x2',
+  'A100x4',
+  'A100x8',
+  'RTX3090',
+  'RTX3090x2',
+  'RTX3090x4',
+  'RTX3090x8',
+  'RTX2080Ti',
+  'RTX2080Tix2',
+  'RTX2080Tix4',
+];
 
 function compareServingGpus(a: string, b: string): number {
   const aRank = SERVING_GPU_ORDER.indexOf(a);
@@ -233,7 +248,7 @@ export function GemmPage({ dataScope }: { dataScope: DataScope }) {
 
       {/* Serving Predictions Section */}
       <div className="mt-4 border-t border-[#30363d] pt-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-base font-semibold text-[#e6edf3]">Serving Latency Predictions</h3>
             <p className="text-xs text-[#484f58] mt-1">
@@ -241,7 +256,7 @@ export function GemmPage({ dataScope }: { dataScope: DataScope }) {
               Multi-turn TTFT reflects cache-aware serving behavior, not cumulative full-prefill latency.
             </p>
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5 lg:justify-end">
             {servingTabs.map(g => (
               <button
                 key={`s-${g}`}

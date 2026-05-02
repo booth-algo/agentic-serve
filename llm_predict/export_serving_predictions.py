@@ -7,6 +7,7 @@ canonical single-turn/stress comparator set. Legacy profile tags are excluded.
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from .cache_aware import predict_multiturn_from_per_turn
@@ -23,11 +24,22 @@ from .serving import predict_serving
 from .validate import BENCH_DATA, _HW_MAP, _actual_isl_osl, _resolve_model
 
 
-DEFAULT_GPUS = ["H100", "H100x2", "H100x4", "A100", "RTX3090", "RTX2080Ti"]
-SERVING_PREDICTOR_GPU = {
-    "H100x2": "H100",
-    "H100x4": "H100",
-}
+DEFAULT_GPUS = [
+    "H100",
+    "H100x2",
+    "H100x4",
+    "A100",
+    "A100x2",
+    "A100x4",
+    "A100x8",
+    "RTX3090",
+    "RTX3090x2",
+    "RTX3090x4",
+    "RTX3090x8",
+    "RTX2080Ti",
+    "RTX2080Tix2",
+    "RTX2080Tix4",
+]
 DEFAULT_PROFILES = [
     "chat-singleturn",
     "coding-singleturn",
@@ -62,11 +74,18 @@ DEFAULT_OUTPUT = (
 
 
 def _serving_gpu_key(raw_hardware: str) -> str:
+    match = re.fullmatch(r"(.+?)x(\d+)", raw_hardware)
+    if match:
+        base, tensor_parallel = match.groups()
+        return f"{_HW_MAP.get(base, base)}x{tensor_parallel}"
     return _HW_MAP.get(raw_hardware, raw_hardware)
 
 
 def _predictor_gpu_key(serving_gpu: str) -> str:
-    return SERVING_PREDICTOR_GPU.get(serving_gpu, serving_gpu)
+    match = re.fullmatch(r"(.+?)x\d+", serving_gpu)
+    if match:
+        return match.group(1)
+    return serving_gpu
 
 
 def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
