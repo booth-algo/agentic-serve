@@ -27,6 +27,8 @@ from pathlib import Path
 
 import yaml
 
+from compile_sweep import profile_infeasible_reasons, resolve
+
 HERE = Path(__file__).resolve().parent
 SWEEP_YAML = HERE / "sweep.yaml"
 STATE_DIR = Path("/tmp/bench_jobs/state")
@@ -75,11 +77,16 @@ def read_state(jid: str) -> dict:
     return out
 
 
+def has_signature(jid: str) -> bool:
+    return (STATE_DIR / f"{jid}.signature").exists()
+
+
 def build_state(manifest: dict) -> dict:
     # Normalize host keys to strings — YAML parses unquoted `3090:` as int
     # but cells reference hosts by string name.
     hosts = {str(k): v for k, v in manifest["hosts"].items()}
     cells = []
+    profile_infeasible = []
 
     # One record per sweep cell, augmented with runtime state.
     for cell in manifest["cells"]:
@@ -91,6 +98,33 @@ def build_state(manifest: dict) -> dict:
         backend = str(cell.get("backend", "vllm"))
         jid = job_id(host_name, model, tp, mode, backend)
         rt = read_state(jid)
+        resolved = resolve(cell, manifest)
+        profile_reasons = profile_infeasible_reasons(cell, manifest)
+        runnable_profiles = [
+            str(profile) for profile in resolved["profiles"]
+            if str(profile) not in profile_reasons
+        ]
+        if (
+            rt["status"] in {"skipped", "failed"}
+            and profile_reasons
+            and runnable_profiles
+            and not has_signature(jid)
+        ):
+            rt["status"] = "pending"
+            rt["reason"] = "legacy skipped state predates profile filtering; rerun reduced-profile job"
+
+        for profile, reason in profile_reasons.items():
+            profile_infeasible.append({
+                "host": host_name,
+                "hw_label": hw_label(host_cfg, tp),
+                "model": model,
+                "tp": tp,
+                "mode": mode,
+                "backend": backend,
+                "profile": profile,
+                "max_len": int(resolved["max_len"]),
+                "reason": reason,
+            })
 
         cells.append({
             "host": host_name,
@@ -101,6 +135,10 @@ def build_state(manifest: dict) -> dict:
             "backend": backend,
             "status": rt["status"],
             "attempt": rt["attempt"],
+            "max_len": int(resolved["max_len"]),
+            "gpu_mem": float(resolved["gpu_mem"]),
+            "profiles": [str(p) for p in resolved["profiles"]],
+            "concurrencies": [int(c) for c in resolved["concurrencies"]],
             "max_len_override": rt["max_len_override"],
             "reason": rt["reason"],
             "updated_at": rt["updated_at"],
@@ -130,6 +168,10 @@ def build_state(manifest: dict) -> dict:
                 "backend": "vllm",
                 "status": "known_oom",
                 "attempt": 0,
+                "max_len": None,
+                "gpu_mem": None,
+                "profiles": [],
+                "concurrencies": [],
                 "max_len_override": None,
                 "reason": entry["reason"],
                 "updated_at": None,
@@ -151,6 +193,7 @@ def build_state(manifest: dict) -> dict:
             for m, cfg in manifest["models"].items()
         },
         "cells": cells,
+        "profile_infeasible": profile_infeasible,
     }
 
 

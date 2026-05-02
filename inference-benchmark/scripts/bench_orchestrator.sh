@@ -68,6 +68,8 @@ read_status()  { cat "$STATE_DIR/${1}.status" 2>/dev/null || echo "pending"; }
 write_status() { echo "$2" > "$STATE_DIR/${1}.status"; }
 read_attempt() { cat "$STATE_DIR/${1}.attempt" 2>/dev/null || echo "0"; }
 bump_attempt() { local n=$(($(read_attempt "$1") + 1)); echo "$n" > "$STATE_DIR/${1}.attempt"; }
+read_signature() { cat "$STATE_DIR/${1}.signature" 2>/dev/null || true; }
+write_signature() { echo "$2" > "$STATE_DIR/${1}.signature"; }
 
 # Phase 1: multi-slot GPU scheduling — scan per-GPU and per-port usage.
 declare -A HOST_GPU_COUNT=( [gpu-4]=8 [3090]=8 [2080ti]=8 [h100]=8 )
@@ -122,6 +124,17 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
     : "${BACKEND:=vllm}"  # default if column missing (legacy rows)
     JID=$(job_id "$HOST" "$SHORT" "$TP" "$MODE" "$BACKEND")
     STATUS=$(read_status "$JID")
+    JOB_SIGNATURE="${MAX_LEN}|${GPU_MEM}|${CONCS}|${PROFILES}|${EXTRA_ENV}"
+    OLD_SIGNATURE=$(read_signature "$JID")
+    if [[ "$STATUS" =~ ^(skipped|failed)$ && -n "$OLD_SIGNATURE" && "$OLD_SIGNATURE" != "$JOB_SIGNATURE" ]]; then
+        log "$JID: job shape changed since terminal $STATUS; retrying as pending"
+        STATUS="pending"
+        write_status "$JID" pending
+    elif [[ "$STATUS" =~ ^(skipped|failed)$ && -z "$OLD_SIGNATURE" && "$MODE" == "multi" && "$PROFILES" != *"swebench-multiturn"* && "$PROFILES" != *"terminalbench-multiturn"* ]]; then
+        log "$JID: legacy terminal $STATUS predates profile filtering; retrying reduced-profile job"
+        STATUS="pending"
+        write_status "$JID" pending
+    fi
     PREFIX=$(host_prefix "$HOST")
     RESULT_DIR_NAME="${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
     OUT_DIR_REMOTE="/tmp/results/${RESULT_SCOPE}/${RESULT_DIR_NAME}"
@@ -230,6 +243,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             claim_slot "$HOST" "$SLOT_GPUS" "$SLOT_PORT"
             echo "$SLOT_PORT" > "$STATE_DIR/${JID}.port"
             echo "$SLOT_GPUS" > "$STATE_DIR/${JID}.gpus"
+            write_signature "$JID" "$JOB_SIGNATURE"
 
             log "$JID: dispatching on $HOST:$SLOT_PORT gpus=[$SLOT_GPUS] ($BACKEND, max_len=$MAX_LEN, mode=$MODE)"
             write_status "$JID" running

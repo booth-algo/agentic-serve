@@ -615,6 +615,7 @@ class TrajectoryMultiTurnDataset(BaseDataset):
         random_seed: int = 42,
         max_isl_tokens: int = 131072,
         max_osl_tokens: int = 2000,
+        context_safety_margin_tokens: int = 0,
     ):
         self.filepath = filepath
         self.min_turns = min_turns
@@ -623,6 +624,7 @@ class TrajectoryMultiTurnDataset(BaseDataset):
         self.random_seed = random_seed
         self.max_isl_tokens = max_isl_tokens
         self.max_osl_tokens = max_osl_tokens
+        self.context_safety_margin_tokens = context_safety_margin_tokens
         self._sessions: Optional[list[MultiTurnSession]] = None
         self._flat_requests: Optional[list[BenchmarkRequest]] = None
         self._flat_available: Optional[list[BenchmarkRequest]] = None
@@ -662,9 +664,32 @@ class TrajectoryMultiTurnDataset(BaseDataset):
                             int(len(m.get("content", "").split()) * 1.35)
                             for m in messages
                         )
-                        if isl_est > self.max_isl_tokens:
+                        prompt_budget = (
+                            self.max_isl_tokens
+                            - osl
+                            - self.context_safety_margin_tokens
+                        )
+                        if prompt_budget < 1 or isl_est > prompt_budget:
                             break
-                        turns.append(BenchmarkRequest(messages=messages, max_tokens=osl))
+                        turn_index = t.get("turn_idx", t.get("turn_index", len(turns)))
+                        turns.append(BenchmarkRequest(
+                            messages=messages,
+                            max_tokens=osl,
+                            metadata={
+                                "source_session_id": entry.get("session_id"),
+                                "source_turn_index": turn_index,
+                                "trace_content_source": entry.get("source"),
+                                "planned_total_context_tokens": isl_est,
+                                "planned_output_tokens": osl,
+                                "planned_total_with_output_tokens": isl_est + osl,
+                                "context_window_tokens": self.max_isl_tokens,
+                                "context_safety_margin_tokens": (
+                                    self.context_safety_margin_tokens
+                                ),
+                                "prompt_token_budget": prompt_budget,
+                                "truncated_by_context_limit": False,
+                            },
+                        ))
 
                     if len(turns) < self.min_turns:
                         continue
@@ -866,8 +891,9 @@ def make_dataset(
             max_turns=profile.max_turns,
             num_sessions=profile.num_sessions,
             random_seed=random_seed,
-            max_isl_tokens=profile.isl_tokens,
+            max_isl_tokens=max_context_tokens or profile.isl_tokens,
             max_osl_tokens=profile.osl_tokens,
+            context_safety_margin_tokens=context_safety_margin_tokens,
         )
     elif profile.dataset == "distributional-multi-turn":
         return DistributionalMultiTurnDataset(
