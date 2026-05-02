@@ -29,6 +29,9 @@ jobs:
         working-directory: inference-benchmark/dashboard
         run: npm ci
 
+      - name: Install predictor dependencies
+        run: python3 -m pip install -q numpy xgboost
+
       - name: Download results from R2
         working-directory: inference-benchmark
         run: |
