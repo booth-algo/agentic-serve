@@ -51,8 +51,10 @@ class FlashAttnPredictor:
             with open(table_path) as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    key = (int(row["seq_len"]), int(row["n_heads"]),
-                           int(row["head_dim"]), int(row["causal"]))
+                    # Schema: q_len,kv_len,n_heads,n_kv_heads,head_dim,batch,latency_us
+                    key = (int(row["q_len"]), int(row["kv_len"]),
+                           int(row["n_heads"]), int(row["n_kv_heads"]),
+                           int(row["head_dim"]), int(row["batch"]))
                     self._table[key] = float(row["latency_us"])
 
         model_path = MODEL_DIR / f"flash_{self.gpu_name}.pkl"
@@ -71,7 +73,9 @@ class FlashAttnPredictor:
             n_kv_heads = n_heads
 
         if self._table:
-            exact = self._table.get((seq_len, n_heads, head_dim, int(causal)))
+            exact = self._table.get(
+                (seq_len, kv_len, n_heads, n_kv_heads, head_dim, batch)
+            )
             if exact is not None:
                 return exact
 
