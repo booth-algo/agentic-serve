@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { DataScope } from '../profileMeta';
 
-type PageId = 'benchmark' | 'coverage' | 'predictor';
+type PageId = 'benchmark' | 'coverage' | 'gemm' | 'serving';
 
 interface LayoutProps {
   children: ReactNode;
@@ -36,12 +36,23 @@ const NAV_PAGES: Array<{ id: PageId; label: string; icon: ReactNode }> = [
     ),
   },
   {
-    id: 'predictor',
-    label: 'Predictor',
+    id: 'gemm',
+    label: 'GEMM',
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" />
         <path d="M3 9h18M9 3v18" />
+      </svg>
+    ),
+  },
+  {
+    id: 'serving',
+    label: 'Serving',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 19V5" />
+        <path d="M4 19h16" />
+        <path d="m7 15 4-4 3 3 5-7" />
       </svg>
     ),
   },

@@ -42,8 +42,8 @@ jobs:
           echo "Downloaded $(find results -name '*.json' | wc -l) result files"
 
       - name: Build data.json
-        working-directory: inference-benchmark
-        run: npx tsx dashboard/scripts/build-data.ts
+        working-directory: inference-benchmark/dashboard
+        run: npm run build:data
 
       - name: Build serving predictions
         run: python3 -m llm_predict.export_serving_predictions

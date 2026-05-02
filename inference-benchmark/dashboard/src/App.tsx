@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useData } from './hooks/useData';
 import { useSweepState } from './hooks/useSweepState';
 import { Layout } from './components/Layout';
@@ -12,11 +12,13 @@ import { PerTurnChart } from './components/charts/PerTurnChart';
 import { DataTable } from './components/DataTable';
 import { CoveragePage } from './components/CoveragePage';
 import { GemmPage } from './components/GemmPage';
+import { ServingPredictionsPage } from './components/ServingPredictionsPage';
 import type { TabId } from './types';
 import type { DataScope } from './profileMeta';
 import './index.css';
 
-type PageId = 'benchmark' | 'coverage' | 'predictor';
+type PageId = 'benchmark' | 'coverage' | 'gemm' | 'serving';
+const PAGE_IDS: PageId[] = ['benchmark', 'coverage', 'gemm', 'serving'];
 const DATA_SCOPE_STORAGE_KEY = 'inference-dashboard-data-scope';
 
 function initialDataScope(): DataScope {
@@ -24,6 +26,17 @@ function initialDataScope(): DataScope {
   const urlScope = params.get('scope');
   if (urlScope === 'archive' || urlScope === 'current') return urlScope;
   return window.localStorage.getItem(DATA_SCOPE_STORAGE_KEY) === 'archive' ? 'archive' : 'current';
+}
+
+function initialPage(): PageId {
+  const hashPage = window.location.hash.replace(/^#\/?/, '');
+  return PAGE_IDS.includes(hashPage as PageId) ? (hashPage as PageId) : 'benchmark';
+}
+
+function pageUrl(page: PageId): string {
+  const url = new URL(window.location.href);
+  url.hash = page === 'benchmark' ? '' : page;
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function App() {
@@ -42,8 +55,19 @@ function App() {
   } = useData(dataScope);
   const { sweepState } = useSweepState();
 
-  const [activePage, setActivePage] = useState<PageId>('benchmark');
+  const [activePage, setActivePageState] = useState<PageId>(initialPage);
   const [activeTab, setActiveTab] = useState<TabId>('latency');
+
+  const setActivePage = useCallback((page: PageId) => {
+    setActivePageState(page);
+    window.history.replaceState(null, '', pageUrl(page));
+  }, []);
+
+  useEffect(() => {
+    const onHashChange = () => setActivePageState(initialPage());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const setDataScope = useCallback((scope: DataScope) => {
     setDataScopeState(scope);
@@ -90,8 +114,10 @@ function App() {
       dataScope={dataScope}
       onDataScopeChange={setDataScope}
     >
-      {activePage === 'predictor' ? (
-        <GemmPage dataScope={dataScope} />
+      {activePage === 'gemm' ? (
+        <GemmPage />
+      ) : activePage === 'serving' ? (
+        <ServingPredictionsPage dataScope={dataScope} />
       ) : activePage === 'coverage' ? (
         <CoveragePage
           allData={allData}
