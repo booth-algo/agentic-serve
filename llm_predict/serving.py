@@ -1,37 +1,11 @@
-"""Serving predictor: analytical concurrency model on top of kernel predictions.
+"""Serving predictor: analytical concurrency model on top of kernel predictions."""
 
-Composes TTFT, TPOT, E2EL at arbitrary concurrency using Little's Law
-steady-state batch size, iterative solver, and TTFT queuing.
-"""
-
-import math
 from dataclasses import dataclass
 from typing import Any
 
 from .configs.model_configs import ModelConfig
 from .composer import Composer
-from .framework_corrections import (
-    decode_correction_factor,
-    framework_correction,
-    get_calibration_status,
-    moe_decode_correction_factor,
-    prefix_cache_contention_factors,
-    ttft_queue_factor,
-)
-
-_DECODE_CORRECTION: dict[str, dict] = {
-    "A100":      {"alpha_base": 1.0, "exponent": 0.0},
-    "RTX3090":   {"alpha_base": 1.0, "exponent": 0.0},
-    "RTX2080Ti": {"alpha_base": 1.0, "exponent": 0.0},
-    "H100":      {"alpha_base": 1.0, "exponent": 0.0},
-}
-
-_TTFT_QUEUE: dict[str, dict] = {
-    "A100":      {"K": 0.3, "c_thresh": 30},
-    "RTX3090":   {"K": 0.3, "c_thresh": 30},
-    "RTX2080Ti": {"K": 0.3, "c_thresh": 20},
-    "H100":      {"K": 0.6, "c_thresh": 100},
-}
+from .framework_corrections import get_calibration_status
 
 
 @dataclass
@@ -44,21 +18,19 @@ class ServingPrediction:
     concurrency: int
     ttft_kernel_ms: float = 0.0
     ttft_base_ms: float = 0.0
-    ttft_queue_factor: float = 1.0
-    ttft_correction_applied: bool = False
-    ttft_queue_applied: bool = False
-    decode_correction_factor: float = 1.0
-    decode_correction_applied: bool = False
-    moe_decode_correction_applied: bool = False
+    ttft_floor_ms: float = 0.0
+    ttft_first_decode_ms: float = 0.0
+    ttft_queue_ms: float = 0.0
     calibration_status: str = "missing"
     total_context_tokens: int = 0
     new_prefill_tokens: int = 0
     cached_context_tokens: int = 0
     cache_hit_rate: float = 0.0
     cache_aware_applied: bool = False
-    prefix_cache_ttft_factor: float = 1.0
-    prefix_cache_decode_factor: float = 1.0
-    prefix_cache_contention_applied: bool = False
+    cache_feature_source: str = "none"
+    cache_prediction_regime: str = "full_prefill"
+    ttft_prediction_supported: bool = True
+    unsupported_reason: str | None = None
     multiturn_prediction_mode: str | None = None
     predicted_turn_count: int = 0
     total_successful_turn_requests: int = 0
@@ -67,40 +39,30 @@ class ServingPrediction:
     multiturn_turn_predictions: list[dict[str, Any]] | None = None
 
 
-def _decode_alpha(gpu: str, bs: float) -> float:
-    params = _DECODE_CORRECTION.get(gpu, {"alpha_base": 1.0, "exponent": 0.0})
-    alpha = params["alpha_base"] * (bs ** params["exponent"])
-    floor = params.get("alpha_floor")
-    if floor is not None:
-        alpha = max(alpha, floor)
-    return alpha
-
-
-def _ttft_queuing_factor(gpu: str, concurrency: int) -> float:
-    params = _TTFT_QUEUE.get(gpu, {"K": 0.3, "c_thresh": 30})
-    if concurrency <= 1:
-        return 1.0
-    c = min(concurrency, params["c_thresh"])
-    return 1.0 + params["K"] * math.log(c)
+def decode_interval_count(output_tokens: int) -> int:
+    """Return post-TTFT decode intervals for benchmark TPOT/E2EL semantics."""
+    return max(0, int(output_tokens) - 1)
 
 
 def _integrate_decode_ms(composer: Composer, cfg: ModelConfig,
-                         isl: int, osl: int, bs: float,
-                         n_points: int = 8) -> float:
-    if osl <= 0:
+                         isl: int, decode_steps: int, bs: float,
+                         tp: int = 1, n_points: int = 8) -> float:
+    if decode_steps <= 0:
         return 0.0
     total = 0.0
     for i in range(n_points):
-        t = (i + 0.5) * osl / n_points
-        kv_len = isl + int(t)
-        step_us = composer.predict_decode_step_us(cfg, kv_len, bs=max(1, int(bs)))
+        t = (i + 0.5) * decode_steps / n_points
+        kv_offset = 1 + min(decode_steps - 1, int(t))
+        kv_len = isl + kv_offset
+        step_us = composer.predict_decode_step_us(cfg, kv_len, bs=max(1, int(bs)),
+                                                   tensor_parallel_size=tp)
         total += step_us
-    return (total * osl / n_points) / 1000.0
+    return (total * decode_steps / n_points) / 1000.0
 
 
 def _iterative_bs_eff(composer: Composer, cfg: ModelConfig,
-                      gpu: str, isl: int, osl: int,
-                      concurrency: int, max_iter: int = 5,
+                      isl: int, decode_steps: int,
+                      concurrency: int, tp: int = 1, max_iter: int = 5,
                       damping: float = 0.3,
                       ttft_ms_for_batch: float | None = None,
                       ttft_prefill_tokens: int | None = None,
@@ -112,12 +74,11 @@ def _iterative_bs_eff(composer: Composer, cfg: ModelConfig,
     if ttft_ms is None:
         prefill_tokens = ttft_prefill_tokens if ttft_prefill_tokens is not None else isl
         kv_len = ttft_kv_len if ttft_kv_len is not None else isl
-        ttft_ms = composer.predict_ttft_ms(cfg, prefill_tokens, kv_len=kv_len)
+        ttft_ms = composer.predict_ttft_ms(cfg, prefill_tokens, kv_len=kv_len,
+                                            tensor_parallel_size=tp)
     bs = 1.0
     for _ in range(max_iter):
-        decode_ms = _integrate_decode_ms(composer, cfg, isl, osl, bs)
-        alpha = _decode_alpha(gpu, bs)
-        decode_ms *= alpha
+        decode_ms = _integrate_decode_ms(composer, cfg, isl, decode_steps, bs, tp=tp)
         decode_frac = decode_ms / (ttft_ms + decode_ms) if (ttft_ms + decode_ms) > 0 else 0.5
         bs_new = concurrency * decode_frac
         bs_new = max(1.0, min(bs_new, float(concurrency)))
@@ -128,6 +89,7 @@ def _iterative_bs_eff(composer: Composer, cfg: ModelConfig,
 def predict_serving(composer: Composer, cfg: ModelConfig,
                     gpu: str, isl: int, osl: int,
                     concurrency: int = 1,
+                    tensor_parallel_size: int = 1,
                     backend: str | None = None,
                     backend_version: str | None = None,
                     model_key: str | None = None,
@@ -136,7 +98,13 @@ def predict_serving(composer: Composer, cfg: ModelConfig,
                     new_prefill_tokens: int | None = None,
                     cached_context_tokens: int | None = None,
                     cache_hit_rate: float | None = None,
-                    apply_prefix_contention: bool = True) -> ServingPrediction:
+                    cache_feature_source: str | None = None,
+                    cache_prediction_regime: str | None = None,
+                    ttft_prediction_supported: bool = True,
+                    unsupported_reason: str | None = None,
+                    _sim_ttft_ms: float | None = None,
+                    _sim_tpot_ms: float | None = None,
+                    _sim_e2el_ms: float | None = None) -> ServingPrediction:
     total_context = max(1, int(total_context_tokens if total_context_tokens is not None else isl))
     if new_prefill_tokens is None:
         if cached_context_tokens is not None:
@@ -161,71 +129,84 @@ def predict_serving(composer: Composer, cfg: ModelConfig,
         derived_cache_hit_rate = max(0.0, min(1.0, float(cache_hit_rate)))
 
     cache_aware = prefill_tokens < total_context or derived_cache_hit_rate > 0.0
+    resolved_feature_source = cache_feature_source or ("provided" if cache_aware else "none")
+    resolved_regime = cache_prediction_regime or (
+        "prefix_cached_prefill" if cache_aware else "full_prefill"
+    )
     ttft_kernel = composer.predict_ttft_ms(
-        cfg, prefill_tokens, kv_len=total_context
+        cfg, prefill_tokens, kv_len=total_context,
+        tensor_parallel_size=tensor_parallel_size,
     )
     calibration_model = model_key or cfg.name
     if backend:
         calibration_status = get_calibration_status(
             gpu, backend, backend_version, calibration_model
         )
-        ttft_base, corr_applied = framework_correction(
-            gpu, backend, ttft_kernel, backend_version, calibration_model
-        )
-        queue_factor, queue_applied = ttft_queue_factor(
-            gpu, backend, concurrency, backend_version, calibration_model, profile
-        )
     else:
         calibration_status = "raw_kernel"
-        ttft_base = ttft_kernel
-        corr_applied = False
-        queue_factor = _ttft_queuing_factor(gpu, concurrency)
-        queue_applied = False
-    ttft_ms = ttft_base * queue_factor
+    ttft_base = ttft_kernel
+
+    # Fixed per-forward-pass overhead: TP all-reduce barriers + scheduler +
+    # CUDA graph / kernel launch. Scales with n_layers and TP.
+    # TP all-reduce: ~5 reduces per layer (QKV-attn, O, gate+up, down).
+    # Barrier latency ~5us per reduce at TP>1.
+    tp_barrier_us = 5.0 * 5.0 * cfg.n_layers if tensor_parallel_size > 1 else 0.0
+    scheduler_overhead_us = 500.0  # scheduler loop + kernel launch
+    ttft_floor_ms = (tp_barrier_us + scheduler_overhead_us) / 1000.0
+
+    # First decode step: after prefill completes, one decode iteration
+    # runs before the first output token appears.
+    ttft_first_decode_ms = composer.predict_decode_step_us(
+        cfg, kv_len=total_context, bs=1,
+        tensor_parallel_size=tensor_parallel_size,
+    ) / 1000.0
+
+    # Queue model for simultaneous arrivals in continuous batching.
+    # Scheduler interleaves prefill steps and decode steps. With independent
+    # prompts (different user messages per request), each request prefills
+    # separately. The median request waits for ~concurrency/2 prefills to
+    # complete ahead of it, with decode interleaving between each.
+    ttft_queue_ms = 0.0
+    if concurrency > 1:
+        kv_mid = total_context + max(0, int(osl) // 2)
+        m = float(concurrency) / 2.0  # median position in queue
+
+        decode_step_ms = composer.predict_decode_step_us(
+            cfg, kv_len=kv_mid, bs=max(1, int(m)),
+            tensor_parallel_size=tensor_parallel_size,
+        ) / 1000.0
+
+        pref_queue = m * ttft_kernel
+        decode_queue = m * (m + 1.0) / 2.0 * composer.predict_decode_step_us(
+            cfg, kv_len=kv_mid, bs=1,
+            tensor_parallel_size=tensor_parallel_size,
+        ) / 1000.0
+        ttft_queue_ms = pref_queue + decode_queue
+    ttft_ms = ttft_kernel + ttft_floor_ms + ttft_first_decode_ms + ttft_queue_ms
+    decode_steps = decode_interval_count(osl)
 
     bs_eff = _iterative_bs_eff(
-        composer, cfg, gpu, total_context, osl, concurrency,
+        composer, cfg, total_context, decode_steps, concurrency,
+        tp=tensor_parallel_size,
         ttft_ms_for_batch=ttft_base,
         ttft_prefill_tokens=prefill_tokens,
         ttft_kv_len=total_context,
     )
-    alpha = _decode_alpha(gpu, bs_eff)
     decode_total_ms = _integrate_decode_ms(
-        composer, cfg, total_context, osl, bs_eff
-    ) * alpha
-    if backend:
-        if cfg.is_moe:
-            decode_factor, decode_applied = moe_decode_correction_factor(
-                gpu, backend, backend_version, calibration_model, concurrency, profile
-            )
-            moe_decode_applied = decode_applied
-        else:
-            decode_factor, decode_applied = decode_correction_factor(
-                gpu, backend, concurrency, backend_version, calibration_model, profile
-            )
-            moe_decode_applied = False
-        decode_total_ms *= decode_factor
-    else:
-        decode_factor = 1.0
-        decode_applied = False
-        moe_decode_applied = False
+        composer, cfg, total_context, decode_steps, bs_eff,
+        tp=tensor_parallel_size,
+    )
 
-    prefix_ttft_factor = 1.0
-    prefix_decode_factor = 1.0
-    prefix_applied = False
-    if backend and cache_aware and apply_prefix_contention:
-        prefix_ttft_factor, prefix_decode_factor, prefix_applied = (
-            prefix_cache_contention_factors(
-                gpu, backend, backend_version, calibration_model,
-                concurrency, profile
-            )
-        )
-        if prefix_applied:
-            ttft_ms *= prefix_ttft_factor
-            decode_total_ms *= prefix_decode_factor
-
-    tpot_ms = decode_total_ms / max(osl, 1)
+    tpot_ms = decode_total_ms / max(decode_steps, 1)
     e2el_ms = ttft_ms + decode_total_ms
+
+    # Override with event-driven simulation values when provided.
+    if _sim_ttft_ms is not None:
+        ttft_ms = float(_sim_ttft_ms)
+    if _sim_tpot_ms is not None:
+        tpot_ms = float(_sim_tpot_ms)
+    if _sim_e2el_ms is not None:
+        e2el_ms = float(_sim_e2el_ms)
 
     return ServingPrediction(
         ttft_ms=ttft_ms,
@@ -236,19 +217,17 @@ def predict_serving(composer: Composer, cfg: ModelConfig,
         concurrency=concurrency,
         ttft_kernel_ms=ttft_kernel,
         ttft_base_ms=ttft_base,
-        ttft_queue_factor=queue_factor,
-        ttft_correction_applied=corr_applied,
-        ttft_queue_applied=queue_applied,
-        decode_correction_factor=decode_factor,
-        decode_correction_applied=decode_applied,
-        moe_decode_correction_applied=moe_decode_applied,
+        ttft_floor_ms=ttft_floor_ms,
+        ttft_first_decode_ms=ttft_first_decode_ms,
+        ttft_queue_ms=ttft_queue_ms,
         calibration_status=calibration_status,
         total_context_tokens=total_context,
         new_prefill_tokens=prefill_tokens,
         cached_context_tokens=cached_context,
         cache_hit_rate=derived_cache_hit_rate,
         cache_aware_applied=cache_aware,
-        prefix_cache_ttft_factor=prefix_ttft_factor,
-        prefix_cache_decode_factor=prefix_decode_factor,
-        prefix_cache_contention_applied=prefix_applied,
+        cache_feature_source=resolved_feature_source,
+        cache_prediction_regime=resolved_regime,
+        ttft_prediction_supported=ttft_prediction_supported,
+        unsupported_reason=unsupported_reason,
     )
