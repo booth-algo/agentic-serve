@@ -772,48 +772,6 @@ function MetricLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ServingCellTurnBars({ row, selected }: { row: ServingPerTurnRow; selected: boolean }) {
-  const turns = [...row.multiturn_turn_predictions].sort((a, b) => a.turn_index - b.turn_index);
-  const maxContext = Math.max(...turns.map(turn => turn.total_context_tokens), 1);
-  const cacheAware = row.cache_aware_applied && turns.some(turn => Number.isFinite(turn.cache_hit_rate));
-  const title = cacheAware
-    ? `Context and prefix cache by turn: ${turns.map(turn => `${displayTurn(turn)}=${formatTokenCount(turn.total_context_tokens)} tok/${(turn.cache_hit_rate * 100).toFixed(0)}% hit`).join(', ')}`
-    : `Input tokens by turn: ${turns.map(turn => `${displayTurn(turn)}=${formatTokenCount(turn.total_context_tokens)}`).join(', ')}`;
-
-  return (
-    <div
-      className={`grid h-[10px] overflow-hidden rounded border px-0.5 py-0.5 ${
-        selected
-          ? 'border-[#58a6ff]/40 bg-[#1f6feb]/15'
-          : 'border-[#30363d] bg-[#0d1117]'
-      }`}
-      style={{
-        gridTemplateColumns: `repeat(${turns.length}, minmax(0, 1fr))`,
-        columnGap: turns.length > 24 ? 0 : 1,
-      }}
-      title={title}
-    >
-      {turns.map(turn => {
-        const normalized = Math.max(0.12, Math.min(1, turn.total_context_tokens / maxContext));
-        const opacity = cacheAware
-          ? Math.max(0.28, Math.min(0.95, 0.25 + turn.cache_hit_rate * 0.65))
-          : selected ? 0.85 : 0.65;
-        return (
-          <span
-            key={turn.turn_index}
-            className="min-w-0 self-end rounded-t-[1px]"
-            style={{
-              height: `${normalized * 100}%`,
-              backgroundColor: cacheAware ? (selected ? '#79c0ff' : '#58a6ff') : (selected ? '#d2a8ff' : '#a855f7'),
-              opacity,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 function ServingMatrixCell({
   row,
   selectedKey,
@@ -847,9 +805,6 @@ function ServingMatrixCell({
             <ServingMiniMetric key={metric.label} row={row} metric={metric} />
           ))}
         </div>
-        {canSelect && (
-          <ServingCellTurnBars row={row} selected={selected} />
-        )}
       </div>
     </td>
   );
