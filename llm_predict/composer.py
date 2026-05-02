@@ -4,6 +4,7 @@ Given a model config, GPU, seq_len, and bs, produces a complete
 latency breakdown per layer and total across all layers.
 """
 
+import math
 from dataclasses import dataclass
 
 from .configs.gpu_specs import get_gpu
@@ -26,6 +27,7 @@ class LayerBreakdown:
     o_proj_us: float
     residual_attn_us: float
     rmsnorm_ffn_us: float
+    router_proj_us: float
     gate_proj_us: float
     up_proj_us: float
     silu_mul_us: float
@@ -35,8 +37,8 @@ class LayerBreakdown:
     @property
     def gemm_us(self) -> float:
         return (self.q_proj_us + self.k_proj_us + self.v_proj_us +
-                self.o_proj_us + self.gate_proj_us + self.up_proj_us +
-                self.down_proj_us)
+                self.o_proj_us + self.router_proj_us + self.gate_proj_us +
+                self.up_proj_us + self.down_proj_us)
 
     @property
     def attn_us(self) -> float:
@@ -75,7 +77,11 @@ class Composer:
         nh = max(1, cfg.n_heads // tp)
         nkv = max(1, cfg.n_kv_heads // tp)
         hd = cfg.head_dim
-        ffn = max(1, cfg.intermediate_size // tp)
+        ffn_raw = (
+            getattr(cfg, "expert_intermediate_size", None)
+            or getattr(cfg, "ffn_intermediate_size", cfg.intermediate_size)
+        )
+        ffn = max(1, ffn_raw // tp)
 
         if phase == "decode":
             M = bs
@@ -87,11 +93,22 @@ class Composer:
             else phase
         )
 
-        # MoE: each token routes to top_k experts. Each expert has its own
-        # gate/up/down weights with the same (ffn, h) shape. The total FFN
-        # cost is top_k * single_expert_cost, not n_experts * cost.
-        # For dense models (n_experts=1, top_k=1), this is a no-op.
-        ffn_scale = cfg.top_k  # how many expert FFN sets fire per token
+        router_proj_us = 0.0
+        gate_proj_us = self.gemm.predict(M, ffn, h)
+        up_proj_us = self.gemm.predict(M, ffn, h)
+        silu_mul_us = self.silu_mul.predict_from_shape(ffn, seq, bs)
+        down_proj_us = self.gemm.predict(M, h, ffn)
+
+        is_moe = getattr(cfg, "is_moe", False)
+        if is_moe:
+            ffn_scale = max(1, int(getattr(cfg, "top_k", 1)))
+            gate_proj_us *= ffn_scale
+            up_proj_us *= ffn_scale
+            silu_mul_us *= ffn_scale
+            down_proj_us *= ffn_scale
+            router_proj_us = self.gemm.predict(M, max(1, int(getattr(cfg, "n_experts", 1))), h)
+        else:
+            ffn_scale = 1
 
         return LayerBreakdown(
             rmsnorm_attn_us=self.rmsnorm.predict_from_shape(h, seq, bs),
@@ -106,21 +123,48 @@ class Composer:
             o_proj_us=self.gemm.predict(M, h, nh * hd),
             residual_attn_us=self.residual.predict_from_shape(h, seq, bs),
             rmsnorm_ffn_us=self.rmsnorm.predict_from_shape(h, seq, bs),
-            gate_proj_us=self.gemm.predict(M, ffn, h) * ffn_scale,
-            up_proj_us=self.gemm.predict(M, ffn, h) * ffn_scale,
-            silu_mul_us=self.silu_mul.predict_from_shape(ffn, seq, bs) * ffn_scale,
-            down_proj_us=self.gemm.predict(M, h, ffn) * ffn_scale,
+            router_proj_us=router_proj_us,
+            gate_proj_us=gate_proj_us,
+            up_proj_us=up_proj_us,
+            silu_mul_us=silu_mul_us,
+            down_proj_us=down_proj_us,
             residual_ffn_us=self.residual.predict_from_shape(h, seq, bs),
         )
+
+    def _predict_model_us(self, cfg: ModelConfig, seq_len: int,
+                          bs: int = 1, kv_len: int | None = None,
+                          phase: str = "prefill",
+                          tensor_parallel_size: int = 1) -> float:
+        if kv_len is None:
+            kv_len = seq_len
+        layer = self.predict_layer(
+            cfg, seq_len=seq_len, bs=bs, kv_len=kv_len, phase=phase,
+            tensor_parallel_size=tensor_parallel_size,
+        )
+        sliding_window = getattr(cfg, "sliding_window", None)
+        full_layers = getattr(cfg, "full_attention_layers", None)
+        if not sliding_window or full_layers is None:
+            return layer.total_us * cfg.n_layers
+
+        full_layers = max(0, min(int(full_layers), cfg.n_layers))
+        sliding_layers = cfg.n_layers - full_layers
+        if sliding_layers <= 0:
+            return layer.total_us * cfg.n_layers
+
+        sliding_kv_len = min(kv_len, int(sliding_window))
+        sliding_layer = self.predict_layer(
+            cfg, seq_len=seq_len, bs=bs, kv_len=sliding_kv_len, phase=phase,
+            tensor_parallel_size=tensor_parallel_size,
+        )
+        return layer.total_us * full_layers + sliding_layer.total_us * sliding_layers
 
     def predict_ttft_us(self, cfg: ModelConfig, isl: int,
                         bs: int = 1, kv_len: int | None = None,
                         tensor_parallel_size: int = 1) -> float:
-        layer = self.predict_layer(
+        return self._predict_model_us(
             cfg, seq_len=isl, bs=bs, kv_len=kv_len, phase="prefill",
             tensor_parallel_size=tensor_parallel_size,
         )
-        return layer.total_us * cfg.n_layers
 
     def predict_ttft_ms(self, cfg: ModelConfig, isl: int,
                         bs: int = 1, kv_len: int | None = None,
@@ -131,11 +175,10 @@ class Composer:
     def predict_decode_step_us(self, cfg: ModelConfig, kv_len: int,
                                bs: int = 1,
                                tensor_parallel_size: int = 1) -> float:
-        layer = self.predict_layer(
+        kernel_us = self._predict_model_us(
             cfg, seq_len=1, bs=bs, kv_len=kv_len, phase="decode",
             tensor_parallel_size=tensor_parallel_size,
         )
-        kernel_us = layer.total_us * cfg.n_layers
         # Serving runtime overhead per scheduler step: paged-attention block
         # table indirection, KV cache block management, scheduler loop.
         # Scales with active decode requests. Placeholder values — calibrate

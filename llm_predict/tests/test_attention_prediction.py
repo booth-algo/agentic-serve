@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from llm_predict.composer import Composer
+from llm_predict.configs.model_configs import MODEL_CONFIGS
 from llm_predict.kernels.flash_attn import _flash_attn_bytes, _flash_attn_flops
 from llm_predict.sweep.generate_shapes import generate_attention_shapes
 
@@ -11,9 +12,11 @@ from llm_predict.sweep.generate_shapes import generate_attention_shapes
 class RecordingGemm:
     def __init__(self):
         self.calls = []
+        self.dtype_bytes = []
 
-    def predict(self, M, N, K):
+    def predict(self, M, N, K, dtype_bytes=2):
         self.calls.append((M, N, K))
+        self.dtype_bytes.append(dtype_bytes)
         return 1.0
 
 
@@ -55,11 +58,38 @@ def fake_cfg():
         n_kv_heads=8,
         head_dim=128,
         intermediate_size=14336,
+        expert_intermediate_size=None,
+        is_moe=False,
+        n_experts=1,
         top_k=1,
     )
 
 
 class AttentionPredictionTests(unittest.TestCase):
+    def test_gpt_oss_configs_match_openai_architecture(self):
+        gpt_oss_20b = MODEL_CONFIGS["gpt-oss-20b"]
+        self.assertEqual(gpt_oss_20b.hidden_dim, 2880)
+        self.assertEqual(gpt_oss_20b.n_layers, 24)
+        self.assertEqual(gpt_oss_20b.n_heads, 64)
+        self.assertEqual(gpt_oss_20b.n_kv_heads, 8)
+        self.assertEqual(gpt_oss_20b.head_dim, 64)
+        self.assertEqual(gpt_oss_20b.intermediate_size, 2880)
+        self.assertEqual(gpt_oss_20b.n_experts, 32)
+        self.assertEqual(gpt_oss_20b.top_k, 4)
+        self.assertEqual(gpt_oss_20b.expert_weight_bits, 4)
+        self.assertEqual(gpt_oss_20b.sliding_window, 128)
+        self.assertEqual(gpt_oss_20b.full_attention_layers, 12)
+        self.assertAlmostEqual(gpt_oss_20b.active_params_b or 0.0, 3.6)
+
+        gpt_oss_120b = MODEL_CONFIGS["gpt-oss-120b"]
+        self.assertEqual(gpt_oss_120b.hidden_dim, 2880)
+        self.assertEqual(gpt_oss_120b.n_layers, 36)
+        self.assertEqual(gpt_oss_120b.n_experts, 128)
+        self.assertEqual(gpt_oss_120b.top_k, 4)
+        self.assertEqual(gpt_oss_120b.expert_weight_bits, 4)
+        self.assertEqual(gpt_oss_120b.full_attention_layers, 18)
+        self.assertAlmostEqual(gpt_oss_120b.active_params_b or 0.0, 5.1)
+
     def test_flash_flops_include_qk_and_av(self):
         q_len = 128
         kv_len = 4096
@@ -142,6 +172,62 @@ class AttentionPredictionTests(unittest.TestCase):
         self.assertIn((256, 4096, 3584), composer.gemm.calls)  # down
         self.assertEqual(composer.flash.calls[0]["n_heads"], 8)
         self.assertEqual(composer.flash.calls[0]["n_kv_heads"], 2)
+
+    def test_moe_uses_topk_scale_on_ffn_gemms(self):
+        composer = fake_composer()
+        cfg = SimpleNamespace(
+            hidden_dim=8,
+            n_heads=2,
+            n_kv_heads=1,
+            head_dim=4,
+            intermediate_size=16,
+            is_moe=True,
+            n_experts=4,
+            top_k=2,
+        )
+
+        # M = seq_len(3) * bs(2) = 6 for prefill
+        layer = composer.predict_layer(cfg, seq_len=3, bs=2, phase="prefill")
+
+        # Router: predict(M=6, N=n_experts=4, K=h=8)
+        self.assertIn((6, 4, 8), composer.gemm.calls)  # router
+        # Gate/up: predict(M=6, N=ffn=16, K=h=8) — each called once, scaled by top_k internally
+        self.assertEqual(composer.gemm.calls.count((6, 16, 8)), 2)  # gate + up
+        # Down: predict(M=6, N=h=8, K=ffn=16), scaled by top_k
+        self.assertIn((6, 8, 16), composer.gemm.calls)  # down
+        # Router output: raw GEMM value (fake composer returns 1.0 per call)
+        self.assertEqual(layer.router_proj_us, 1.0)
+        # FFN outputs: each GEMM returns 1.0, scaled by top_k=2 → 2.0 each
+        self.assertEqual(layer.gate_proj_us, 2.0)
+        self.assertEqual(layer.up_proj_us, 2.0)
+        self.assertEqual(layer.down_proj_us, 2.0)
+        # Q/K/V/O (4 calls) + router + gate + up + down (4 MoE calls) = 8 total, all default fp16
+        self.assertEqual(composer.gemm.dtype_bytes, [2, 2, 2, 2, 2, 2, 2, 2])
+
+    def test_sliding_attention_uses_window_for_sliding_layers(self):
+        composer = fake_composer()
+        cfg = SimpleNamespace(
+            hidden_dim=4096,
+            n_heads=32,
+            n_kv_heads=8,
+            head_dim=128,
+            intermediate_size=14336,
+            expert_intermediate_size=None,
+            expert_weight_bits=None,
+            is_moe=False,
+            n_experts=1,
+            top_k=1,
+            n_layers=4,
+            sliding_window=128,
+            full_attention_layers=1,
+        )
+
+        composer._predict_model_us(
+            cfg, seq_len=1, bs=1, kv_len=2048, phase="decode"
+        )
+
+        self.assertEqual(composer.flash.calls[0]["kv_len"], 2048)
+        self.assertEqual(composer.flash.calls[1]["kv_len"], 128)
 
     def test_attention_shape_inventory_has_all_phases(self):
         phases = {row["phase"] for row in generate_attention_shapes()}
