@@ -20,6 +20,16 @@ class ModelConfig:
     is_moe: bool = False
     n_experts: int = 1
     top_k: int = 1
+    expert_intermediate_size: int | None = None
+    expert_weight_bits: int | None = None
+    active_params_b: float | None = None
+    sliding_window: int | None = None
+    full_attention_layers: int | None = None
+    moe_overhead_us: float = 0.0  # fused kernel routing + all-reduce per decode step
+
+    @property
+    def ffn_intermediate_size(self) -> int:
+        return self.expert_intermediate_size or self.intermediate_size
 
 
 MODEL_CONFIGS: dict[str, ModelConfig] = {
@@ -51,9 +61,19 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
     ),
     "gpt-oss-20b": ModelConfig(
         name="gpt-oss-20b",
-        hidden_dim=6144, n_heads=48, n_kv_heads=8, head_dim=128,
-        intermediate_size=16384, n_layers=44, vocab_size=100352,
-        is_moe=True, n_experts=8, top_k=2,
+        hidden_dim=2880, n_heads=64, n_kv_heads=8, head_dim=64,
+        intermediate_size=2880, n_layers=24, vocab_size=201088,
+        is_moe=True, n_experts=32, top_k=4,
+        expert_intermediate_size=2880, expert_weight_bits=4, active_params_b=3.6,
+        sliding_window=128, full_attention_layers=12,
+    ),
+    "gpt-oss-120b": ModelConfig(
+        name="gpt-oss-120b",
+        hidden_dim=2880, n_heads=64, n_kv_heads=8, head_dim=64,
+        intermediate_size=2880, n_layers=36, vocab_size=201088,
+        is_moe=True, n_experts=128, top_k=4,
+        expert_intermediate_size=2880, expert_weight_bits=4, active_params_b=5.1,
+        sliding_window=128, full_attention_layers=18,
     ),
     "Qwen3.5-9B": ModelConfig(
         name="Qwen3.5-9B",
@@ -67,9 +87,11 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
     ),
     "gpt-oss-120b": ModelConfig(
         name="gpt-oss-120b",
-        hidden_dim=6144, n_heads=48, n_kv_heads=8, head_dim=128,
-        intermediate_size=16384, n_layers=120, vocab_size=100352,
+        hidden_dim=2880, n_heads=64, n_kv_heads=8, head_dim=64,
+        intermediate_size=2880, n_layers=36, vocab_size=201088,
         is_moe=True, n_experts=128, top_k=4,
+        expert_intermediate_size=2880, expert_weight_bits=4, active_params_b=5.1,
+        sliding_window=128, full_attention_layers=18,
     ),
     "Gemma-2-9B": ModelConfig(
         name="gemma-2-9b-it",

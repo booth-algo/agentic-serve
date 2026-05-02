@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useData } from './hooks/useData';
 import { useSweepState } from './hooks/useSweepState';
 import { Layout } from './components/Layout';
@@ -45,6 +45,11 @@ function pageAvailableInScope(page: PageId, scope: DataScope): boolean {
 
 function App() {
   const [dataScope, setDataScopeState] = useState<DataScope>(initialDataScope);
+  const [activePage, setActivePageState] = useState<PageId>(initialPage);
+  const [activeTab, setActiveTab] = useState<TabId>('latency');
+  const [scopePending, startScopeTransition] = useTransition();
+  const visiblePage = pageAvailableInScope(activePage, dataScope) ? activePage : 'benchmark';
+  const deriveBenchmarkData = visiblePage !== 'gemm' && visiblePage !== 'serving';
   const {
     allData,
     data,
@@ -56,11 +61,8 @@ function App() {
     toggleFilter,
     clearFilters,
     clearWorkloadFilters,
-  } = useData(dataScope);
+  } = useData(dataScope, { deriveBenchmarkData });
   const { sweepState } = useSweepState();
-
-  const [activePage, setActivePageState] = useState<PageId>(initialPage);
-  const [activeTab, setActiveTab] = useState<TabId>('latency');
 
   const setActivePage = useCallback((page: PageId) => {
     if (!pageAvailableInScope(page, dataScope)) return;
@@ -82,7 +84,6 @@ function App() {
   }, [activePage, dataScope]);
 
   const setDataScope = useCallback((scope: DataScope) => {
-    setDataScopeState(scope);
     window.localStorage.setItem(DATA_SCOPE_STORAGE_KEY, scope);
     const url = new URL(window.location.href);
     if (scope === 'archive') {
@@ -91,10 +92,11 @@ function App() {
       url.searchParams.delete('scope');
     }
     window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-    clearWorkloadFilters();
+    startScopeTransition(() => {
+      setDataScopeState(scope);
+      clearWorkloadFilters();
+    });
   }, [clearWorkloadFilters]);
-
-  const visiblePage = pageAvailableInScope(activePage, dataScope) ? activePage : 'benchmark';
 
   if (error) {
     return (
@@ -105,6 +107,7 @@ function App() {
         onPageChange={setActivePage}
         dataScope={dataScope}
         onDataScopeChange={setDataScope}
+        scopePending={scopePending}
       >
         <div className="flex h-64 items-center justify-center rounded-lg border border-[#f97583]/30 bg-[#f97583]/10 text-[#f97583]">
           <div className="text-center">
@@ -127,6 +130,7 @@ function App() {
       onPageChange={setActivePage}
       dataScope={dataScope}
       onDataScopeChange={setDataScope}
+      scopePending={scopePending}
     >
       {visiblePage === 'gemm' ? (
         <GemmPage />

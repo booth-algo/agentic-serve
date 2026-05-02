@@ -14,14 +14,16 @@ interface ModelParams {
   head_dim: number;
   is_moe?: boolean;
   active_params_B?: number;
+  n_experts?: number;
+  active_experts_per_token?: number;
 }
 
 const MODEL_PARAMS: Record<string, ModelParams> = {
   'Llama-3.1-8B':  { params_B: 8,   d_model: 4096, n_layers: 32,  n_kv_heads: 8,  head_dim: 128 },
   'Qwen3.5-9B':    { params_B: 9,   d_model: 3584, n_layers: 36,  n_kv_heads: 4,  head_dim: 128 },
-  'gpt-oss-20b':   { params_B: 21,  d_model: 3072, n_layers: 52,  n_kv_heads: 8,  head_dim: 128, is_moe: true, active_params_B: 3.6 },
+  'gpt-oss-20b':   { params_B: 21,  d_model: 2880, n_layers: 24,  n_kv_heads: 8,  head_dim: 64, is_moe: true, active_params_B: 3.6, n_experts: 32, active_experts_per_token: 4 },
   'Qwen3.5-27B':   { params_B: 27,  d_model: 4096, n_layers: 48,  n_kv_heads: 4,  head_dim: 128 },
-  'gpt-oss-120b':  { params_B: 117, d_model: 5120, n_layers: 120, n_kv_heads: 16, head_dim: 128, is_moe: true, active_params_B: 5.1 },
+  'gpt-oss-120b':  { params_B: 117, d_model: 2880, n_layers: 36,  n_kv_heads: 8,  head_dim: 64, is_moe: true, active_params_B: 5.1, n_experts: 128, active_experts_per_token: 4 },
   'Qwen2.5-72B':   { params_B: 72,  d_model: 8192, n_layers: 80,  n_kv_heads: 8,  head_dim: 128 },
   'Llama-3.1-70B':  { params_B: 70,  d_model: 8192, n_layers: 80,  n_kv_heads: 8,  head_dim: 128 },
   'Llama-3.3-70B':  { params_B: 70,  d_model: 8192, n_layers: 80,  n_kv_heads: 8,  head_dim: 128 },

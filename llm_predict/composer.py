@@ -143,6 +143,7 @@ class Composer:
         )
         sliding_window = getattr(cfg, "sliding_window", None)
         full_layers = getattr(cfg, "full_attention_layers", None)
+
         if not sliding_window or full_layers is None:
             return layer.total_us * cfg.n_layers
 
@@ -156,7 +157,8 @@ class Composer:
             cfg, seq_len=seq_len, bs=bs, kv_len=sliding_kv_len, phase=phase,
             tensor_parallel_size=tensor_parallel_size,
         )
-        return layer.total_us * full_layers + sliding_layer.total_us * sliding_layers
+        return (layer.total_us * full_layers
+                + sliding_layer.total_us * sliding_layers)
 
     def predict_ttft_us(self, cfg: ModelConfig, isl: int,
                         bs: int = 1, kv_len: int | None = None,
@@ -175,14 +177,13 @@ class Composer:
     def predict_decode_step_us(self, cfg: ModelConfig, kv_len: int,
                                bs: int = 1,
                                tensor_parallel_size: int = 1) -> float:
-        kernel_us = self._predict_model_us(
+        layer = self.predict_layer(
             cfg, seq_len=1, bs=bs, kv_len=kv_len, phase="decode",
             tensor_parallel_size=tensor_parallel_size,
         )
+        kernel_us = layer.total_us * cfg.n_layers
         # Serving runtime overhead per scheduler step: paged-attention block
         # table indirection, KV cache block management, scheduler loop.
-        # Scales with active decode requests. Placeholder values — calibrate
-        # with D ∈ {1,2,4,8,16,32} NCU profiling sweep.
         gpu_spec = get_gpu(self.gpu)
         overhead_us = (gpu_spec.step_overhead_base_us
                        + bs * gpu_spec.step_overhead_per_req_us)

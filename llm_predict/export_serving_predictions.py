@@ -205,6 +205,14 @@ def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
     measured_tpot = summary.get("median_tpot_ms")
     measured_itl = summary.get("median_itl_ms")
     measured_e2el = summary.get("median_e2el_ms")
+    measurement_warning = None
+    if (
+        measured_ttft and measured_ttft > 0
+        and measured_e2el and measured_e2el > 0
+        and measured_e2el < measured_ttft
+    ):
+        measurement_warning = "measured_e2el_lt_ttft"
+        row["measurement_semantics_warning"] = measurement_warning
     if measured_ttft and measured_ttft > 0 and pred.ttft_prediction_supported:
         row["ttft_pred"] = round(pred.ttft_ms, 2)
         row["ttft_meas"] = round(measured_ttft, 2)
@@ -219,7 +227,8 @@ def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
     if measured_e2el and measured_e2el > 0 and pred.ttft_prediction_supported:
         row["e2el_pred"] = round(pred.e2el_ms, 2)
         row["e2el_meas"] = round(measured_e2el, 2)
-        row["e2el_err"] = round(abs(pred.e2el_ms - measured_e2el) / min(pred.e2el_ms, measured_e2el) * 100, 1)
+        if measurement_warning is None:
+            row["e2el_err"] = round(abs(pred.e2el_ms - measured_e2el) / min(pred.e2el_ms, measured_e2el) * 100, 1)
     return {key: value for key, value in row.items() if value is not None}
 
 
@@ -249,6 +258,7 @@ def _dashboard_row(row: dict) -> dict:
         "cache_prediction_regime": row.get("cache_prediction_regime"),
         "ttft_prediction_supported": row.get("ttft_prediction_supported"),
         "unsupported_reason": row.get("unsupported_reason"),
+        "measurement_semantics_warning": row.get("measurement_semantics_warning"),
         "multiturn_prediction_mode": row.get("multiturn_prediction_mode"),
         "predicted_turn_count": row.get("predicted_turn_count"),
         "total_successful_turn_requests": row.get("total_successful_turn_requests"),

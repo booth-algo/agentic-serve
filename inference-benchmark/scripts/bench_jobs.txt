@@ -55,8 +55,28 @@ gpu-4|/data/models/gpt-oss-20b|4|gpt-oss-20b|multi|vllm|8192|0.85|5 20 40 80 160
 2080ti|/home/kevinlau/models/Llama-3.1-8B-Instruct|1|Llama-3.1-8B|multi|vllm|8192|0.85|5 20 40 80 160|chat-multiturn osworld-multiturn|CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH
 2080ti|/home/kevinlau/models/Qwen3.5-9B|2|Qwen3.5-9B|single|vllm|32768|0.85|1 10 20 40 80 160 256 320|chat-singleturn coding-singleturn|CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH
 2080ti|/home/kevinlau/models/Qwen3.5-9B|2|Qwen3.5-9B|multi|vllm|8192|0.85|5 20 40 80 160|chat-multiturn osworld-multiturn|CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH
+2080ti|/home/kevinlau/models/Qwen3.5-27B|4|Qwen3.5-27B|single|vllm|8192|0.9|1 10 20 40 80 160 256 320|chat-singleturn|CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH
+2080ti|/home/kevinlau/models/Qwen3.5-27B|4|Qwen3.5-27B|multi|vllm|8192|0.85|5 20 40 80 160|chat-multiturn osworld-multiturn|CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH
+
+# === 3090 ===
+3090|/home/kevinlau/models/Qwen3.5-9B|1|Qwen3.5-9B|single|vllm|4096|0.9|1 10 20 40 80 160 256 320|chat-singleturn|
+3090|/home/kevinlau/models/Qwen3.5-9B|1|Qwen3.5-9B|multi|vllm|4096|0.9|5 20 40 80 160|chat-multiturn osworld-multiturn|
+3090|/home/kevinlau/models/gpt-oss-20b|4|gpt-oss-20b|single|vllm|8192|0.9|1 10 20 40 80 160 256 320|chat-singleturn|
+3090|/home/kevinlau/models/gpt-oss-20b|4|gpt-oss-20b|multi|vllm|8192|0.85|5 20 40 80 160|chat-multiturn osworld-multiturn|
 
 # === h100 ===
+h100|/data/kevinlau/models/Llama-3.1-8B-Instruct|4|Llama-3.1-8B|single|vllm|32768|0.9|1 10 20 40 80 160 256 320|chat-singleturn coding-singleturn|
+h100|/data/kevinlau/models/Llama-3.1-8B-Instruct|4|Llama-3.1-8B|multi|vllm|32768|0.9|5 20 40 80 160|chat-multiturn swebench-multiturn terminalbench-multiturn osworld-multiturn|
+h100|/data/kevinlau/models/Mixtral-8x7B-Instruct|4|Mixtral-8x7B|single|vllm|8192|0.9|1 10 20 40 80 160 256 320|chat-singleturn coding-singleturn|
+h100|/data/kevinlau/models/Mixtral-8x7B-Instruct|4|Mixtral-8x7B|multi|vllm|8192|0.9|5 20 40 80 160|chat-multiturn osworld-multiturn|
+h100|/data/kevinlau/models/Qwen3.5-27B|4|Qwen3.5-27B|single|vllm|32768|0.9|1 10 20 40 80 160 256 320|chat-singleturn coding-singleturn|
+h100|/data/kevinlau/models/Qwen3.5-27B|4|Qwen3.5-27B|multi|vllm|32768|0.9|5 20 40 80 160|chat-multiturn swebench-multiturn terminalbench-multiturn osworld-multiturn|
+h100|/data/kevinlau/models/Qwen3.5-9B|4|Qwen3.5-9B|single|vllm|32768|0.9|1 10 20 40 80 160 256 320|chat-singleturn coding-singleturn|
+h100|/data/kevinlau/models/Qwen3.5-9B|4|Qwen3.5-9B|multi|vllm|32768|0.9|5 20 40 80 160|chat-multiturn swebench-multiturn terminalbench-multiturn osworld-multiturn|
+h100|/data/kevinlau/models/gpt-oss-20b|4|gpt-oss-20b|single|vllm|8192|0.9|1 10 20 40 80 160 256 320|chat-singleturn coding-singleturn|
+h100|/data/kevinlau/models/gpt-oss-20b|4|gpt-oss-20b|multi|vllm|8192|0.9|5 20 40 80 160|chat-multiturn osworld-multiturn|
+h100|/data/kevinlau/models/Qwen3.5-27B|1|Qwen3.5-27B|single|vllm|32768|0.9|1 10 20 40 80 160 256 320|chat-singleturn coding-singleturn|
+h100|/data/kevinlau/models/Qwen3.5-27B|1|Qwen3.5-27B|multi|vllm|32768|0.9|5 20 40 80 160|chat-multiturn swebench-multiturn terminalbench-multiturn osworld-multiturn|
 h100|/data/kevinlau/models/Llama-3.1-8B-Instruct|2|Llama-3.1-8B|single|vllm|32768|0.9|1 10 20 40 80 160 256 320|chat-singleturn coding-singleturn|
 h100|/data/kevinlau/models/Llama-3.1-8B-Instruct|2|Llama-3.1-8B|multi|vllm|32768|0.9|5 20 40 80 160|chat-multiturn swebench-multiturn terminalbench-multiturn osworld-multiturn|
 h100|/data/kevinlau/models/Qwen3.5-9B|2|Qwen3.5-9B|single|vllm|32768|0.9|1 10 20 40 80 160 256 320|chat-singleturn coding-singleturn|

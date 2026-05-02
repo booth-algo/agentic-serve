@@ -11,6 +11,7 @@ interface LayoutProps {
   onPageChange: (page: PageId) => void;
   dataScope: DataScope;
   onDataScopeChange: (scope: DataScope) => void;
+  scopePending?: boolean;
 }
 
 const NAV_PAGES: Array<{ id: PageId; label: string; icon: ReactNode }> = [
@@ -66,13 +67,14 @@ export function Layout({
   onPageChange,
   dataScope,
   onDataScopeChange,
+  scopePending = false,
 }: LayoutProps) {
   const navPages = dataScope === 'archive'
     ? NAV_PAGES.filter((page) => page.id !== 'serving')
     : NAV_PAGES;
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
+    <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]" aria-busy={loading || scopePending}>
       {/* Sticky nav */}
       <nav className="sticky top-0 z-50 border-b border-[#21262d] bg-[#161b22]/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
@@ -132,6 +134,11 @@ export function Layout({
               <span className="flex items-center gap-2">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#ff9800]" />
                 Loading...
+              </span>
+            ) : scopePending ? (
+              <span className="flex items-center gap-2">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#58a6ff]" />
+                Updating view...
               </span>
             ) : (
               <span className="flex items-center gap-2">

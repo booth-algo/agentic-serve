@@ -418,6 +418,41 @@ class CacheAwareTests(unittest.TestCase):
         self.assertNotIn("e2el_err", row)
         self.assertIn("tpot_err", row)
 
+    def test_export_flags_e2el_below_ttft_measurements(self):
+        composer = FakeComposer()
+
+        row = _prediction_row(
+            {
+                "hardware": "H100",
+                "dataScope": "current",
+                "engineVersion": "0.10.0",
+                "config": {
+                    "model": "meta-llama/Llama-3.1-8B-Instruct",
+                    "backend": "vllm",
+                    "profile": "chat-singleturn",
+                    "mode": "single_turn",
+                    "concurrency": 1,
+                },
+                "summary": {
+                    "successful_requests": 1,
+                    "total_input_tokens": 100,
+                    "total_output_tokens": 10,
+                    "median_ttft_ms": 100,
+                    "median_tpot_ms": 5,
+                    "median_e2el_ms": 90,
+                },
+            },
+            composer,
+            "H100",
+        )
+
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row["measurement_semantics_warning"], "measured_e2el_lt_ttft")
+        self.assertIn("e2el_pred", row)
+        self.assertIn("e2el_meas", row)
+        self.assertNotIn("e2el_err", row)
+
 
 if __name__ == "__main__":
     unittest.main()

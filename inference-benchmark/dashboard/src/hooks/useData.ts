@@ -8,6 +8,21 @@ import {
 } from '../profileMeta';
 import { dataJsonUrl } from '../dataUrls';
 
+interface UseDataOptions {
+  deriveBenchmarkData?: boolean;
+}
+
+const EMPTY_FILTER_OPTIONS: FilterOptions = {
+  hardware: [],
+  model: [],
+  backend: [],
+  agentType: [],
+  turnStyle: [],
+  profile: [],
+};
+
+const EMPTY_SERIES_DATA = new Map<string, BenchmarkResult[]>();
+
 function defaultHardwareForScope(rows: BenchmarkResult[]): string | undefined {
   const hardware = Array.from(new Set(rows.map((r) => r.hardware))).sort();
   const preferred = [
@@ -22,7 +37,8 @@ function defaultHardwareForScope(rows: BenchmarkResult[]): string | undefined {
   return preferred.find((label) => hardware.includes(label)) ?? hardware[0];
 }
 
-export function useData(dataScope: DataScope) {
+export function useData(dataScope: DataScope, options: UseDataOptions = {}) {
+  const deriveBenchmarkData = options.deriveBenchmarkData ?? true;
   const initialDataScope = useRef<DataScope>(dataScope);
   const [allData, setAllData] = useState<BenchmarkResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,12 +90,20 @@ export function useData(dataScope: DataScope) {
       });
   }, []);
 
-  const scopedData = useMemo(
-    () => allData.filter((r) => (r.dataScope ?? 'archive') === dataScope && isProfileInScope(r.config.profile, dataScope)),
-    [allData, dataScope],
-  );
+  const scopedDataByScope = useMemo<Record<DataScope, BenchmarkResult[]>>(() => {
+    const next: Record<DataScope, BenchmarkResult[]> = { current: [], archive: [] };
+    for (const row of allData) {
+      const scope = row.dataScope ?? 'archive';
+      if (isProfileInScope(row.config.profile, scope)) next[scope].push(row);
+    }
+    return next;
+  }, [allData]);
+
+  const scopedData = scopedDataByScope[dataScope];
 
   const filterOptions = useMemo<FilterOptions>(() => {
+    if (!deriveBenchmarkData) return EMPTY_FILTER_OPTIONS;
+
     const hw = new Set<string>();
     const model = new Set<string>();
     const backend = new Set<string>();
@@ -107,9 +131,11 @@ export function useData(dataScope: DataScope) {
       turnStyle: Array.from(turnStyle).sort(),
       profile: Array.from(profile).sort(),
     };
-  }, [scopedData]);
+  }, [deriveBenchmarkData, scopedData]);
 
   const filteredData = useMemo(() => {
+    if (!deriveBenchmarkData) return [];
+
     return scopedData.filter((r) => {
       if (filters.hardware.length > 0 && !filters.hardware.includes(r.hardware)) return false;
       if (filters.model.length > 0 && !filters.model.includes(r.modelShort)) return false;
@@ -127,10 +153,12 @@ export function useData(dataScope: DataScope) {
 
       return true;
     });
-  }, [scopedData, filters]);
+  }, [deriveBenchmarkData, scopedData, filters]);
 
   // Group data by series key for chart rendering
   const seriesData = useMemo(() => {
+    if (!deriveBenchmarkData) return EMPTY_SERIES_DATA;
+
     const map = new Map<string, BenchmarkResult[]>();
     for (const r of filteredData) {
       const existing = map.get(r.seriesKey) || [];
@@ -142,7 +170,7 @@ export function useData(dataScope: DataScope) {
       arr.sort((a, b) => a.config.concurrency - b.config.concurrency);
     }
     return map;
-  }, [filteredData]);
+  }, [deriveBenchmarkData, filteredData]);
 
   const toggleFilter = useCallback((category: keyof FilterState, value: string) => {
     setFilters((prev) => {

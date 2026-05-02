@@ -32,6 +32,7 @@ interface ServingRow {
   cache_feature_source?: string;
   cache_prediction_regime?: string;
   unsupported_reason?: string;
+  measurement_semantics_warning?: string;
   multiturn_prediction_mode?: string;
   predicted_turn_count?: number;
   total_successful_turn_requests?: number;
@@ -68,6 +69,20 @@ interface GpuConfigSummary {
   concurrencies: number;
   medianE2elErr?: number;
 }
+
+interface ServingScopeIndex {
+  rowsByGpu: Record<string, ServingRow[]>;
+  gpuOptions: string[];
+  summaries: GpuConfigSummary[];
+  summariesByGpu: Record<string, GpuConfigSummary>;
+}
+
+interface ServingIndex {
+  current: ServingScopeIndex;
+  archive: ServingScopeIndex;
+}
+
+const EMPTY_GPU_OPTIONS: string[] = [];
 
 const SERVING_GPU_ORDER = [
   'H100',
@@ -157,7 +172,7 @@ const SERVING_METRICS: ServingMetric[] = [
 ];
 
 export function ServingPredictionsPage({ dataScope }: { dataScope: DataScope }) {
-  const [data, setData] = useState<Record<string, ServingRow[]> | null>(null);
+  const [servingIndex, setServingIndex] = useState<ServingIndex | null>(null);
   const [gpu, setGpu] = useState('H100');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -166,7 +181,7 @@ export function ServingPredictionsPage({ dataScope }: { dataScope: DataScope }) 
     fetch(servingPredictionsJsonUrl)
       .then(r => r.json())
       .then((json: Record<string, ServingRow[]>) => {
-        setData(json);
+        setServingIndex(buildServingIndex(json));
         setLoading(false);
       })
       .catch(() => {
@@ -175,23 +190,18 @@ export function ServingPredictionsPage({ dataScope }: { dataScope: DataScope }) 
       });
   }, []);
 
-  const gpuOptions = useMemo(
-    () => data ? availableServingGpus(data, dataScope) : [],
-    [data, dataScope],
-  );
+  const scopeIndex = servingIndex?.[dataScope];
+  const gpuOptions = scopeIndex?.gpuOptions ?? EMPTY_GPU_OPTIONS;
 
   useEffect(() => {
     if (!gpuOptions.length) return;
     setGpu(current => gpuOptions.includes(current) ? current : gpuOptions[0]);
   }, [gpuOptions]);
 
-  const rows = useMemo(
-    () => data ? scopedServingRows(data, gpu, dataScope) : [],
-    [data, gpu, dataScope],
-  );
+  const rows = scopeIndex?.rowsByGpu[gpu] ?? [];
 
   if (loading) return <div className="p-8 text-[#8b949e]">Loading serving predictions...</div>;
-  if (failed || !data) return <div className="p-8 text-[#f85149]">Failed to load serving-predictions.json</div>;
+  if (failed || !scopeIndex) return <div className="p-8 text-[#f85149]">Failed to load serving-predictions.json</div>;
 
   return (
     <div className="space-y-4">
@@ -206,9 +216,7 @@ export function ServingPredictionsPage({ dataScope }: { dataScope: DataScope }) 
       </div>
 
       <GpuConfigSelector
-        data={data}
-        dataScope={dataScope}
-        options={gpuOptions}
+        scopeIndex={scopeIndex}
         selectedGpu={gpu}
         onSelect={setGpu}
       />
@@ -219,24 +227,19 @@ export function ServingPredictionsPage({ dataScope }: { dataScope: DataScope }) 
 }
 
 function GpuConfigSelector({
-  data,
-  dataScope,
-  options,
+  scopeIndex,
   selectedGpu,
   onSelect,
 }: {
-  data: Record<string, ServingRow[]>;
-  dataScope: DataScope;
-  options: string[];
+  scopeIndex: ServingScopeIndex;
   selectedGpu: string;
   onSelect: (gpu: string) => void;
 }) {
-  const summaries = useMemo(
-    () => options.map(gpu => summarizeGpuConfig(gpu, scopedServingRows(data, gpu, dataScope))),
-    [data, dataScope, options],
+  const selectedSummary = scopeIndex.summariesByGpu[selectedGpu];
+  const groups = useMemo(
+    () => groupGpuSummaries(scopeIndex.summaries),
+    [scopeIndex.summaries],
   );
-  const selectedSummary = summaries.find(summary => summary.gpu === selectedGpu);
-  const groups = groupGpuSummaries(summaries);
 
   return (
     <section className="space-y-3">
@@ -258,7 +261,7 @@ function GpuConfigSelector({
           </div>
         </div>
         <div className="text-xs text-[#6e7681]">
-          {summaries.length} configs in {Object.keys(groups).length} families
+          {scopeIndex.summaries.length} configs in {Object.keys(groups).length} families
         </div>
       </div>
 
@@ -360,12 +363,6 @@ function gpuAcceleratorCount(gpu: string): number {
   return match ? Number(match[1]) : 1;
 }
 
-function availableServingGpus(data: Record<string, ServingRow[]>, dataScope: DataScope): string[] {
-  return Object.keys(data)
-    .filter(gpu => scopedServingRows(data, gpu, dataScope).length > 0)
-    .sort(compareServingGpus);
-}
-
 function compareServingGpus(a: string, b: string): number {
   const aRank = SERVING_GPU_ORDER.indexOf(a);
   const bRank = SERVING_GPU_ORDER.indexOf(b);
@@ -375,18 +372,66 @@ function compareServingGpus(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
-function scopedServingRows(
-  data: Record<string, ServingRow[]>,
-  gpu: string,
-  dataScope: DataScope,
-): ServingRow[] {
-  return (data[gpu] ?? [])
-    .map(row => ({ ...row, profile: normalizeProfileName(row.profile) }))
-    .filter(row => (row.data_scope ?? row.dataScope ?? 'archive') === dataScope && isProfileInScope(row.profile, dataScope));
+function createServingScopeIndex(): ServingScopeIndex {
+  return {
+    rowsByGpu: {},
+    gpuOptions: [],
+    summaries: [],
+    summariesByGpu: {},
+  };
+}
+
+function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
+  const index: ServingIndex = {
+    current: createServingScopeIndex(),
+    archive: createServingScopeIndex(),
+  };
+
+  for (const [gpu, rows] of Object.entries(data)) {
+    for (const row of rows) {
+      const dataScope = row.data_scope ?? row.dataScope ?? 'archive';
+      if (dataScope !== 'current' && dataScope !== 'archive') continue;
+
+      const profile = normalizeProfileName(row.profile);
+      if (!isProfileInScope(profile, dataScope)) continue;
+
+      const normalizedRow = profile === row.profile ? row : { ...row, profile };
+      const rowsByGpu = index[dataScope].rowsByGpu;
+      if (!rowsByGpu[gpu]) rowsByGpu[gpu] = [];
+      rowsByGpu[gpu].push(normalizedRow);
+    }
+  }
+
+  for (const scope of ['current', 'archive'] as const) {
+    const scopeIndex = index[scope];
+    scopeIndex.gpuOptions = Object.keys(scopeIndex.rowsByGpu)
+      .filter(gpu => scopeIndex.rowsByGpu[gpu].length > 0)
+      .sort(compareServingGpus);
+    scopeIndex.summaries = scopeIndex.gpuOptions.map(gpu => (
+      summarizeGpuConfig(gpu, scopeIndex.rowsByGpu[gpu] ?? [])
+    ));
+    scopeIndex.summariesByGpu = Object.fromEntries(
+      scopeIndex.summaries.map(summary => [summary.gpu, summary]),
+    );
+  }
+
+  return index;
 }
 
 function ServingTable({ rows, dataScope }: { rows: ServingRow[]; dataScope: DataScope }) {
   const [selectedPerTurnKey, setSelectedPerTurnKey] = useState<string | null>(null);
+  const tableData = useMemo(() => {
+    const concurrencies = Array.from(new Set(rows.map(r => r.concurrency ?? 1))).sort((a, b) => a - b);
+    const matrixRows = buildServingMatrixRows(rows);
+    const perTurnRows = rows.filter(hasTurnPredictions).sort(compareServingRows);
+    const groupedByModel = groupServingRowsByModel(matrixRows);
+    return { concurrencies, perTurnRows, groupedByModel };
+  }, [rows]);
+  const selectedPerTurnRow = useMemo(
+    () => tableData.perTurnRows.find(row => servingRowKey(row) === selectedPerTurnKey) ?? tableData.perTurnRows[0],
+    [selectedPerTurnKey, tableData.perTurnRows],
+  );
+  const selectedPerTurnRowKey = selectedPerTurnRow ? servingRowKey(selectedPerTurnRow) : null;
 
   if (rows.length === 0) {
     return (
@@ -399,12 +444,7 @@ function ServingTable({ rows, dataScope }: { rows: ServingRow[]; dataScope: Data
     );
   }
 
-  const concurrencies = Array.from(new Set(rows.map(r => r.concurrency ?? 1))).sort((a, b) => a - b);
-  const matrixRows = buildServingMatrixRows(rows);
-  const perTurnRows = rows.filter(hasTurnPredictions).sort(compareServingRows);
-  const selectedPerTurnRow = perTurnRows.find(row => servingRowKey(row) === selectedPerTurnKey) ?? perTurnRows[0];
-  const selectedPerTurnRowKey = selectedPerTurnRow ? servingRowKey(selectedPerTurnRow) : null;
-  const groupedByModel = groupServingRowsByModel(matrixRows);
+  const { concurrencies, groupedByModel } = tableData;
 
   return (
     <div className="space-y-3">
@@ -573,12 +613,15 @@ function hasTurnPredictions(row: ServingRow): row is ServingPerTurnRow {
 }
 
 function ServingPerTurnBreakdown({ row }: { row?: ServingPerTurnRow }) {
-  if (!row) return null;
-
-  const turns = [...row.multiturn_turn_predictions].sort((a, b) => a.turn_index - b.turn_index);
+  const turns = useMemo(
+    () => row ? [...row.multiturn_turn_predictions].sort((a, b) => a.turn_index - b.turn_index) : [],
+    [row],
+  );
   const meanHit = turns.length
     ? turns.reduce((total, turn) => total + turn.cache_hit_rate, 0) / turns.length
     : 0;
+
+  if (!row) return null;
 
   return (
     <div className="rounded-md border border-[#21262d] bg-[#161b22]">
@@ -796,6 +839,7 @@ function ServingMiniMetric({ row, metric }: { row: ServingRow; metric: ServingMe
     `meas ${formatLatency(meas, metric.isTotal)}`,
     `ISL->OSL ${row.isl}->${row.osl}`,
     cacheTooltip(row),
+    measurementTooltip(row),
   ].join(' | ');
 
   return (
@@ -822,6 +866,13 @@ function cacheTooltip(row: ServingRow): string {
     ? `; ${row.multiturn_prediction_mode} ${row.predicted_turn_count ?? 0} turns`
     : '';
   return `cache hit ${hit}; new/full ${fresh}/${total}; cached ${cached}${source}${multiturn}`;
+}
+
+function measurementTooltip(row: ServingRow): string {
+  if (row.measurement_semantics_warning === 'measured_e2el_lt_ttft') {
+    return 'measurement warning: measured E2EL is below measured TTFT';
+  }
+  return 'measurement semantics ok';
 }
 
 function numericMetric(row: ServingRow, key: ServingMetricKey): number | undefined {

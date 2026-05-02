@@ -221,6 +221,36 @@ cells:
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: single, preset: single_small, max_len: 32768, profiles: [chat-singleturn, coding-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: multi,  preset: multi_tight, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
 
+  # === 2080ti gap fill ===
+  - { host: 2080ti, model: Qwen3.5-27B,   tp: 4, mode: single, preset: single_large, max_len: 8192, extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Qwen3.5-27B,   tp: 4, mode: multi,  preset: multi_medium, max_len: 8192, extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+
+  # === 3090 gap fill ===
+  - { host: 3090,  model: Qwen3.5-9B,     tp: 1, mode: single, preset: single_tight, max_len: 4096, gpu_mem: 0.90 }
+  - { host: 3090,  model: Qwen3.5-9B,     tp: 1, mode: multi,  preset: multi_tight, max_len: 4096, gpu_mem: 0.90 }
+  - { host: 3090,  model: gpt-oss-20b,    tp: 4, mode: single, preset: single_large, max_len: 8192 }
+  - { host: 3090,  model: gpt-oss-20b,    tp: 4, mode: multi,  preset: multi_medium, max_len: 8192 }
+
+  # === H100 tp4 gap fill ===
+  - { host: h100, model: Llama-3.1-8B,   tp: 4, mode: single, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B,   tp: 4, mode: multi,  preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Mixtral-8x7B,   tp: 4, mode: single, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Mixtral-8x7B,   tp: 4, mode: multi,  preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Qwen3.5-27B,    tp: 4, mode: single, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-27B,    tp: 4, mode: multi,  preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B,     tp: 4, mode: single, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B,     tp: 4, mode: multi,  preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: gpt-oss-20b,    tp: 4, mode: single, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b,    tp: 4, mode: multi,  preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+
+  # === H100 tp1 gap fill ===
+  - { host: h100, model: Qwen3.5-27B,    tp: 1, mode: single, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-27B,    tp: 1, mode: multi,  preset: multi_small, gpu_mem: 0.90 }
+
+  # === gpu-4 gap fill ===
+  - { host: gpu-4, model: Qwen3.5-27B,   tp: 2, mode: single, preset: single_large, max_len: 8192, gpu_mem: 0.90 }
+  - { host: gpu-4, model: Qwen3.5-27B,   tp: 2, mode: multi,  preset: multi_medium, max_len: 8192, gpu_mem: 0.90 }
+
   # === H100 tp2 ===
   - { host: h100, model: Llama-3.1-8B,   tp: 2, mode: single, preset: single_small, gpu_mem: 0.90 }
   - { host: h100, model: Llama-3.1-8B,   tp: 2, mode: multi,  preset: multi_small, gpu_mem: 0.90 }

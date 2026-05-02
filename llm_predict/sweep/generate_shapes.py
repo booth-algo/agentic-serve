@@ -25,7 +25,7 @@ def enumerate_nk_pairs(cfg: ModelConfig) -> list[tuple[int, int, str]]:
     nh = cfg.n_heads
     nkv = cfg.n_kv_heads
     hd = cfg.head_dim
-    ffn = cfg.intermediate_size
+    ffn = cfg.ffn_intermediate_size
     vocab = cfg.vocab_size
 
     pairs = [
@@ -120,7 +120,7 @@ def write_shapes(path: Path | None = None) -> Path:
     unique_nk = len({(r["N"], r["K"]) for r in rows})
 
     with open(path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["M", "N", "K"])
+        w = csv.DictWriter(f, fieldnames=["M", "N", "K"], lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
 
@@ -139,7 +139,7 @@ def write_attention_shapes(path: Path | None = None) -> Path:
         "head_dim", "batch", "phase",
     ]
     with open(path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
 
