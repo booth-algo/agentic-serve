@@ -8,6 +8,7 @@ from unittest.mock import patch
 from llm_predict.cache_aware import (
     aggregate_turn_cache_feature,
     derive_turn_cache_features,
+    predict_multiturn_from_per_turn,
     weighted_median,
 )
 from llm_predict.framework_corrections import (
@@ -130,6 +131,102 @@ class CacheAwareTests(unittest.TestCase):
         self.assertEqual(pred.cached_context_tokens, 900)
         self.assertAlmostEqual(pred.cache_hit_rate, 0.9)
         self.assertTrue(pred.cache_aware_applied)
+
+    def test_multiturn_prediction_calls_serving_once_per_valid_turn(self):
+        composer = FakeComposer()
+        cfg = SimpleNamespace(name="fake", is_moe=False)
+
+        pred = predict_multiturn_from_per_turn(
+            composer, cfg, "H100",
+            [
+                {
+                    "turn_index": 0,
+                    "successful": 2,
+                    "median_input_tokens": 100,
+                    "median_new_prefill_tokens": 100,
+                    "median_output_tokens": 10,
+                },
+                {
+                    "turn_index": 1,
+                    "successful": 1,
+                    "median_input_tokens": 1000,
+                    "median_new_prefill_tokens": 50,
+                    "median_cached_context_tokens": 950,
+                    "median_cache_hit_rate": 0.95,
+                    "median_output_tokens": 20,
+                },
+            ],
+            concurrency=1,
+        )
+
+        self.assertIsNotNone(pred)
+        assert pred is not None
+        self.assertEqual(composer.ttft_calls, [(100, 1, 100), (50, 1, 1000)])
+        self.assertEqual(pred.multiturn_prediction_mode, "per_turn_aggregated")
+        self.assertEqual(pred.predicted_turn_count, 2)
+        self.assertEqual(pred.total_successful_turn_requests, 3)
+
+    def test_multiturn_prediction_skips_invalid_turns(self):
+        composer = FakeComposer()
+        cfg = SimpleNamespace(name="fake", is_moe=False)
+
+        pred = predict_multiturn_from_per_turn(
+            composer, cfg, "H100",
+            [
+                {
+                    "turn_index": 0,
+                    "successful": 0,
+                    "median_input_tokens": 100,
+                    "median_new_prefill_tokens": 100,
+                    "median_output_tokens": 10,
+                },
+                {
+                    "turn_index": 1,
+                    "successful": 1,
+                    "median_input_tokens": 1000,
+                    "median_new_prefill_tokens": 50,
+                    "median_cached_context_tokens": 950,
+                    "median_output_tokens": 20,
+                },
+            ],
+            concurrency=1,
+        )
+
+        self.assertIsNotNone(pred)
+        assert pred is not None
+        self.assertEqual(composer.ttft_calls, [(50, 1, 1000)])
+        self.assertEqual(pred.predicted_turn_count, 1)
+
+    def test_multiturn_tpot_is_token_weighted(self):
+        composer = FakeComposer()
+        cfg = SimpleNamespace(name="fake", is_moe=False)
+
+        pred = predict_multiturn_from_per_turn(
+            composer, cfg, "H100",
+            [
+                {
+                    "turn_index": 0,
+                    "successful": 1,
+                    "median_input_tokens": 100,
+                    "median_new_prefill_tokens": 100,
+                    "median_output_tokens": 10,
+                },
+                {
+                    "turn_index": 1,
+                    "successful": 1,
+                    "median_input_tokens": 1000,
+                    "median_new_prefill_tokens": 50,
+                    "median_cached_context_tokens": 950,
+                    "median_output_tokens": 20,
+                },
+            ],
+            concurrency=1,
+        )
+
+        self.assertIsNotNone(pred)
+        assert pred is not None
+        expected_decode_total = 1.045 + 20.19
+        self.assertAlmostEqual(pred.tpot_ms, expected_decode_total / 30)
 
     def test_prefix_cache_contention_requires_applicable_calibration(self):
         artifact = {
