@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-01T17:13:14.379845+00:00",
+  "generated_at": "2026-05-02T15:58:44.891146+00:00",
   "feasibility_ratio": 0.9,
   "hosts": {
     "gpu-4": {
@@ -62,9 +62,25 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:05:25.545539+00:00"
+      "updated_at": "2026-05-02T13:51:29.271363+00:00"
     },
     {
       "host": "gpu-4",
@@ -75,9 +91,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:05:34.668288+00:00"
+      "updated_at": "2026-05-02T13:51:38.298122+00:00"
     },
     {
       "host": "gpu-4",
@@ -88,9 +119,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 4096,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:05:44.022031+00:00"
+      "updated_at": "2026-05-02T13:51:48.963837+00:00"
     },
     {
       "host": "gpu-4",
@@ -101,9 +147,81 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:05:53.446771+00:00"
+      "updated_at": "2026-05-02T13:51:59.435558+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "Llama-3.1-8B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T13:52:11.109246+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "Llama-3.1-8B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T14:28:30.209562+00:00"
     },
     {
       "host": "gpu-4",
@@ -114,9 +232,80 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:06:03.114505+00:00"
+      "updated_at": "2026-05-02T14:03:08.507668+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T14:03:19.194382+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T14:03:28.153142+00:00"
     },
     {
       "host": "gpu-4",
@@ -127,9 +316,25 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:20:23.977520+00:00"
+      "updated_at": "2026-05-02T14:14:34.072079+00:00"
     },
     {
       "host": "gpu-4",
@@ -140,9 +345,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:20:34.245235+00:00"
+      "updated_at": "2026-05-02T14:25:36.727227+00:00"
     },
     {
       "host": "gpu-4",
@@ -153,9 +373,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:52:01.327720+00:00"
+      "updated_at": "2026-05-02T14:36:39.026424+00:00"
     },
     {
       "host": "gpu-4",
@@ -166,9 +401,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.95,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:52:10.690471+00:00"
+      "updated_at": "2026-05-02T14:41:47.125168+00:00"
     },
     {
       "host": "gpu-4",
@@ -179,9 +429,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.95,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:47:36.637003+00:00"
+      "updated_at": "2026-05-02T14:47:28.138030+00:00"
     },
     {
       "host": "gpu-4",
@@ -192,9 +457,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.95,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:02:38.052580+00:00"
+      "updated_at": "2026-05-02T14:55:08.893672+00:00"
     },
     {
       "host": "gpu-4",
@@ -205,9 +485,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.95,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:57:28.134811+00:00"
+      "updated_at": "2026-05-02T14:57:45.987457+00:00"
     },
     {
       "host": "gpu-4",
@@ -218,9 +513,24 @@
       "backend": "vllm",
       "status": "skipped",
       "attempt": 0,
+      "max_len": 4096,
+      "gpu_mem": 0.95,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:02:11.671068+00:00"
+      "updated_at": "2026-05-02T15:06:03.276110+00:00"
     },
     {
       "host": "gpu-4",
@@ -231,9 +541,24 @@
       "backend": "vllm",
       "status": "skipped",
       "attempt": 0,
+      "max_len": 4096,
+      "gpu_mem": 0.95,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:09:17.714400+00:00"
+      "updated_at": "2026-05-02T15:08:40.165899+00:00"
     },
     {
       "host": "gpu-4",
@@ -244,9 +569,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 16384,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:14:06.076492+00:00"
+      "updated_at": "2026-05-02T15:18:26.741041+00:00"
     },
     {
       "host": "gpu-4",
@@ -257,9 +597,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:21:07.801918+00:00"
+      "updated_at": "2026-05-02T15:21:16.665444+00:00"
     },
     {
       "host": "gpu-4",
@@ -270,9 +625,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:25:58.085948+00:00"
+      "updated_at": "2026-05-02T15:31:01.883654+00:00"
     },
     {
       "host": "3090",
@@ -283,9 +653,25 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:06:17.746102+00:00"
+      "updated_at": "2026-05-02T13:52:31.095712+00:00"
     },
     {
       "host": "3090",
@@ -296,9 +682,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:06:27.013847+00:00"
+      "updated_at": "2026-05-02T13:52:41.824426+00:00"
     },
     {
       "host": "3090",
@@ -309,9 +710,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:06:36.528585+00:00"
+      "updated_at": "2026-05-02T13:52:53.177123+00:00"
     },
     {
       "host": "3090",
@@ -322,9 +738,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:06:45.770331+00:00"
+      "updated_at": "2026-05-02T14:03:41.617781+00:00"
     },
     {
       "host": "3090",
@@ -335,9 +766,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:20:48.544837+00:00"
+      "updated_at": "2026-05-02T14:11:40.921760+00:00"
     },
     {
       "host": "3090",
@@ -348,9 +794,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:50:25.894342+00:00"
+      "updated_at": "2026-05-02T14:22:36.743069+00:00"
     },
     {
       "host": "3090",
@@ -361,9 +822,25 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:06:59.213961+00:00"
+      "updated_at": "2026-05-02T13:53:10.092671+00:00"
     },
     {
       "host": "3090",
@@ -374,9 +851,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:21:02.337454+00:00"
+      "updated_at": "2026-05-02T14:03:51.993504+00:00"
     },
     {
       "host": "3090",
@@ -387,9 +879,53 @@
       "backend": "sglang",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:21:13.605140+00:00"
+      "updated_at": "2026-05-02T14:11:55.649361+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T14:22:45.804826+00:00"
     },
     {
       "host": "3090",
@@ -398,11 +934,54 @@
       "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:52:26.425053+00:00"
+      "updated_at": "2026-05-02T14:22:45.818825+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T14:33:44.242121+00:00"
     },
     {
       "host": "3090",
@@ -413,9 +992,81 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:21:25.661805+00:00"
+      "updated_at": "2026-05-02T14:23:01.948391+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T14:33:55.302824+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T14:44:41.220505+00:00"
     },
     {
       "host": "3090",
@@ -426,9 +1077,25 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:02:51.747208+00:00"
+      "updated_at": "2026-05-02T15:02:54.802169+00:00"
     },
     {
       "host": "3090",
@@ -439,9 +1106,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:13:03.397550+00:00"
+      "updated_at": "2026-05-02T15:15:42.002507+00:00"
     },
     {
       "host": "2080ti",
@@ -452,9 +1134,25 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:07:13.813559+00:00"
+      "updated_at": "2026-05-02T14:04:10.857998+00:00"
     },
     {
       "host": "2080ti",
@@ -463,11 +1161,27 @@
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-05-02T14:20:00.704271+00:00"
     },
     {
       "host": "2080ti",
@@ -476,11 +1190,26 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-05-02T14:31:06.284366+00:00"
     },
     {
       "host": "2080ti",
@@ -491,9 +1220,25 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:07:22.887309+00:00"
+      "updated_at": "2026-05-02T13:53:27.344210+00:00"
     },
     {
       "host": "2080ti",
@@ -504,9 +1249,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:21:36.391507+00:00"
+      "updated_at": "2026-05-02T14:04:23.685647+00:00"
     },
     {
       "host": "2080ti",
@@ -515,11 +1275,27 @@
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-05-02T14:52:20.454191+00:00"
     },
     {
       "host": "2080ti",
@@ -528,8 +1304,707 @@
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T15:03:08.508801+00:00"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Llama-3.1-8B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Llama-3.1-8B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Qwen3.5-27B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Qwen3.5-27B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Mixtral-8x7B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Mixtral-8x7B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Llama-3.1-70B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Llama-3.1-70B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Llama-3.3-70B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Llama-3.3-70B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Qwen2.5-72B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Qwen2.5-72B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T13:53:41.920821+00:00"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T14:04:37.134279+00:00"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "Mixtral-8x7B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "Mixtral-8x7B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -543,6 +2018,21 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -556,6 +2046,21 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -569,6 +2074,21 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -582,9 +2102,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:24:37.404222+00:00"
+      "updated_at": "2026-05-02T14:44:53.967163+00:00"
     },
     {
       "host": "3090",
@@ -595,9 +2130,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:36:11.262913+00:00"
+      "updated_at": "2026-05-02T15:28:18.959045+00:00"
     },
     {
       "host": "3090",
@@ -608,9 +2158,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:47:46.386735+00:00"
+      "updated_at": "2026-05-02T15:40:38.976111+00:00"
     },
     {
       "host": "2080ti",
@@ -621,9 +2186,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:21:53.447033+00:00"
+      "updated_at": "2026-05-02T14:41:59.865827+00:00"
     },
     {
       "host": "2080ti",
@@ -632,11 +2212,26 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-05-02T15:03:21.072464+00:00"
     },
     {
       "host": "h100",
@@ -647,6 +2242,22 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -660,6 +2271,22 @@
       "backend": "sglang",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -673,6 +2300,21 @@
       "backend": "sglang",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -686,6 +2328,22 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -699,6 +2357,22 @@
       "backend": "sglang",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -712,6 +2386,21 @@
       "backend": "sglang",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -725,6 +2414,22 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -738,6 +2443,22 @@
       "backend": "sglang",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -751,6 +2472,21 @@
       "backend": "sglang",
       "status": "pending",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
       "updated_at": null
@@ -764,9 +2500,53 @@
       "backend": "sglang",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:07:37.103918+00:00"
+      "updated_at": "2026-05-02T13:53:53.744505+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T14:14:47.124727+00:00"
     },
     {
       "host": "gpu-4",
@@ -777,9 +2557,52 @@
       "backend": "sglang",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:32:58.396928+00:00"
+      "updated_at": "2026-05-02T15:33:38.377437+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T15:43:26.114612+00:00"
     },
     {
       "host": "3090",
@@ -788,11 +2611,55 @@
       "tp": 1,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T15:24:49.763875+00:00"
+      "updated_at": "2026-05-02T15:40:39.115108+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T15:53:18.314049+00:00"
     },
     {
       "host": "3090",
@@ -801,11 +2668,54 @@
       "tp": 2,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:02:24.158726+00:00"
+      "updated_at": null
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
     },
     {
       "host": "gpu-4",
@@ -816,9 +2726,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:37:52.104125+00:00"
+      "updated_at": "2026-05-02T15:46:06.380298+00:00"
     },
     {
       "host": "gpu-4",
@@ -829,9 +2754,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 4096,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:07:46.133669+00:00"
+      "updated_at": "2026-05-02T14:14:57.899436+00:00"
     },
     {
       "host": "gpu-4",
@@ -842,9 +2782,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:44:53.075817+00:00"
+      "updated_at": "2026-05-02T14:25:50.695851+00:00"
     },
     {
       "host": "gpu-4",
@@ -855,9 +2810,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:49:56.246626+00:00"
+      "updated_at": "2026-05-02T15:56:00.683774+00:00"
     },
     {
       "host": "gpu-4",
@@ -868,9 +2838,24 @@
       "backend": "vllm",
       "status": "done",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:45:02.751556+00:00"
+      "updated_at": "2026-05-02T14:36:53.907024+00:00"
     },
     {
       "host": "2080ti",
@@ -881,6 +2866,21 @@
       "backend": "vllm",
       "status": "known_oom",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": "MXFP4 needs sm80+; 2080Ti is sm75 (Turing, no hw support)",
       "updated_at": null
@@ -894,9 +2894,52 @@
       "backend": "vllm",
       "status": "skipped",
       "attempt": 1,
+      "max_len": 4096,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": 2048,
       "reason": null,
-      "updated_at": "2026-05-01T14:52:35.178819+00:00"
+      "updated_at": "2026-05-02T15:18:34.707825+00:00"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "running",
+      "attempt": 1,
+      "max_len": 4096,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": 2048,
+      "reason": null,
+      "updated_at": "2026-05-02T15:53:18.398046+00:00"
     },
     {
       "host": "2080ti",
@@ -905,11 +2948,27 @@
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-05-02T15:18:39.526695+00:00"
     },
     {
       "host": "gpu-4",
@@ -920,9 +2979,52 @@
       "backend": "sglang",
       "status": "skipped",
       "attempt": 0,
+      "max_len": 4096,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:45:07.537427+00:00"
+      "updated_at": "2026-05-02T14:36:58.778893+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "skipped",
+      "attempt": 0,
+      "max_len": 4096,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T15:58:32.350764+00:00"
     },
     {
       "host": "gpu-4",
@@ -933,9 +3035,52 @@
       "backend": "sglang",
       "status": "skipped",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T16:56:52.446351+00:00"
+      "updated_at": "2026-05-02T15:58:37.475628+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "skipped",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T15:58:42.251501+00:00"
     },
     {
       "host": "gpu-4",
@@ -944,11 +3089,55 @@
       "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "running",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T17:01:36.359575+00:00"
+      "updated_at": "2026-05-02T15:56:00.794771+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-8B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T15:58:42.293500+00:00"
     },
     {
       "host": "gpu-4",
@@ -957,11 +3146,55 @@
       "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T17:08:32.547589+00:00"
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Mixtral-8x7B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
     },
     {
       "host": "gpu-4",
@@ -970,11 +3203,54 @@
       "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
+      "max_len": 16384,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T17:13:14.299668+00:00"
+      "updated_at": null
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": null
     },
     {
       "host": "2080ti",
@@ -985,9 +3261,52 @@
       "backend": "sglang",
       "status": "skipped",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-01T14:52:40.200686+00:00"
+      "updated_at": "2026-05-02T15:15:49.859294+00:00"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "skipped",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T15:28:26.913831+00:00"
     },
     {
       "host": "2080ti",
@@ -996,11 +3315,55 @@
       "tp": 2,
       "mode": "single",
       "backend": "sglang",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-05-02T15:40:49.833819+00:00"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Tix2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "skipped",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-02T15:53:25.849851+00:00"
     },
     {
       "host": "gpu-4",
@@ -1011,6 +3374,10 @@
       "backend": "vllm",
       "status": "known_oom",
       "attempt": 0,
+      "max_len": null,
+      "gpu_mem": null,
+      "profiles": [],
+      "concurrencies": [],
       "max_len_override": null,
       "reason": "hybrid-attn triton",
       "updated_at": null
@@ -1024,9 +3391,719 @@
       "backend": "vllm",
       "status": "known_oom",
       "attempt": 0,
+      "max_len": null,
+      "gpu_mem": null,
+      "profiles": [],
+      "concurrencies": [],
       "max_len_override": null,
       "reason": "hybrid-attn triton",
       "updated_at": null
+    }
+  ],
+  "profile_infeasible": [
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Mixtral-8x7B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Mixtral-8x7B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.3-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.3-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen2.5-72B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 4096,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen2.5-72B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 4096,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "gpt-oss-20b",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "gpt-oss-20b",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Tix2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Tix2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Mixtral-8x7B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100x2",
+      "model": "Mixtral-8x7B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "Mixtral-8x7B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "h100",
+      "hw_label": "H100",
+      "model": "Mixtral-8x7B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 4096,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 4096,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 4096,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 4096,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 4096,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 4096,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Mixtral-8x7B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Mixtral-8x7B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Tix2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Tix2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
     }
   ]
 }

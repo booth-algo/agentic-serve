@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-25T01:03:24.396828+00:00",
+  "generated_at": "2026-04-25T12:49:00.483756+00:00",
   "gpus": [
     "A100",
     "RTX2080Ti",
@@ -383,10 +383,10 @@
       "gpu": "RTX2080Ti",
       "model": "Llama-8B",
       "rows_per_op": {
-        "attn": 19,
-        "ffn": 19,
-        "norm_pre": 19,
-        "norm_post": 19
+        "attn": 41,
+        "ffn": 41,
+        "norm_pre": 41,
+        "norm_post": 41
       },
       "ops_present": [
         "attn",
@@ -395,8 +395,8 @@
         "norm_pre"
       ],
       "ops_missing": [],
-      "total_rows": 76,
-      "grid_cells": 19,
+      "total_rows": 164,
+      "grid_cells": 23,
       "density": "thin",
       "held_out": false,
       "status": "partial",
@@ -429,9 +429,9 @@
       "gpu": "RTX2080Ti",
       "model": "Qwen3.5-9B",
       "rows_per_op": {
-        "ffn": 19,
-        "norm_pre": 19,
-        "norm_post": 19
+        "ffn": 34,
+        "norm_pre": 34,
+        "norm_post": 34
       },
       "ops_present": [
         "ffn",
@@ -441,8 +441,8 @@
       "ops_missing": [
         "attn"
       ],
-      "total_rows": 57,
-      "grid_cells": 19,
+      "total_rows": 102,
+      "grid_cells": 22,
       "density": "thin",
       "held_out": false,
       "status": "partial",
