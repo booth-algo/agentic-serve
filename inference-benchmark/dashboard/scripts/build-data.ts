@@ -297,7 +297,7 @@ function main() {
         ? 'multi-turn'
         : (raw.config.mode || (relDir.includes('multiturn') ? 'multi-turn' : 'single-turn'));
       raw.config.mode = mode;
-      if (mode !== 'multi-turn' && concurrency > 1 && raw.config.num_requests && raw.config.num_requests < concurrency) {
+      if (mode !== 'multi-turn' && concurrency > 1 && raw.config.num_requests && raw.config.num_requests < Math.floor(concurrency / 4)) {
         skipped++;
         continue;
       }
@@ -412,6 +412,7 @@ function main() {
   // Strip fields not used by the dashboard to reduce payload size
   const CONFIG_KEEP = new Set([
     'backend', 'profile', 'concurrency', 'model', 'mode', 'num_requests',
+    'tensor_parallel_size',
     'benchmark_schema_version', 'workload_schema_version', 'dashboard_scope',
     'profile_metadata', 'prediction_metadata',
   ]);
