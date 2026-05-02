@@ -39,6 +39,10 @@ function pageUrl(page: PageId): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+function pageAvailableInScope(page: PageId, scope: DataScope): boolean {
+  return scope === 'current' || page !== 'serving';
+}
+
 function App() {
   const [dataScope, setDataScopeState] = useState<DataScope>(initialDataScope);
   const {
@@ -59,15 +63,23 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>('latency');
 
   const setActivePage = useCallback((page: PageId) => {
+    if (!pageAvailableInScope(page, dataScope)) return;
     setActivePageState(page);
     window.history.replaceState(null, '', pageUrl(page));
-  }, []);
+  }, [dataScope]);
 
   useEffect(() => {
     const onHashChange = () => setActivePageState(initialPage());
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
+
+  useEffect(() => {
+    if (!pageAvailableInScope(activePage, dataScope)) {
+      setActivePageState('benchmark');
+      window.history.replaceState(null, '', pageUrl('benchmark'));
+    }
+  }, [activePage, dataScope]);
 
   const setDataScope = useCallback((scope: DataScope) => {
     setDataScopeState(scope);
@@ -82,12 +94,14 @@ function App() {
     clearWorkloadFilters();
   }, [clearWorkloadFilters]);
 
+  const visiblePage = pageAvailableInScope(activePage, dataScope) ? activePage : 'benchmark';
+
   if (error) {
     return (
       <Layout
         totalRuns={0}
         loading={false}
-        activePage={activePage}
+        activePage={visiblePage}
         onPageChange={setActivePage}
         dataScope={dataScope}
         onDataScopeChange={setDataScope}
@@ -109,16 +123,16 @@ function App() {
     <Layout
       totalRuns={allData.length}
       loading={loading}
-      activePage={activePage}
+      activePage={visiblePage}
       onPageChange={setActivePage}
       dataScope={dataScope}
       onDataScopeChange={setDataScope}
     >
-      {activePage === 'gemm' ? (
+      {visiblePage === 'gemm' ? (
         <GemmPage />
-      ) : activePage === 'serving' ? (
+      ) : visiblePage === 'serving' ? (
         <ServingPredictionsPage dataScope={dataScope} />
-      ) : activePage === 'coverage' ? (
+      ) : visiblePage === 'coverage' ? (
         <CoveragePage
           allData={allData}
           sweepState={sweepState}

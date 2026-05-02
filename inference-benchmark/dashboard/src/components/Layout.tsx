@@ -67,6 +67,10 @@ export function Layout({
   dataScope,
   onDataScopeChange,
 }: LayoutProps) {
+  const navPages = dataScope === 'archive'
+    ? NAV_PAGES.filter((page) => page.id !== 'serving')
+    : NAV_PAGES;
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
       {/* Sticky nav */}
@@ -90,7 +94,7 @@ export function Layout({
 
             {/* Page nav pills */}
             <div className="hidden items-center gap-1 sm:flex">
-              {NAV_PAGES.map((page) => (
+              {navPages.map((page) => (
                 <button
                   key={page.id}
                   onClick={() => onPageChange(page.id)}
@@ -140,7 +144,7 @@ export function Layout({
 
         {/* Mobile page nav */}
         <div className="flex items-center gap-1 border-t border-[#21262d] px-4 py-2 sm:hidden">
-          {NAV_PAGES.map((page) => (
+          {navPages.map((page) => (
             <button
               key={page.id}
               onClick={() => onPageChange(page.id)}

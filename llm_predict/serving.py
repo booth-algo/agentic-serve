@@ -5,6 +5,7 @@ from typing import Any
 
 from .configs.model_configs import ModelConfig
 from .composer import Composer
+from .configs.gpu_specs import get_gpu
 from .framework_corrections import get_calibration_status
 
 
@@ -147,10 +148,13 @@ def predict_serving(composer: Composer, cfg: ModelConfig,
     ttft_base = ttft_kernel
 
     # Fixed per-forward-pass overhead: TP all-reduce barriers + scheduler +
-    # CUDA graph / kernel launch. Scales with n_layers and TP.
-    # TP all-reduce: ~5 reduces per layer (QKV-attn, O, gate+up, down).
-    # Barrier latency ~5us per reduce at TP>1.
-    tp_barrier_us = 5.0 * 5.0 * cfg.n_layers if tensor_parallel_size > 1 else 0.0
+    # CUDA graph / kernel launch. TP overhead scales with n_layers and interconnect.
+    # ~5 all-reduces per layer (QKV, O, gate+up, down).
+    # Latency varies by interconnect: NVSwitch ~5us, NVLink ~10us, PCIe ~40us.
+    tp_barrier_us = 0.0
+    if tensor_parallel_size > 1:
+        gpu_spec = get_gpu(gpu)
+        tp_barrier_us = 5.0 * gpu_spec.tp_comm_latency_us * cfg.n_layers
     scheduler_overhead_us = 500.0  # scheduler loop + kernel launch
     ttft_floor_ms = (tp_barrier_us + scheduler_overhead_us) / 1000.0
 
