@@ -18,16 +18,20 @@ DATA_DIR = Path(__file__).parent.parent / "data" / "flash_attn"
 MODEL_DIR = Path(__file__).parent.parent / "data" / "models"
 
 
-def _flash_attn_flops(seq_len: int, kv_len: int, n_heads: int,
-                      head_dim: int) -> float:
-    return 2.0 * seq_len * kv_len * n_heads * head_dim
+def _flash_attn_flops(q_len: int, kv_len: int, n_heads: int,
+                      head_dim: int, batch: int = 1) -> float:
+    return 4.0 * batch * q_len * kv_len * n_heads * head_dim
 
 
-def _flash_attn_bytes(seq_len: int, kv_len: int, n_heads: int,
-                      head_dim: int, dtype_bytes: int = 2) -> float:
-    q_bytes = seq_len * n_heads * head_dim * dtype_bytes
-    kv_bytes = 2 * kv_len * n_heads * head_dim * dtype_bytes
-    o_bytes = seq_len * n_heads * head_dim * dtype_bytes
+def _flash_attn_bytes(q_len: int, kv_len: int, n_heads: int,
+                      head_dim: int, batch: int = 1,
+                      n_kv_heads: int | None = None,
+                      dtype_bytes: int = 2) -> float:
+    if n_kv_heads is None:
+        n_kv_heads = n_heads
+    q_bytes = batch * q_len * n_heads * head_dim * dtype_bytes
+    kv_bytes = 2 * batch * kv_len * n_kv_heads * head_dim * dtype_bytes
+    o_bytes = batch * q_len * n_heads * head_dim * dtype_bytes
     return q_bytes + kv_bytes + o_bytes
 
 
@@ -57,22 +61,30 @@ class FlashAttnPredictor:
                 self._xgb = pickle.load(f)
 
     def predict(self, seq_len: int, n_heads: int, head_dim: int,
-                causal: bool = True, kv_len: Optional[int] = None) -> float:
+                causal: bool = True, kv_len: Optional[int] = None,
+                n_kv_heads: Optional[int] = None,
+                batch: int = 1,
+                phase: Optional[str] = None) -> float:
         if kv_len is None:
             kv_len = seq_len
+        if n_kv_heads is None:
+            n_kv_heads = n_heads
 
         if self._table:
             exact = self._table.get((seq_len, n_heads, head_dim, int(causal)))
             if exact is not None:
                 return exact
 
-        flops = _flash_attn_flops(seq_len, kv_len, n_heads, head_dim)
-        bytes_moved = _flash_attn_bytes(seq_len, kv_len, n_heads, head_dim)
+        flops = _flash_attn_flops(seq_len, kv_len, n_heads, head_dim, batch)
+        bytes_moved = _flash_attn_bytes(
+            seq_len, kv_len, n_heads, head_dim, batch, n_kv_heads
+        )
         baseline = roofline_us(flops, bytes_moved, self.gpu)
 
         if self._xgb is not None:
             features = self._make_features(
-                seq_len, kv_len, n_heads, head_dim, causal, baseline)
+                seq_len, kv_len, n_heads, head_dim, causal, baseline,
+                batch=batch, n_kv_heads=n_kv_heads)
             log_residual = self._xgb.predict(features.reshape(1, -1))[0]
             return baseline * math.exp(log_residual)
 
@@ -80,9 +92,12 @@ class FlashAttnPredictor:
 
     def _make_features(self, seq_len: int, kv_len: int, n_heads: int,
                        head_dim: int, causal: bool,
-                       baseline_us: float) -> np.ndarray:
-        flops = _flash_attn_flops(seq_len, kv_len, n_heads, head_dim)
-        bytes_moved = _flash_attn_bytes(seq_len, kv_len, n_heads, head_dim)
+                       baseline_us: float, batch: int = 1,
+                       n_kv_heads: int | None = None) -> np.ndarray:
+        flops = _flash_attn_flops(seq_len, kv_len, n_heads, head_dim, batch)
+        bytes_moved = _flash_attn_bytes(
+            seq_len, kv_len, n_heads, head_dim, batch, n_kv_heads
+        )
         oi = flops / bytes_moved if bytes_moved > 0 else 0.0
         return np.array([
             math.log2(max(seq_len, 1)),

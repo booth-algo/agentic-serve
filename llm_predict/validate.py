@@ -12,10 +12,7 @@ if __package__ in (None, ""):
     from llm_predict.composer import Composer
     from llm_predict.serving import predict_serving
     from llm_predict.framework_corrections import (
-        get_correction_note,
-        get_correction_params,
         get_calibration_status,
-        prefix_cache_prior,
         ttft_validation_scope,
     )
 else:
@@ -24,10 +21,7 @@ else:
     from .composer import Composer
     from .serving import predict_serving
     from .framework_corrections import (
-        get_correction_note,
-        get_correction_params,
         get_calibration_status,
-        prefix_cache_prior,
         ttft_validation_scope,
     )
 
@@ -108,6 +102,7 @@ def validate(gpu: str, profile: str = "chat-singleturn",
         backend_version = entry.get("engineVersion")
         validation_scope = ttft_validation_scope(profile, cfg_block.get("mode"))
         pred = None
+        missing_prefix_cache_features = False
         if validation_scope == "prefix_cache_affected" and entry.get("perTurn"):
             pred = predict_multiturn_from_per_turn(
                 composer, cfg, gpu, entry.get("perTurn"), concurrency,
@@ -117,20 +112,7 @@ def validate(gpu: str, profile: str = "chat-singleturn",
                 profile=profile,
             )
         elif validation_scope == "prefix_cache_affected":
-            prior_new_tokens, prior_hit_rate, prior_applied = prefix_cache_prior(
-                gpu, backend, backend_version, model_key, profile, isl
-            )
-            if prior_applied:
-                pred = predict_serving(
-                    composer, cfg, gpu, isl, osl, concurrency,
-                    backend=backend,
-                    backend_version=backend_version,
-                    model_key=model_key,
-                    profile=profile,
-                    total_context_tokens=isl,
-                    new_prefill_tokens=prior_new_tokens,
-                    cache_hit_rate=prior_hit_rate,
-                )
+            missing_prefix_cache_features = True
         if pred is None:
             pred = predict_serving(
                 composer, cfg, gpu, isl, osl, concurrency,
@@ -138,6 +120,16 @@ def validate(gpu: str, profile: str = "chat-singleturn",
                 backend_version=backend_version,
                 model_key=model_key,
                 profile=profile,
+                cache_feature_source="missing" if missing_prefix_cache_features else None,
+                cache_prediction_regime=(
+                    "unknown_prefix_cache" if missing_prefix_cache_features else None
+                ),
+                ttft_prediction_supported=not missing_prefix_cache_features,
+                unsupported_reason=(
+                    "missing_prefix_cache_features"
+                    if missing_prefix_cache_features
+                    else None
+                ),
             )
 
         measured_ttft = summary.get("median_ttft_ms")
@@ -152,20 +144,15 @@ def validate(gpu: str, profile: str = "chat-singleturn",
                      "calibration_status": pred.calibration_status,
                      "ttft_kernel_ms": round(pred.ttft_kernel_ms, 2),
                      "ttft_base_ms": round(pred.ttft_base_ms, 2),
-                     "ttft_queue_factor": round(pred.ttft_queue_factor, 3),
-                     "ttft_correction_applied": pred.ttft_correction_applied,
-                     "ttft_queue_applied": pred.ttft_queue_applied,
-                     "decode_correction_factor": round(pred.decode_correction_factor, 3),
-                     "decode_correction_applied": pred.decode_correction_applied,
-                     "moe_decode_correction_applied": pred.moe_decode_correction_applied,
                      "total_context_tokens": pred.total_context_tokens,
                      "new_prefill_tokens": pred.new_prefill_tokens,
                      "cached_context_tokens": pred.cached_context_tokens,
                      "cache_hit_rate": round(pred.cache_hit_rate, 4),
                      "cache_aware_applied": pred.cache_aware_applied,
-                     "prefix_cache_ttft_factor": round(pred.prefix_cache_ttft_factor, 3),
-                     "prefix_cache_decode_factor": round(pred.prefix_cache_decode_factor, 3),
-                     "prefix_cache_contention_applied": pred.prefix_cache_contention_applied,
+                     "cache_feature_source": pred.cache_feature_source,
+                     "cache_prediction_regime": pred.cache_prediction_regime,
+                     "ttft_prediction_supported": pred.ttft_prediction_supported,
+                     "unsupported_reason": pred.unsupported_reason,
                      "ttft_validation_scope": validation_scope}
         if pred.multiturn_prediction_mode:
             row["multiturn_prediction_mode"] = pred.multiturn_prediction_mode
@@ -178,20 +165,11 @@ def validate(gpu: str, profile: str = "chat-singleturn",
                 pred.mean_predicted_turn_tpot_ms, 2
             )
             row["multiturn_turn_predictions"] = pred.multiturn_turn_predictions
-        corr_params = get_correction_params(
-            gpu, backend, backend_version, model_key
-        )
-        if corr_params:
-            row["ttft_correction_alpha"] = corr_params[0]
-            row["ttft_correction_beta_ms"] = corr_params[1]
         row["calibration_lookup_status"] = get_calibration_status(
             gpu, backend, backend_version, model_key
         )
-        corr_note = get_correction_note(gpu, backend, backend_version, model_key)
-        if corr_note:
-            row["ttft_correction_note"] = corr_note
 
-        if measured_ttft and measured_ttft > 0:
+        if measured_ttft and measured_ttft > 0 and pred.ttft_prediction_supported:
             row["ttft_pred"] = round(pred.ttft_ms, 2)
             row["ttft_meas"] = round(measured_ttft, 2)
             row["ttft_err_pct"] = round(abs(pred.ttft_ms - measured_ttft) / measured_ttft * 100, 1)
@@ -199,7 +177,7 @@ def validate(gpu: str, profile: str = "chat-singleturn",
             row["tpot_pred"] = round(pred.tpot_ms, 2)
             row["tpot_meas"] = round(measured_tpot, 2)
             row["tpot_err_pct"] = round(abs(pred.tpot_ms - measured_tpot) / measured_tpot * 100, 1)
-        if measured_e2el and measured_e2el > 0:
+        if measured_e2el and measured_e2el > 0 and pred.ttft_prediction_supported:
             row["e2el_pred"] = round(pred.e2el_ms, 2)
             row["e2el_meas"] = round(measured_e2el, 2)
             row["e2el_err_pct"] = round(abs(pred.e2el_ms - measured_e2el) / measured_e2el * 100, 1)
@@ -232,10 +210,11 @@ if __name__ == "__main__":
 
     header = ["model", "backend", "backend_version", "calibration_status",
               "ttft_validation_scope",
-              "ttft_kernel_ms", "ttft_base_ms", "ttft_queue_factor",
+              "ttft_kernel_ms", "ttft_base_ms",
               "cache_aware_applied", "cache_hit_rate",
+              "cache_feature_source", "cache_prediction_regime",
+              "ttft_prediction_supported", "unsupported_reason",
               "new_prefill_tokens", "total_context_tokens",
-              "prefix_cache_ttft_factor", "prefix_cache_decode_factor",
               "multiturn_prediction_mode", "predicted_turn_count",
               "ttft_pred", "ttft_meas", "ttft_err_pct",
               "tpot_pred", "tpot_meas", "tpot_err_pct",
