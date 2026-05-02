@@ -20,3 +20,11 @@ export const dataJsonUrl = withBuildHash(
 export const sweepStateUrl = withBuildHash(
   import.meta.env.VITE_SWEEP_STATE_URL || joinUrl(jsonBase, 'sweep-state.json'),
 );
+
+export const gemmEvalJsonUrl = withBuildHash(
+  import.meta.env.VITE_GEMM_EVAL_JSON_URL || joinUrl(jsonBase, 'gemm-eval.json'),
+);
+
+export const servingPredictionsJsonUrl = withBuildHash(
+  import.meta.env.VITE_SERVING_PREDICTIONS_JSON_URL || joinUrl(jsonBase, 'serving-predictions.json'),
+);

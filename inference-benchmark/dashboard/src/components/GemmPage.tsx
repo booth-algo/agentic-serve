@@ -5,10 +5,7 @@ import {
   normalizeProfileName,
   profileDisplayName,
 } from '../profileMeta';
-
-declare const __BUILD_HASH__: string;
-
-const R2_JSON_BASE = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current';
+import { gemmEvalJsonUrl, servingPredictionsJsonUrl } from '../dataUrls';
 
 interface GemmPoint {
   M: number; N: number; K: number;
@@ -43,7 +40,7 @@ export function GemmPage({ dataScope }: { dataScope: DataScope }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${R2_JSON_BASE}/gemm-eval.json?v=${__BUILD_HASH__}`)
+    fetch(gemmEvalJsonUrl)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
@@ -230,7 +227,7 @@ export function GemmPage({ dataScope }: { dataScope: DataScope }) {
             ))}
           </div>
         </div>
-        <ServingTable gpu={servingGpu} dataScope={dataScope} />
+        <ServingTable gpu={servingGpu} dataScope={dataScope} onGpuFallback={setServingGpu} />
       </div>
     </div>
   );
@@ -286,6 +283,27 @@ interface ServingProfileGroup {
   validationScope?: string;
   hasLowCalibration: boolean;
   backendRows: ServingMatrixRow[];
+}
+
+function scopedServingRows(
+  data: Record<string, ServingRow[]>,
+  gpu: string,
+  dataScope: DataScope,
+): ServingRow[] {
+  return (data[gpu] ?? [])
+    .map(row => ({ ...row, profile: normalizeProfileName(row.profile) }))
+    .filter(row => (row.data_scope ?? row.dataScope ?? 'archive') === dataScope && isProfileInScope(row.profile, dataScope));
+}
+
+function preferredServingGpu(
+  data: Record<string, ServingRow[]>,
+  dataScope: DataScope,
+  selectedGpu: string,
+): string | undefined {
+  const available = Object.keys(data).filter(gpu => scopedServingRows(data, gpu, dataScope).length > 0);
+  if (available.includes(selectedGpu)) return selectedGpu;
+  const preferredOrder = ['H100', 'A100', 'RTX3090', 'RTX2080Ti'];
+  return preferredOrder.find(gpu => available.includes(gpu)) ?? available[0];
 }
 
 type ServingMetricKey =
@@ -365,23 +383,30 @@ function servingProfileRank(profile: string): number {
   return 500;
 }
 
-function ServingTable({ gpu, dataScope }: { gpu: string; dataScope: DataScope }) {
+function ServingTable({
+  gpu,
+  dataScope,
+  onGpuFallback,
+}: {
+  gpu: string;
+  dataScope: DataScope;
+  onGpuFallback: (gpu: string) => void;
+}) {
   const [rows, setRows] = useState<ServingRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${R2_JSON_BASE}/serving-predictions.json?v=${__BUILD_HASH__}`)
+    fetch(servingPredictionsJsonUrl)
       .then(r => r.json())
       .then((d: Record<string, ServingRow[]>) => {
-        const scopedRows = (d[gpu] ?? [])
-          .map(row => ({ ...row, profile: normalizeProfileName(row.profile) }))
-          .filter(row => (row.data_scope ?? row.dataScope ?? 'archive') === dataScope && isProfileInScope(row.profile, dataScope));
-        setRows(scopedRows);
+        const effectiveGpu = preferredServingGpu(d, dataScope, gpu);
+        if (effectiveGpu && effectiveGpu !== gpu) onGpuFallback(effectiveGpu);
+        setRows(effectiveGpu ? scopedServingRows(d, effectiveGpu, dataScope) : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [dataScope, gpu]);
+  }, [dataScope, gpu, onGpuFallback]);
 
   if (loading) return <div className="text-[#484f58] text-sm py-4 text-center">Loading...</div>;
 
