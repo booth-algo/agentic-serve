@@ -166,26 +166,72 @@ def predict_serving(composer: Composer, cfg: ModelConfig,
     ) / 1000.0
 
     # Queue model for simultaneous arrivals in continuous batching.
-    # Scheduler interleaves prefill steps and decode steps. With independent
-    # prompts (different user messages per request), each request prefills
-    # separately. The median request waits for ~concurrency/2 prefills to
-    # complete ahead of it, with decode interleaving between each.
+    # With shared prefix (cache_hit_rate > 0): first request fills KV cache,
+    # subsequent requests only prefill the new suffix. These batch efficiently.
+    # Without shared prefix: each request prefills separately (independent prompts).
     ttft_queue_ms = 0.0
     if concurrency > 1:
         kv_mid = total_context + max(0, int(osl) // 2)
-        m = float(concurrency) / 2.0  # median position in queue
+        gpu_spec = get_gpu(gpu)
 
-        decode_step_ms = composer.predict_decode_step_us(
-            cfg, kv_len=kv_mid, bs=max(1, int(m)),
-            tensor_parallel_size=tensor_parallel_size,
+        # Raw kernel decode time at bs=1 (without step overhead)
+        decode_kernel_bs1 = (
+            composer.predict_decode_step_us(
+                cfg, kv_len=kv_mid, bs=1,
+                tensor_parallel_size=tensor_parallel_size,
+            )
+            - gpu_spec.step_overhead_base_us
+            - 1 * gpu_spec.step_overhead_per_req_us
         ) / 1000.0
 
-        pref_queue = m * ttft_kernel
-        decode_queue = m * (m + 1.0) / 2.0 * composer.predict_decode_step_us(
-            cfg, kv_len=kv_mid, bs=1,
-            tensor_parallel_size=tensor_parallel_size,
-        ) / 1000.0
-        ttft_queue_ms = pref_queue + decode_queue
+        if cache_aware and cache_feature_source == "prefix_cache_prior":
+            # Shared prefix: first request fills the KV cache (full prefill),
+            # remaining requests batch their suffix prefills.
+            # Scheduler can chain prefills without decode interleaving when
+            # batches are small and many requests are pending.
+            n = float(concurrency)
+            max_tokens_per_step = 8192
+
+            # First request: full prefill (fills the prefix cache)
+            first_prefill = composer.predict_ttft_ms(
+                cfg, total_context, kv_len=total_context,
+                tensor_parallel_size=tensor_parallel_size,
+            )
+
+            # Remaining requests: batched cached prefills
+            remaining = n - 1.0
+            per_step = max(1.0, max_tokens_per_step / max(1.0, float(prefill_tokens)))
+            prefill_batches = max(1.0, (remaining + per_step - 1.0) // per_step)
+            batch_tokens = min(int(per_step * prefill_tokens), max_tokens_per_step)
+            batch_prefill_ms = composer.predict_ttft_ms(
+                cfg, batch_tokens, kv_len=total_context,
+                tensor_parallel_size=tensor_parallel_size,
+            )
+
+            median_pos = n / 2.0
+            if median_pos <= 1.0:
+                prefill_queue = 0.0
+            else:
+                pos_after_first = median_pos - 1.0
+                batches_before = (pos_after_first + per_step - 1.0) // per_step
+                prefill_queue = first_prefill + max(0.0, batches_before - 1.0) * batch_prefill_ms
+
+            # One decode step after all prefills, before first token of median
+            decode_step_ms = composer.predict_decode_step_us(
+                cfg, kv_len=kv_mid, bs=max(1, int(median_pos)),
+                tensor_parallel_size=tensor_parallel_size,
+            ) / 1000.0
+            ttft_queue_ms = prefill_queue + decode_step_ms
+        else:
+            # Independent prompts: serial prefills, triangular decode interleaving.
+            m = float(concurrency) / 2.0
+
+            pref_queue = m * ttft_kernel
+            decode_kernel_queue = m * (m + 1.0) / 2.0 * decode_kernel_bs1
+            decode_overhead_queue = m * gpu_spec.step_overhead_base_us / 1000.0
+            decode_overhead_queue += m * (m + 1.0) / 2.0 * gpu_spec.step_overhead_per_req_us / 1000.0
+
+            ttft_queue_ms = pref_queue + decode_kernel_queue + decode_overhead_queue
     ttft_ms = ttft_kernel + ttft_floor_ms + ttft_first_decode_ms + ttft_queue_ms
     decode_steps = decode_interval_count(osl)
 

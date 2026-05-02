@@ -135,7 +135,15 @@ class Composer:
             cfg, seq_len=1, bs=bs, kv_len=kv_len, phase="decode",
             tensor_parallel_size=tensor_parallel_size,
         )
-        return layer.total_us * cfg.n_layers
+        kernel_us = layer.total_us * cfg.n_layers
+        # Serving runtime overhead per scheduler step: paged-attention block
+        # table indirection, KV cache block management, scheduler loop.
+        # Scales with active decode requests. Placeholder values — calibrate
+        # with D ∈ {1,2,4,8,16,32} NCU profiling sweep.
+        gpu_spec = get_gpu(self.gpu)
+        overhead_us = (gpu_spec.step_overhead_base_us
+                       + bs * gpu_spec.step_overhead_per_req_us)
+        return kernel_us + overhead_us
 
     def attribute_tpot(self, cfg: ModelConfig, isl: int, osl: int,
                        bs: int = 1) -> dict:
