@@ -36,7 +36,7 @@ function mapeColor(v: number): string {
 export function GemmPage({ dataScope }: { dataScope: DataScope }) {
   const [data, setData] = useState<GemmEval | null>(null);
   const [gpu, setGpu] = useState('H100');
-  const [servingGpu, setServingGpu] = useState('H100');
+  const [servingGpu, setServingGpu] = useState(dataScope === 'current' ? 'A100' : 'H100');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +45,10 @@ export function GemmPage({ dataScope }: { dataScope: DataScope }) {
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    setServingGpu(dataScope === 'current' ? 'A100' : 'H100');
+  }, [dataScope]);
 
   if (loading) return <div className="text-[#8b949e] p-8">Loading GEMM evaluation data...</div>;
   if (!data) return <div className="text-[#f85149] p-8">Failed to load gemm-eval.json</div>;
@@ -227,7 +231,7 @@ export function GemmPage({ dataScope }: { dataScope: DataScope }) {
             ))}
           </div>
         </div>
-        <ServingTable gpu={servingGpu} dataScope={dataScope} onGpuFallback={setServingGpu} />
+        <ServingTable gpu={servingGpu} dataScope={dataScope} />
       </div>
     </div>
   );
@@ -240,6 +244,19 @@ function SummaryCard({ label, value, color }: { label: string; value: string; co
       <div className="text-2xl font-bold mt-1" style={{ color: color ?? '#e6edf3' }}>{value}</div>
     </div>
   );
+}
+
+interface ServingTurnPrediction {
+  turn_index: number;
+  successful: number;
+  total_context_tokens: number;
+  new_prefill_tokens: number;
+  cached_context_tokens: number;
+  cache_hit_rate: number;
+  output_tokens: number;
+  ttft_pred?: number; ttft_meas?: number; ttft_err?: number;
+  tpot_pred?: number; tpot_meas?: number; tpot_err?: number;
+  e2el_pred?: number; e2el_meas?: number; e2el_err?: number;
 }
 
 interface ServingRow {
@@ -261,11 +278,13 @@ interface ServingRow {
   total_successful_turn_requests?: number;
   mean_predicted_turn_ttft_ms?: number;
   mean_predicted_turn_tpot_ms?: number;
-  multiturn_turn_predictions?: Array<Record<string, number | string>>;
+  multiturn_turn_predictions?: ServingTurnPrediction[];
   ttft_pred?: number; ttft_meas?: number; ttft_err?: number;
   tpot_pred?: number; tpot_meas?: number; tpot_err?: number;
   e2el_pred?: number; e2el_meas?: number; e2el_err?: number;
 }
+
+type ServingPerTurnRow = ServingRow & { multiturn_turn_predictions: ServingTurnPrediction[] };
 
 interface ServingMatrixRow {
   key: string;
@@ -293,17 +312,6 @@ function scopedServingRows(
   return (data[gpu] ?? [])
     .map(row => ({ ...row, profile: normalizeProfileName(row.profile) }))
     .filter(row => (row.data_scope ?? row.dataScope ?? 'archive') === dataScope && isProfileInScope(row.profile, dataScope));
-}
-
-function preferredServingGpu(
-  data: Record<string, ServingRow[]>,
-  dataScope: DataScope,
-  selectedGpu: string,
-): string | undefined {
-  const available = Object.keys(data).filter(gpu => scopedServingRows(data, gpu, dataScope).length > 0);
-  if (available.includes(selectedGpu)) return selectedGpu;
-  const preferredOrder = ['H100', 'A100', 'RTX3090', 'RTX2080Ti'];
-  return preferredOrder.find(gpu => available.includes(gpu)) ?? available[0];
 }
 
 type ServingMetricKey =
@@ -383,30 +391,47 @@ function servingProfileRank(profile: string): number {
   return 500;
 }
 
+function servingRowKey(row: ServingRow): string {
+  return `${row.model}|${row.backend ?? ''}|${row.profile}|${row.concurrency ?? 1}`;
+}
+
+function compareServingRows(a: ServingRow, b: ServingRow): number {
+  const modelOrder = a.model.localeCompare(b.model);
+  if (modelOrder !== 0) return modelOrder;
+  const profileOrder = servingProfileRank(a.profile) - servingProfileRank(b.profile);
+  if (profileOrder !== 0) return profileOrder;
+  const profileNameOrder = a.profile.localeCompare(b.profile);
+  if (profileNameOrder !== 0) return profileNameOrder;
+  const backendOrder = (a.backend ?? '').localeCompare(b.backend ?? '');
+  if (backendOrder !== 0) return backendOrder;
+  return (a.concurrency ?? 1) - (b.concurrency ?? 1);
+}
+
+function hasTurnPredictions(row: ServingRow): row is ServingPerTurnRow {
+  return Array.isArray(row.multiturn_turn_predictions) && row.multiturn_turn_predictions.length > 0;
+}
+
 function ServingTable({
   gpu,
   dataScope,
-  onGpuFallback,
 }: {
   gpu: string;
   dataScope: DataScope;
-  onGpuFallback: (gpu: string) => void;
 }) {
   const [rows, setRows] = useState<ServingRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPerTurnKey, setSelectedPerTurnKey] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
     fetch(servingPredictionsJsonUrl)
       .then(r => r.json())
       .then((d: Record<string, ServingRow[]>) => {
-        const effectiveGpu = preferredServingGpu(d, dataScope, gpu);
-        if (effectiveGpu && effectiveGpu !== gpu) onGpuFallback(effectiveGpu);
-        setRows(effectiveGpu ? scopedServingRows(d, effectiveGpu, dataScope) : []);
+        setRows(scopedServingRows(d, gpu, dataScope));
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [dataScope, gpu, onGpuFallback]);
+  }, [dataScope, gpu]);
 
   if (loading) return <div className="text-[#484f58] text-sm py-4 text-center">Loading...</div>;
 
@@ -448,6 +473,9 @@ function ServingTable({
     if (profileNameOrder !== 0) return profileNameOrder;
     return (a.backend ?? '').localeCompare(b.backend ?? '');
   });
+  const perTurnRows = rows.filter(hasTurnPredictions).sort(compareServingRows);
+  const selectedPerTurnRow = perTurnRows.find(row => servingRowKey(row) === selectedPerTurnKey) ?? perTurnRows[0];
+  const selectedPerTurnRowKey = selectedPerTurnRow ? servingRowKey(selectedPerTurnRow) : null;
 
   const profileGroupsByModel: Record<string, Record<string, ServingProfileGroup>> = {};
   for (const row of matrixRows) {
@@ -541,6 +569,8 @@ function ServingTable({
                           <ServingMatrixCell
                             key={concurrency}
                             row={row.cells[concurrency]}
+                            selectedKey={selectedPerTurnRowKey}
+                            onSelectPerTurn={setSelectedPerTurnKey}
                           />
                         ))}
                       </tr>
@@ -553,6 +583,8 @@ function ServingTable({
         </table>
       </div>
 
+      <ServingPerTurnBreakdown row={selectedPerTurnRow} />
+
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#6e7681]">
         <span>Cells show % error left-to-right: <span className="text-[#f0883e]">TTFT</span> / <span className="text-[#58a6ff]">TPOT</span> / <span className="text-[#a855f7]">E2EL</span>.</span>
         <span className="font-medium text-[#8b949e]">Error bands:</span>
@@ -560,6 +592,95 @@ function ServingTable({
         <span className="rounded border border-[#58a6ff]/30 bg-[#58a6ff]/10 px-2 py-0.5 text-[#58a6ff]">10-25%</span>
         <span className="rounded border border-[#f0883e]/30 bg-[#f0883e]/10 px-2 py-0.5 text-[#f0883e]">25-50%</span>
         <span className="rounded border border-[#f85149]/30 bg-[#f85149]/10 px-2 py-0.5 text-[#f85149]">&gt;=50%</span>
+      </div>
+    </div>
+  );
+}
+
+function ServingPerTurnBreakdown({ row }: { row?: ServingPerTurnRow }) {
+  if (!row) return null;
+
+  const turns = [...row.multiturn_turn_predictions].sort((a, b) => a.turn_index - b.turn_index);
+  const meanHit = turns.length
+    ? turns.reduce((total, turn) => total + turn.cache_hit_rate, 0) / turns.length
+    : 0;
+
+  return (
+    <div className="rounded-md border border-[#21262d] bg-[#161b22]">
+      <div className="flex flex-col gap-3 border-b border-[#21262d] px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-[#e6edf3]">Per-Turn Multi-Turn Prediction</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[#6e7681]">
+            <span className="font-mono text-[#8b949e]">{row.model}</span>
+            <span>{row.backend ?? 'backend'}</span>
+            <span>{profileDisplayName(row.profile)}</span>
+            <span>c{row.concurrency ?? 1}</span>
+            <span>{turns.length} turns</span>
+            <span>{row.total_successful_turn_requests ?? 0} successful turn requests</span>
+            <span>mean cache hit {(meanHit * 100).toFixed(0)}%</span>
+            <span>mean TTFT {formatLatency(row.mean_predicted_turn_ttft_ms)}</span>
+            <span>mean TPOT {formatLatency(row.mean_predicted_turn_tpot_ms)}</span>
+          </div>
+        </div>
+        <div className="rounded border border-[#30363d] bg-[#0d1117] px-2 py-1 font-mono text-[10px] text-[#79c0ff]">
+          selected from serving table
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border-b border-[#21262d]">
+        <div className="flex min-w-max gap-2 p-3">
+          {turns.map(turn => (
+            <div key={turn.turn_index} className="w-[122px] shrink-0 rounded border border-[#21262d] bg-[#0d1117] p-2">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-mono text-[11px] font-semibold text-[#c9d1d9]">Turn {displayTurn(turn)}</span>
+                <span className="text-[10px] text-[#6e7681]">{turn.successful} req</span>
+              </div>
+              <ServingTurnCacheBar turn={turn} compact />
+              <div className="mt-2 space-y-1">
+                {SERVING_METRICS.map(metric => (
+                  <ServingTurnErrorBadge key={metric.label} turn={turn} metric={metric} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1120px] border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-[#21262d] text-[#8b949e]">
+              <th className="px-3 py-2 text-left font-medium">Turn</th>
+              <th className="px-2 py-2 text-right font-medium">Req</th>
+              <th className="px-2 py-2 text-right font-medium">Ctx</th>
+              <th className="px-2 py-2 text-right font-medium">New</th>
+              <th className="px-2 py-2 text-right font-medium">Cached</th>
+              <th className="w-[150px] px-2 py-2 text-left font-medium">Hit</th>
+              <th className="px-2 py-2 text-right font-medium">Out</th>
+              {SERVING_METRICS.map(metric => (
+                <th key={metric.label} className="w-[170px] px-2 py-2 text-left font-medium" style={{ color: metric.color }}>
+                  {metric.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {turns.map(turn => (
+              <tr key={turn.turn_index} className="border-b border-[#21262d]/50 hover:bg-[#0d1117]">
+                <td className="px-3 py-2 font-mono text-[#c9d1d9]">{displayTurn(turn)}</td>
+                <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatTokenCount(turn.successful)}</td>
+                <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatTokenCount(turn.total_context_tokens)}</td>
+                <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatTokenCount(turn.new_prefill_tokens)}</td>
+                <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatTokenCount(turn.cached_context_tokens)}</td>
+                <td className="px-2 py-2"><ServingTurnCacheBar turn={turn} /></td>
+                <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatTokenCount(turn.output_tokens)}</td>
+                {SERVING_METRICS.map(metric => (
+                  <ServingTurnMetricCell key={metric.label} turn={turn} metric={metric} />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -593,7 +714,73 @@ function ServingMetricSummary({ metric, rows }: { metric: ServingMetric; rows: S
   );
 }
 
-function ServingMatrixCell({ row }: { row?: ServingRow }) {
+function ServingTurnCacheBar({ turn, compact = false }: { turn: ServingTurnPrediction; compact?: boolean }) {
+  const pct = Math.max(0, Math.min(100, turn.cache_hit_rate * 100));
+  return (
+    <div className={compact ? 'space-y-1' : 'flex items-center gap-2'}>
+      <span className={compact ? 'block text-[9px] uppercase text-[#6e7681]' : 'w-8 text-[10px] uppercase text-[#6e7681]'}>Hit</span>
+      <div className="relative h-4 flex-1 overflow-hidden rounded bg-[#21262d]">
+        <div className="h-full rounded bg-[#58a6ff]/70" style={{ width: `${pct}%` }} />
+        <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-[#e6edf3]">
+          {pct.toFixed(0)}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ServingTurnErrorBadge({ turn, metric }: { turn: ServingTurnPrediction; metric: ServingMetric }) {
+  const err = numericTurnMetric(turn, metric.errKey);
+  const tone = servingErrorTone(err);
+  return (
+    <div className="grid grid-cols-[34px_1fr] items-center gap-1">
+      <span className="text-[9px] font-semibold uppercase" style={{ color: metric.color }}>{metric.label}</span>
+      <span className={`rounded px-1.5 py-0.5 text-right font-mono text-[10px] leading-none ${tone.className}`}>
+        {formatCompactPercent(err)}
+      </span>
+    </div>
+  );
+}
+
+function ServingTurnMetricCell({ turn, metric }: { turn: ServingTurnPrediction; metric: ServingMetric }) {
+  const pred = numericTurnMetric(turn, metric.predKey);
+  const meas = numericTurnMetric(turn, metric.measKey);
+  const err = numericTurnMetric(turn, metric.errKey);
+  const tone = servingErrorTone(err);
+  return (
+    <td className="px-2 py-2 align-top">
+      <div className="space-y-1">
+        <MetricLine label="Pred" value={formatLatency(pred, metric.isTotal)} />
+        <MetricLine label="Actual" value={formatLatency(meas, metric.isTotal)} />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] text-[#6e7681]">Err</span>
+          <span className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${tone.className}`}>
+            {formatPercent(err)}
+          </span>
+        </div>
+      </div>
+    </td>
+  );
+}
+
+function MetricLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[10px] text-[#6e7681]">{label}</span>
+      <span className="font-mono text-[10px] text-[#c9d1d9]">{value}</span>
+    </div>
+  );
+}
+
+function ServingMatrixCell({
+  row,
+  selectedKey,
+  onSelectPerTurn,
+}: {
+  row?: ServingRow;
+  selectedKey: string | null;
+  onSelectPerTurn: (key: string) => void;
+}) {
   if (!row) {
     return (
       <td className="border-l border-[#21262d]/50 px-1.5 py-1 text-center">
@@ -601,12 +788,28 @@ function ServingMatrixCell({ row }: { row?: ServingRow }) {
       </td>
     );
   }
+  const canSelect = hasTurnPredictions(row);
+  const rowKey = servingRowKey(row);
+  const selected = canSelect && rowKey === selectedKey;
   return (
-    <td className="border-l border-[#21262d]/50 px-1.5 py-1 align-middle">
-      <div className="grid grid-cols-3 gap-0.5" title={`ISL→OSL ${row.isl}→${row.osl}`}>
-        {SERVING_METRICS.map(metric => (
-          <ServingMiniMetric key={metric.label} row={row} metric={metric} />
-        ))}
+    <td
+      onClick={canSelect ? () => onSelectPerTurn(rowKey) : undefined}
+      className={`border-l border-[#21262d]/50 px-1.5 py-1 align-middle transition-colors ${
+        canSelect ? 'cursor-pointer hover:bg-[#1f6feb]/10' : ''
+      } ${selected ? 'bg-[#1f6feb]/10 shadow-[inset_0_0_0_1px_#58a6ff]' : ''}`}
+      title={canSelect ? `Show ${row.multiturn_turn_predictions.length} per-turn predictions` : undefined}
+    >
+      <div className="space-y-1">
+        <div className="grid grid-cols-3 gap-0.5" title={`ISL→OSL ${row.isl}→${row.osl}`}>
+          {SERVING_METRICS.map(metric => (
+            <ServingMiniMetric key={metric.label} row={row} metric={metric} />
+          ))}
+        </div>
+        {canSelect && (
+          <div className={`text-center font-mono text-[9px] leading-none ${selected ? 'text-[#79c0ff]' : 'text-[#6e7681]'}`}>
+            {row.multiturn_turn_predictions.length} turns
+          </div>
+        )}
       </div>
     </td>
   );
@@ -655,6 +858,11 @@ function numericMetric(row: ServingRow, key: ServingMetricKey): number | undefin
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function numericTurnMetric(turn: ServingTurnPrediction, key: ServingMetricKey): number | undefined {
+  const value = turn[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 function servingErrorTone(err: number | undefined): { className: string } {
   if (err === undefined) return { className: 'border border-[#30363d] bg-[#21262d] text-[#6e7681]' };
   const value = Math.abs(err);
@@ -682,6 +890,15 @@ function formatCompactPercent(value: number | undefined): string {
 function formatFactor(value: number | undefined): string {
   if (value === undefined) return '1.00';
   return value.toFixed(2);
+}
+
+function formatTokenCount(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '-';
+  return Math.round(value).toLocaleString();
+}
+
+function displayTurn(turn: ServingTurnPrediction): number {
+  return turn.turn_index + 1;
 }
 
 function median(arr: number[]): number {
