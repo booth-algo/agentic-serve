@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { BenchmarkResult, FilterState, FilterOptions } from '../types';
 import {
   PROFILE_META,
@@ -8,7 +8,22 @@ import {
 } from '../profileMeta';
 import { dataJsonUrl } from '../dataUrls';
 
+function defaultHardwareForScope(rows: BenchmarkResult[]): string | undefined {
+  const hardware = Array.from(new Set(rows.map((r) => r.hardware))).sort();
+  const preferred = [
+    'H100x8',
+    'H100x4',
+    'H100x2',
+    'H100',
+    'A100-40GBx4',
+    'A100-40GBx2',
+    'A100-40GB',
+  ];
+  return preferred.find((label) => hardware.includes(label)) ?? hardware[0];
+}
+
 export function useData(dataScope: DataScope) {
+  const initialDataScope = useRef<DataScope>(dataScope);
   const [allData, setAllData] = useState<BenchmarkResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,10 +56,13 @@ export function useData(dataScope: DataScope) {
           };
         });
         setAllData(normalized);
-        // Default to first hardware config to avoid chart clutter
-        const hwSet = new Set(normalized.map((r) => r.hardware));
-        const sortedHardware = Array.from(hwSet).sort();
-        const defaultHardware = sortedHardware.includes('H100') ? 'H100' : sortedHardware[0];
+        // Default within the active scope to avoid filtering current rows with
+        // archive-only labels such as plain "H100".
+        const scopedForDefault = normalized.filter(
+          (r) => (r.dataScope ?? 'archive') === initialDataScope.current
+            && isProfileInScope(r.config.profile, initialDataScope.current),
+        );
+        const defaultHardware = defaultHardwareForScope(scopedForDefault);
         if (defaultHardware) {
           setFilters((prev) => ({ ...prev, hardware: [defaultHardware] }));
         }
@@ -139,7 +157,7 @@ export function useData(dataScope: DataScope) {
   }, []);
 
   const clearWorkloadFilters = useCallback(() => {
-    setFilters((prev) => ({ ...prev, agentType: [], turnStyle: [], profile: [] }));
+    setFilters({ hardware: [], model: [], backend: [], agentType: [], turnStyle: [], profile: [] });
   }, []);
 
   return {
