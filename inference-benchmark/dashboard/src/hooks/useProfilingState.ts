@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
+import { profilingStateJsonUrl } from '../dataUrls';
 import type { ProfilingState } from '../types-profiling';
-
-declare const __BUILD_HASH__: string;
-
-const PROFILING_URL = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current/profiling-state.json';
 
 export function useProfilingState() {
   const [profilingState, setProfilingState] = useState<ProfilingState | null>(null);
@@ -11,7 +8,7 @@ export function useProfilingState() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${PROFILING_URL}?v=${__BUILD_HASH__}`)
+    fetch(profilingStateJsonUrl)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

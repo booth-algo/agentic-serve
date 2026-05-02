@@ -12,6 +12,10 @@ export interface SweepCell {
   backend: string;   // "vllm" | "sglang"
   status: CellStatus;
   attempt: number;
+  max_len: number | null;
+  gpu_mem: number | null;
+  profiles: string[];
+  concurrencies: number[];
   max_len_override: number | null;
   reason: string | null;
   updated_at: string | null;  // ISO-8601 UTC
@@ -27,10 +31,23 @@ export interface SweepModel {
   weights_gb: number;
 }
 
+export interface SweepProfileInfeasible {
+  host: string;
+  hw_label: string;
+  model: string;
+  tp: number;
+  mode: 'single' | 'multi';
+  backend: string;
+  profile: string;
+  max_len: number;
+  reason: string;
+}
+
 export interface SweepState {
   generated_at: string;
   feasibility_ratio: number;
   hosts: Record<string, SweepHost>;
   models: Record<string, SweepModel>;
   cells: SweepCell[];
+  profile_infeasible?: SweepProfileInfeasible[];
 }

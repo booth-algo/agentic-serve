@@ -28,3 +28,11 @@ export const gemmEvalJsonUrl = withBuildHash(
 export const servingPredictionsJsonUrl = withBuildHash(
   import.meta.env.VITE_SERVING_PREDICTIONS_JSON_URL || joinUrl(jsonBase, 'serving-predictions.json'),
 );
+
+export const profilingStateJsonUrl = withBuildHash(
+  import.meta.env.VITE_PROFILING_STATE_JSON_URL || joinUrl(jsonBase, 'profiling-state.json'),
+);
+
+export const predictorCoverageJsonUrl = withBuildHash(
+  import.meta.env.VITE_PREDICTOR_COVERAGE_JSON_URL || joinUrl(jsonBase, 'predictor-coverage.json'),
+);

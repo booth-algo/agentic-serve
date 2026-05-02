@@ -72,6 +72,7 @@ interface ProfileRow {
   isMultiTurn: boolean;
   expected: number[];
   present: Set<number>;
+  infeasibleReason?: string;
 }
 
 interface DataModel {
@@ -95,6 +96,7 @@ interface StatusModel {
   reason?: string;
   attempt?: number;
   updatedAt?: string | null;
+  totalNeed: number;
 }
 
 type ModelEntry = DataModel | StatusModel;
@@ -214,6 +216,32 @@ export function CoveragePage({
     const weightsFor = (model: string): number | undefined =>
       sweepState?.models[model]?.weights_gb;
     const ratio = sweepState?.feasibility_ratio ?? 0.85;
+    const profileInfeasible = new Map<string, string>();
+    if (dataScope === 'current') {
+      for (const item of sweepState?.profile_infeasible ?? []) {
+        profileInfeasible.set(
+          `${item.hw_label}|${item.model}|${item.backend}|${item.profile}`,
+          item.reason,
+        );
+      }
+    }
+    const profileInfeasibleReasonFor = (
+      hw: string,
+      model: string,
+      backend: string,
+      profile: string,
+    ): string | undefined =>
+      profileInfeasible.get(`${hw}|${model}|${backend}|${profile}`);
+    const expectedCountFor = (hw: string, model: string, backend: string): number => {
+      let total = 0;
+      for (const profile of singleProfiles) {
+        if (!profileInfeasibleReasonFor(hw, model, backend, profile)) total += singleConcs.length;
+      }
+      for (const profile of multiProfiles) {
+        if (!profileInfeasibleReasonFor(hw, model, backend, profile)) total += multiConcs.length;
+      }
+      return total;
+    };
 
     const bucket = new Map<string, Set<number>>();
     const mbHasData = new Map<string, Set<string>>();  // hw -> Set<"model|backend">
@@ -267,6 +295,9 @@ export function CoveragePage({
           const hasData = mbHasData.get(hw)?.has(`${model}|${backend}`) ?? false;
           // sweep-state status only applies to the vllm backend.
           const cell = aggStatus.get(`${hw}|${model}|${backend}`);
+          const expectedForModel = dataScope === 'current'
+            ? expectedCountFor(hw, model, backend)
+            : expectedCellsPerModel;
 
           if (hasData) {
             const profiles: ProfileRow[] = [];
@@ -285,17 +316,23 @@ export function CoveragePage({
             } else {
               for (const profile of singleProfiles) {
                 const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
-                const have = [...present].filter((c) => singleConcs.includes(c)).length;
-                totalHave += have;
-                totalNeed += singleConcs.length;
-                profiles.push({ profile, isMultiTurn: false, expected: singleConcs, present });
+                const infeasibleReason = profileInfeasibleReasonFor(hw, model, backend, profile);
+                if (!infeasibleReason) {
+                  const have = [...present].filter((c) => singleConcs.includes(c)).length;
+                  totalHave += have;
+                  totalNeed += singleConcs.length;
+                }
+                profiles.push({ profile, isMultiTurn: false, expected: singleConcs, present, infeasibleReason });
               }
               for (const profile of multiProfiles) {
                 const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
-                const have = [...present].filter((c) => multiConcs.includes(c)).length;
-                totalHave += have;
-                totalNeed += multiConcs.length;
-                profiles.push({ profile, isMultiTurn: true, expected: multiConcs, present });
+                const infeasibleReason = profileInfeasibleReasonFor(hw, model, backend, profile);
+                if (!infeasibleReason) {
+                  const have = [...present].filter((c) => multiConcs.includes(c)).length;
+                  totalHave += have;
+                  totalNeed += multiConcs.length;
+                }
+                profiles.push({ profile, isMultiTurn: true, expected: multiConcs, present, infeasibleReason });
               }
             }
             const engineVersion = engineVersionByMb.get(`${hw}|${model}|${backend}`);
@@ -309,38 +346,37 @@ export function CoveragePage({
 
           if (cell) {
             if (cell.status === 'known_oom') {
-              models.push({ kind: 'status', hardware: hw, model, backend, status: 'oom', reason: cell.reason ?? undefined });
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'oom', reason: cell.reason ?? undefined, totalNeed: 0 });
               summary.oom += 1;
               continue;
             }
             if (cell.status === 'running') {
-              models.push({ kind: 'status', hardware: hw, model, backend, status: 'running', attempt: cell.attempt, updatedAt: cell.updated_at });
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'running', attempt: cell.attempt, updatedAt: cell.updated_at, totalNeed: expectedForModel });
               summary.running += 1;
-              summary.totalNeed += expectedCellsPerModel;
+              summary.totalNeed += expectedForModel;
               continue;
             }
             if (cell.status === 'skipped') {
-              models.push({ kind: 'status', hardware: hw, model, backend, status: 'skipped', reason: cell.reason ?? undefined, attempt: cell.attempt });
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'skipped', reason: cell.reason ?? undefined, attempt: cell.attempt, totalNeed: 0 });
               summary.skipped += 1;
-              summary.totalNeed += expectedCellsPerModel;
               continue;
             }
             if (cell.status === 'pending' || cell.status === 'done') {
-              models.push({ kind: 'status', hardware: hw, model, backend, status: 'untested' });
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'untested', totalNeed: expectedForModel });
               summary.untested += 1;
-              summary.totalNeed += expectedCellsPerModel;
+              summary.totalNeed += expectedForModel;
               continue;
             }
           }
 
           const infReason = infeasibilityReason(vramFor(hw), weightsFor(model), tpOf(hw), ratio);
           if (infReason) {
-            models.push({ kind: 'status', hardware: hw, model, backend, status: 'infeasible', reason: infReason });
+            models.push({ kind: 'status', hardware: hw, model, backend, status: 'infeasible', reason: infReason, totalNeed: 0 });
             summary.infeasible += 1;
           } else {
-            models.push({ kind: 'status', hardware: hw, model, backend, status: 'untested' });
+            models.push({ kind: 'status', hardware: hw, model, backend, status: 'untested', totalNeed: expectedForModel });
             summary.untested += 1;
-            summary.totalNeed += expectedCellsPerModel;
+            summary.totalNeed += expectedForModel;
           }
         }
       }
@@ -588,6 +624,7 @@ function ModelRows({ hwName, model, showFamily, open, onToggle, allConcs, expect
     const bg = bgForStatus(model.status);
     const txt = colorForStatus(model.status);
     const label = labelForStatus(model.status);
+    const totalNeed = model.totalNeed ?? expectedCellsPerModel;
     return (
       <tr className={`border-b border-[#21262d]/50 ${bg}`}>
         <td className="whitespace-nowrap px-3 py-1.5">
@@ -611,7 +648,7 @@ function ModelRows({ hwName, model, showFamily, open, onToggle, allConcs, expect
         <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono">
           {model.status === 'untested' || model.status === 'pending' ||
            model.status === 'running'  || model.status === 'skipped' ? (
-            <span className="text-[#8b949e]">0/{expectedCellsPerModel}</span>
+            <span className="text-[#8b949e]">0/{totalNeed}</span>
           ) : (
             <span className="text-[#8b949e]">—</span>
           )}
@@ -626,6 +663,7 @@ function ModelRows({ hwName, model, showFamily, open, onToggle, allConcs, expect
   // when every profile that expects it actually has a run at that conc.
   const concStats = new Map<number, { present: number; expected: number }>();
   for (const p of model.profiles) {
+    if (p.infeasibleReason) continue;
     for (const c of p.expected) {
       const s = concStats.get(c) ?? { present: 0, expected: 0 };
       s.expected += 1;
@@ -670,9 +708,9 @@ function ModelRows({ hwName, model, showFamily, open, onToggle, allConcs, expect
       </tr>
       {open && model.profiles.map((p) => {
         const have = [...p.present].filter((c) => p.expected.includes(c)).length;
-        const need = p.expected.length;
+        const need = p.infeasibleReason ? 0 : p.expected.length;
         const profPct = need > 0 ? Math.round((have / need) * 100) : 0;
-        const profUntested = have === 0;
+        const profUntested = !p.infeasibleReason && have === 0;
         const displayName = profileDisplayName(p.profile);
         return (
           <tr key={`${hwName}|${model.model}|${p.profile}`} className="border-b border-[#21262d]/50 bg-[#0d1117]/50">
@@ -686,25 +724,31 @@ function ModelRows({ hwName, model, showFamily, open, onToggle, allConcs, expect
               <span className="text-[#c9d1d9]" title={p.profile}>{displayName}</span>
               {displayName !== p.profile && <span className="ml-1 text-[10px] text-[#6e7681]">{p.profile}</span>}
               {p.isMultiTurn && <span className="ml-1 rounded bg-[#8b5cf6]/20 px-1 text-[10px] text-[#8b5cf6]">mt</span>}
+              {p.infeasibleReason && <span className="ml-1 rounded border border-[#64b5f6]/40 bg-[#64b5f6]/10 px-1 text-[10px] text-[#64b5f6] uppercase" title={p.infeasibleReason}>N/A</span>}
+              {p.infeasibleReason && <span className="ml-1 inline-block max-w-[360px] truncate align-bottom text-[10px] text-[#8b949e]" title={p.infeasibleReason}>— {p.infeasibleReason}</span>}
               {profUntested && <span className="ml-1 rounded border border-[#ff9800]/40 bg-[#ff9800]/10 px-1 text-[10px] text-[#ff9800] uppercase">todo</span>}
             </td>
             {allConcs.map((c) => {
               const expected = p.expected.includes(c);
               const present = p.present.has(c);
               const state: 'present' | 'missing' | 'na' =
-                !expected ? 'na' : present ? 'present' : 'missing';
-              return <td key={c} className="px-1 py-1.5 text-center"><Cell state={state} /></td>;
+                p.infeasibleReason || !expected ? 'na' : present ? 'present' : 'missing';
+              return <td key={c} className="px-1 py-1.5 text-center"><Cell state={state} title={p.infeasibleReason} /></td>;
             })}
             <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono">
-              <span
-                className={
-                  profPct === 100 ? 'text-[#3fb950]' :
-                  profPct === 0 ? 'text-[#8b949e]' :
-                  'text-[#ff9800]'
-                }
-              >
-                {have}/{need}
-              </span>
+              {p.infeasibleReason ? (
+                <span className="text-[#64b5f6]" title={p.infeasibleReason}>N/A</span>
+              ) : (
+                <span
+                  className={
+                    profPct === 100 ? 'text-[#3fb950]' :
+                    profPct === 0 ? 'text-[#8b949e]' :
+                    'text-[#ff9800]'
+                  }
+                >
+                  {have}/{need}
+                </span>
+              )}
             </td>
           </tr>
         );
@@ -777,7 +821,7 @@ function CoverageLegend({ dataScope }: { dataScope: DataScope }) {
           )}
           <span className="flex items-center gap-1.5">
             <Cell state="na" />
-            {dataScope === 'current' ? 'not expected' : 'not observed'}
+            {dataScope === 'current' ? 'not expected / infeasible' : 'not observed'}
           </span>
         </div>
         <div className="space-y-1 leading-relaxed">
@@ -788,12 +832,12 @@ function CoverageLegend({ dataScope }: { dataScope: DataScope }) {
   );
 }
 
-function Cell({ state }: { state: 'present' | 'missing' | 'na' }) {
+function Cell({ state, title }: { state: 'present' | 'missing' | 'na'; title?: string }) {
   const cls =
     state === 'present' ? 'bg-[#3fb950] border-[#3fb950]' :
     state === 'missing' ? 'bg-transparent border-[#30363d]' :
     'bg-[#21262d]/50 border-transparent';
-  return <span className={`inline-block h-3 w-3 rounded-sm border ${cls}`} />;
+  return <span className={`inline-block h-3 w-3 rounded-sm border ${cls}`} title={title} />;
 }
 
 function BackendBadge({ backend, version }: { backend: string; version?: string }) {
