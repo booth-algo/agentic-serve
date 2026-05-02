@@ -30,8 +30,8 @@ GPU_SPECS: dict[str, GpuSpec] = {
         hbm_bw_gb_s=2600.0,
         kernel_floor_us=2.0,
         tp_comm_latency_us=5.0,
-        step_overhead_base_us=200.0,      # kernel launch, graph replay
-        step_overhead_per_req_us=200.0,   # block-table indirection per active decode
+        step_overhead_base_us=0.0,       # calibrate via D-sweep (currently 0 to avoid regressing D=1)
+        step_overhead_per_req_us=0.0,    # calibrate via D-sweep
     ),
     "A100": GpuSpec(
         name="A100-SXM4-40GB",
@@ -39,8 +39,8 @@ GPU_SPECS: dict[str, GpuSpec] = {
         hbm_bw_gb_s=1555.0,
         kernel_floor_us=3.0,
         tp_comm_latency_us=10.0,
-        step_overhead_base_us=300.0,
-        step_overhead_per_req_us=300.0,
+        step_overhead_base_us=0.0,
+        step_overhead_per_req_us=0.0,
     ),
     "RTX3090": GpuSpec(
         name="RTX3090-24GB",
@@ -48,8 +48,8 @@ GPU_SPECS: dict[str, GpuSpec] = {
         hbm_bw_gb_s=760.0,
         kernel_floor_us=4.0,
         tp_comm_latency_us=40.0,
-        step_overhead_base_us=500.0,
-        step_overhead_per_req_us=500.0,
+        step_overhead_base_us=0.0,
+        step_overhead_per_req_us=0.0,
     ),
     "RTX2080Ti": GpuSpec(
         name="RTX2080Ti-11GB",
@@ -57,8 +57,8 @@ GPU_SPECS: dict[str, GpuSpec] = {
         hbm_bw_gb_s=520.0,
         kernel_floor_us=5.0,
         tp_comm_latency_us=50.0,
-        step_overhead_base_us=600.0,
-        step_overhead_per_req_us=600.0,
+        step_overhead_base_us=0.0,
+        step_overhead_per_req_us=0.0,
     ),
 }
 
