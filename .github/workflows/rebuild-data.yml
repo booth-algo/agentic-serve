@@ -42,6 +42,9 @@ jobs:
         working-directory: inference-benchmark
         run: npx tsx dashboard/scripts/build-data.ts
 
+      - name: Build serving predictions
+        run: python3 -m llm_predict.export_serving_predictions
+
       - name: Validate data.json
         working-directory: inference-benchmark/dashboard
         run: npm run validate:data
@@ -55,12 +58,35 @@ jobs:
             --endpoint-url $R2_ENDPOINT
           echo "Uploaded data.json ($(du -h dashboard/public/data.json | cut -f1))"
 
+      - name: Upload serving predictions to R2
+        working-directory: inference-benchmark
+        run: |
+          aws s3 cp dashboard/public/serving-predictions.json s3://agent-bench/serving-predictions.json \
+            --endpoint-url $R2_ENDPOINT
+          aws s3 cp dashboard/public/serving-predictions.json s3://agent-bench/json/current/serving-predictions.json \
+            --endpoint-url $R2_ENDPOINT
+          echo "Uploaded serving-predictions.json ($(du -h dashboard/public/serving-predictions.json | cut -f1))"
+
       - name: Verify R2 data.json
         working-directory: inference-benchmark/dashboard
         run: |
           aws s3 cp s3://agent-bench/json/current/data.json /tmp/dashboard-r2-data.json \
             --endpoint-url $R2_ENDPOINT
           npm run validate:data -- /tmp/dashboard-r2-data.json
+
+      - name: Verify R2 serving predictions
+        working-directory: inference-benchmark
+        run: |
+          aws s3 cp s3://agent-bench/json/current/serving-predictions.json /tmp/dashboard-r2-serving-predictions.json \
+            --endpoint-url $R2_ENDPOINT
+          python3 - <<'PY'
+          import json
+          rows = json.load(open('/tmp/dashboard-r2-serving-predictions.json')).values()
+          current = sum(1 for group in rows for row in group if row.get('data_scope') == 'current')
+          if current <= 0:
+              raise SystemExit('expected current serving prediction rows')
+          print(f'current serving prediction rows: {current}')
+          PY
 
       - name: Upload roofline-quadrant.json to R2
         working-directory: inference-benchmark
