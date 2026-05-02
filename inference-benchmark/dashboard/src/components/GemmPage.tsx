@@ -33,10 +33,28 @@ function mapeColor(v: number): string {
   return '#f85149';
 }
 
+const SERVING_GPU_ORDER = ['H100', 'H100x2', 'H100x4', 'A100', 'RTX3090', 'RTX2080Ti'];
+
+function compareServingGpus(a: string, b: string): number {
+  const aRank = SERVING_GPU_ORDER.indexOf(a);
+  const bRank = SERVING_GPU_ORDER.indexOf(b);
+  const normalizedARank = aRank === -1 ? SERVING_GPU_ORDER.length : aRank;
+  const normalizedBRank = bRank === -1 ? SERVING_GPU_ORDER.length : bRank;
+  if (normalizedARank !== normalizedBRank) return normalizedARank - normalizedBRank;
+  return a.localeCompare(b);
+}
+
+function availableServingGpus(data: Record<string, ServingRow[]>, dataScope: DataScope): string[] {
+  return Object.keys(data)
+    .filter(g => scopedServingRows(data, g, dataScope).length > 0)
+    .sort(compareServingGpus);
+}
+
 export function GemmPage({ dataScope }: { dataScope: DataScope }) {
   const [data, setData] = useState<GemmEval | null>(null);
   const [gpu, setGpu] = useState('H100');
-  const [servingGpu, setServingGpu] = useState(dataScope === 'current' ? 'A100' : 'H100');
+  const [servingGpu, setServingGpu] = useState('H100');
+  const [servingGpuOptions, setServingGpuOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,13 +65,21 @@ export function GemmPage({ dataScope }: { dataScope: DataScope }) {
   }, []);
 
   useEffect(() => {
-    setServingGpu(dataScope === 'current' ? 'A100' : 'H100');
+    fetch(servingPredictionsJsonUrl)
+      .then(r => r.json())
+      .then((d: Record<string, ServingRow[]>) => {
+        const options = availableServingGpus(d, dataScope);
+        setServingGpuOptions(options);
+        setServingGpu(current => options.includes(current) ? current : (options[0] ?? current));
+      })
+      .catch(() => setServingGpuOptions([]));
   }, [dataScope]);
 
   if (loading) return <div className="text-[#8b949e] p-8">Loading GEMM evaluation data...</div>;
   if (!data) return <div className="text-[#f85149] p-8">Failed to load gemm-eval.json</div>;
 
   const gpus = Object.keys(data.gpus);
+  const servingTabs = servingGpuOptions.length ? servingGpuOptions : gpus;
   const gpuData = data.gpus[gpu];
   if (!gpuData) return null;
 
@@ -216,7 +242,7 @@ export function GemmPage({ dataScope }: { dataScope: DataScope }) {
             </p>
           </div>
           <div className="flex gap-1.5">
-            {gpus.map(g => (
+            {servingTabs.map(g => (
               <button
                 key={`s-${g}`}
                 onClick={() => setServingGpu(g)}

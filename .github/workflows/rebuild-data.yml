@@ -89,11 +89,11 @@ jobs:
           current = sum(1 for group in rows for row in group if row.get('data_scope') == 'current')
           if current <= 0:
               raise SystemExit('expected current serving prediction rows')
-          h100_current = sum(1 for row in payload.get('H100', []) if row.get('data_scope') == 'current')
-          if h100_current <= 0:
-              raise SystemExit('expected current H100 serving prediction rows')
+          h100x4_current = sum(1 for row in payload.get('H100x4', []) if row.get('data_scope') == 'current')
+          if h100x4_current <= 0:
+              raise SystemExit('expected current H100x4 serving prediction rows')
           print(f'current serving prediction rows: {current}')
-          print(f'current H100 serving prediction rows: {h100_current}')
+          print(f'current H100x4 serving prediction rows: {h100x4_current}')
           PY
 
       - name: Upload roofline-quadrant.json to R2

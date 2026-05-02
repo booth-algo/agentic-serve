@@ -23,8 +23,8 @@ from .serving import predict_serving
 from .validate import BENCH_DATA, _HW_MAP, _actual_isl_osl, _resolve_model
 
 
-DEFAULT_GPUS = ["H100", "A100", "RTX3090", "RTX2080Ti"]
-SERVING_GPU_ALIASES = {
+DEFAULT_GPUS = ["H100", "H100x2", "H100x4", "A100", "RTX3090", "RTX2080Ti"]
+SERVING_PREDICTOR_GPU = {
     "H100x2": "H100",
     "H100x4": "H100",
 }
@@ -62,8 +62,11 @@ DEFAULT_OUTPUT = (
 
 
 def _serving_gpu_key(raw_hardware: str) -> str:
-    gpu = _HW_MAP.get(raw_hardware, raw_hardware)
-    return SERVING_GPU_ALIASES.get(gpu, gpu)
+    return _HW_MAP.get(raw_hardware, raw_hardware)
+
+
+def _predictor_gpu_key(serving_gpu: str) -> str:
+    return SERVING_PREDICTOR_GPU.get(serving_gpu, serving_gpu)
 
 
 def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
@@ -253,13 +256,14 @@ def export_serving_predictions(output: Path = DEFAULT_OUTPUT,
         concurrency = int(cfg_block.get("concurrency", 1))
         if concurrency not in concurrency_set:
             continue
-        gpu = _serving_gpu_key(entry.get("hardware", ""))
-        if gpu not in gpu_set:
+        serving_gpu = _serving_gpu_key(entry.get("hardware", ""))
+        if serving_gpu not in gpu_set:
             continue
-        composer = composers.setdefault(gpu, Composer(gpu))
-        row = _prediction_row(entry, composer, gpu)
+        predictor_gpu = _predictor_gpu_key(serving_gpu)
+        composer = composers.setdefault(predictor_gpu, Composer(predictor_gpu))
+        row = _prediction_row(entry, composer, predictor_gpu)
         if row is not None:
-            payload[gpu].append(_dashboard_row(row))
+            payload[serving_gpu].append(_dashboard_row(row))
 
     for gpu_rows in payload.values():
         gpu_rows.sort(
