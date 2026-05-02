@@ -520,7 +520,7 @@ function ServingTable({
 
       <div className="overflow-x-auto rounded-md border border-[#21262d] bg-[#161b22]">
         <table
-          className="w-full border-collapse text-xs"
+          className="w-full table-fixed border-collapse text-xs"
           style={{ minWidth: `${310 + concurrencies.length * 82}px` }}
         >
           <thead className="sticky top-0 z-10 bg-[#161b22]">
@@ -772,6 +772,48 @@ function MetricLine({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ServingCellTurnBars({ row, selected }: { row: ServingPerTurnRow; selected: boolean }) {
+  const turns = [...row.multiturn_turn_predictions].sort((a, b) => a.turn_index - b.turn_index);
+  const maxContext = Math.max(...turns.map(turn => turn.total_context_tokens), 1);
+  const cacheAware = row.cache_aware_applied && turns.some(turn => Number.isFinite(turn.cache_hit_rate));
+  const title = cacheAware
+    ? `Context and prefix cache by turn: ${turns.map(turn => `${displayTurn(turn)}=${formatTokenCount(turn.total_context_tokens)} tok/${(turn.cache_hit_rate * 100).toFixed(0)}% hit`).join(', ')}`
+    : `Input tokens by turn: ${turns.map(turn => `${displayTurn(turn)}=${formatTokenCount(turn.total_context_tokens)}`).join(', ')}`;
+
+  return (
+    <div
+      className={`grid h-[10px] overflow-hidden rounded border px-0.5 py-0.5 ${
+        selected
+          ? 'border-[#58a6ff]/40 bg-[#1f6feb]/15'
+          : 'border-[#30363d] bg-[#0d1117]'
+      }`}
+      style={{
+        gridTemplateColumns: `repeat(${turns.length}, minmax(0, 1fr))`,
+        columnGap: turns.length > 24 ? 0 : 1,
+      }}
+      title={title}
+    >
+      {turns.map(turn => {
+        const normalized = Math.max(0.12, Math.min(1, turn.total_context_tokens / maxContext));
+        const opacity = cacheAware
+          ? Math.max(0.28, Math.min(0.95, 0.25 + turn.cache_hit_rate * 0.65))
+          : selected ? 0.85 : 0.65;
+        return (
+          <span
+            key={turn.turn_index}
+            className="min-w-0 self-end rounded-t-[1px]"
+            style={{
+              height: `${normalized * 100}%`,
+              backgroundColor: cacheAware ? (selected ? '#79c0ff' : '#58a6ff') : (selected ? '#d2a8ff' : '#a855f7'),
+              opacity,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function ServingMatrixCell({
   row,
   selectedKey,
@@ -794,21 +836,19 @@ function ServingMatrixCell({
   return (
     <td
       onClick={canSelect ? () => onSelectPerTurn(rowKey) : undefined}
-      className={`border-l border-[#21262d]/50 px-1.5 py-1 align-middle transition-colors ${
+      className={`border-l border-[#21262d]/50 px-1 py-0.5 align-middle transition-colors ${
         canSelect ? 'cursor-pointer hover:bg-[#1f6feb]/10' : ''
       } ${selected ? 'bg-[#1f6feb]/10 shadow-[inset_0_0_0_1px_#58a6ff]' : ''}`}
       title={canSelect ? `Show ${row.multiturn_turn_predictions.length} per-turn predictions` : undefined}
     >
-      <div className="space-y-1">
-        <div className="grid grid-cols-3 gap-0.5" title={`ISL→OSL ${row.isl}→${row.osl}`}>
+      <div className="min-w-0 space-y-0.5" title={`ISL→OSL ${row.isl}→${row.osl}`}>
+        <div className="grid min-w-0 grid-cols-3 gap-0.5">
           {SERVING_METRICS.map(metric => (
             <ServingMiniMetric key={metric.label} row={row} metric={metric} />
           ))}
         </div>
         {canSelect && (
-          <div className={`text-center font-mono text-[9px] leading-none ${selected ? 'text-[#79c0ff]' : 'text-[#6e7681]'}`}>
-            {row.multiturn_turn_predictions.length} turns
-          </div>
+          <ServingCellTurnBars row={row} selected={selected} />
         )}
       </div>
     </td>
