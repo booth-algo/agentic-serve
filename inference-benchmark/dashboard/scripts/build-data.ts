@@ -281,7 +281,9 @@ function main() {
         continue;
       }
 
-      // Skip underloaded single-turn results (nreq < concurrency)
+      // Skip underloaded single-turn results. A single-turn run needs at least
+      // `concurrency` requests to exercise that concurrency level at all; current
+      // sweep scripts target 2x concurrency for extra steady-load coverage.
       // Multi-turn uses num_requests=num_sessions which is intentionally < concurrency
       //
       // Mode inference priority:
@@ -297,7 +299,10 @@ function main() {
         ? 'multi-turn'
         : (raw.config.mode || (relDir.includes('multiturn') ? 'multi-turn' : 'single-turn'));
       raw.config.mode = mode;
-      if (mode !== 'multi-turn' && concurrency > 1 && raw.config.num_requests && raw.config.num_requests < Math.floor(concurrency / 4)) {
+      const configuredReqs = Number(raw.config.num_requests ?? raw.summary.num_requests ?? 0);
+      const successfulReqsForLoad = Number(raw.summary.successful_requests ?? 0);
+      const loadReqs = successfulReqsForLoad > 0 ? successfulReqsForLoad : configuredReqs;
+      if (mode !== 'multi-turn' && concurrency > 1 && loadReqs > 0 && loadReqs < concurrency) {
         skipped++;
         continue;
       }

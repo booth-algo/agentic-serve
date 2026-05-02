@@ -63,7 +63,8 @@ echo " Concurrency sweep"
 echo " Backend:  $BACKEND"
 echo " Profiles: $PROFILES"
 echo " Levels:   $CONCURRENCY_LEVELS"
-echo " Requests: $NUM_REQUESTS per run"
+echo " Requests: $NUM_REQUESTS minimum per run"
+echo "           single-turn concurrency>1 uses at least 2x concurrency"
 echo " Output:   $RESULTS_DIR"
 echo "=============================="
 echo ""
@@ -81,13 +82,23 @@ for PROFILE in $PROFILES; do
       profile_mode="single-turn"
     fi
 
+    run_num_requests="$NUM_REQUESTS"
+    if [[ "$profile_mode" != "multi-turn" && "$CONC" -gt 1 ]]; then
+      min_loaded_requests=$(( CONC * 2 ))
+      [[ "$run_num_requests" -lt "$min_loaded_requests" ]] && run_num_requests="$min_loaded_requests"
+    fi
+
+    if [[ "$run_num_requests" != "$NUM_REQUESTS" ]]; then
+      echo "  num_requests=$run_num_requests (raised for loaded single-turn concurrency)"
+    fi
+
     RUNNER_ARGS=(
       --url "$URL"
       --model "$MODEL"
       --backend "$BACKEND"
       --profile "$PROFILE"
       --concurrency "$CONC"
-      --num-requests "$NUM_REQUESTS"
+      --num-requests "$run_num_requests"
       --warmup "$WARMUP"
       --api-key "$API_KEY"
       --prefix-caching-state "$PREFIX_CACHING_STATE"

@@ -9,7 +9,7 @@
 # Usage (matches sweep_all_profiles.sh):
 #   bash sweep_all_profiles_sglang.sh \
 #       MODEL_PATH TP SHORT_NAME BACKEND OUT_DIR \
-#       [PY] [GPU_MEM] [MAX_LEN] [CONC_LIST] [PROFILE_LIST] [NREQ_PER_CONC]
+#       [PY] [GPU_MEM] [MAX_LEN] [CONC_LIST] [PROFILE_LIST] [MIN_NREQ_PER_CONC]
 #
 # BACKEND is expected to be "sglang" - the 4th arg is preserved for CMD
 # symmetry with the vllm script; the output filenames still use it.
@@ -53,7 +53,7 @@ GPU_MEM="${7:-0.85}"
 MAX_LEN="${8:-32768}"
 CONCS="${9:-1 10 20 40 80 160 256 320}"
 PROFILES="${10:-chat-singleturn coding-singleturn}"
-NREQ="${11:-100}"
+MIN_NREQ="${11:-100}"
 
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
@@ -62,6 +62,7 @@ mkdir -p "$OUT_DIR"
 echo "[sweep-sglang] MODEL=$MODEL_PATH TP=$TP OUT=$OUT_DIR"
 echo "[sweep-sglang] concurrencies: $CONCS"
 echo "[sweep-sglang] profiles: $PROFILES"
+echo "[sweep-sglang] min requests per run: $MIN_NREQ (single-turn uses at least 2x concurrency)"
 
 # sglang.launch_server flags:
 #   --model-path         path to HF model dir
@@ -114,10 +115,14 @@ for PROFILE in $PROFILES; do
             echo "[skip] $OUT_FILE exists"
             continue
         fi
-        echo ""
-        echo "=== profile=$PROFILE conc=$CONC ==="
-        local_nreq="$NREQ"
+        local_nreq="$MIN_NREQ"
         [[ "$CONC" -eq 1 ]] && local_nreq=30
+        if [[ "$PROFILE" != *multiturn* && "$CONC" -gt 1 ]]; then
+            min_loaded_nreq=$(( CONC * 2 ))
+            [[ "$local_nreq" -lt "$min_loaded_nreq" ]] && local_nreq="$min_loaded_nreq"
+        fi
+        echo ""
+        echo "=== profile=$PROFILE conc=$CONC nreq=$local_nreq ==="
         OPENAI_API_KEY="$API_KEY" "$PY" -m src.benchmark.runner \
             --url        "http://localhost:$PORT/v1/chat/completions" \
             --model      "$MODEL_PATH" \
