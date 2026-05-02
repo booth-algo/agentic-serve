@@ -27,6 +27,10 @@ DEFAULT_GPUS = ["H100", "A100", "RTX3090", "RTX2080Ti"]
 DEFAULT_PROFILES = [
     "chat-singleturn",
     "coding-singleturn",
+    "chat-multiturn",
+    "swebench-multiturn",
+    "terminalbench-multiturn",
+    "osworld-multiturn",
     "prefill-heavy",
     "decode-heavy",
     "random-1k",
@@ -66,6 +70,7 @@ def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
     backend_version = entry.get("engineVersion")
     profile = cfg_block.get("profile", "")
     concurrency = int(cfg_block.get("concurrency", 1))
+    data_scope = entry.get("dataScope", "archive")
 
     validation_scope = ttft_validation_scope(profile, cfg_block.get("mode"))
     pred = None
@@ -106,7 +111,7 @@ def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
         "backend": backend,
         "backend_version": backend_version,
         "profile": profile,
-        "data_scope": entry.get("dataScope", "archive"),
+        "data_scope": data_scope,
         "mode": cfg_block.get("mode"),
         "concurrency": concurrency,
         "isl": isl,
@@ -133,6 +138,18 @@ def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
         "prefix_cache_decode_factor": round(pred.prefix_cache_decode_factor, 3),
         "prefix_cache_contention_applied": pred.prefix_cache_contention_applied,
     }
+    if pred.multiturn_prediction_mode:
+        row["multiturn_prediction_mode"] = pred.multiturn_prediction_mode
+        row["predicted_turn_count"] = pred.predicted_turn_count
+        row["total_successful_turn_requests"] = pred.total_successful_turn_requests
+        row["mean_predicted_turn_ttft_ms"] = round(
+            pred.mean_predicted_turn_ttft_ms, 2
+        )
+        row["mean_predicted_turn_tpot_ms"] = round(
+            pred.mean_predicted_turn_tpot_ms, 2
+        )
+        if data_scope == "current":
+            row["multiturn_turn_predictions"] = pred.multiturn_turn_predictions
     corr_params = get_correction_params(gpu, backend, backend_version, model_key)
     if corr_params:
         row["ttft_correction_alpha"] = corr_params[0]
@@ -186,6 +203,12 @@ def _dashboard_row(row: dict) -> dict:
         "prefix_cache_ttft_factor": row.get("prefix_cache_ttft_factor"),
         "prefix_cache_decode_factor": row.get("prefix_cache_decode_factor"),
         "prefix_cache_contention_applied": row.get("prefix_cache_contention_applied"),
+        "multiturn_prediction_mode": row.get("multiturn_prediction_mode"),
+        "predicted_turn_count": row.get("predicted_turn_count"),
+        "total_successful_turn_requests": row.get("total_successful_turn_requests"),
+        "mean_predicted_turn_ttft_ms": row.get("mean_predicted_turn_ttft_ms"),
+        "mean_predicted_turn_tpot_ms": row.get("mean_predicted_turn_tpot_ms"),
+        "multiturn_turn_predictions": row.get("multiturn_turn_predictions"),
     }
     for metric in ("ttft", "tpot", "e2el"):
         out[f"{metric}_pred"] = row.get(f"{metric}_pred")

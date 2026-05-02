@@ -259,6 +259,12 @@ interface ServingRow {
   prefix_cache_ttft_factor?: number;
   prefix_cache_decode_factor?: number;
   prefix_cache_contention_applied?: boolean;
+  multiturn_prediction_mode?: string;
+  predicted_turn_count?: number;
+  total_successful_turn_requests?: number;
+  mean_predicted_turn_ttft_ms?: number;
+  mean_predicted_turn_tpot_ms?: number;
+  multiturn_turn_predictions?: Array<Record<string, number | string>>;
   ttft_pred?: number; ttft_meas?: number; ttft_err?: number;
   tpot_pred?: number; tpot_meas?: number; tpot_err?: number;
   e2el_pred?: number; e2el_meas?: number; e2el_err?: number;
@@ -613,7 +619,10 @@ function cacheTooltip(row: ServingRow): string {
   const contention = row.prefix_cache_contention_applied
     ? `contention TTFT×${formatFactor(row.prefix_cache_ttft_factor)} TPOT×${formatFactor(row.prefix_cache_decode_factor)}`
     : 'contention not applied';
-  return `cache hit ${hit}; new/full ${fresh}/${total}; cached ${cached}; ${contention}`;
+  const multiturn = row.multiturn_prediction_mode
+    ? `; ${row.multiturn_prediction_mode} ${row.predicted_turn_count ?? 0} turns`
+    : '';
+  return `cache hit ${hit}; new/full ${fresh}/${total}; cached ${cached}; ${contention}${multiturn}`;
 }
 
 function numericMetric(row: ServingRow, key: ServingMetricKey): number | undefined {

@@ -6,6 +6,7 @@ steady-state batch size, iterative solver, and TTFT queuing.
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 from .configs.model_configs import ModelConfig
 from .composer import Composer
@@ -58,6 +59,12 @@ class ServingPrediction:
     prefix_cache_ttft_factor: float = 1.0
     prefix_cache_decode_factor: float = 1.0
     prefix_cache_contention_applied: bool = False
+    multiturn_prediction_mode: str | None = None
+    predicted_turn_count: int = 0
+    total_successful_turn_requests: int = 0
+    mean_predicted_turn_ttft_ms: float = 0.0
+    mean_predicted_turn_tpot_ms: float = 0.0
+    multiturn_turn_predictions: list[dict[str, Any]] | None = None
 
 
 def _decode_alpha(gpu: str, bs: float) -> float:

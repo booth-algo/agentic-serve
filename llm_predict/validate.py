@@ -167,6 +167,17 @@ def validate(gpu: str, profile: str = "chat-singleturn",
                      "prefix_cache_decode_factor": round(pred.prefix_cache_decode_factor, 3),
                      "prefix_cache_contention_applied": pred.prefix_cache_contention_applied,
                      "ttft_validation_scope": validation_scope}
+        if pred.multiturn_prediction_mode:
+            row["multiturn_prediction_mode"] = pred.multiturn_prediction_mode
+            row["predicted_turn_count"] = pred.predicted_turn_count
+            row["total_successful_turn_requests"] = pred.total_successful_turn_requests
+            row["mean_predicted_turn_ttft_ms"] = round(
+                pred.mean_predicted_turn_ttft_ms, 2
+            )
+            row["mean_predicted_turn_tpot_ms"] = round(
+                pred.mean_predicted_turn_tpot_ms, 2
+            )
+            row["multiturn_turn_predictions"] = pred.multiturn_turn_predictions
         corr_params = get_correction_params(
             gpu, backend, backend_version, model_key
         )
@@ -225,6 +236,7 @@ if __name__ == "__main__":
               "cache_aware_applied", "cache_hit_rate",
               "new_prefill_tokens", "total_context_tokens",
               "prefix_cache_ttft_factor", "prefix_cache_decode_factor",
+              "multiturn_prediction_mode", "predicted_turn_count",
               "ttft_pred", "ttft_meas", "ttft_err_pct",
               "tpot_pred", "tpot_meas", "tpot_err_pct",
               "e2el_pred", "e2el_meas", "e2el_err_pct"]
