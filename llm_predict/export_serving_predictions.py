@@ -24,6 +24,10 @@ from .validate import BENCH_DATA, _HW_MAP, _actual_isl_osl, _resolve_model
 
 
 DEFAULT_GPUS = ["H100", "A100", "RTX3090", "RTX2080Ti"]
+SERVING_GPU_ALIASES = {
+    "H100x2": "H100",
+    "H100x4": "H100",
+}
 DEFAULT_PROFILES = [
     "chat-singleturn",
     "coding-singleturn",
@@ -55,6 +59,11 @@ DEFAULT_OUTPUT = (
     / "public"
     / "serving-predictions.json"
 )
+
+
+def _serving_gpu_key(raw_hardware: str) -> str:
+    gpu = _HW_MAP.get(raw_hardware, raw_hardware)
+    return SERVING_GPU_ALIASES.get(gpu, gpu)
 
 
 def _prediction_row(entry: dict, composer: Composer, gpu: str) -> dict | None:
@@ -244,7 +253,7 @@ def export_serving_predictions(output: Path = DEFAULT_OUTPUT,
         concurrency = int(cfg_block.get("concurrency", 1))
         if concurrency not in concurrency_set:
             continue
-        gpu = _HW_MAP.get(entry.get("hardware", ""), entry.get("hardware", ""))
+        gpu = _serving_gpu_key(entry.get("hardware", ""))
         if gpu not in gpu_set:
             continue
         composer = composers.setdefault(gpu, Composer(gpu))
