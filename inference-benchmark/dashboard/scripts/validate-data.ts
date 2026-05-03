@@ -15,7 +15,7 @@ const REQUIRED_CURRENT_PROFILES = [
 ] as const;
 
 interface DataRow {
-  dataScope?: 'current' | 'archive';
+  dataScope?: 'current' | 'archive' | 'fixed';
   config?: {
     profile?: string;
   };
@@ -38,16 +38,16 @@ if (!Array.isArray(parsed)) {
 }
 
 const rows = parsed as DataRow[];
-const scopeCounts = { current: 0, archive: 0 };
+const scopeCounts = { current: 0, archive: 0, fixed: 0 };
 const currentProfiles = new Map<string, number>();
 
 for (const row of rows) {
   const scope = row.dataScope ?? 'archive';
-  if (scope !== 'current' && scope !== 'archive') {
+  if (scope !== 'current' && scope !== 'archive' && scope !== 'fixed') {
     fail(`invalid dataScope ${JSON.stringify(scope)}`);
   }
   scopeCounts[scope] += 1;
-  if (scope === 'current') {
+  if (scope === 'current' || scope === 'fixed') {
     const profile = row.config?.profile;
     if (profile) currentProfiles.set(profile, (currentProfiles.get(profile) ?? 0) + 1);
   }
