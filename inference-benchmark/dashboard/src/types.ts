@@ -16,7 +16,7 @@ export interface BenchmarkConfig {
   mode?: string | null;
   benchmark_schema_version?: number;
   workload_schema_version?: string;
-  dashboard_scope?: 'current' | 'archive';
+  dashboard_scope?: 'current' | 'archive' | 'fixed';
   profile_metadata?: Record<string, unknown>;
   prediction_metadata?: Record<string, unknown>;
 }

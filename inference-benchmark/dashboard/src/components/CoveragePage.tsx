@@ -160,15 +160,21 @@ function isMultiTurnProfile(profile: string): boolean {
   return profile.includes('multiturn') || profile.includes('multi-turn');
 }
 
+function usesCanonicalCoverage(scope: DataScope): boolean {
+  return scope !== 'archive';
+}
+
 export function CoveragePage({
   allData,
   sweepState,
   loading,
   dataScope,
 }: CoveragePageProps) {
+  const canonicalCoverage = usesCanonicalCoverage(dataScope);
+
   const coveragePlan = useMemo(() => {
-    const singleProfiles = dataScope === 'current' ? CURRENT_SINGLE_PROFILES : (dataScope === 'fixed' ? CURRENT_SINGLE_PROFILES : ARCHIVE_SINGLE_PROFILES);
-    const multiProfiles = dataScope === 'current' ? CURRENT_MULTI_PROFILES : (dataScope === 'fixed' ? CURRENT_MULTI_PROFILES : ARCHIVE_MULTI_PROFILES);
+    const singleProfiles = usesCanonicalCoverage(dataScope) ? CURRENT_SINGLE_PROFILES : ARCHIVE_SINGLE_PROFILES;
+    const multiProfiles = usesCanonicalCoverage(dataScope) ? CURRENT_MULTI_PROFILES : ARCHIVE_MULTI_PROFILES;
     const singleConcs = dataScope === 'current' ? CURRENT_SINGLE_CONCS : (dataScope === 'fixed' ? FIXED_SINGLE_CONCS : ARCHIVE_SINGLE_CONCS);
     const multiConcs = dataScope === 'current' ? CURRENT_MULTI_CONCS : (dataScope === 'fixed' ? FIXED_MULTI_CONCS : ARCHIVE_MULTI_CONCS);
     return {
@@ -199,7 +205,7 @@ export function CoveragePage({
     }
 
     const expectedModels = new Set<string>();
-    if (dataScope === 'current' && sweepState) for (const m of Object.keys(sweepState.models)) expectedModels.add(m);
+    if (canonicalCoverage && sweepState) for (const m of Object.keys(sweepState.models)) expectedModels.add(m);
     for (const r of allData) expectedModels.add(r.modelShort);
     const modelList = Array.from(expectedModels).sort(compareModels);
 
@@ -219,7 +225,7 @@ export function CoveragePage({
       sweepState?.models[model]?.weights_gb;
     const ratio = sweepState?.feasibility_ratio ?? 0.85;
     const profileInfeasible = new Map<string, string>();
-    if (dataScope === 'current') {
+    if (canonicalCoverage) {
       for (const item of sweepState?.profile_infeasible ?? []) {
         profileInfeasible.set(
           `${item.hw_label}|${item.model}|${item.backend}|${item.profile}`,
@@ -281,7 +287,7 @@ export function CoveragePage({
         // Always include ACTIVE_BACKENDS (current sweep target) plus any
         // other known backend that actually has data for this (hw, model).
         const backendSet = new Set<string>();
-        if (dataScope === 'current') {
+        if (canonicalCoverage) {
           for (const b of ACTIVE_BACKENDS) backendSet.add(b);
           for (const b of KNOWN_BACKENDS) {
             if (mbHasData.get(hw)?.has(`${model}|${b}`)) backendSet.add(b);
@@ -297,7 +303,7 @@ export function CoveragePage({
           const hasData = mbHasData.get(hw)?.has(`${model}|${backend}`) ?? false;
           // sweep-state status only applies to the vllm backend.
           const cell = aggStatus.get(`${hw}|${model}|${backend}`);
-          const expectedForModel = dataScope === 'current'
+          const expectedForModel = canonicalCoverage
             ? expectedCountFor(hw, model, backend)
             : expectedCellsPerModel;
 
@@ -386,7 +392,7 @@ export function CoveragePage({
     }
 
     return { groups: hwGroups, hardwareList: expectedHw };
-  }, [allData, coveragePlan, dataScope, sweepState]);
+  }, [allData, canonicalCoverage, coveragePlan, dataScope, sweepState]);
 
   const [expandedHw, setExpandedHw] = useState<Set<string>>(new Set());
   const [expandedModel, setExpandedModel] = useState<Set<string>>(new Set());
@@ -461,7 +467,14 @@ export function CoveragePage({
   const primarySummary = dataScope === 'archive' ? `${grand.totalHave} cells filled` : `${pct}%`;
   const scopeSummary = dataScope === 'current'
     ? '6 paper profiles'
-    : 'legacy profiles containing full runs of single-turn, short/medium/long multi-turn, and stress workloads';
+    : dataScope === 'fixed'
+      ? '6 paper profiles on the fixed concurrency grid'
+      : 'legacy profiles containing full runs of single-turn, short/medium/long multi-turn, and stress workloads';
+  const coverageLabel = dataScope === 'current'
+    ? 'Canonical coverage'
+    : dataScope === 'fixed'
+      ? 'Fixed coverage'
+      : 'Archive coverage';
 
   return (
     <div className="space-y-4">
@@ -470,13 +483,13 @@ export function CoveragePage({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#8b949e]">
               <span className="font-medium uppercase tracking-wide text-[#00bcd4]">
-                {dataScope === 'current' ? 'Canonical coverage' : 'Archive coverage'}
+                {coverageLabel}
               </span>
               <span>{hardwareList.length} hardware targets</span>
             </div>
             <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="font-mono text-3xl font-semibold text-[#e6edf3]">{primarySummary}</span>
-              {dataScope === 'current' && (
+              {canonicalCoverage && (
                 <span className="font-mono text-sm text-[#8b949e]">{cellSummary}</span>
               )}
               <span className="text-xs text-[#8b949e]">{scopeSummary}</span>
@@ -805,9 +818,12 @@ function GroupChip({
 }
 
 function CoverageLegend({ dataScope }: { dataScope: DataScope }) {
+  const canonicalCoverage = usesCanonicalCoverage(dataScope);
   const scopeNote = dataScope === 'current'
     ? 'Current coverage tracks the canonical paper profile surface and expected concurrency grid.'
-    : 'Archive coverage is inventory-style: it shows historical runs that exist and does not count missing legacy cells.';
+    : dataScope === 'fixed'
+      ? 'Fixed coverage tracks the canonical paper profile surface on the fixed concurrency grid.'
+      : 'Archive coverage is inventory-style: it shows historical runs that exist and does not count missing legacy cells.';
 
   return (
     <div className="rounded-md border border-[#21262d] bg-[#161b22] px-4 py-3 text-xs text-[#8b949e]">
@@ -818,12 +834,12 @@ function CoverageLegend({ dataScope }: { dataScope: DataScope }) {
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="flex items-center gap-1.5"><Cell state="present" />present</span>
-          {dataScope === 'current' && (
+          {canonicalCoverage && (
             <span className="flex items-center gap-1.5"><Cell state="missing" />expected and missing</span>
           )}
           <span className="flex items-center gap-1.5">
             <Cell state="na" />
-            {dataScope === 'current' ? 'not expected / infeasible' : 'not observed'}
+            {canonicalCoverage ? 'not expected / infeasible' : 'not observed'}
           </span>
         </div>
         <div className="space-y-1 leading-relaxed">

@@ -201,7 +201,7 @@ export function Filters({ filters, options, dataScope, onToggle, onClear }: Filt
   const normalizedQuery = profileQuery.trim().toLowerCase();
 
   const allProfiles = useMemo(
-    () => Array.from(dataScope === 'current' ? CURRENT_PROFILES : ARCHIVE_PROFILES)
+    () => Array.from(dataScope === 'archive' ? ARCHIVE_PROFILES : CURRENT_PROFILES)
       .filter((profile) => PROFILE_META[profile])
       .sort((a, b) => profileRank(a) - profileRank(b) || a.localeCompare(b)),
     [dataScope],
