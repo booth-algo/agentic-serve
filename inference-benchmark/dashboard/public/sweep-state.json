@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-03T16:11:49.199761+00:00",
+  "generated_at": "2026-05-03T17:04:53.426634+00:00",
   "feasibility_ratio": 0.9,
   "hosts": {
     "gpu-4": {
@@ -80,7 +80,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T10:44:31.710485+00:00"
+      "updated_at": "2026-05-03T17:03:54.723260+00:00"
     },
     {
       "host": "gpu-4",
@@ -108,7 +108,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T10:44:40.901240+00:00"
+      "updated_at": "2026-05-03T17:04:03.927014+00:00"
     },
     {
       "host": "gpu-4",
@@ -334,7 +334,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T11:07:32.975342+00:00"
+      "updated_at": "2026-05-03T17:04:14.644728+00:00"
     },
     {
       "host": "gpu-4",
@@ -399,7 +399,7 @@
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.95,
@@ -418,7 +418,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T11:18:40.051148+00:00"
+      "updated_at": "2026-05-03T17:04:14.735726+00:00"
     },
     {
       "host": "gpu-4",
@@ -427,7 +427,7 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.95,
@@ -446,7 +446,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T11:31:16.082073+00:00"
+      "updated_at": "2026-05-03T17:04:17.409654+00:00"
     },
     {
       "host": "gpu-4",
@@ -651,7 +651,7 @@
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -671,7 +671,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T16:11:41.717743+00:00"
+      "updated_at": "2026-05-03T17:04:30.760298+00:00"
     },
     {
       "host": "3090",
@@ -699,7 +699,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T10:45:49.597407+00:00"
+      "updated_at": "2026-05-03T17:04:40.885028+00:00"
     },
     {
       "host": "3090",
@@ -1218,7 +1218,7 @@
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -1238,7 +1238,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T16:11:44.544667+00:00"
+      "updated_at": "2026-05-03T17:04:50.932760+00:00"
     },
     {
       "host": "2080ti",
@@ -1247,7 +1247,7 @@
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -1266,7 +1266,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T10:57:43.502228+00:00"
+      "updated_at": "2026-05-03T17:04:50.951759+00:00"
     },
     {
       "host": "2080ti",
@@ -2288,7 +2288,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T15:00:32.827518+00:00"
+      "updated_at": "2026-05-03T16:59:14.544751+00:00"
     },
     {
       "host": "h100",
@@ -2806,7 +2806,7 @@
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2826,7 +2826,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": null
+      "updated_at": "2026-05-03T16:59:14.697747+00:00"
     },
     {
       "host": "h100",
@@ -3290,7 +3290,7 @@
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -3309,7 +3309,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:32:03.712573+00:00"
+      "updated_at": "2026-05-03T16:49:17.078870+00:00"
     },
     {
       "host": "gpu-4",
@@ -3825,7 +3825,7 @@
       "tp": 1,
       "mode": "single",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -3844,7 +3844,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T11:32:26.239199+00:00"
+      "updated_at": "2026-05-03T16:16:47.146819+00:00"
     },
     {
       "host": "2080ti",
@@ -3853,7 +3853,7 @@
       "tp": 1,
       "mode": "multi",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -3872,7 +3872,7 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T11:45:05.399260+00:00"
+      "updated_at": "2026-05-03T16:16:47.146819+00:00"
     },
     {
       "host": "2080ti",
@@ -3930,6 +3930,276 @@
       "max_len_override": null,
       "reason": null,
       "updated_at": "2026-05-03T12:07:09.230734+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T17:03:54.723260+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GB",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T17:04:03.927014+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-8B",
+      "tp": 4,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T17:04:14.644728+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-8B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T16:49:17.078870+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.95,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T17:04:14.735726+00:00"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.95,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T17:04:17.409654+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T17:04:30.760298+00:00"
+    },
+    {
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T17:04:40.885028+00:00"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T17:04:50.932760+00:00"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-03T17:04:50.951759+00:00"
     },
     {
       "host": "gpu-4",
@@ -4782,6 +5052,50 @@
       "tp": 2,
       "mode": "multi",
       "backend": "sglang",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "gpu-4",
+      "hw_label": "A100-40GBx4",
+      "model": "Llama-3.1-70B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "terminalbench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "profile": "swebench-multiturn",
+      "max_len": 8192,
+      "reason": "context too short for long multi-turn traces; requires max_len=32768"
+    },
+    {
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
       "profile": "terminalbench-multiturn",
       "max_len": 8192,
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
