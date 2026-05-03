@@ -13,6 +13,8 @@ interface CoveragePageProps {
 
 const CURRENT_SINGLE_CONCS = [1, 10, 20, 40, 80, 160, 256, 320];
 const CURRENT_MULTI_CONCS = [5, 20, 40, 80, 160];
+const FIXED_SINGLE_CONCS = [5, 40, 80, 200, 320];
+const FIXED_MULTI_CONCS = [5, 40, 80, 200, 320];
 const ARCHIVE_SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
 const ARCHIVE_MULTI_CONCS = [5, 10, 20, 40, 80, 120, 160, 200, 256, 320];
 
@@ -165,10 +167,10 @@ export function CoveragePage({
   dataScope,
 }: CoveragePageProps) {
   const coveragePlan = useMemo(() => {
-    const singleProfiles = dataScope === 'current' ? CURRENT_SINGLE_PROFILES : ARCHIVE_SINGLE_PROFILES;
-    const multiProfiles = dataScope === 'current' ? CURRENT_MULTI_PROFILES : ARCHIVE_MULTI_PROFILES;
-    const singleConcs = dataScope === 'current' ? CURRENT_SINGLE_CONCS : ARCHIVE_SINGLE_CONCS;
-    const multiConcs = dataScope === 'current' ? CURRENT_MULTI_CONCS : ARCHIVE_MULTI_CONCS;
+    const singleProfiles = dataScope === 'current' ? CURRENT_SINGLE_PROFILES : (dataScope === 'fixed' ? CURRENT_SINGLE_PROFILES : ARCHIVE_SINGLE_PROFILES);
+    const multiProfiles = dataScope === 'current' ? CURRENT_MULTI_PROFILES : (dataScope === 'fixed' ? CURRENT_MULTI_PROFILES : ARCHIVE_MULTI_PROFILES);
+    const singleConcs = dataScope === 'current' ? CURRENT_SINGLE_CONCS : (dataScope === 'fixed' ? FIXED_SINGLE_CONCS : ARCHIVE_SINGLE_CONCS);
+    const multiConcs = dataScope === 'current' ? CURRENT_MULTI_CONCS : (dataScope === 'fixed' ? FIXED_MULTI_CONCS : ARCHIVE_MULTI_CONCS);
     return {
       singleProfiles,
       multiProfiles,
