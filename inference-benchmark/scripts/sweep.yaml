@@ -120,7 +120,7 @@ presets:
   fixed_multi:
     max_len: 32768
     gpu_mem: 0.85
-    concurrencies: [40, 80]
+    concurrencies: [40, 80, 200, 320]
     profiles: [chat-multiturn, swebench-multiturn, terminalbench-multiturn, osworld-multiturn]
 
 # --------------------------------------------------------------------------
