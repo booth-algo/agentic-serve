@@ -445,7 +445,7 @@ def get_args():
                         help="Benchmark mode (sets profile defaults and required flags). "
                              "Use --profile for a specific profile within a mode.")
     parser.add_argument("--scope", choices=["current", "archive", "fixed"],
-                        default=None, help="Dashboard scope override (default: active→current, inactive→archive)")
+                        default=None, help="Dashboard scope override (default: active→fixed, inactive→archive)")
     parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
     parser.add_argument("--include-inactive", action="store_true",
                         help="With --list-profiles, include legacy/inactive profiles")
@@ -519,7 +519,7 @@ if __name__ == "__main__":
     )
     scope = args.scope
     if scope is None:
-        scope = "current" if profile.active else "archive"
+        scope = "fixed" if profile.active else "archive"
     config = {
         **vars(args),
         "profile": profile_name,

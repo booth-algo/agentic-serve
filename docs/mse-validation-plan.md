@@ -131,3 +131,22 @@ At C=5 (where both have `min(5, 10) = min(5, 100) = 5`), MAPE was only 17-25% �
 **Fix applied** in `profiles.py`. New benchmark runs will use 100 sessions and produce valid comparisons against legacy data.
 
 **No re-run needed yet**: The orchestrator will pick up the new session counts on its next sweep cycle.
+
+---
+
+## Update (2026-05-03): Codex's Runtime Fix
+
+Codex added `resolve_multi_turn_num_sessions()` in `runner.py:389`:
+
+```python
+effective_num_sessions = max(profile.num_sessions, concurrency)
+```
+
+This overrides the profile's `num_sessions` at runtime for all multi-turn modes. At C=80 with `num_sessions=10`, the benchmark now creates 80 synthetic sessions (up from 10). Passed through to `make_dataset(num_sessions=effective_num_sessions)`.
+
+Combined with the profile-level bump (10→100), the fix is redundant but safe:
+- Profile floor: 100 sessions (enough for any C ≤ 100)
+- Runtime ceiling: `max(100, 80) = 100` — always matches C or the floor
+
+Old data (pre-fix): 426 broken rows at C > 10, effective C capped at 10
+New data (post-fix): uses `-- scope fixed`, concurrency labels match actual sessions
