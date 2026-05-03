@@ -1,0 +1,462 @@
+{
+  "@context": {
+    "@language": "en",
+    "@vocab": "https://schema.org/",
+    "citeAs": "cr:citeAs",
+    "column": "cr:column",
+    "conformsTo": "dct:conformsTo",
+    "cr": "http://mlcommons.org/croissant/",
+    "data": {
+      "@id": "cr:data",
+      "@type": "@json"
+    },
+    "dataType": {
+      "@id": "cr:dataType",
+      "@type": "@vocab"
+    },
+    "dct": "http://purl.org/dc/terms/",
+    "equivalentProperty": "cr:equivalentProperty",
+    "examples": {
+      "@id": "cr:examples",
+      "@type": "@json"
+    },
+    "extract": "cr:extract",
+    "field": "cr:field",
+    "fileObject": "cr:fileObject",
+    "fileProperty": "cr:fileProperty",
+    "fileSet": "cr:fileSet",
+    "format": "cr:format",
+    "includes": "cr:includes",
+    "isLiveDataset": "cr:isLiveDataset",
+    "jsonPath": "cr:jsonPath",
+    "key": "cr:key",
+    "md5": "cr:md5",
+    "parentField": "cr:parentField",
+    "path": "cr:path",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "recordSet": "cr:recordSet",
+    "references": "cr:references",
+    "regex": "cr:regex",
+    "repeated": "cr:repeated",
+    "replace": "cr:replace",
+    "samplingRate": "cr:samplingRate",
+    "prov": "http://www.w3.org/ns/prov#",
+    "sc": "https://schema.org/",
+    "separator": "cr:separator",
+    "source": "cr:source",
+    "subField": "cr:subField",
+    "transform": "cr:transform"
+  },
+  "@type": "sc:Dataset",
+  "name": "AgentPerfBench",
+  "description": "LLM inference benchmark dataset measuring serving performance (TTFT, TPOT, throughput) across 9 models, 4 GPU platforms, 2 serving engines under agentic and chat workloads. Provides two dataset configurations: trace_replay (empirical session replays) and distributional (statistical sampling).",
+  "url": "https://huggingface.co/datasets/lynae-1219/AgentPerfBench",
+  "license": "https://spdx.org/licenses/Apache-2.0.html",
+  "conformsTo": "http://mlcommons.org/croissant/1.1",
+  "datePublished": "2026-05-04",
+  "version": "2.0.0",
+  "citeAs": "@inproceedings{agentperfbench2026, title={AgentPerfBench: A Benchmarking and Evaluation Suite for Inference Performance of Agentic LLMs}, author={Anonymous}, booktitle={NeurIPS 2026 Evaluations and Datasets Track}, year={2026}}",
+  "creator": {
+    "@type": "sc:Organization",
+    "name": "Anonymous (under review)"
+  },
+  "distribution": [
+    {
+      "@type": "cr:FileObject",
+      "@id": "trace-replay-summary-parquet",
+      "name": "trace_replay/summary.parquet",
+      "contentUrl": "https://huggingface.co/datasets/lynae-1219/AgentPerfBench/resolve/main/trace_replay/summary.parquet",
+      "encodingFormat": "application/x-parquet",
+      "sha256": "a9cd2565a9292e75f54791e8108f2491b7bb371fdfeeefb81cdb00833860dd23"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "distributional-summary-parquet",
+      "name": "distributional/summary.parquet",
+      "contentUrl": "https://huggingface.co/datasets/lynae-1219/AgentPerfBench/resolve/main/distributional/summary.parquet",
+      "encodingFormat": "application/x-parquet",
+      "sha256": "b55a7f80bb7c23d68ce30d9cc8b0ddb5c412479581fdb18755d394303329138d"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "kernel-profiles-parquet",
+      "name": "roofline/kernel_profiles.parquet",
+      "contentUrl": "https://huggingface.co/datasets/lynae-1219/AgentPerfBench/resolve/main/roofline/kernel_profiles.parquet",
+      "encodingFormat": "application/x-parquet",
+      "sha256": "109cf3206b6cef47ad033f93db2e943a124c0a5a55e9db7bdf2bdbc9b864290a"
+    }
+  ],
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "trace-replay-summary",
+      "name": "Trace Replay Summary",
+      "description": "One row per benchmark configuration from trace replay runs (empirical agent session replays).",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "trace-replay-summary/run_id",
+          "name": "run_id",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "run_id"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "trace-replay-summary/model",
+          "name": "model",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "model"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "trace-replay-summary/hardware",
+          "name": "hardware",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "hardware"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "trace-replay-summary/engine",
+          "name": "engine",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "engine"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "trace-replay-summary/profile",
+          "name": "profile",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "profile"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "trace-replay-summary/concurrency",
+          "name": "concurrency",
+          "dataType": "sc:Integer",
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "concurrency"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "trace-replay-summary/request_throughput",
+          "name": "request_throughput",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "request_throughput"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "trace-replay-summary/median_ttft_ms",
+          "name": "median_ttft_ms",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "median_ttft_ms"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "trace-replay-summary/median_tpot_ms",
+          "name": "median_tpot_ms",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "median_tpot_ms"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "@type": "cr:RecordSet",
+      "@id": "distributional-summary",
+      "name": "Distributional Summary",
+      "description": "One row per benchmark configuration from distributional runs (statistical sampling, shorter to run, MSE-validated against trace replays).",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "distributional-summary/run_id",
+          "name": "run_id",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "run_id"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "distributional-summary/model",
+          "name": "model",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "model"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "distributional-summary/hardware",
+          "name": "hardware",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "hardware"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "distributional-summary/engine",
+          "name": "engine",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "engine"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "distributional-summary/profile",
+          "name": "profile",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "profile"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "distributional-summary/concurrency",
+          "name": "concurrency",
+          "dataType": "sc:Integer",
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "concurrency"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "distributional-summary/request_throughput",
+          "name": "request_throughput",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "request_throughput"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "distributional-summary/median_ttft_ms",
+          "name": "median_ttft_ms",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "median_ttft_ms"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "distributional-summary/median_tpot_ms",
+          "name": "median_tpot_ms",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "median_tpot_ms"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "@type": "cr:RecordSet",
+      "@id": "kernel-profile-data",
+      "name": "Kernel Profiles",
+      "description": "Per-kernel CUDA profiling data for roofline analysis.",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "kernel-profile-data/model",
+          "name": "model",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "kernel-profiles-parquet"
+            },
+            "extract": {
+              "column": "model"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "kernel-profile-data/phase",
+          "name": "phase",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "kernel-profiles-parquet"
+            },
+            "extract": {
+              "column": "phase"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "kernel-profile-data/kernel_name",
+          "name": "kernel_name",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "kernel-profiles-parquet"
+            },
+            "extract": {
+              "column": "kernel_name"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "kernel-profile-data/arithmetic_intensity",
+          "name": "arithmetic_intensity",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "kernel-profiles-parquet"
+            },
+            "extract": {
+              "column": "arithmetic_intensity"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "kernel-profile-data/achieved_tflops",
+          "name": "achieved_tflops",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "kernel-profiles-parquet"
+            },
+            "extract": {
+              "column": "achieved_tflops"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "rai:dataLimitations": "Results cover NVIDIA H100, A100, RTX 3090, and RTX 2080 Ti GPUs only and may not generalize to other accelerators (AMD, Intel, TPU). Benchmark configurations are pinned to vLLM 0.19.0 and SGLang 0.5.9; results do not represent other engine versions. Concurrency levels (1-320) may not cover extreme-scale deployments. Not recommended as sole basis for hardware purchasing decisions or for comparing model task quality.",
+  "rai:dataBiases": "Model selection over-represents Meta Llama and Alibaba Qwen families. Hardware is exclusively NVIDIA GPUs. Workload profiles are author-designed approximations of production traffic; real deployment patterns may differ.",
+  "rai:personalSensitiveInformation": "No personally identifiable information is present. All API endpoints and credentials are stripped. Workload traces use synthetic random tokens or publicly available coding benchmarks.",
+  "rai:dataUseCases": "Established uses: relative comparison of inference engine throughput, latency benchmarking under controlled conditions, GPU roofline analysis, studying TTFT degradation under multi-turn context growth. Not established: absolute latency prediction for production, model quality comparison, cost estimation.",
+  "rai:dataSocialImpact": "Enables reproducible comparison of open-source LLM serving systems, supporting infrastructure research and reducing vendor lock-in.",
+  "rai:hasSyntheticData": true,
+  "prov:wasDerivedFrom": [
+    {
+      "@id": "https://huggingface.co/datasets/princeton-nlp/SWE-bench",
+      "name": "SWE-Bench"
+    },
+    {
+      "@id": "https://github.com/TerminalBench/TerminalBench",
+      "name": "TerminalBench"
+    },
+    {
+      "@id": "https://github.com/xlang-ai/OSWorld",
+      "name": "OSWorld"
+    }
+  ],
+  "prov:wasGeneratedBy": {
+    "@type": "prov:Activity",
+    "name": "AgentPerfBench benchmark collection",
+    "description": "Deploy model on target GPU with specified engine and tensor parallelism. Send requests per configuration after warmup using closed-loop concurrency control. Record per-request TTFT, TPOT, ITL, E2EL, and token counts. Compute summary percentiles. Sanitize credentials and convert to Parquet."
+  }
+}

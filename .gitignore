@@ -6,6 +6,7 @@
 .omc/
 **/.omc/
 inference-benchmark/results/
+inference-benchmark/hf_dataset/**/*.parquet
 *.egg-info/
 *.ncu-rep
 llm_predict_legacy/profiling/data/**/*.pkl
