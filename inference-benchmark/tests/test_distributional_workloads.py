@@ -256,6 +256,66 @@ class DistributionalMultiTurnDatasetTests(unittest.TestCase):
             )
             self.assertLessEqual(dataset.session_specs[0][-1].total_context_tokens, 140)
 
+    def test_make_dataset_num_sessions_override_controls_distributional_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "fixture_multiturn.json"
+            payload = {
+                "schema_version": 1,
+                "name": "fixture_multiturn",
+                "source": {"kind": "unit-test"},
+                "summary": {},
+                "samples": {
+                    "turn_count": [3],
+                    "turns": [
+                        {
+                            "turn_index": 0,
+                            "total_context_tokens": 100,
+                            "new_prefill_tokens": 100,
+                            "output_tokens": 20,
+                            "cache_hit_rate": 0.0,
+                        },
+                        {
+                            "turn_index": 1,
+                            "total_context_tokens": 150,
+                            "new_prefill_tokens": 50,
+                            "output_tokens": 30,
+                            "cache_hit_rate": 100 / 150,
+                        },
+                        {
+                            "turn_index": 2,
+                            "total_context_tokens": 190,
+                            "new_prefill_tokens": 40,
+                            "output_tokens": 10,
+                            "cache_hit_rate": 150 / 190,
+                        },
+                    ],
+                },
+            }
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            profile = WorkloadProfile(
+                name="fixture-multiturn",
+                isl_tokens=512,
+                osl_tokens=64,
+                isl_stddev=0.0,
+                description="fixture",
+                dataset="distributional-multi-turn",
+                file_path=str(path),
+                mode="multi-turn",
+                num_sessions=2,
+                agent_type="coding",
+                turn_style="multi-turn",
+                data_source="distributional",
+            )
+
+            dataset = make_dataset(
+                profile,
+                max_context_tokens=170,
+                context_safety_margin_tokens=0,
+                num_sessions=4,
+            )
+
+            self.assertEqual(len(dataset.sessions), 4)
+
     def test_make_dataset_random_seed_controls_distributional_sampling(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "fixture_multiturn.json"

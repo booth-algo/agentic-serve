@@ -154,6 +154,7 @@ async def run_multi_turn_benchmark(
     context_safety_margin_tokens: int = 256,
     seed: int = 42,
     cache_block_size: int | None = 16,
+    num_sessions: int | None = None,
 ):
     """
     Run a multi-turn benchmark with interleaved round-robin scheduling.
@@ -181,6 +182,7 @@ async def run_multi_turn_benchmark(
         max_context_tokens=max_context_tokens,
         random_seed=seed,
         context_safety_margin_tokens=context_safety_margin_tokens,
+        num_sessions=num_sessions,
     )
 
     if not isinstance(dataset, (DistributionalMultiTurnDataset, ShareGPTMultiTurnDataset, TrajectoryMultiTurnDataset)):
@@ -384,6 +386,17 @@ def _resolve_tri_state(cli_value: str) -> tuple[str, str]:
     return "unknown", "not_reported"
 
 
+def resolve_multi_turn_num_sessions(profile, concurrency: int) -> tuple[int, str]:
+    """Multi-turn runs need enough sessions to saturate the requested concurrency."""
+    if profile.mode != "multi-turn":
+        return profile.num_sessions, "profile_default"
+
+    effective_num_sessions = max(profile.num_sessions, concurrency)
+    if effective_num_sessions == profile.num_sessions:
+        return effective_num_sessions, "profile_default"
+    return effective_num_sessions, "concurrency_floor"
+
+
 def get_args():
     parser = argparse.ArgumentParser(description="inference-benchmark runner")
     parser.add_argument("--url", required=False, help="Server endpoint URL")
@@ -431,6 +444,8 @@ def get_args():
     parser.add_argument("--mode", choices=["stress-test", "single-turn", "multi-turn"],
                         help="Benchmark mode (sets profile defaults and required flags). "
                              "Use --profile for a specific profile within a mode.")
+    parser.add_argument("--scope", choices=["current", "archive", "fixed"],
+                        default=None, help="Dashboard scope override (default: active→current, inactive→archive)")
     parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
     parser.add_argument("--include-inactive", action="store_true",
                         help="With --list-profiles, include legacy/inactive profiles")
@@ -491,6 +506,10 @@ if __name__ == "__main__":
 
     profile = get_profile(args.profile)
     profile_name = profile.name
+    effective_num_sessions, num_sessions_source = resolve_multi_turn_num_sessions(
+        profile,
+        args.concurrency,
+    )
     prefix_caching_state, prefix_caching_state_source = _resolve_cache_state(
         args.prefix_caching_state,
         profile,
@@ -498,13 +517,14 @@ if __name__ == "__main__":
     chunked_prefill_state, chunked_prefill_state_source = _resolve_tri_state(
         args.chunked_prefill,
     )
+    scope = args.scope
+    if scope is None:
+        scope = "current" if profile.active else "archive"
     config = {
         **vars(args),
         "profile": profile_name,
         "mode": args.mode or profile.mode,
-        "benchmark_schema_version": BENCHMARK_SCHEMA_VERSION,
-        "workload_schema_version": WORKLOAD_SCHEMA_VERSION,
-        "dashboard_scope": "current" if profile.active else "archive",
+        "dashboard_scope": scope,
         "profile_metadata": {
             "dataset": profile.dataset,
             "agent_type": profile.agent_type,
@@ -517,7 +537,9 @@ if __name__ == "__main__":
             "osl_tokens": profile.osl_tokens,
             "min_turns": profile.min_turns,
             "max_turns": profile.max_turns,
-            "num_sessions": profile.num_sessions,
+            "num_sessions": effective_num_sessions,
+            "profile_num_sessions": profile.num_sessions,
+            "num_sessions_source": num_sessions_source,
         },
         "prediction_metadata": {
             "prefix_caching_state": prefix_caching_state,
@@ -555,6 +577,7 @@ if __name__ == "__main__":
             context_safety_margin_tokens=args.context_safety_margin_tokens,
             seed=args.seed,
             cache_block_size=args.prefix_cache_block_size,
+            num_sessions=effective_num_sessions,
         ))
 
         summary = aggregate(

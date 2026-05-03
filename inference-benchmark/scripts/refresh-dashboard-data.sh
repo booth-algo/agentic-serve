@@ -5,13 +5,22 @@
 #   bash scripts/refresh-dashboard-data.sh
 #   bash scripts/refresh-dashboard-data.sh --filter current/
 #   bash scripts/refresh-dashboard-data.sh --skip-sync --output /tmp/data.json
+#   BENCHMARK_RESULTS_DIR=/mnt/100g/agent-bench/results bash scripts/refresh-dashboard-data.sh
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DASHBOARD_DIR="$ROOT_DIR/dashboard"
-RESULTS_DIR="$ROOT_DIR/results"
+
+if [[ -n "${LOCAL_R2_MIRROR:-}" ]]; then
+    DEFAULT_RESULTS_DIR="${LOCAL_R2_MIRROR%/}/results"
+elif [[ -d /mnt/100g ]]; then
+    DEFAULT_RESULTS_DIR="/mnt/100g/agent-bench/results"
+else
+    DEFAULT_RESULTS_DIR="$ROOT_DIR/results"
+fi
+RESULTS_DIR="${BENCHMARK_RESULTS_DIR:-$DEFAULT_RESULTS_DIR}"
 
 ENDPOINT="${R2_ENDPOINT:-https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com}"
 BUCKET="${R2_BUCKET:-agent-bench}"
@@ -40,6 +49,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --output)
             OUTPUT="$2"
+            shift 2
+            ;;
+        --results-dir)
+            RESULTS_DIR="$2"
             shift 2
             ;;
         --skip-sync)
@@ -81,7 +94,7 @@ fi
 
 echo "Rebuilding dashboard benchmark data"
 if [[ -n "$OUTPUT" ]]; then
-    (cd "$DASHBOARD_DIR" && DASHBOARD_DATA_OUTPUT="$OUTPUT" npx tsx scripts/build-data.ts)
+    (cd "$DASHBOARD_DIR" && BENCHMARK_RESULTS_DIR="$RESULTS_DIR" DASHBOARD_DATA_OUTPUT="$OUTPUT" npx tsx scripts/build-data.ts)
 else
-    (cd "$DASHBOARD_DIR" && npx tsx scripts/build-data.ts)
+    (cd "$DASHBOARD_DIR" && BENCHMARK_RESULTS_DIR="$RESULTS_DIR" npx tsx scripts/build-data.ts)
 fi

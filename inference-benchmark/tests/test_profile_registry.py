@@ -1,5 +1,6 @@
 import unittest
 
+from src.benchmark.runner import resolve_multi_turn_num_sessions
 from src.workloads.profiles import filter_profiles, get_profile, resolve_profile_name
 
 
@@ -27,6 +28,28 @@ class ProfileRegistryTests(unittest.TestCase):
         }
         self.assertTrue(canonical.issubset(all_multi))
         self.assertTrue(canonical.issubset(active))
+
+    def test_multi_turn_num_sessions_uses_concurrency_floor(self):
+        profile = get_profile("osworld-multiturn")
+
+        effective, source = resolve_multi_turn_num_sessions(
+            profile,
+            profile.num_sessions + 1,
+        )
+
+        self.assertEqual(effective, profile.num_sessions + 1)
+        self.assertEqual(source, "concurrency_floor")
+
+    def test_multi_turn_num_sessions_keeps_profile_default_when_large_enough(self):
+        profile = get_profile("chat-multiturn")
+
+        effective, source = resolve_multi_turn_num_sessions(
+            profile,
+            max(1, profile.num_sessions - 1),
+        )
+
+        self.assertEqual(effective, profile.num_sessions)
+        self.assertEqual(source, "profile_default")
 
 
 if __name__ == "__main__":

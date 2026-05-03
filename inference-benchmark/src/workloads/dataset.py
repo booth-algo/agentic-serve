@@ -831,9 +831,12 @@ def make_dataset(
     max_context_tokens: Optional[int] = None,
     random_seed: int = 42,
     context_safety_margin_tokens: int = 256,
+    num_sessions: Optional[int] = None,
 ) -> BaseDataset:
     """Factory: create the right dataset for a workload profile."""
     from .profiles import WorkloadProfile
+    effective_num_sessions = profile.num_sessions if num_sessions is None else num_sessions
+
     if profile.dataset == "test":
         return TestDataset()
     elif profile.dataset == "file":
@@ -878,7 +881,7 @@ def make_dataset(
         return ShareGPTMultiTurnDataset(
             min_turns=profile.min_turns,
             max_turns=profile.max_turns,
-            num_sessions=profile.num_sessions,
+            num_sessions=effective_num_sessions,
             random_seed=random_seed,
             system_prompt=profile.system_prompt,
             max_isl_tokens=profile.isl_tokens,
@@ -889,7 +892,7 @@ def make_dataset(
             filepath=profile.file_path,
             min_turns=profile.min_turns,
             max_turns=profile.max_turns,
-            num_sessions=profile.num_sessions,
+            num_sessions=effective_num_sessions,
             random_seed=random_seed,
             max_isl_tokens=max_context_tokens or profile.isl_tokens,
             max_osl_tokens=profile.osl_tokens,
@@ -898,7 +901,7 @@ def make_dataset(
     elif profile.dataset == "distributional-multi-turn":
         return DistributionalMultiTurnDataset(
             filepath=profile.file_path,
-            num_sessions=profile.num_sessions,
+            num_sessions=effective_num_sessions,
             random_seed=random_seed,
             max_context_tokens=max_context_tokens or profile.isl_tokens,
             context_safety_margin_tokens=context_safety_margin_tokens,

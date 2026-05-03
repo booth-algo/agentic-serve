@@ -80,6 +80,7 @@ interface ServingScopeIndex {
 interface ServingIndex {
   current: ServingScopeIndex;
   archive: ServingScopeIndex;
+  fixed: ServingScopeIndex;
 }
 
 const EMPTY_GPU_OPTIONS: string[] = [];
@@ -385,12 +386,13 @@ function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
   const index: ServingIndex = {
     current: createServingScopeIndex(),
     archive: createServingScopeIndex(),
+    fixed: createServingScopeIndex(),
   };
 
   for (const [gpu, rows] of Object.entries(data)) {
     for (const row of rows) {
       const dataScope = row.data_scope ?? row.dataScope ?? 'archive';
-      if (dataScope !== 'current' && dataScope !== 'archive') continue;
+      if (dataScope !== 'current' && dataScope !== 'archive' && dataScope !== 'fixed') continue;
 
       const profile = normalizeProfileName(row.profile);
       if (!isProfileInScope(profile, dataScope)) continue;
@@ -402,7 +404,7 @@ function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
     }
   }
 
-  for (const scope of ['current', 'archive'] as const) {
+  for (const scope of ['current', 'archive', 'fixed'] as const) {
     const scopeIndex = index[scope];
     scopeIndex.gpuOptions = Object.keys(scopeIndex.rowsByGpu)
       .filter(gpu => scopeIndex.rowsByGpu[gpu].length > 0)

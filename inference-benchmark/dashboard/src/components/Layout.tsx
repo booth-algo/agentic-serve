@@ -116,7 +116,7 @@ export function Layout({
           {/* Right: status */}
           <div className="flex items-center gap-3 text-sm text-[#8b949e]">
             <div className="hidden items-center rounded-md border border-[#30363d] bg-[#0d1117] p-0.5 sm:flex">
-              {(['current', 'archive'] as const).map((scope) => (
+              {(['current', 'archive', 'fixed'] as const).map((scope) => (
                 <button
                   key={scope}
                   onClick={() => onDataScopeChange(scope)}
@@ -166,7 +166,7 @@ export function Layout({
             </button>
           ))}
           <div className="ml-auto flex items-center rounded-md border border-[#30363d] bg-[#0d1117] p-0.5">
-            {(['current', 'archive'] as const).map((scope) => (
+            {(['current', 'archive', 'fixed'] as const).map((scope) => (
               <button
                 key={scope}
                 onClick={() => onDataScopeChange(scope)}
