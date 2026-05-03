@@ -112,6 +112,16 @@ presets:
     gpu_mem: 0.85
     concurrencies: [5, 20, 40, 80, 160]
     profiles: [chat-multiturn, swebench-multiturn, terminalbench-multiturn, osworld-multiturn]
+  fixed_single:
+    max_len: 32768
+    gpu_mem: 0.85
+    concurrencies: [40, 80, 200, 320]
+    profiles: [chat-singleturn, coding-singleturn]
+  fixed_multi:
+    max_len: 32768
+    gpu_mem: 0.85
+    concurrencies: [40, 80]
+    profiles: [chat-multiturn, swebench-multiturn, terminalbench-multiturn, osworld-multiturn]
 
 # --------------------------------------------------------------------------
 # Feasibility rule (mirrors CoveragePage.tsx checkFeasibility)
@@ -365,3 +375,20 @@ cells:
   - { host: 2080ti, model: Llama-3.1-8B,  tp: 1, mode: multi,  backend: sglang, preset: multi_tight, max_len: 8192, gpu_mem: 0.85, extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: single, backend: sglang, preset: single_small, max_len: 32768, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: multi,  backend: sglang, preset: multi_tight, max_len: 8192, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
+
+  # === Fixed-scope cells (MSE validation: 40,80,200,320 concurrency) ===
+  # Reduced coverage grid for post-num_sessions-fix benchmark data.
+  # Only the paper-canonical profiles on dense models.
+  # gpu-4 (A100)
+  - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: single, preset: fixed_single }
+  - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: multi,  preset: fixed_multi }
+  - { host: gpu-4, model: Llama-3.1-8B,   tp: 4, mode: single, preset: fixed_single }
+  - { host: gpu-4, model: Llama-3.1-8B,   tp: 4, mode: multi,  preset: fixed_multi }
+  - { host: gpu-4, model: Llama-3.1-70B,  tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.95, max_len: 8192 }
+  - { host: gpu-4, model: Llama-3.1-70B,  tp: 4, mode: multi,  preset: fixed_multi, gpu_mem: 0.95, max_len: 8192 }
+  # 3090
+  - { host: 3090,  model: Llama-3.1-8B,   tp: 1, mode: single, preset: fixed_single }
+  - { host: 3090,  model: Llama-3.1-8B,   tp: 1, mode: multi,  preset: fixed_multi }
+  # 2080Ti
+  - { host: 2080ti, model: Llama-3.1-8B,   tp: 1, mode: single, preset: fixed_single, extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Llama-3.1-8B,   tp: 1, mode: multi,  preset: fixed_multi, max_len: 8192, gpu_mem: 0.85, extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
