@@ -246,7 +246,7 @@
       "@type": "cr:RecordSet",
       "@id": "kernels-labeled",
       "name": "Kernels Labeled",
-      "description": "Per-kernel CUDA profiling data from NCU (Nsight Compute). Individual kernel invocations across 4 GPUs and 13 model/sweep sources.",
+      "description": "Per-kernel Nsight Compute (ncu) hardware counter profiles. Individual kernel invocations across 4 GPUs and 13 model/sweep sources.",
       "field": [
         {
           "@type": "cr:Field",

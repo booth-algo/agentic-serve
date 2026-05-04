@@ -340,7 +340,7 @@ dataset_info:
 
 # AgentPerfBench
 
-LLM inference benchmark: 3,392 serving runs, 148,077 per-kernel CUDA profiles, and 4,715 latency predictions across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
+LLM inference benchmark: 3,392 serving runs, 148,077 per-kernel NCU profiles, and 4,715 latency predictions across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
 
 ## Dataset configurations
 
@@ -358,7 +358,7 @@ ISL/OSL sampled from lognormal fits to real workload statistics. 42 combinations
 
 ### kernels_labeled (148,077 rows)
 
-Per-kernel CUDA profiles from NCU across 4 GPUs (A100, H100, RTX 3090, RTX 2080 Ti) and 13 model/sweep sources.
+Per-kernel Nsight Compute (ncu) profiles across 4 GPUs (A100, H100, RTX 3090, RTX 2080 Ti) and 13 model/sweep sources.
 
 ### roofline_quadrant (2,163 rows)
 
