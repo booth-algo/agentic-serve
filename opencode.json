@@ -15,6 +15,7 @@
       "*.env": "deny",
       "*.env.*": "deny",
       "*.env.example": "allow"
-    }
+    },
+    "edit": "ask"
   }
 }

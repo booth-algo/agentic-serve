@@ -57,12 +57,31 @@ MIN_NREQ="${11:-100}"
 
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
+DASHBOARD_SCOPE="${DASHBOARD_SCOPE:-fixed}"
+
+result_scope_matches_expected() {
+    local file="$1"
+    "$PY" - "$file" "$DASHBOARD_SCOPE" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1]) as f:
+        raw = json.load(f)
+except Exception:
+    raise SystemExit(1)
+
+scope = (raw.get("config") or {}).get("dashboard_scope")
+raise SystemExit(0 if scope == sys.argv[2] else 1)
+PY
+}
 
 mkdir -p "$OUT_DIR"
 echo "[sweep-sglang] MODEL=$MODEL_PATH TP=$TP OUT=$OUT_DIR"
 echo "[sweep-sglang] concurrencies: $CONCS"
 echo "[sweep-sglang] profiles: $PROFILES"
 echo "[sweep-sglang] min requests per run: $MIN_NREQ (single-turn uses at least 2x concurrency)"
+echo "[sweep-sglang] dashboard scope: $DASHBOARD_SCOPE"
 
 # sglang.launch_server flags:
 #   --model-path         path to HF model dir
@@ -112,8 +131,11 @@ for PROFILE in $PROFILES; do
     for CONC in $CONCS; do
         OUT_FILE="$OUT_DIR/${SHORT}_tp${TP}_${BACKEND}_${PROFILE}_conc${CONC}.json"
         if [ -f "$OUT_FILE" ] && [ -s "$OUT_FILE" ]; then
-            echo "[skip] $OUT_FILE exists"
-            continue
+            if result_scope_matches_expected "$OUT_FILE"; then
+                echo "[skip] $OUT_FILE exists with dashboard_scope=$DASHBOARD_SCOPE"
+                continue
+            fi
+            echo "[rerun] $OUT_FILE exists with stale/missing dashboard_scope; overwriting for $DASHBOARD_SCOPE"
         fi
         local_nreq="$MIN_NREQ"
         [[ "$CONC" -eq 1 ]] && local_nreq=30
@@ -135,6 +157,7 @@ for PROFILE in $PROFILES; do
             --max-model-len "$MAX_LEN" \
             --gpu-memory-utilization "$GPU_MEM" \
             --tensor-parallel-size "$TP" \
+            --scope      "$DASHBOARD_SCOPE" \
             --output     "$OUT_FILE" \
             --mode       single-turn \
             2>&1 | tail -8

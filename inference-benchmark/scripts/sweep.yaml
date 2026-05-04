@@ -118,10 +118,10 @@ presets:
     concurrencies: [5, 40, 80, 200, 320]
     profiles: [chat-singleturn, coding-singleturn]
   fixed_multi:
-    max_len: 32768
+    max_len: 8192
     gpu_mem: 0.85
     concurrencies: [5, 40, 80, 200, 320]
-    profiles: [chat-multiturn, swebench-multiturn, terminalbench-multiturn, osworld-multiturn]
+    profiles: [chat-multiturn, osworld-multiturn]
 
 # --------------------------------------------------------------------------
 # Feasibility rule (mirrors CoveragePage.tsx checkFeasibility)
@@ -490,3 +490,32 @@ cells:
   - { host: h100, model: Qwen2.5-72B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.9 }
   - { host: h100, model: Qwen2.5-72B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.9, backend: sglang }
   - { host: h100, model: Qwen2.5-72B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.9, backend: sglang }
+  # 3090 (fixed)
+  - { host: 3090, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single }
+  - { host: 3090, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi }
+  - { host: 3090, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 8192 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 2, mode: multi, preset: fixed_multi }
+  - { host: 3090, model: Qwen3.5-27B, tp: 4, mode: single, preset: fixed_single, max_len: 8192 }
+  - { host: 3090, model: Qwen3.5-27B, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 1, mode: single, preset: fixed_single, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 1, mode: multi, preset: fixed_multi, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 1, mode: single, preset: fixed_single, max_len: 8192, backend: sglang }
+  - { host: 3090, model: gpt-oss-20b, tp: 1, mode: multi, preset: fixed_multi, max_len: 8192, backend: sglang }
+  - { host: 3090, model: Qwen3.5-27B, tp: 4, mode: single, preset: fixed_single, max_len: 8192, backend: sglang }
+  - { host: 3090, model: Qwen3.5-27B, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192, backend: sglang }
+  - { host: 3090, model: Llama-3.1-8B, tp: 2, mode: single, preset: fixed_single }
+  - { host: 3090, model: gpt-oss-20b, tp: 2, mode: single, preset: fixed_single, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 2, mode: multi, preset: fixed_multi, max_len: 8192 }
+  - { host: 3090, model: Llama-3.1-8B, tp: 4, mode: single, preset: fixed_single }
+  - { host: 3090, model: Qwen3.5-9B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 8192 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 4096 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 4096 }
+  - { host: 3090, model: gpt-oss-20b, tp: 4, mode: single, preset: fixed_single, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192 }
+  - { host: 3090, model: Llama-3.1-8B, tp: 2, mode: multi, preset: fixed_multi }
+  - { host: 3090, model: Llama-3.1-8B, tp: 4, mode: multi, preset: fixed_multi }
+  - { host: 3090, model: Qwen3.5-9B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.85, max_len: 8192 }
+  - { host: 3090, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single, backend: sglang }
+  - { host: 3090, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi, backend: sglang }
+  - { host: 3090, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 8192, backend: sglang, extra_env: "CUDA_VISIBLE_DEVICES=0,1" }
+  - { host: 3090, model: Qwen3.5-9B, tp: 2, mode: multi, preset: fixed_multi, gpu_mem: 0.85, max_len: 8192, backend: sglang, extra_env: "CUDA_VISIBLE_DEVICES=0,1" }

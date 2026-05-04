@@ -91,7 +91,7 @@ export function useData(dataScope: DataScope, options: UseDataOptions = {}) {
   }, []);
 
   const scopedDataByScope = useMemo<Record<DataScope, BenchmarkResult[]>>(() => {
-    const next: Record<DataScope, BenchmarkResult[]> = { current: [], archive: [], fixed: [] };
+    const next: Record<DataScope, BenchmarkResult[]> = { current: [], archive: [], fixed: [], mse: [] };
     for (const row of allData) {
       const scope = row.dataScope ?? 'archive';
       if (isProfileInScope(row.config.profile, scope)) next[scope].push(row);

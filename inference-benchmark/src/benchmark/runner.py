@@ -444,7 +444,7 @@ def get_args():
     parser.add_argument("--mode", choices=["stress-test", "single-turn", "multi-turn"],
                         help="Benchmark mode (sets profile defaults and required flags). "
                              "Use --profile for a specific profile within a mode.")
-    parser.add_argument("--scope", choices=["current", "archive", "fixed"],
+    parser.add_argument("--scope", choices=["current", "archive", "fixed", "mse"],
                         default=None, help="Dashboard scope override (default: active→fixed, inactive→archive)")
     parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
     parser.add_argument("--include-inactive", action="store_true",

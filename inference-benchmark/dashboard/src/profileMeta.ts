@@ -10,7 +10,7 @@ export interface ProfileMeta {
   description: string;
 }
 
-export type DataScope = 'current' | 'archive' | 'fixed';
+export type DataScope = 'current' | 'archive' | 'fixed' | 'mse';
 
 export const CURRENT_PROFILES = [
   'chat-singleturn',
@@ -137,5 +137,5 @@ export function isProfileInScope(profile: string, scope: DataScope): boolean {
 }
 
 export function scopeLabel(scope: DataScope): string {
-  return scope === 'current' ? 'Current' : scope === 'fixed' ? 'Fixed' : 'Archive';
+  return scope === 'current' ? 'Current' : scope === 'fixed' ? 'Fixed' : scope === 'mse' ? 'MSE' : 'Archive';
 }

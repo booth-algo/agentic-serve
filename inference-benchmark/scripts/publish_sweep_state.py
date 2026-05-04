@@ -51,6 +51,14 @@ def job_id(host: str, model: str, tp: int, mode: str, backend: str = "vllm") -> 
     return jid
 
 
+def cell_data_scope(cell: dict) -> str:
+    scope = cell.get("data_scope") or cell.get("dashboard_scope") or cell.get("scope")
+    if scope:
+        return str(scope)
+    preset = str(cell.get("preset", ""))
+    return "fixed" if preset.startswith("fixed_") else "current"
+
+
 def read_state(jid: str) -> dict:
     out: dict = {"status": "pending", "attempt": 0, "max_len_override": None, "reason": None, "updated_at": None}
     p = STATE_DIR / f"{jid}.status"
@@ -96,6 +104,7 @@ def build_state(manifest: dict) -> dict:
         mode = str(cell["mode"])
         model = str(cell["model"])
         backend = str(cell.get("backend", "vllm"))
+        data_scope = cell_data_scope(cell)
         jid = job_id(host_name, model, tp, mode, backend)
         rt = read_state(jid)
         resolved = resolve(cell, manifest)
@@ -115,6 +124,7 @@ def build_state(manifest: dict) -> dict:
 
         for profile, reason in profile_reasons.items():
             profile_infeasible.append({
+                "data_scope": data_scope,
                 "host": host_name,
                 "hw_label": hw_label(host_cfg, tp),
                 "model": model,
@@ -127,6 +137,7 @@ def build_state(manifest: dict) -> dict:
             })
 
         cells.append({
+            "data_scope": data_scope,
             "host": host_name,
             "hw_label": hw_label(host_cfg, tp),
             "model": model,

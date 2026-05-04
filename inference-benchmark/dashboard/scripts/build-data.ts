@@ -56,7 +56,7 @@ interface EnrichedResult {
   seriesKey: string;
   filename: string;
   engineVersion?: string;  // e.g. "0.19.0" — from _engine_version.txt sidecar or fallback
-  dataScope: 'current' | 'archive' | 'fixed';
+  dataScope: 'current' | 'archive' | 'fixed' | 'mse';
   perTurn?: PerTurnEntry[];
   scatterData?: ScatterPoint[];
 }
@@ -176,7 +176,8 @@ function normalizeProfile(profile: string): string {
   return HISTORICAL_PROFILE_ALIASES[normalized] ?? normalized;
 }
 
-function detectDataScope(raw: RawResult, relDir: string): 'current' | 'archive' | 'fixed' {
+function detectDataScope(raw: RawResult, relDir: string): 'current' | 'archive' | 'fixed' | 'mse' {
+  if (raw.config.dashboard_scope === 'mse') return 'mse';
   if (raw.config.dashboard_scope === 'fixed') return 'fixed';
   if (raw.config.dashboard_scope === 'current') return 'current';
   // Files under the results/current/ R2 namespace are canonical even if

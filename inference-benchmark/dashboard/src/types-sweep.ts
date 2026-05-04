@@ -4,6 +4,7 @@
 export type CellStatus = 'pending' | 'running' | 'done' | 'skipped' | 'known_oom';
 
 export interface SweepCell {
+  data_scope?: 'current' | 'fixed';
   host: string;
   hw_label: string;  // e.g. "A100-40GBx4"
   model: string;
@@ -32,6 +33,7 @@ export interface SweepModel {
 }
 
 export interface SweepProfileInfeasible {
+  data_scope?: 'current' | 'fixed';
   host: string;
   hw_label: string;
   model: string;

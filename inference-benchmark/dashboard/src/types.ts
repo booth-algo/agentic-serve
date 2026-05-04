@@ -103,7 +103,7 @@ export interface BenchmarkResult {
   seriesKey: string;
   filename: string;
   engineVersion?: string;  // "0.19.0" — from _engine_version.txt sidecar or fallback
-  dataScope?: 'current' | 'archive' | 'fixed';
+  dataScope?: 'current' | 'archive' | 'fixed' | 'mse';
   perTurn?: PerTurnEntry[];
   scatterData?: ScatterPoint[];
 }

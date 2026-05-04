@@ -126,7 +126,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
     STATUS=$(read_status "$JID")
     JOB_SIGNATURE="${MAX_LEN}|${GPU_MEM}|${CONCS}|${PROFILES}|${EXTRA_ENV}"
     OLD_SIGNATURE=$(read_signature "$JID")
-    if [[ "$STATUS" =~ ^(skipped|failed)$ && -n "$OLD_SIGNATURE" && "$OLD_SIGNATURE" != "$JOB_SIGNATURE" ]]; then
+    if [[ "$STATUS" =~ ^(done|skipped|failed)$ && -n "$OLD_SIGNATURE" && "$OLD_SIGNATURE" != "$JOB_SIGNATURE" ]]; then
         log "$JID: job shape changed since terminal $STATUS; retrying as pending"
         STATUS="pending"
         write_status "$JID" pending
@@ -154,22 +154,23 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                 log "$JID: still running on $HOST:$JOB_PORT"
                 continue
             fi
-            # Grace period: 70B/72B weight-load takes 3-5 min. If the
-            # status file was written <10 min ago, the job is probably
-            # still coming up (port not yet listening). Don't finalize
-            # prematurely.
+            # Grace period: weight-load + CUDA graph compilation.
+            # vllm: ~3-5 min typical, 10 min max.
+            # sglang: aggressive torch compilation, 10-15 min for large/MoE models.
+            WARMUP_TIMEOUT=600
+            [[ "$BACKEND" == "sglang" ]] && WARMUP_TIMEOUT=900
             STATUS_FILE="$STATE_DIR/${JID}.status"
             if [[ -f "$STATUS_FILE" ]]; then
                 AGE=$(( $(date +%s) - $(stat -c %Y "$STATUS_FILE") ))
-                if [[ "$AGE" -lt 600 ]]; then
-                    log "$JID: dispatched ${AGE}s ago (<10min), still warming up on port $JOB_PORT"
+                if [[ "$AGE" -lt "$WARMUP_TIMEOUT" ]]; then
+                    log "$JID: dispatched ${AGE}s ago (<$(( WARMUP_TIMEOUT / 60 ))min), still warming up on port $JOB_PORT"
                     JOB_GPUS=$(cat "$STATE_DIR/${JID}.gpus" 2>/dev/null || true)
                     [[ -n "$JOB_GPUS" ]] && HOST_USED_GPUS[$HOST]="${HOST_USED_GPUS[$HOST]:-} ${JOB_GPUS//,/ } "
                     HOST_USED_PORTS[$HOST]="${HOST_USED_PORTS[$HOST]:-} $JOB_PORT "
                     continue
                 fi
             fi
-            log "$JID: slot idle — finalizing"
+            log "$JID: slot idle after ${AGE}s warmup ($BACKEND) — finalizing"
             # All ssh/rsync/aws calls inside this `while read ... done <JOBS`
             # loop must close stdin (`< /dev/null`), otherwise they consume
             # the jobs file and iteration ends early — 2080ti rows were
@@ -182,7 +183,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                 aws --profile "$PROFILE" --endpoint-url "$EP" s3 sync \
                     "$OUT_DIR_LOCAL/" "s3://$BUCKET/results/$R2_DIR/" < /dev/null >> "$LOG" 2>&1
                 write_status "$JID" done
-                log "$JID: DONE ($COUNT files uploaded to results/$R2_DIR)"
+                log "$JID: DONE ($COUNT files uploaded to results/$R2_DIR, warmup=${AGE}s backend=$BACKEND)"
             else
                 # Widen detection to include vLLM's KV-cache budget failure
                 # ("Available KV cache memory: -...", "No available memory for

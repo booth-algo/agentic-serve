@@ -81,6 +81,7 @@ interface ServingIndex {
   current: ServingScopeIndex;
   archive: ServingScopeIndex;
   fixed: ServingScopeIndex;
+  mse: ServingScopeIndex;
 }
 
 const EMPTY_GPU_OPTIONS: string[] = [];
@@ -387,6 +388,7 @@ function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
     current: createServingScopeIndex(),
     archive: createServingScopeIndex(),
     fixed: createServingScopeIndex(),
+    mse: createServingScopeIndex(),
   };
 
   for (const [gpu, rows] of Object.entries(data)) {

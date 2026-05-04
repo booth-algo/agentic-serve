@@ -37,9 +37,9 @@ DEFAULT_LOCAL_STATE_FILE = BENCH_ROOT / "dashboard" / "public" / "sweep-state.js
 DEFAULT_SWEEP_YAML = HERE / "sweep.yaml"
 DEFAULT_STATE_DIR = Path("/tmp/bench_jobs/state")
 
-CellKey = tuple[str, str, int, str, str]  # host, model, tp, mode, backend
+CellKey = tuple[str, str, str, int, str, str]  # scope, host, model, tp, mode, backend
 PointKey = tuple[str, str, str, str, str, int]  # hw, model, backend, mode, profile, conc
-ProfileKey = tuple[str, str, int, str, str, str]  # host, model, tp, mode, backend, profile
+ProfileKey = tuple[str, str, str, int, str, str, str]  # scope, host, model, tp, mode, backend, profile
 
 
 @dataclass(frozen=True)
@@ -76,6 +76,7 @@ def load_local_generated_state(sweep_yaml: Path, state_dir: Path) -> dict[str, A
 
 def cell_key(cell: dict[str, Any]) -> CellKey:
     return (
+        str(cell.get("data_scope") or "current"),
         str(cell.get("host", "")),
         str(cell.get("model", "")),
         int(cell.get("tp", 0) or 0),
@@ -86,6 +87,7 @@ def cell_key(cell: dict[str, Any]) -> CellKey:
 
 def profile_key(item: dict[str, Any]) -> ProfileKey:
     return (
+        str(item.get("data_scope") or "current"),
         str(item.get("host", "")),
         str(item.get("model", "")),
         int(item.get("tp", 0) or 0),
@@ -112,12 +114,19 @@ def mode_to_data_mode(mode: str) -> str:
     return mode
 
 
-def expected_points_from_state(state: dict[str, Any]) -> set[PointKey]:
+def scope_matches(item: dict[str, Any], scope: str) -> bool:
+    return scope == "all" or str(item.get("data_scope") or "current") == scope
+
+
+def expected_points_from_state(state: dict[str, Any], scope: str) -> set[PointKey]:
     blocked_profiles = {profile_key(item) for item in state.get("profile_infeasible", [])}
     points: set[PointKey] = set()
     for cell in state.get("cells", []):
+        if not scope_matches(cell, scope):
+            continue
         if cell.get("status") == "known_oom":
             continue
+        data_scope = str(cell.get("data_scope") or "current")
         host = str(cell.get("host", ""))
         model = str(cell.get("model", ""))
         tp = int(cell.get("tp", 0) or 0)
@@ -128,7 +137,7 @@ def expected_points_from_state(state: dict[str, Any]) -> set[PointKey]:
         profiles = [str(p) for p in cell.get("profiles") or []]
         concurrencies = [int(c) for c in cell.get("concurrencies") or []]
         for profile in profiles:
-            if (host, model, tp, mode, backend, profile) in blocked_profiles:
+            if (data_scope, host, model, tp, mode, backend, profile) in blocked_profiles:
                 continue
             for conc in concurrencies:
                 points.add((hw, model, backend, data_mode, profile, conc))
@@ -166,8 +175,8 @@ def state_status_counts(state: dict[str, Any]) -> Counter[str]:
 
 
 def format_cell_key(key: CellKey) -> str:
-    host, model, tp, mode, backend = key
-    return f"{host}/{model}/tp{tp}/{mode}/{backend}"
+    scope, host, model, tp, mode, backend = key
+    return f"{scope}/{host}/{model}/tp{tp}/{mode}/{backend}"
 
 
 def format_point_group(key: tuple[str, str, str, str, str], concs: list[int]) -> str:
@@ -269,7 +278,7 @@ def build_report(args: argparse.Namespace) -> int:
     local_vs_published = compare_state(local_state, published_state)
     generated_vs_file = compare_state(local_state, local_state_file)
 
-    expected = expected_points_from_state(local_state)
+    expected = expected_points_from_state(local_state, args.scope)
     local_points = data_points(local_data, args.scope)
     published_points = data_points(published_data, args.scope)
 
@@ -366,7 +375,7 @@ def build_report(args: argparse.Namespace) -> int:
     print(f"- present in published R2 data.json: {len(expected & published_points)} / {len(expected)}")
     print(f"- missing from local data.json: {len(missing_local)}")
     print(f"- missing from published R2 data.json: {len(missing_published)}")
-    print(f"- published current points not expected by local YAML/state: {len(published_extra_vs_yaml)}")
+    print(f"- published {args.scope} points not expected by local YAML/state: {len(published_extra_vs_yaml)}")
     print()
 
     print("## Published Missing Points")
@@ -377,8 +386,8 @@ def build_report(args: argparse.Namespace) -> int:
     print()
 
     print("## Local Vs Published Data")
-    print(f"- local current points not published: {len(local_not_published)}")
-    print(f"- published current points not local: {len(published_not_local)}")
+    print(f"- local {args.scope} points not published: {len(local_not_published)}")
+    print(f"- published {args.scope} points not local: {len(published_not_local)}")
     for key, concs in group_points(local_not_published)[:args.limit]:
         print(f"- local-only: {format_point_group(key, concs)}")
     for key, concs in group_points(published_not_local)[:args.limit]:
@@ -386,7 +395,7 @@ def build_report(args: argparse.Namespace) -> int:
     print()
 
     print("## Stop Condition")
-    print("- Healthy means: published sweep-state matches local generated state, published data matches local data, and no expected current points are missing.")
+    print(f"- Healthy means: published sweep-state matches local generated state, published data matches local data, and no expected {args.scope} points are missing.")
     print("- Incomplete means: state is in sync, but the local YAML still expects benchmark rows that are absent from published data.")
     print("- Degraded means: the website/R2 artifacts are stale or divergent from local state/data.")
 
@@ -406,7 +415,7 @@ def main() -> int:
     parser.add_argument("--published-base", default=DEFAULT_PUBLIC_BASE)
     parser.add_argument("--published-state", default=None)
     parser.add_argument("--published-data", default=None)
-    parser.add_argument("--scope", choices=("current", "archive", "all"), default="current")
+    parser.add_argument("--scope", choices=("current", "fixed", "archive", "all"), default="current")
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--limit", type=int, default=25)
     parser.add_argument("--fail-on-drift", action="store_true")

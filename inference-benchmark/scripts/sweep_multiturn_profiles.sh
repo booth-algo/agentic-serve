@@ -30,11 +30,30 @@ CONTEXT_SAFETY_MARGIN_TOKENS="${CONTEXT_SAFETY_MARGIN_TOKENS:-256}"
 
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
+DASHBOARD_SCOPE="${DASHBOARD_SCOPE:-fixed}"
+
+result_scope_matches_expected() {
+    local file="$1"
+    "$PY" - "$file" "$DASHBOARD_SCOPE" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1]) as f:
+        raw = json.load(f)
+except Exception:
+    raise SystemExit(1)
+
+scope = (raw.get("config") or {}).get("dashboard_scope")
+raise SystemExit(0 if scope == sys.argv[2] else 1)
+PY
+}
 
 mkdir -p "$OUT_DIR"
 echo "[mt-sweep] MODEL=$MODEL_PATH TP=$TP OUT=$OUT_DIR"
 echo "[mt-sweep] concurrencies: $CONCS"
 echo "[mt-sweep] profiles: $PROFILES"
+echo "[mt-sweep] dashboard scope: $DASHBOARD_SCOPE"
 
 "$PY" -m vllm.entrypoints.openai.api_server \
     --model "$MODEL_PATH" \
@@ -78,8 +97,11 @@ for PROFILE in $PROFILES; do
     for CONC in $CONCS; do
         OUT_FILE="$OUT_DIR/${PROFILE}_conc${CONC}.json"
         if [ -f "$OUT_FILE" ] && [ -s "$OUT_FILE" ]; then
-            echo "[skip] $OUT_FILE exists"
-            continue
+            if result_scope_matches_expected "$OUT_FILE"; then
+                echo "[skip] $OUT_FILE exists with dashboard_scope=$DASHBOARD_SCOPE"
+                continue
+            fi
+            echo "[rerun] $OUT_FILE exists with stale/missing dashboard_scope; overwriting for $DASHBOARD_SCOPE"
         fi
         echo ""
         echo "=== profile=$PROFILE conc=$CONC (multi-turn) ==="
@@ -100,6 +122,7 @@ for PROFILE in $PROFILES; do
             --warmup     "$WARMUP" \
             --timeout    300 \
             --api-key    "$API_KEY" \
+            --scope      "$DASHBOARD_SCOPE" \
             --output     "$OUT_FILE" || echo "[warn] mt-bench failed for $PROFILE conc=$CONC (continuing)"
     done
 done

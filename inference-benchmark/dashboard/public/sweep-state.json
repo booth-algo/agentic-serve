@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-03T22:33:19.224772+00:00",
+  "generated_at": "2026-05-04T14:26:52.797153+00:00",
   "feasibility_ratio": 0.9,
   "hosts": {
     "gpu-4": {
@@ -54,13 +54,14 @@
   },
   "cells": [
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -79,17 +80,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:58.182321+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:22:53.268973+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -107,17 +109,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:00.590257+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:02.283730+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 4096,
       "gpu_mem": 0.9,
@@ -135,17 +138,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:03.011192+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 4/5 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:13.197435+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -163,17 +167,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:05.418128+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:23.336161+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Llama-3.1-8B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -192,17 +197,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:07.827064+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:34.844851+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Llama-3.1-8B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -220,17 +226,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:10.800985+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:44.254597+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -248,17 +255,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:20.949311+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:44.271596+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "gpt-oss-20b",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -276,17 +284,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:20.963311+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 5/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:46.643532+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "gpt-oss-20b",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -304,10 +313,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:20.975311+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:48.992469+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-8B",
@@ -333,10 +343,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:20.987311+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -361,10 +372,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.007310+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 5/5 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -389,10 +401,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.018310+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
@@ -417,10 +430,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.040309+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 6/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
@@ -445,10 +459,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.057309+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.3-70B",
@@ -473,10 +488,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.073308+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 5/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.3-70B",
@@ -501,17 +517,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.084308+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen2.5-72B",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 4096,
       "gpu_mem": 0.95,
@@ -530,16 +547,17 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.097308+00:00"
+      "updated_at": "2026-05-04T10:34:02.599539+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen2.5-72B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 4096,
       "gpu_mem": 0.95,
@@ -558,9 +576,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.101308+00:00"
+      "updated_at": "2026-05-04T10:43:36.022405+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -585,10 +604,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.109307+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "gpt-oss-20b",
@@ -613,10 +633,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.122307+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "gpt-oss-20b",
@@ -641,10 +662,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.132307+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "Llama-3.1-8B",
@@ -670,10 +692,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T17:16:30.658124+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:14.929246+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "Llama-3.1-8B",
@@ -698,10 +721,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T17:16:39.871879+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:23.951003+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Qwen3.5-9B",
@@ -726,17 +750,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:45:59.579141+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:19.447647+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -754,17 +779,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:46:08.841893+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:12:57.332048+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-27B",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -782,17 +808,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:56:58.845432+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.960163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-27B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -810,17 +837,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:57:08.598169+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.960163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "gpt-oss-20b",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -839,17 +867,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:46:23.284507+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:24.000001+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "gpt-oss-20b",
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -867,17 +896,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:46:32.509261+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:26.375937+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "gpt-oss-20b",
       "tp": 1,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -896,17 +926,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:07:59.457680+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:19.525645+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "gpt-oss-20b",
       "tp": 1,
       "mode": "multi",
       "backend": "sglang",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -924,17 +955,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:08:10.451404+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 6/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:21.914580+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-27B",
       "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -952,17 +984,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:08:20.446153+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.960163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-27B",
       "tp": 4,
       "mode": "multi",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -980,17 +1013,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:18:56.285721+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.960163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Llama-3.1-8B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -1009,17 +1043,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:08:33.667821+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "gpt-oss-20b",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -1037,17 +1072,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:19:06.485453+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 5/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "gpt-oss-20b",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -1065,17 +1101,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:19:15.804207+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Llama-3.1-8B",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -1094,17 +1131,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:31:41.769387+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-9B",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -1122,14 +1160,45 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:31:51.542126+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Llama-3.1-8B",
       "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:05.554022+00:00"
+    },
+    {
+      "data_scope": "current",
+      "host": "2080ti",
+      "hw_label": "2080Tix4",
+      "model": "Llama-3.1-8B",
+      "tp": 4,
       "mode": "single",
       "backend": "vllm",
       "status": "running",
@@ -1151,39 +1220,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:13.499913+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:05.574021+00:00"
     },
     {
-      "host": "2080ti",
-      "hw_label": "2080Tix4",
-      "model": "Llama-3.1-8B",
-      "tp": 4,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len": 32768,
-      "gpu_mem": 0.85,
-      "profiles": [
-        "chat-singleturn",
-        "coding-singleturn"
-      ],
-      "concurrencies": [
-        1,
-        10,
-        20,
-        40,
-        80,
-        160,
-        256,
-        320
-      ],
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.181305+00:00"
-    },
-    {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix4",
       "model": "Qwen3.5-9B",
@@ -1208,47 +1249,49 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.185305+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:19:49.999919+00:00"
+    },
+    {
+      "data_scope": "current",
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
       "backend": "vllm",
       "status": "running",
       "attempt": 0,
-      "max_len": 32768,
-      "gpu_mem": 0.85,
-      "profiles": [
-        "chat-singleturn",
-        "coding-singleturn"
-      ],
-      "concurrencies": [
-        1,
-        10,
-        20,
-        40,
-        80,
-        160,
-        256,
-        320
-      ],
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:16.102843+00:00"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Ti",
-      "model": "Llama-3.1-8B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
@@ -1265,10 +1308,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.195305+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:19:50.015918+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
@@ -1294,10 +1338,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.199305+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.955163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
@@ -1322,13 +1367,130 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.204305+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.955163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix4",
       "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "skipped",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-04T13:27:41.700395+00:00"
+    },
+    {
+      "data_scope": "current",
+      "host": "2080ti",
+      "hw_label": "2080Tix4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "skipped",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-04T13:27:41.700395+00:00"
+    },
+    {
+      "data_scope": "current",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 1,
+      "max_len": 4096,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn"
+      ],
+      "concurrencies": [
+        1,
+        10,
+        20,
+        40,
+        80,
+        160,
+        256,
+        320
+      ],
+      "max_len_override": 2048,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
+    },
+    {
+      "data_scope": "current",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 1,
+      "max_len": 4096,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "swebench-multiturn",
+        "terminalbench-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        20,
+        40,
+        80,
+        160
+      ],
+      "max_len_override": 2048,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
+    },
+    {
+      "data_scope": "current",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "gpt-oss-20b",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
@@ -1350,13 +1512,14 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.209305+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 5/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
     },
     {
-      "host": "2080ti",
-      "hw_label": "2080Tix4",
-      "model": "Qwen3.5-27B",
+      "data_scope": "current",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "gpt-oss-20b",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
@@ -1378,122 +1541,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.218304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
     },
     {
-      "host": "3090",
-      "hw_label": "3090",
-      "model": "Qwen3.5-9B",
-      "tp": 1,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "known_oom",
-      "attempt": 1,
-      "max_len": 4096,
-      "gpu_mem": 0.9,
-      "profiles": [
-        "chat-singleturn"
-      ],
-      "concurrencies": [
-        1,
-        10,
-        20,
-        40,
-        80,
-        160,
-        256,
-        320
-      ],
-      "max_len_override": 2048,
-      "reason": null,
-      "updated_at": "2026-05-03T12:07:09.230734+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090",
-      "model": "Qwen3.5-9B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "known_oom",
-      "attempt": 1,
-      "max_len": 4096,
-      "gpu_mem": 0.9,
-      "profiles": [
-        "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
-        "osworld-multiturn"
-      ],
-      "concurrencies": [
-        5,
-        20,
-        40,
-        80,
-        160
-      ],
-      "max_len_override": 2048,
-      "reason": null,
-      "updated_at": "2026-05-03T12:07:09.230734+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x4",
-      "model": "gpt-oss-20b",
-      "tp": 4,
-      "mode": "single",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len": 8192,
-      "gpu_mem": 0.9,
-      "profiles": [
-        "chat-singleturn"
-      ],
-      "concurrencies": [
-        1,
-        10,
-        20,
-        40,
-        80,
-        160,
-        256,
-        320
-      ],
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:44:23.113329+00:00"
-    },
-    {
-      "host": "3090",
-      "hw_label": "3090x4",
-      "model": "gpt-oss-20b",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "done",
-      "attempt": 0,
-      "max_len": 8192,
-      "gpu_mem": 0.85,
-      "profiles": [
-        "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
-        "osworld-multiturn"
-      ],
-      "concurrencies": [
-        5,
-        20,
-        40,
-        80,
-        160
-      ],
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T12:18:58.704107+00:00"
-    },
-    {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-8B",
@@ -1519,10 +1571,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.252304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-8B",
@@ -1547,10 +1600,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.256304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Mixtral-8x7B",
@@ -1576,10 +1630,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.259303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Mixtral-8x7B",
@@ -1604,10 +1659,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.262303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen3.5-27B",
@@ -1637,6 +1693,7 @@
       "updated_at": "2026-05-03T13:01:59.981579+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen3.5-27B",
@@ -1662,16 +1719,17 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.981579+00:00"
+      "updated_at": "2026-05-04T11:54:23.230692+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen3.5-9B",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -1691,16 +1749,17 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.266303+00:00"
+      "updated_at": "2026-05-04T12:06:00.728706+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen3.5-9B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -1719,9 +1778,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.269303+00:00"
+      "updated_at": "2026-05-04T12:17:36.693806+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "gpt-oss-20b",
@@ -1747,10 +1807,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.273303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "gpt-oss-20b",
@@ -1775,10 +1836,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.276303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Qwen3.5-27B",
@@ -1805,9 +1867,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.983579+00:00"
+      "updated_at": "2026-05-04T09:49:10.390431+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Qwen3.5-27B",
@@ -1833,9 +1896,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.983579+00:00"
+      "updated_at": "2026-05-04T09:51:30.064662+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-27B",
@@ -1864,6 +1928,7 @@
       "updated_at": null
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-27B",
@@ -1892,6 +1957,7 @@
       "updated_at": null
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.1-8B",
@@ -1917,10 +1983,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.280303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.1-8B",
@@ -1945,17 +2012,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.284303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -1975,16 +2043,17 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.287302+00:00"
+      "updated_at": "2026-05-04T12:55:44.477415+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2003,9 +2072,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.291302+00:00"
+      "updated_at": "2026-05-04T13:06:24.460330+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen3.5-27B",
@@ -2032,9 +2102,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.983579+00:00"
+      "updated_at": "2026-05-04T13:06:29.197203+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen3.5-27B",
@@ -2060,9 +2131,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.983579+00:00"
+      "updated_at": "2026-05-04T13:18:21.577000+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "gpt-oss-20b",
@@ -2088,10 +2160,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.294302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "gpt-oss-20b",
@@ -2116,10 +2189,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.299302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Mixtral-8x7B",
@@ -2145,10 +2219,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.303302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Mixtral-8x7B",
@@ -2173,17 +2248,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.305302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.1-70B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2203,16 +2279,17 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.308302+00:00"
+      "updated_at": "2026-05-04T13:42:25.129282+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.1-70B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2231,9 +2308,10 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.311302+00:00"
+      "updated_at": "2026-05-04T13:51:34.887362+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.3-70B",
@@ -2259,10 +2337,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.316302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.3-70B",
@@ -2287,17 +2366,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.320302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen2.5-72B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2317,16 +2397,17 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.322302+00:00"
+      "updated_at": "2026-05-04T14:03:15.373703+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen2.5-72B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2345,16 +2426,17 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.325302+00:00"
+      "updated_at": "2026-05-04T14:05:34.815959+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2373,10 +2455,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.329302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:04.463528+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Llama-3.1-8B",
@@ -2401,10 +2484,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.334301+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Qwen3.5-9B",
@@ -2412,7 +2496,7 @@
       "mode": "single",
       "backend": "vllm",
       "status": "pending",
-      "attempt": 0,
+      "attempt": 1,
       "max_len": 32768,
       "gpu_mem": 0.9,
       "profiles": [
@@ -2429,18 +2513,19 @@
         256,
         320
       ],
-      "max_len_override": null,
+      "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.339301+00:00"
+      "updated_at": "2026-05-04T14:05:39.560831+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2459,9 +2544,10 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.344301+00:00"
+      "updated_at": "2026-05-04T11:35:33.476224+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "gpt-oss-20b",
@@ -2487,10 +2573,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.347301+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "gpt-oss-20b",
@@ -2515,10 +2602,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.350301+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.959163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Mixtral-8x7B",
@@ -2548,6 +2636,7 @@
       "updated_at": null
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Mixtral-8x7B",
@@ -2576,13 +2665,14 @@
       "updated_at": null
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-70B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2601,9 +2691,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.354301+00:00"
+      "updated_at": "2026-05-04T14:05:39.593830+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
@@ -2632,6 +2723,7 @@
       "updated_at": "2026-05-03T22:32:21.357301+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
@@ -2660,13 +2752,14 @@
       "updated_at": "2026-05-03T22:32:21.360301+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Llama-3.1-8B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -2684,17 +2777,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T11:44:44.207796+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Llama-3.1-8B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -2712,17 +2806,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T12:19:16.043657+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-9B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -2741,9 +2836,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:31:21.435685+00:00"
+      "updated_at": "2026-05-04T13:06:57.742438+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Llama-3.1-8B",
@@ -2768,10 +2864,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.222304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.955163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix4",
       "model": "Llama-3.1-8B",
@@ -2796,10 +2893,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.226304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-70B",
@@ -2829,6 +2927,7 @@
       "updated_at": "2026-05-03T22:32:21.364300+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-70B",
@@ -2858,13 +2957,14 @@
       "updated_at": "2026-05-03T12:55:41.556055+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-70B",
       "tp": 4,
       "mode": "multi",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2883,9 +2983,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.556055+00:00"
+      "updated_at": "2026-05-04T09:06:23.624747+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
@@ -2915,6 +3016,7 @@
       "updated_at": "2026-05-03T22:32:21.375300+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
@@ -2944,13 +3046,14 @@
       "updated_at": "2026-05-03T12:55:41.557055+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
       "tp": 4,
       "mode": "multi",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -2969,9 +3072,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.557055+00:00"
+      "updated_at": "2026-05-04T09:06:23.646746+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
@@ -3001,6 +3105,7 @@
       "updated_at": "2026-05-03T22:32:21.378300+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
@@ -3030,13 +3135,14 @@
       "updated_at": "2026-05-03T12:55:41.557055+00:00"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
       "tp": 4,
       "mode": "multi",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -3055,9 +3161,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.557055+00:00"
+      "updated_at": "2026-05-04T09:06:23.667746+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Llama-3.1-8B",
@@ -3083,17 +3190,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:58:13.878408+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:26:48.617718+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "multi",
       "backend": "sglang",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -3111,17 +3219,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:58:22.930164+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:51.432403+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
       "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -3139,17 +3248,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T12:19:28.800326+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
       "tp": 4,
       "mode": "multi",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -3167,17 +3277,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T12:31:30.504446+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -3196,17 +3307,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T12:31:40.028196+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "multi",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -3224,17 +3336,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T12:31:49.718941+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 6/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -3252,17 +3365,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T12:42:09.828608+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "multi",
       "backend": "sglang",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -3281,9 +3395,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:52:37.671530+00:00"
+      "updated_at": "2026-05-04T13:37:38.120087+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-8B",
@@ -3308,17 +3423,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.142307+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 4096,
       "gpu_mem": 0.85,
@@ -3336,10 +3452,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.148306+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:26:48.705716+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-9B",
@@ -3364,10 +3481,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.154306+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -3392,10 +3510,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.160306+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -3420,10 +3539,11 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.169306+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "gpt-oss-20b",
@@ -3452,13 +3572,14 @@
       "updated_at": null
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 4096,
       "gpu_mem": 0.9,
@@ -3477,16 +3598,17 @@
       ],
       "max_len_override": 2048,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.231304+00:00"
+      "updated_at": "2026-05-04T13:31:04.405832+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 4096,
       "gpu_mem": 0.9,
@@ -3505,9 +3627,10 @@
       ],
       "max_len_override": 2048,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.234304+00:00"
+      "updated_at": "2026-05-04T13:44:48.775381+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix4",
       "model": "Qwen3.5-9B",
@@ -3533,10 +3656,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.238304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
@@ -3562,9 +3686,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.543056+00:00"
+      "updated_at": "2026-05-04T11:30:20.322764+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
@@ -3590,9 +3715,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.522056+00:00"
+      "updated_at": "2026-05-04T11:35:07.140929+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -3618,9 +3744,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.425058+00:00"
+      "updated_at": "2026-05-04T11:35:11.867800+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -3646,9 +3773,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.411059+00:00"
+      "updated_at": "2026-05-04T11:35:16.602674+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-8B",
@@ -3675,9 +3803,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.492057+00:00"
+      "updated_at": "2026-05-04T11:42:30.804012+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-8B",
@@ -3703,9 +3832,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.477057+00:00"
+      "updated_at": "2026-05-04T11:47:22.198126+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -3732,9 +3862,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.507056+00:00"
+      "updated_at": "2026-05-04T11:54:15.924891+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -3760,9 +3891,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:19:42.208218+00:00"
+      "updated_at": "2026-05-04T11:58:57.509230+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -3791,6 +3923,7 @@
       "updated_at": "2026-05-03T12:55:41.561055+00:00"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -3816,9 +3949,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:19:42.208218+00:00"
+      "updated_at": "2026-05-04T12:05:55.805840+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
@@ -3843,10 +3977,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T16:16:47.146819+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
@@ -3871,17 +4006,18 @@
         160
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T16:16:47.146819+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "single",
       "backend": "sglang",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -3901,16 +4037,17 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.245304+00:00"
+      "updated_at": "2026-05-04T13:27:41.700395+00:00"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "multi",
       "backend": "sglang",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -3929,16 +4066,17 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.249304+00:00"
+      "updated_at": "2026-05-04T13:27:41.700395+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -3954,24 +4092,23 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:58.182321+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:22:53.268973+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -3982,17 +4119,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:00.590257+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:02.283730+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 4096,
       "gpu_mem": 0.9,
@@ -4007,17 +4145,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:03.011192+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 4/5 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:13.197435+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -4033,17 +4172,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:05.418128+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:23.336161+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Llama-3.1-8B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -4059,24 +4199,23 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:07.827064+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:34.844851+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Llama-3.1-8B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "running",
+      "status": "done",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4087,17 +4226,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:10.800985+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:44.254597+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -4113,17 +4253,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:20.949311+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:44.271596+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "gpt-oss-20b",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -4139,24 +4280,23 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:20.963311+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 5/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:46.643532+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "gpt-oss-20b",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4167,10 +4307,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:20.975311+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:48.992469+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-8B",
@@ -4193,10 +4334,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:20.987311+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -4218,10 +4360,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.007310+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 5/5 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -4230,12 +4373,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4246,10 +4387,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.018310+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
@@ -4272,10 +4414,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.040309+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 6/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
@@ -4288,8 +4431,6 @@
       "gpu_mem": 0.95,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4300,10 +4441,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.057309+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.3-70B",
@@ -4326,10 +4468,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.073308+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 5/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.3-70B",
@@ -4342,8 +4485,6 @@
       "gpu_mem": 0.95,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4354,17 +4495,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.084308+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.952164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen2.5-72B",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 4096,
       "gpu_mem": 0.95,
@@ -4381,23 +4523,22 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.097308+00:00"
+      "updated_at": "2026-05-04T10:34:02.599539+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen2.5-72B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 4096,
       "gpu_mem": 0.95,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4409,9 +4550,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.101308+00:00"
+      "updated_at": "2026-05-04T10:43:36.022405+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -4434,10 +4576,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.109307+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "gpt-oss-20b",
@@ -4460,10 +4603,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.122307+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "gpt-oss-20b",
@@ -4476,8 +4620,6 @@
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4488,10 +4630,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.132307+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-27B",
@@ -4518,6 +4661,7 @@
       "updated_at": null
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-27B",
@@ -4530,8 +4674,6 @@
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4546,6 +4688,7 @@
       "updated_at": null
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Llama-3.1-8B",
@@ -4568,24 +4711,23 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:58:13.878408+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:26:48.617718+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "multi",
       "backend": "sglang",
-      "status": "done",
+      "status": "running",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4596,17 +4738,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T10:58:22.930164+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:23:51.432403+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
       "tp": 4,
       "mode": "single",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
@@ -4622,24 +4765,23 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T12:19:28.800326+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
       "tp": 4,
       "mode": "multi",
       "backend": "sglang",
-      "status": "done",
+      "status": "pending",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4650,10 +4792,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T12:31:30.504446+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.953164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-8B",
@@ -4662,12 +4805,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4678,24 +4819,23 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.142307+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
       "max_len": 4096,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4706,10 +4846,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.148306+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:26:48.705716+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-9B",
@@ -4718,12 +4859,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4734,10 +4873,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.154306+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -4746,12 +4886,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4762,10 +4900,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.160306+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -4774,12 +4913,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4790,10 +4927,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.169306+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
@@ -4817,9 +4955,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.543056+00:00"
+      "updated_at": "2026-05-04T11:30:20.322764+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
@@ -4832,8 +4971,6 @@
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4845,9 +4982,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.522056+00:00"
+      "updated_at": "2026-05-04T11:35:07.140929+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -4871,9 +5009,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.425058+00:00"
+      "updated_at": "2026-05-04T11:35:11.867800+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -4886,8 +5025,6 @@
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4899,9 +5036,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.411059+00:00"
+      "updated_at": "2026-05-04T11:35:16.602674+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-8B",
@@ -4925,9 +5063,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.492057+00:00"
+      "updated_at": "2026-05-04T11:42:30.804012+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-8B",
@@ -4936,12 +5075,10 @@
       "backend": "sglang",
       "status": "skipped",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -4953,9 +5090,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.477057+00:00"
+      "updated_at": "2026-05-04T11:47:22.198126+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -4979,9 +5117,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.507056+00:00"
+      "updated_at": "2026-05-04T11:54:15.924891+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -4994,8 +5133,6 @@
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5007,9 +5144,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:19:42.208218+00:00"
+      "updated_at": "2026-05-04T11:58:57.509230+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -5036,6 +5174,7 @@
       "updated_at": "2026-05-03T12:55:41.561055+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -5044,12 +5183,10 @@
       "backend": "sglang",
       "status": "skipped",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5061,13 +5198,41 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:19:42.208218+00:00"
+      "updated_at": "2026-05-04T12:05:55.805840+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Llama-3.1-8B",
       "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:05.554022+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "2080ti",
+      "hw_label": "2080Tix4",
+      "model": "Llama-3.1-8B",
+      "tp": 4,
       "mode": "single",
       "backend": "vllm",
       "status": "running",
@@ -5086,17 +5251,45 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:13.499913+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:05.574021+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Tix4",
-      "model": "Llama-3.1-8B",
+      "model": "Qwen3.5-9B",
       "tp": 4,
-      "mode": "single",
+      "mode": "multi",
       "backend": "vllm",
       "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.954164+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "2080ti",
+      "hw_label": "2080Ti",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -5112,78 +5305,23 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.181305+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:19:49.999919+00:00"
     },
     {
-      "host": "2080ti",
-      "hw_label": "2080Tix4",
-      "model": "Qwen3.5-9B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len": 32768,
-      "gpu_mem": 0.85,
-      "profiles": [
-        "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
-        "osworld-multiturn"
-      ],
-      "concurrencies": [
-        5,
-        40,
-        80,
-        200,
-        320
-      ],
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.185305+00:00"
-    },
-    {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
       "tp": 1,
-      "mode": "single",
+      "mode": "multi",
       "backend": "vllm",
       "status": "running",
       "attempt": 0,
-      "max_len": 32768,
-      "gpu_mem": 0.85,
-      "profiles": [
-        "chat-singleturn",
-        "coding-singleturn"
-      ],
-      "concurrencies": [
-        5,
-        40,
-        80,
-        200,
-        320
-      ],
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:33:16.102843+00:00"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Ti",
-      "model": "Llama-3.1-8B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5194,10 +5332,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.195305+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:19:50.015918+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
@@ -5220,10 +5359,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.199305+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.955163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
@@ -5232,12 +5372,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5248,17 +5386,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.204305+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.955163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Tix4",
       "model": "Qwen3.5-27B",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
@@ -5275,12 +5414,67 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.209305+00:00"
+      "updated_at": "2026-05-04T13:27:41.700395+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Tix4",
       "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "skipped",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-04T13:27:41.700395+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "2080ti",
+      "hw_label": "2080Tix2",
+      "model": "Llama-3.1-8B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.955163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "2080ti",
+      "hw_label": "2080Tix4",
+      "model": "Llama-3.1-8B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
@@ -5290,8 +5484,6 @@
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5302,66 +5494,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.218304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
-      "host": "2080ti",
-      "hw_label": "2080Tix2",
-      "model": "Llama-3.1-8B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len": 32768,
-      "gpu_mem": 0.85,
-      "profiles": [
-        "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
-        "osworld-multiturn"
-      ],
-      "concurrencies": [
-        5,
-        40,
-        80,
-        200,
-        320
-      ],
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.222304+00:00"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Tix4",
-      "model": "Llama-3.1-8B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "status": "pending",
-      "attempt": 0,
-      "max_len": 32768,
-      "gpu_mem": 0.85,
-      "profiles": [
-        "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
-        "osworld-multiturn"
-      ],
-      "concurrencies": [
-        5,
-        40,
-        80,
-        200,
-        320
-      ],
-      "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.226304+00:00"
-    },
-    {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "gpt-oss-20b",
@@ -5387,13 +5524,14 @@
       "updated_at": null
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 4096,
       "gpu_mem": 0.9,
@@ -5410,23 +5548,22 @@
       ],
       "max_len_override": 2048,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.231304+00:00"
+      "updated_at": "2026-05-04T13:31:04.405832+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 4096,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5438,9 +5575,10 @@
       ],
       "max_len_override": 2048,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.234304+00:00"
+      "updated_at": "2026-05-04T13:44:48.775381+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Tix4",
       "model": "Qwen3.5-9B",
@@ -5463,10 +5601,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.238304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
@@ -5489,10 +5628,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T16:16:47.146819+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
@@ -5505,8 +5645,6 @@
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5517,17 +5655,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T16:16:47.146819+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "single",
       "backend": "sglang",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.85,
@@ -5544,23 +5683,22 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.245304+00:00"
+      "updated_at": "2026-05-04T13:27:41.700395+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "multi",
       "backend": "sglang",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 8192,
       "gpu_mem": 0.85,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5572,9 +5710,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.249304+00:00"
+      "updated_at": "2026-05-04T13:27:41.700395+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-8B",
@@ -5597,10 +5736,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.252304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-8B",
@@ -5609,12 +5749,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5625,10 +5763,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.256304+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.956163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Mixtral-8x7B",
@@ -5651,10 +5790,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.259303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Mixtral-8x7B",
@@ -5667,8 +5807,6 @@
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5679,10 +5817,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.262303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen3.5-27B",
@@ -5709,6 +5848,7 @@
       "updated_at": "2026-05-03T13:01:59.981579+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen3.5-27B",
@@ -5717,12 +5857,10 @@
       "backend": "vllm",
       "status": "skipped",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5734,16 +5872,17 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.981579+00:00"
+      "updated_at": "2026-05-04T11:54:23.230692+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen3.5-9B",
       "tp": 4,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -5760,23 +5899,22 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.266303+00:00"
+      "updated_at": "2026-05-04T12:06:00.728706+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen3.5-9B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5788,9 +5926,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.269303+00:00"
+      "updated_at": "2026-05-04T12:17:36.693806+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "gpt-oss-20b",
@@ -5813,10 +5952,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.273303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "gpt-oss-20b",
@@ -5829,8 +5969,6 @@
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5841,10 +5979,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.276303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "Qwen3.5-27B",
@@ -5868,9 +6007,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.983579+00:00"
+      "updated_at": "2026-05-04T09:49:10.390431+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "Qwen3.5-27B",
@@ -5879,12 +6019,10 @@
       "backend": "vllm",
       "status": "skipped",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5896,9 +6034,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.983579+00:00"
+      "updated_at": "2026-05-04T09:51:30.064662+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.1-8B",
@@ -5921,10 +6060,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.280303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.1-8B",
@@ -5933,12 +6073,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -5949,17 +6087,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.284303+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -5976,23 +6115,22 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.287302+00:00"
+      "updated_at": "2026-05-04T12:55:44.477415+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6004,9 +6142,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.291302+00:00"
+      "updated_at": "2026-05-04T13:06:24.460330+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen3.5-27B",
@@ -6030,9 +6169,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.983579+00:00"
+      "updated_at": "2026-05-04T13:06:29.197203+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen3.5-27B",
@@ -6041,12 +6181,10 @@
       "backend": "vllm",
       "status": "skipped",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6058,9 +6196,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T13:01:59.983579+00:00"
+      "updated_at": "2026-05-04T13:18:21.577000+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "gpt-oss-20b",
@@ -6083,10 +6222,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.294302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.957164+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "gpt-oss-20b",
@@ -6099,8 +6239,6 @@
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6111,10 +6249,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.299302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Mixtral-8x7B",
@@ -6137,10 +6276,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.303302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Mixtral-8x7B",
@@ -6153,8 +6293,6 @@
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6165,17 +6303,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.305302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.1-70B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -6192,23 +6331,22 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.308302+00:00"
+      "updated_at": "2026-05-04T13:42:25.129282+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.1-70B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6220,9 +6358,10 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.311302+00:00"
+      "updated_at": "2026-05-04T13:51:34.887362+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.3-70B",
@@ -6245,10 +6384,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.316302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Llama-3.3-70B",
@@ -6257,12 +6397,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6273,17 +6411,18 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.320302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen2.5-72B",
       "tp": 2,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -6300,23 +6439,22 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.322302+00:00"
+      "updated_at": "2026-05-04T14:03:15.373703+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Qwen2.5-72B",
       "tp": 2,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6328,16 +6466,17 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.325302+00:00"
+      "updated_at": "2026-05-04T14:05:34.815959+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "Llama-3.1-8B",
       "tp": 1,
       "mode": "single",
       "backend": "vllm",
-      "status": "pending",
+      "status": "done",
       "attempt": 0,
       "max_len": 32768,
       "gpu_mem": 0.9,
@@ -6353,10 +6492,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.329302+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:04.463528+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "Llama-3.1-8B",
@@ -6365,12 +6505,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6381,10 +6519,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.334301+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "Qwen3.5-9B",
@@ -6392,7 +6531,7 @@
       "mode": "single",
       "backend": "vllm",
       "status": "pending",
-      "attempt": 0,
+      "attempt": 1,
       "max_len": 32768,
       "gpu_mem": 0.9,
       "profiles": [
@@ -6406,25 +6545,24 @@
         200,
         320
       ],
-      "max_len_override": null,
+      "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.339301+00:00"
+      "updated_at": "2026-05-04T14:05:39.560831+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "Qwen3.5-9B",
       "tp": 1,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "skipped",
       "attempt": 1,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6436,9 +6574,10 @@
       ],
       "max_len_override": 16384,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.344301+00:00"
+      "updated_at": "2026-05-04T11:35:33.476224+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "gpt-oss-20b",
@@ -6461,10 +6600,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.347301+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.958163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "gpt-oss-20b",
@@ -6477,8 +6617,6 @@
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6489,10 +6627,11 @@
         320
       ],
       "max_len_override": null,
-      "reason": null,
-      "updated_at": "2026-05-03T22:32:21.350301+00:00"
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.959163+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "Mixtral-8x7B",
@@ -6519,6 +6658,7 @@
       "updated_at": null
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100",
       "model": "Mixtral-8x7B",
@@ -6531,8 +6671,6 @@
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6547,20 +6685,19 @@
       "updated_at": null
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-70B",
       "tp": 4,
       "mode": "multi",
       "backend": "vllm",
-      "status": "pending",
+      "status": "running",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6572,9 +6709,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T22:32:21.354301+00:00"
+      "updated_at": "2026-05-04T14:05:39.593830+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
@@ -6583,12 +6721,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6603,6 +6739,7 @@
       "updated_at": "2026-05-03T22:32:21.357301+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
@@ -6611,12 +6748,10 @@
       "backend": "vllm",
       "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6631,6 +6766,7 @@
       "updated_at": "2026-05-03T22:32:21.360301+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-70B",
@@ -6657,6 +6793,7 @@
       "updated_at": "2026-05-03T22:32:21.364300+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-70B",
@@ -6683,20 +6820,19 @@
       "updated_at": "2026-05-03T12:55:41.556055+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.1-70B",
       "tp": 4,
       "mode": "multi",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6708,9 +6844,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.556055+00:00"
+      "updated_at": "2026-05-04T09:06:23.624747+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
@@ -6737,6 +6874,7 @@
       "updated_at": "2026-05-03T22:32:21.375300+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
@@ -6763,20 +6901,19 @@
       "updated_at": "2026-05-03T12:55:41.557055+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Llama-3.3-70B",
       "tp": 4,
       "mode": "multi",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6788,9 +6925,10 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.557055+00:00"
+      "updated_at": "2026-05-04T09:06:23.646746+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
@@ -6817,6 +6955,7 @@
       "updated_at": "2026-05-03T22:32:21.378300+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
@@ -6843,20 +6982,19 @@
       "updated_at": "2026-05-03T12:55:41.557055+00:00"
     },
     {
+      "data_scope": "fixed",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Qwen2.5-72B",
       "tp": 4,
       "mode": "multi",
       "backend": "sglang",
-      "status": "skipped",
+      "status": "pending",
       "attempt": 0,
-      "max_len": 32768,
+      "max_len": 8192,
       "gpu_mem": 0.9,
       "profiles": [
         "chat-multiturn",
-        "swebench-multiturn",
-        "terminalbench-multiturn",
         "osworld-multiturn"
       ],
       "concurrencies": [
@@ -6868,7 +7006,763 @@
       ],
       "max_len_override": null,
       "reason": null,
-      "updated_at": "2026-05-03T12:55:41.557055+00:00"
+      "updated_at": "2026-05-04T09:06:23.667746+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:14.929246+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:23.951003+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "done",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:19.447647+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:12:57.332048+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.960163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.960163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:24.000001+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:20:26.375937+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "single",
+      "backend": "sglang",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:19.525645+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "gpt-oss-20b",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 6/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:24:21.914580+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "single",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.960163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-27B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.960163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Llama-3.1-8B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 5/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "gpt-oss-20b",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Llama-3.1-8B",
+      "tp": 4,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 7/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 1,
+      "max_len": 4096,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": 2048,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.961163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Qwen3.5-9B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 1,
+      "max_len": 4096,
+      "gpu_mem": 0.9,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": 2048,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "gpt-oss-20b",
+      "tp": 4,
+      "mode": "single",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 5/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "gpt-oss-20b",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Llama-3.1-8B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 9/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Llama-3.1-8B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x4",
+      "model": "Qwen3.5-9B",
+      "tp": 4,
+      "mode": "multi",
+      "backend": "vllm",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-04T13:06:57.742438+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "single",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 32768,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 8/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090",
+      "model": "Llama-3.1-8B",
+      "tp": 1,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 6/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "single",
+      "backend": "sglang",
+      "status": "pending",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-singleturn",
+        "coding-singleturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": "coverage incomplete for scope=fixed: missing 10/10 points; reset by reconcile_sweep_coverage.py at 2026-05-04T14:07:55+00:00",
+      "updated_at": "2026-05-04T14:07:55.962163+00:00"
+    },
+    {
+      "data_scope": "fixed",
+      "host": "3090",
+      "hw_label": "3090x2",
+      "model": "Qwen3.5-9B",
+      "tp": 2,
+      "mode": "multi",
+      "backend": "sglang",
+      "status": "running",
+      "attempt": 0,
+      "max_len": 8192,
+      "gpu_mem": 0.85,
+      "profiles": [
+        "chat-multiturn",
+        "osworld-multiturn"
+      ],
+      "concurrencies": [
+        5,
+        40,
+        80,
+        200,
+        320
+      ],
+      "max_len_override": null,
+      "reason": null,
+      "updated_at": "2026-05-04T13:37:38.120087+00:00"
     },
     {
       "host": "gpu-4",
@@ -6890,6 +7784,7 @@
   ],
   "profile_infeasible": [
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "gpt-oss-20b",
@@ -6901,6 +7796,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "gpt-oss-20b",
@@ -6912,6 +7808,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -6923,6 +7820,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -6934,6 +7832,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
@@ -6945,6 +7844,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
@@ -6956,6 +7856,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.3-70B",
@@ -6967,6 +7868,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.3-70B",
@@ -6978,6 +7880,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen2.5-72B",
@@ -6989,6 +7892,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen2.5-72B",
@@ -7000,6 +7904,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "gpt-oss-20b",
@@ -7011,6 +7916,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "gpt-oss-20b",
@@ -7022,6 +7928,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Qwen3.5-9B",
@@ -7033,6 +7940,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Qwen3.5-9B",
@@ -7044,6 +7952,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-27B",
@@ -7055,6 +7964,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-27B",
@@ -7066,6 +7976,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "gpt-oss-20b",
@@ -7077,6 +7988,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "gpt-oss-20b",
@@ -7088,6 +8000,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "gpt-oss-20b",
@@ -7099,6 +8012,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "gpt-oss-20b",
@@ -7110,6 +8024,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-27B",
@@ -7121,6 +8036,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-27B",
@@ -7132,6 +8048,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "gpt-oss-20b",
@@ -7143,6 +8060,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "gpt-oss-20b",
@@ -7154,6 +8072,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
@@ -7165,6 +8084,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
@@ -7176,6 +8096,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
@@ -7187,6 +8108,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
@@ -7198,6 +8120,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix4",
       "model": "Qwen3.5-27B",
@@ -7209,6 +8132,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix4",
       "model": "Qwen3.5-27B",
@@ -7220,6 +8144,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "Qwen3.5-9B",
@@ -7231,6 +8156,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090",
       "model": "Qwen3.5-9B",
@@ -7242,6 +8168,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "gpt-oss-20b",
@@ -7253,6 +8180,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "gpt-oss-20b",
@@ -7264,6 +8192,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Mixtral-8x7B",
@@ -7275,6 +8204,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "Mixtral-8x7B",
@@ -7286,6 +8216,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "gpt-oss-20b",
@@ -7297,6 +8228,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x4",
       "model": "gpt-oss-20b",
@@ -7308,6 +8240,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-27B",
@@ -7319,6 +8252,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-27B",
@@ -7330,6 +8264,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "gpt-oss-20b",
@@ -7341,6 +8276,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "gpt-oss-20b",
@@ -7352,6 +8288,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Mixtral-8x7B",
@@ -7363,6 +8300,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100x2",
       "model": "Mixtral-8x7B",
@@ -7374,6 +8312,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "gpt-oss-20b",
@@ -7385,6 +8324,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "gpt-oss-20b",
@@ -7396,6 +8336,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Mixtral-8x7B",
@@ -7407,6 +8348,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "h100",
       "hw_label": "H100",
       "model": "Mixtral-8x7B",
@@ -7418,6 +8360,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-9B",
@@ -7429,6 +8372,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x4",
       "model": "Qwen3.5-9B",
@@ -7440,6 +8384,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
@@ -7451,6 +8396,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Llama-3.1-70B",
@@ -7462,6 +8408,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Qwen3.5-9B",
@@ -7473,6 +8420,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "3090",
       "hw_label": "3090x2",
       "model": "Qwen3.5-9B",
@@ -7484,6 +8432,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
@@ -7495,6 +8444,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
@@ -7506,6 +8456,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-9B",
@@ -7517,6 +8468,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx2",
       "model": "Qwen3.5-9B",
@@ -7528,6 +8480,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -7539,6 +8492,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -7550,6 +8504,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -7561,6 +8516,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -7572,6 +8528,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Qwen3.5-9B",
@@ -7583,6 +8540,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Qwen3.5-9B",
@@ -7594,6 +8552,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
@@ -7605,6 +8564,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "Qwen3.5-9B",
@@ -7616,6 +8576,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -7627,6 +8588,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GB",
       "model": "gpt-oss-20b",
@@ -7638,6 +8600,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -7649,6 +8612,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Mixtral-8x7B",
@@ -7660,6 +8624,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -7671,6 +8636,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "gpu-4",
       "hw_label": "A100-40GBx4",
       "model": "Qwen3.5-9B",
@@ -7682,6 +8648,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
@@ -7693,6 +8660,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Ti",
       "model": "Llama-3.1-8B",
@@ -7704,6 +8672,7 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
@@ -7715,474 +8684,13 @@
       "reason": "context too short for long multi-turn traces; requires max_len=32768"
     },
     {
+      "data_scope": "current",
       "host": "2080ti",
       "hw_label": "2080Tix2",
       "model": "Qwen3.5-9B",
       "tp": 2,
       "mode": "multi",
       "backend": "sglang",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx2",
-      "model": "gpt-oss-20b",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx2",
-      "model": "gpt-oss-20b",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Llama-3.1-70B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Llama-3.1-70B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Llama-3.3-70B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Llama-3.3-70B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Qwen2.5-72B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 4096,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Qwen2.5-72B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 4096,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "gpt-oss-20b",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "gpt-oss-20b",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx2",
-      "model": "Qwen3.5-27B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx2",
-      "model": "Qwen3.5-27B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Llama-3.1-70B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Llama-3.1-70B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GB",
-      "model": "Qwen3.5-9B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 4096,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GB",
-      "model": "Qwen3.5-9B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 4096,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GB",
-      "model": "Qwen3.5-9B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "swebench-multiturn",
-      "max_len": 4096,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GB",
-      "model": "Qwen3.5-9B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "terminalbench-multiturn",
-      "max_len": 4096,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GB",
-      "model": "gpt-oss-20b",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GB",
-      "model": "gpt-oss-20b",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Mixtral-8x7B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "gpu-4",
-      "hw_label": "A100-40GBx4",
-      "model": "Mixtral-8x7B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Tix4",
-      "model": "Qwen3.5-27B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Tix4",
-      "model": "Qwen3.5-27B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Ti",
-      "model": "Qwen3.5-9B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 4096,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Ti",
-      "model": "Qwen3.5-9B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 4096,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Ti",
-      "model": "Llama-3.1-8B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Ti",
-      "model": "Llama-3.1-8B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Tix2",
-      "model": "Qwen3.5-9B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "2080ti",
-      "hw_label": "2080Tix2",
-      "model": "Qwen3.5-9B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "sglang",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "Mixtral-8x7B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "Mixtral-8x7B",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "gpt-oss-20b",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x4",
-      "model": "gpt-oss-20b",
-      "tp": 4,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x2",
-      "model": "gpt-oss-20b",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x2",
-      "model": "gpt-oss-20b",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x2",
-      "model": "Mixtral-8x7B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100x2",
-      "model": "Mixtral-8x7B",
-      "tp": 2,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100",
-      "model": "gpt-oss-20b",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100",
-      "model": "gpt-oss-20b",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "terminalbench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100",
-      "model": "Mixtral-8x7B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
-      "profile": "swebench-multiturn",
-      "max_len": 8192,
-      "reason": "context too short for long multi-turn traces; requires max_len=32768"
-    },
-    {
-      "host": "h100",
-      "hw_label": "H100",
-      "model": "Mixtral-8x7B",
-      "tp": 1,
-      "mode": "multi",
-      "backend": "vllm",
       "profile": "terminalbench-multiturn",
       "max_len": 8192,
       "reason": "context too short for long multi-turn traces; requires max_len=32768"

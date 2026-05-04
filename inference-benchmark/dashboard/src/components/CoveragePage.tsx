@@ -156,6 +156,10 @@ function aggregateCells(cells: SweepCell[]): Map<string, SweepCell> {
   return out;
 }
 
+function stateCellScope(cell: SweepCell): DataScope {
+  return cell.data_scope ?? 'current';
+}
+
 function isMultiTurnProfile(profile: string): boolean {
   return profile.includes('multiturn') || profile.includes('multi-turn');
 }
@@ -227,6 +231,7 @@ export function CoveragePage({
     const profileInfeasible = new Map<string, string>();
     if (canonicalCoverage) {
       for (const item of sweepState?.profile_infeasible ?? []) {
+        if ((item.data_scope ?? 'current') !== dataScope) continue;
         profileInfeasible.set(
           `${item.hw_label}|${item.model}|${item.backend}|${item.profile}`,
           item.reason,
@@ -271,7 +276,7 @@ export function CoveragePage({
     }
 
     const aggStatus = sweepState
-      ? aggregateCells(sweepState.cells)
+      ? aggregateCells(sweepState.cells.filter((cell) => stateCellScope(cell) === dataScope))
       : new Map<string, SweepCell>();
 
     const hwGroups: HwGroup[] = [];
