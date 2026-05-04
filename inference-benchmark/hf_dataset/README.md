@@ -28,14 +28,6 @@ configs:
     data_files:
       - split: train
         path: kernel_profiles/kernels_labeled.parquet
-  - config_name: roofline_quadrant
-    data_files:
-      - split: train
-        path: kernel_profiles/roofline_quadrant.parquet
-  - config_name: predictions
-    data_files:
-      - split: train
-        path: predictions/serving_predictions.parquet
 dataset_info:
   - config_name: trace_replay
     features:
@@ -226,121 +218,11 @@ dataset_info:
     splits:
       - name: train
         num_examples: 148077
-  - config_name: roofline_quadrant
-    features:
-      - name: model
-        dtype: string
-      - name: profile
-        dtype: string
-      - name: concurrency
-        dtype: int64
-      - name: engine
-        dtype: string
-      - name: hardware
-        dtype: string
-      - name: oi
-        dtype: float64
-      - name: cf_gb
-        dtype: float64
-      - name: output_tput
-        dtype: float64
-      - name: tpot_ms
-        dtype: float64
-      - name: ttft_ms
-        dtype: float64
-    splits:
-      - name: train
-        num_examples: 2163
-  - config_name: predictions
-    features:
-      - name: hardware_config
-        dtype: string
-      - name: model
-        dtype: string
-      - name: backend
-        dtype: string
-      - name: profile
-        dtype: string
-      - name: data_scope
-        dtype: string
-      - name: concurrency
-        dtype: int64
-      - name: isl
-        dtype: int64
-      - name: osl
-        dtype: int64
-      - name: calibration_status
-        dtype: string
-      - name: ttft_validation_scope
-        dtype: string
-      - name: ttft_kernel_ms
-        dtype: float64
-      - name: ttft_base_ms
-        dtype: float64
-      - name: ttft_floor_ms
-        dtype: float64
-      - name: ttft_first_decode_ms
-        dtype: float64
-      - name: ttft_queue_ms
-        dtype: float64
-      - name: itl_meas
-        dtype: float64
-      - name: total_context_tokens
-        dtype: int64
-      - name: new_prefill_tokens
-        dtype: int64
-      - name: cached_context_tokens
-        dtype: int64
-      - name: cache_hit_rate
-        dtype: float64
-      - name: cache_aware_applied
-        dtype: bool
-      - name: cache_feature_source
-        dtype: string
-      - name: cache_prediction_regime
-        dtype: string
-      - name: ttft_prediction_supported
-        dtype: bool
-      - name: multiturn_prediction_mode
-        dtype: string
-      - name: predicted_turn_count
-        dtype: float64
-      - name: total_successful_turn_requests
-        dtype: float64
-      - name: mean_predicted_turn_ttft_ms
-        dtype: float64
-      - name: mean_predicted_turn_tpot_ms
-        dtype: float64
-      - name: multiturn_turn_predictions
-        dtype: string
-      - name: ttft_pred
-        dtype: float64
-      - name: ttft_meas
-        dtype: float64
-      - name: ttft_err
-        dtype: float64
-      - name: tpot_pred
-        dtype: float64
-      - name: tpot_meas
-        dtype: float64
-      - name: tpot_err
-        dtype: float64
-      - name: e2el_pred
-        dtype: float64
-      - name: e2el_meas
-        dtype: float64
-      - name: e2el_err
-        dtype: float64
-      - name: measurement_semantics_warning
-        dtype: string
-    splits:
-      - name: train
-        num_examples: 4715
 ---
 
 # AgentPerfBench
 
-LLM inference benchmark: 3,392 serving runs, 148,077 per-kernel NCU profiles, and 4,715 latency predictions across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
+LLM inference benchmark: 3,392 serving runs and 148,077 per-kernel NCU profiles across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
 
 ## Dataset configurations
 
@@ -359,14 +241,6 @@ ISL/OSL sampled from lognormal fits to real workload statistics. 42 combinations
 ### kernels_labeled (148,077 rows)
 
 Per-kernel Nsight Compute (ncu) profiles across 4 GPUs (A100, H100, RTX 3090, RTX 2080 Ti) and 13 model/sweep sources.
-
-### roofline_quadrant (2,163 rows)
-
-Operational intensity and achieved throughput per kernel, for roofline analysis. H100 reference hardware (989 peak TFLOPS, 3.35 TB/s HBM).
-
-### predictions (4,715 rows)
-
-Predicted vs. measured TTFT, TPOT, and E2EL for each serving configuration, with cache-aware prediction metadata. 14 hardware configs.
 
 ### Concurrency filtering
 
@@ -449,7 +323,7 @@ Each row in `summary.parquet` (both configs):
 from datasets import load_dataset
 
 ds = load_dataset("agent-perf-bench/AgentPerfBench", "trace_replay")
-# or "distributional", "kernels_labeled", "roofline_quadrant", "predictions"
+# or "distributional", "kernels_labeled"
 ```
 
 ## Benchmark methodology

@@ -1,7 +1,6 @@
 """Build kernel profiling parquets from R2 data."""
 
 import argparse
-import json
 import sys
 import tempfile
 import urllib.request
@@ -36,19 +35,6 @@ KERNELS_SCHEMA = {
     "launch_registers_per_thread": "float64",
 }
 
-ROOFLINE_SCHEMA = {
-    "model": "string",
-    "profile": "string",
-    "concurrency": "int64",
-    "engine": "string",
-    "hardware": "string",
-    "oi": "float64",
-    "cf_gb": "float64",
-    "output_tput": "float64",
-    "tpot_ms": "float64",
-    "ttft_ms": "float64",
-}
-
 
 def download(url: str, dest: Path) -> Path:
     print(f"Downloading {url}")
@@ -78,26 +64,9 @@ def build_kernels_labeled(csv_path: Path, output_path: Path) -> pd.DataFrame:
     return df
 
 
-def build_roofline_quadrant(json_path: Path, output_path: Path) -> pd.DataFrame:
-    with open(json_path) as f:
-        data = json.load(f)
-    df = pd.DataFrame(data["points"])
-    df = df[list(ROOFLINE_SCHEMA.keys())]
-    df = df.astype(ROOFLINE_SCHEMA)
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(output_path, index=False)
-
-    print(f"Written: {output_path}")
-    print(f"  Rows:    {len(df)}")
-    print(f"  Columns: {list(df.columns)}")
-    return df
-
-
 def main():
     parser = argparse.ArgumentParser(description="Build kernel profiling parquets from R2 data")
     parser.add_argument("--kernels-csv", type=Path, default=None, help="Path to kernels_labeled.csv")
-    parser.add_argument("--roofline-json", type=Path, default=None, help="Path to roofline-quadrant.json")
     parser.add_argument("--output-dir", type=Path,
                         default=Path(__file__).resolve().parent.parent.parent / "hf_dataset",
                         help="Output directory for parquets")
@@ -114,15 +83,7 @@ def main():
                 tmp / "kernels_labeled.csv",
             )
 
-        roofline_json = args.roofline_json
-        if roofline_json is None:
-            roofline_json = download(
-                args.r2_base.rstrip("/") + "/roofline-quadrant.json",
-                tmp / "roofline-quadrant.json",
-            )
-
         build_kernels_labeled(kernels_csv, args.output_dir / "kernel_profiles" / "kernels_labeled.parquet")
-        build_roofline_quadrant(roofline_json, args.output_dir / "kernel_profiles" / "roofline_quadrant.parquet")
 
 
 if __name__ == "__main__":

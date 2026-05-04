@@ -162,8 +162,6 @@ def update_croissant(output_dir: Path, hashes: dict[str, str]):
         "trace-replay-summary-parquet": hashes.get("trace_replay"),
         "distributional-summary-parquet": hashes.get("distributional"),
         "kernels-labeled-parquet": hashes.get("kernels_labeled"),
-        "roofline-quadrant-parquet": hashes.get("roofline_quadrant"),
-        "predictions-parquet": hashes.get("predictions"),
     }
 
     for dist in croissant.get("distribution", []):
@@ -239,8 +237,6 @@ def main():
 
     supplementary = {
         "kernels_labeled": "kernel_profiles/kernels_labeled.parquet",
-        "roofline_quadrant": "kernel_profiles/roofline_quadrant.parquet",
-        "predictions": "predictions/serving_predictions.parquet",
     }
     for key, rel_path in supplementary.items():
         path = args.output_dir / rel_path

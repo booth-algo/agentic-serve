@@ -18,8 +18,6 @@ EXPECTED_PARQUETS = [
     "trace_replay/summary.parquet",
     "distributional/summary.parquet",
     "kernel_profiles/kernels_labeled.parquet",
-    "kernel_profiles/roofline_quadrant.parquet",
-    "predictions/serving_predictions.parquet",
 ]
 
 
@@ -78,11 +76,6 @@ def main():
         ])
 
     run_script("build_kernels.py", [
-        "--r2-base", r2_base,
-        "--output-dir", str(output_dir),
-    ])
-
-    run_script("build_predictions.py", [
         "--r2-base", r2_base,
         "--output-dir", str(output_dir),
     ])

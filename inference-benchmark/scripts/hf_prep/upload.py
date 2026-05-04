@@ -34,8 +34,6 @@ def main():
         "trace_replay/summary.parquet",
         "distributional/summary.parquet",
         "kernel_profiles/kernels_labeled.parquet",
-        "kernel_profiles/roofline_quadrant.parquet",
-        "predictions/serving_predictions.parquet",
     ]
     missing = [f for f in expected_files if not (args.dataset_dir / f).exists()]
     if missing:
