@@ -82,21 +82,24 @@
       "@id": "kernels-labeled-parquet",
       "name": "kernel_profiles/kernels_labeled.parquet",
       "contentUrl": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench/resolve/main/kernel_profiles/kernels_labeled.parquet",
-      "encodingFormat": "application/x-parquet"
+      "encodingFormat": "application/x-parquet",
+      "sha256": "05571ee61fe97beac7f3d0b0e8be07a0feeca00cee9b308cd469a57cd4c9b671"
     },
     {
       "@type": "cr:FileObject",
       "@id": "roofline-quadrant-parquet",
       "name": "kernel_profiles/roofline_quadrant.parquet",
       "contentUrl": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench/resolve/main/kernel_profiles/roofline_quadrant.parquet",
-      "encodingFormat": "application/x-parquet"
+      "encodingFormat": "application/x-parquet",
+      "sha256": "6f4cc5b4a8ac287d47e8631369d9599ff734fa3009adf73c24fba50f68b712c1"
     },
     {
       "@type": "cr:FileObject",
       "@id": "predictions-parquet",
       "name": "predictions/serving_predictions.parquet",
       "contentUrl": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench/resolve/main/predictions/serving_predictions.parquet",
-      "encodingFormat": "application/x-parquet"
+      "encodingFormat": "application/x-parquet",
+      "sha256": "243ff637143f93e2e7579c39385a4900c0539a5f3c250ac0766d3884a791a4cf"
     }
   ],
   "recordSet": [
