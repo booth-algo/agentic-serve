@@ -161,7 +161,9 @@ def update_croissant(output_dir: Path, hashes: dict[str, str]):
     id_to_hash = {
         "trace-replay-summary-parquet": hashes.get("trace_replay"),
         "distributional-summary-parquet": hashes.get("distributional"),
-        "kernel-profiles-parquet": hashes.get("roofline"),
+        "kernels-labeled-parquet": hashes.get("kernels_labeled"),
+        "roofline-quadrant-parquet": hashes.get("roofline_quadrant"),
+        "predictions-parquet": hashes.get("predictions"),
     }
 
     for dist in croissant.get("distribution", []):
@@ -235,9 +237,15 @@ def main():
         print(f"    hardware: {sorted(df['hardware'].unique())}")
         print(f"    profiles: {sorted(df['profile'].unique())}")
 
-    roofline_path = args.output_dir / "roofline" / "kernel_profiles.parquet"
-    if roofline_path.exists():
-        hashes["roofline"] = compute_sha256(roofline_path)
+    supplementary = {
+        "kernels_labeled": "kernel_profiles/kernels_labeled.parquet",
+        "roofline_quadrant": "kernel_profiles/roofline_quadrant.parquet",
+        "predictions": "predictions/serving_predictions.parquet",
+    }
+    for key, rel_path in supplementary.items():
+        path = args.output_dir / rel_path
+        if path.exists():
+            hashes[key] = compute_sha256(path)
 
     update_croissant(args.output_dir, hashes)
     print_retention_report(stats)

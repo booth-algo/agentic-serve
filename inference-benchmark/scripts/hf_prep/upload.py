@@ -15,7 +15,7 @@ except ImportError:
 def main():
     parser = argparse.ArgumentParser(description="Upload dataset to HuggingFace Hub")
     parser.add_argument("--token", type=str, default=None, help="HF token (or set HF_TOKEN)")
-    parser.add_argument("--repo", type=str, default="lynae-1219/AgentPerfBench")
+    parser.add_argument("--repo", type=str, default="agent-perf-bench/AgentPerfBench")
     parser.add_argument("--dataset-dir", type=Path,
                         default=Path(__file__).resolve().parent.parent.parent / "hf_dataset",
                         help="Path to hf_dataset/ directory")
@@ -29,6 +29,17 @@ def main():
     if not args.dataset_dir.exists():
         print(f"Error: {args.dataset_dir} does not exist. Run build_dataset.py first.", file=sys.stderr)
         sys.exit(1)
+
+    expected_files = [
+        "trace_replay/summary.parquet",
+        "distributional/summary.parquet",
+        "kernel_profiles/kernels_labeled.parquet",
+        "kernel_profiles/roofline_quadrant.parquet",
+        "predictions/serving_predictions.parquet",
+    ]
+    missing = [f for f in expected_files if not (args.dataset_dir / f).exists()]
+    if missing:
+        print(f"Warning: missing expected files: {missing}", file=sys.stderr)
 
     api = HfApi(token=token)
     api.create_repo(repo_id=args.repo, repo_type="dataset", exist_ok=True)

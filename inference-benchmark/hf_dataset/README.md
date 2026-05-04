@@ -12,8 +12,9 @@ tags:
   - sglang
   - agentic-workloads
 size_categories:
-  - 1K<n<10K
+  - 100K<n<1M
 pretty_name: AgentPerfBench
+version: "1.0"
 configs:
   - config_name: trace_replay
     data_files:
@@ -23,66 +24,392 @@ configs:
     data_files:
       - split: summary
         path: distributional/summary.parquet
-  - config_name: roofline
+  - config_name: kernels_labeled
     data_files:
-      - split: kernel_profiles
-        path: roofline/kernel_profiles.parquet
+      - split: train
+        path: kernel_profiles/kernels_labeled.parquet
+  - config_name: roofline_quadrant
+    data_files:
+      - split: train
+        path: kernel_profiles/roofline_quadrant.parquet
+  - config_name: predictions
+    data_files:
+      - split: train
+        path: predictions/serving_predictions.parquet
+dataset_info:
+  - config_name: trace_replay
+    features:
+      - name: run_id
+        dtype: string
+      - name: model
+        dtype: string
+      - name: model_family
+        dtype: string
+      - name: hardware
+        dtype: string
+      - name: engine
+        dtype: string
+      - name: tensor_parallelism
+        dtype: int64
+      - name: profile
+        dtype: string
+      - name: concurrency
+        dtype: int64
+      - name: num_requests
+        dtype: int64
+      - name: duration_s
+        dtype: float64
+      - name: successful_requests
+        dtype: int64
+      - name: failed_requests
+        dtype: int64
+      - name: request_throughput
+        dtype: float64
+      - name: input_token_throughput
+        dtype: float64
+      - name: output_token_throughput
+        dtype: float64
+      - name: total_token_throughput
+        dtype: float64
+      - name: mean_ttft_ms
+        dtype: float64
+      - name: median_ttft_ms
+        dtype: float64
+      - name: p90_ttft_ms
+        dtype: float64
+      - name: p99_ttft_ms
+        dtype: float64
+      - name: mean_tpot_ms
+        dtype: float64
+      - name: median_tpot_ms
+        dtype: float64
+      - name: p90_tpot_ms
+        dtype: float64
+      - name: p99_tpot_ms
+        dtype: float64
+      - name: mean_itl_ms
+        dtype: float64
+      - name: median_itl_ms
+        dtype: float64
+      - name: p90_itl_ms
+        dtype: float64
+      - name: p99_itl_ms
+        dtype: float64
+      - name: mean_e2el_ms
+        dtype: float64
+      - name: median_e2el_ms
+        dtype: float64
+      - name: p90_e2el_ms
+        dtype: float64
+      - name: p99_e2el_ms
+        dtype: float64
+    splits:
+      - name: summary
+        num_examples: 3147
+        num_bytes: 694254
+  - config_name: distributional
+    features:
+      - name: run_id
+        dtype: string
+      - name: model
+        dtype: string
+      - name: model_family
+        dtype: string
+      - name: hardware
+        dtype: string
+      - name: engine
+        dtype: string
+      - name: tensor_parallelism
+        dtype: int64
+      - name: profile
+        dtype: string
+      - name: concurrency
+        dtype: int64
+      - name: num_requests
+        dtype: int64
+      - name: duration_s
+        dtype: float64
+      - name: successful_requests
+        dtype: int64
+      - name: failed_requests
+        dtype: int64
+      - name: request_throughput
+        dtype: float64
+      - name: input_token_throughput
+        dtype: float64
+      - name: output_token_throughput
+        dtype: float64
+      - name: total_token_throughput
+        dtype: float64
+      - name: mean_ttft_ms
+        dtype: float64
+      - name: median_ttft_ms
+        dtype: float64
+      - name: p90_ttft_ms
+        dtype: float64
+      - name: p99_ttft_ms
+        dtype: float64
+      - name: mean_tpot_ms
+        dtype: float64
+      - name: median_tpot_ms
+        dtype: float64
+      - name: p90_tpot_ms
+        dtype: float64
+      - name: p99_tpot_ms
+        dtype: float64
+      - name: mean_itl_ms
+        dtype: float64
+      - name: median_itl_ms
+        dtype: float64
+      - name: p90_itl_ms
+        dtype: float64
+      - name: p99_itl_ms
+        dtype: float64
+      - name: mean_e2el_ms
+        dtype: float64
+      - name: median_e2el_ms
+        dtype: float64
+      - name: p90_e2el_ms
+        dtype: float64
+      - name: p99_e2el_ms
+        dtype: float64
+    splits:
+      - name: summary
+        num_examples: 245
+        num_bytes: 70836
+  - config_name: kernels_labeled
+    features:
+      - name: source
+        dtype: string
+      - name: gpu
+        dtype: string
+      - name: model
+        dtype: string
+      - name: kernel_family
+        dtype: string
+      - name: kernel_name
+        dtype: string
+      - name: dtype
+        dtype: string
+      - name: held_out
+        dtype: bool
+      - name: M
+        dtype: float64
+      - name: N
+        dtype: float64
+      - name: K
+        dtype: float64
+      - name: bs
+        dtype: float64
+      - name: seq
+        dtype: float64
+      - name: n_heads
+        dtype: float64
+      - name: head_dim
+        dtype: float64
+      - name: kv_heads
+        dtype: float64
+      - name: numel
+        dtype: float64
+      - name: op_type
+        dtype: string
+      - name: gpu_time_duration_ms
+        dtype: float64
+      - name: launch_block_size
+        dtype: float64
+      - name: launch_grid_size
+        dtype: float64
+      - name: dram_bytes_sum
+        dtype: float64
+      - name: launch_registers_per_thread
+        dtype: float64
+    splits:
+      - name: train
+        num_examples: 148077
+  - config_name: roofline_quadrant
+    features:
+      - name: model
+        dtype: string
+      - name: profile
+        dtype: string
+      - name: concurrency
+        dtype: int64
+      - name: engine
+        dtype: string
+      - name: hardware
+        dtype: string
+      - name: oi
+        dtype: float64
+      - name: cf_gb
+        dtype: float64
+      - name: output_tput
+        dtype: float64
+      - name: tpot_ms
+        dtype: float64
+      - name: ttft_ms
+        dtype: float64
+    splits:
+      - name: train
+        num_examples: 2163
+  - config_name: predictions
+    features:
+      - name: hardware_config
+        dtype: string
+      - name: model
+        dtype: string
+      - name: backend
+        dtype: string
+      - name: profile
+        dtype: string
+      - name: data_scope
+        dtype: string
+      - name: concurrency
+        dtype: int64
+      - name: isl
+        dtype: int64
+      - name: osl
+        dtype: int64
+      - name: calibration_status
+        dtype: string
+      - name: ttft_validation_scope
+        dtype: string
+      - name: ttft_kernel_ms
+        dtype: float64
+      - name: ttft_base_ms
+        dtype: float64
+      - name: ttft_floor_ms
+        dtype: float64
+      - name: ttft_first_decode_ms
+        dtype: float64
+      - name: ttft_queue_ms
+        dtype: float64
+      - name: itl_meas
+        dtype: float64
+      - name: total_context_tokens
+        dtype: int64
+      - name: new_prefill_tokens
+        dtype: int64
+      - name: cached_context_tokens
+        dtype: int64
+      - name: cache_hit_rate
+        dtype: float64
+      - name: cache_aware_applied
+        dtype: bool
+      - name: cache_feature_source
+        dtype: string
+      - name: cache_prediction_regime
+        dtype: string
+      - name: ttft_prediction_supported
+        dtype: bool
+      - name: multiturn_prediction_mode
+        dtype: string
+      - name: predicted_turn_count
+        dtype: float64
+      - name: total_successful_turn_requests
+        dtype: float64
+      - name: mean_predicted_turn_ttft_ms
+        dtype: float64
+      - name: mean_predicted_turn_tpot_ms
+        dtype: float64
+      - name: multiturn_turn_predictions
+        dtype: string
+      - name: ttft_pred
+        dtype: float64
+      - name: ttft_meas
+        dtype: float64
+      - name: ttft_err
+        dtype: float64
+      - name: tpot_pred
+        dtype: float64
+      - name: tpot_meas
+        dtype: float64
+      - name: tpot_err
+        dtype: float64
+      - name: e2el_pred
+        dtype: float64
+      - name: e2el_meas
+        dtype: float64
+      - name: e2el_err
+        dtype: float64
+      - name: measurement_semantics_warning
+        dtype: string
+    splits:
+      - name: train
+        num_examples: 4715
 ---
 
 # AgentPerfBench
 
-LLM inference benchmark dataset measuring serving performance (TTFT, TPOT, ITL, throughput) across 9 models, 14 GPU configurations, 2 serving engines, and 20+ workload profiles spanning single-turn chat, multi-turn agent sessions, and synthetic stress tests. Includes per-kernel CUDA profiling data for roofline analysis.
+LLM inference benchmark: 3,392 serving runs, 148,077 per-kernel CUDA profiles, and 4,715 latency predictions across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
 
-## Dataset Configurations
+## Dataset configurations
 
-This dataset provides two benchmark configurations reflecting distinct data collection methodologies:
+### trace_replay (3,147 rows)
 
-### trace_replay
+Replays exact ISL/OSL sequences from recorded agent sessions (SWE-Bench, TerminalBench, OSWorld, ShareGPT). 77 (model, hardware, engine) combinations, 17 profiles, 6 concurrency levels.
 
-Requests replay exact ISL/OSL sequences from recorded agent sessions (SWE-Bench, TerminalBench, OSWorld, ShareGPT). Input distributions are empirically grounded in real tool-use patterns, capturing realistic burstiness and turn-depth correlations.
+17 profiles: `chat-medium`, `chat-multiturn-long`, `chat-multiturn-medium`, `chat-multiturn-short`, `chat-short`, `chat-singleturn`, `coding-singleturn`, `decode-heavy`, `osworld-multiturn-long`, `osworld-multiturn-medium`, `osworld-multiturn-short`, `prefill-heavy`, `random-1k`, `swebench-multiturn-medium`, `swebench-multiturn-short`, `terminalbench-multiturn-medium`, `terminalbench-multiturn-short`
 
-Profiles: `chat-medium`, `chat-multiturn-long`, `chat-multiturn-medium`, `chat-multiturn-short`, `chat-short`, `chat-singleturn`, `coding-singleturn`, `decode-heavy`, `osworld-multiturn-long`, `osworld-multiturn-medium`, `osworld-multiturn-short`, `prefill-heavy`, `random-1k`, `swebench-multiturn-medium`, `swebench-multiturn-short`, `terminalbench-multiturn-medium`, `terminalbench-multiturn-short`
+### distributional (245 rows)
 
-### distributional
+ISL/OSL sampled from lognormal fits to real workload statistics. 42 combinations, 6 profiles, 7 concurrency levels.
 
-Requests sample ISL/OSL from parameterized statistical distributions (e.g., lognormal) fitted to real workload statistics. Shorter to run than full trace replays, enabling faster characterization of profile-level serving behavior across the hardware matrix. MSE validation confirms distributional runs reproduce the latency and throughput characteristics of their trace-replay counterparts.
+6 profiles: `chat-multiturn`, `chat-singleturn`, `coding-singleturn`, `osworld-multiturn`, `swebench-multiturn`, `terminalbench-multiturn`
 
-Profiles: `chat-multiturn`, `chat-singleturn`, `coding-singleturn`, `osworld-multiturn`, `swebench-multiturn`, `terminalbench-multiturn`
+### kernels_labeled (148,077 rows)
 
-### Why two configurations?
+Per-kernel CUDA profiles from NCU across 4 GPUs (A100, H100, RTX 3090, RTX 2080 Ti) and 13 model/sweep sources.
 
-**trace_replay** provides ecological validity — patterns are drawn from real agent sessions, grounding results in observed behavior. **distributional** enables efficient coverage — shorter run times allow systematic sweeps across the full model-hardware-concurrency matrix, while MSE validation against trace_replay confirms the results remain representative.
+### roofline_quadrant (2,163 rows)
+
+Operational intensity and achieved throughput per kernel, for roofline analysis. H100 reference hardware (989 peak TFLOPS, 3.35 TB/s HBM).
+
+### predictions (4,715 rows)
+
+Predicted vs. measured TTFT, TPOT, and E2EL for each serving configuration, with cache-aware prediction metadata. 14 hardware configs.
 
 ### Concurrency filtering
 
-Rows where declared concurrency exceeds the session pool size have been excluded. This affects trace_replay data at concurrency > 100 (session pool was 100) and distributional/current data at concurrency > 10 (session pool was 10). Distributional data collected after the fix has no such limitation.
+Concurrency is controlled by a fixed-size connection pool. Trace replay uses levels {1, 5, 10, 20, 40, 80}; distributional uses {1, 5, 10, 40, 80, 200, 320}.
+
+Early runs used a session-pool size smaller than the declared concurrency (`num_sessions=100` for trace replay, `num_sessions=10` for distributional), capping actual load below the nominal value. Rows where declared concurrency exceeded the session pool were dropped.
+
+| Config | Rows |
+|--------|------|
+| trace_replay | 3,147 |
+| distributional | 245 |
+| **Total** | **3,392** |
 
 ## Coverage
 
 ### Hardware
 
-| GPU | VRAM | HBM Bandwidth | Peak BF16 TFLOPS |
-|-----|------|---------------|------------------|
+All benchmarks collected on PyTorch 2.10.0, CUDA 12.8.
+
+| GPU | VRAM | HBM bandwidth | Peak half-precision TFLOPS |
+|-----|------|---------------|---------------------------|
 | NVIDIA H100 SXM | 80 GB | 3.35 TB/s | 989 |
 | NVIDIA A100 SXM4 | 40 GB | 1.56 TB/s | 312 |
 | NVIDIA RTX 3090 | 24 GB | 936 GB/s | 71 |
 | NVIDIA RTX 2080 Ti | 11 GB | 616 GB/s | 27 |
 
-Multi-GPU configurations: 1, 2, 4, 8 GPUs with tensor parallelism.
+Multi-GPU configurations: 1, 2, 4, or 8 GPUs with tensor parallelism.
 
 ### Models
 
-| Model | Family | Parameters | Architecture |
-|-------|--------|-----------|--------------|
-| Llama-3.1-8B-Instruct | Llama | 8B | Dense |
-| Llama-3.1-70B-Instruct | Llama | 70B | Dense |
-| Llama-3.3-70B-Instruct | Llama | 70B | Dense |
-| Qwen2.5-72B-Instruct | Qwen | 72B | Dense |
-| Qwen3.5-9B | Qwen | 9B | Dense |
-| Qwen3.5-27B | Qwen | 27B | Dense |
-| Mixtral-8x7B | Mixtral | 46.7B (12.9B active) | MoE |
-| gpt-oss-20b | GPT-OSS | 21B (3.6B active) | MoE |
-| gpt-oss-120b | GPT-OSS | 117B (5.1B active) | MoE |
+All models served in BF16 unless noted.
+
+| Model | Family | Parameters | Architecture | Notes |
+|-------|--------|-----------|--------------|-------|
+| Llama-3.1-8B | Llama | 8B | Dense | |
+| Llama-3.1-70B | Llama | 70B | Dense | |
+| Llama-3.3-70B | Llama | 70B | Dense | |
+| Qwen2.5-72B | Qwen | 72B | Dense | |
+| Qwen3.5-9B | Qwen | 9B | Dense | |
+| Qwen3.5-27B | Qwen | 27B | Dense | |
+| Mixtral-8x7B | Mixtral | 46.7B (12.9B active) | MoE | |
+| gpt-oss-20b | GPT-OSS | 21B (3.6B active) | MoE | mxfp4 projections |
+| gpt-oss-120b | GPT-OSS | 117B (5.1B active) | MoE | mxfp4 projections |
 
 ### Engines
 
@@ -91,7 +418,7 @@ Multi-GPU configurations: 1, 2, 4, 8 GPUs with tensor parallelism.
 
 ## Schema
 
-Each row in `summary.parquet` (both configs) contains:
+Each row in `summary.parquet` (both configs):
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -116,43 +443,39 @@ Each row in `summary.parquet` (both configs) contains:
 | mean/median/p90/p99_itl_ms | float | Inter-token latency |
 | mean/median/p90/p99_e2el_ms | float | End-to-end latency |
 
-## Benchmark Methodology
+## Loading
 
-- **Concurrency model**: Closed-loop with semaphore control.
-- **Concurrency sweep**: 1 to 320.
-- **Requests per configuration**: 50-100, with 3-request warmup.
-- **Metrics**: TTFT, TPOT, ITL, E2EL, request throughput, token throughput.
-- **Percentiles**: mean, median, p90, p99.
-- **Kernel profiling** (roofline config): PyTorch profiler on 2-layer forward passes, batch sizes [1, 4, 8, 32, 64].
+```python
+from datasets import load_dataset
 
-## Future Releases
+ds = load_dataset("agent-perf-bench/AgentPerfBench", "trace_replay")
+# or "distributional", "kernels_labeled", "roofline_quadrant", "predictions"
+```
 
-Per-request and multi-turn granularity data will be added when full result JSON files are available from the collection infrastructure.
+## Benchmark methodology
 
-## Intended Uses
-
-- Comparing inference engine performance under controlled conditions.
-- Capacity planning for agentic LLM deployments.
-- Roofline analysis of GPU utilization under different workload regimes.
-- Studying TTFT degradation under multi-turn context accumulation.
+- Closed-loop concurrency with semaphore control.
+- 3-request warmup before each configuration.
+- Metrics: TTFT, TPOT, ITL, E2EL, request throughput, token throughput (mean, median, p90, p99).
+- Metrics computed over successful requests only.
+- Collection period: March 2026 onwards.
 
 ## Limitations
 
-- Results are specific to tested hardware and software versions (vLLM 0.19.0, SGLang 0.5.9).
-- Distributional profiles approximate but do not replicate exact production traffic patterns.
-- No consumer GPUs beyond RTX 3090; no non-NVIDIA accelerators.
-- Closed-loop concurrency only; open-loop (Poisson arrival) not included.
-- No model quality metrics. This is a systems benchmark.
+- Distributional profiles are fitted approximations, not direct production replays.
+- Closed-loop concurrency only; no open-loop (Poisson) arrivals.
 
-## Ethical Considerations
+## Ethical considerations
 
-- No PII in the dataset.
-- Synthetic profiles use random tokens. Trace-replay profiles derive from open benchmarks (SWE-Bench MIT, TerminalBench, OSWorld).
-- Benchmark results should not be used as sole basis for hardware purchasing decisions.
+No PII. Trace-replay profiles derive from open benchmarks (SWE-Bench MIT, TerminalBench, OSWorld). Synthetic profiles use random tokens.
 
-## Source Datasets
+## License
 
-- [SWE-Bench](https://github.com/princeton-nlp/SWE-bench) (MIT License)
+Benchmark data released under Apache-2.0. Source datasets retain their original licenses.
+
+## Source datasets
+
+- [SWE-Bench](https://github.com/princeton-nlp/SWE-bench) (MIT)
 - [TerminalBench](https://github.com/TerminalBench/TerminalBench)
 - [ShareGPT (Aeala/ShareGPT_Vicuna_unfiltered)](https://huggingface.co/datasets/Aeala/ShareGPT_Vicuna_unfiltered)
 - [OSWorld](https://github.com/xlang-ai/OSWorld)
