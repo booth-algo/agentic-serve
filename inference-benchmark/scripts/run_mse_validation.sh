@@ -77,7 +77,7 @@ OPENAI_API_KEY="$API_KEY" "$PY" -m src.benchmark.runner \
     --max-model-len "$MAX_LEN" \
     --gpu-memory-utilization "$GPU_MEM" \
     --tensor-parallel-size "$TP" \
-    --scope      fixed \
+    --scope      mse \
     --warmup     2 \
     --timeout    300 \
     --api-key    "$API_KEY" \
@@ -98,7 +98,7 @@ OPENAI_API_KEY="$API_KEY" "$PY" -m src.benchmark.runner \
     --max-model-len "$MAX_LEN" \
     --gpu-memory-utilization "$GPU_MEM" \
     --tensor-parallel-size "$TP" \
-    --scope      fixed \
+    --scope      mse \
     --warmup     2 \
     --timeout    300 \
     --api-key    "$API_KEY" \
