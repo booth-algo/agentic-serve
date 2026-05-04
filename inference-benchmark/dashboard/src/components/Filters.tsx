@@ -7,6 +7,7 @@ import {
   FALLBACK_META_COLORS,
   profileDisplayName,
   CURRENT_PROFILES,
+  FIXED_PROFILES,
   ARCHIVE_PROFILES,
   type DataScope,
 } from '../profileMeta';
@@ -201,7 +202,11 @@ export function Filters({ filters, options, dataScope, onToggle, onClear }: Filt
   const normalizedQuery = profileQuery.trim().toLowerCase();
 
   const allProfiles = useMemo(
-    () => Array.from(dataScope === 'archive' ? ARCHIVE_PROFILES : CURRENT_PROFILES)
+    () => Array.from(
+      dataScope === 'archive' ? ARCHIVE_PROFILES :
+      dataScope === 'fixed' ? FIXED_PROFILES :
+      CURRENT_PROFILES,
+    )
       .filter((profile) => PROFILE_META[profile])
       .sort((a, b) => profileRank(a) - profileRank(b) || a.localeCompare(b)),
     [dataScope],

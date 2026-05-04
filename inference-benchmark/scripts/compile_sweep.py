@@ -145,6 +145,9 @@ def render_row(cell: dict, manifest: dict) -> str:
     concs = " ".join(str(c) for c in resolved["concurrencies"])
     profiles = " ".join(resolved["profiles"])
     extra_env = resolved.get("extra_env", "")
+    scope = cell.get("scope", "")
+    if scope:
+        extra_env = f"{extra_env} SCOPE={scope}".strip()
     backend = str(cell.get("backend", "vllm"))
     fields = [
         str(cell["host"]),
@@ -162,11 +165,20 @@ def render_row(cell: dict, manifest: dict) -> str:
     return "|".join(fields)
 
 
-def compile_jobs(manifest: dict):
+def cell_data_scope(cell: dict) -> str:
+    scope = cell.get("data_scope") or cell.get("dashboard_scope") or cell.get("scope")
+    if scope:
+        return str(scope)
+    return "fixed" if str(cell.get("preset", "")).startswith("fixed_") else "current"
+
+
+def compile_jobs(manifest: dict, scope: str = "all"):
     emitted: list[tuple[dict, str]] = []
     skipped: list[tuple[dict, str, str]] = []  # (cell, status, reason)
 
     for cell in manifest["cells"]:
+        if scope != "all" and cell_data_scope(cell) != scope:
+            continue
         reason = is_known_oom(cell, manifest)
         if reason:
             skipped.append((cell, "known_oom", reason))
@@ -198,11 +210,12 @@ def compile_jobs(manifest: dict):
     return emitted, skipped
 
 
-def render_file(emitted: list[tuple[dict, str]]) -> str:
+def render_file(emitted: list[tuple[dict, str]], scope: str = "all") -> str:
     lines = [
         "# Benchmark job matrix consumed by bench_orchestrator.sh.",
         "# GENERATED from scripts/sweep.yaml by scripts/compile_sweep.py — DO NOT EDIT DIRECTLY.",
         "# Format: HOST|MODEL_PATH|TP|SHORT|MODE|BACKEND|MAX_LEN|GPU_MEM|CONCS|PROFILES|EXTRA_ENV",
+        f"# SCOPE: {scope}",
         "# MODE: single | multi",
         "# BACKEND: vllm | sglang",
         "# EXTRA_ENV: optional `KEY=VAL KEY=VAL`.",
@@ -224,13 +237,14 @@ def main() -> int:
     ap.add_argument("--yaml", type=Path, default=SWEEP_YAML)
     ap.add_argument("--out", type=Path, default=BENCH_JOBS_TXT)
     ap.add_argument("--dry-run", action="store_true", help="print to stdout, don't write")
+    ap.add_argument("--scope", choices=("all", "current", "fixed"), default="all", help="emit only one dashboard scope")
     ap.add_argument("--verbose", "-v", action="store_true", help="show skip reasons")
     args = ap.parse_args()
 
     manifest = load_manifest(args.yaml)
     validate(manifest)
-    emitted, skipped = compile_jobs(manifest)
-    output = render_file(emitted)
+    emitted, skipped = compile_jobs(manifest, args.scope)
+    output = render_file(emitted, args.scope)
 
     if args.dry_run:
         sys.stdout.write(output)

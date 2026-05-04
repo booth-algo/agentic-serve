@@ -13,8 +13,8 @@ interface CoveragePageProps {
 
 const CURRENT_SINGLE_CONCS = [1, 10, 20, 40, 80, 160, 256, 320];
 const CURRENT_MULTI_CONCS = [5, 20, 40, 80, 160];
-const FIXED_SINGLE_CONCS = [40, 80, 200, 320];
-const FIXED_MULTI_CONCS = [40, 80, 200, 320];
+const FIXED_SINGLE_CONCS = [200, 320];
+const FIXED_MULTI_CONCS = [200, 320];
 const ARCHIVE_SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
 const ARCHIVE_MULTI_CONCS = [5, 10, 20, 40, 80, 120, 160, 200, 256, 320];
 
@@ -23,6 +23,15 @@ const CURRENT_SINGLE_PROFILES = [
   'coding-singleturn',
 ];
 const CURRENT_MULTI_PROFILES = [
+  'chat-multiturn',
+  'swebench-multiturn',
+  'terminalbench-multiturn',
+  'osworld-multiturn',
+];
+const FIXED_SINGLE_PROFILES = [
+  'chat-singleturn',
+];
+const FIXED_MULTI_PROFILES = [
   'chat-multiturn',
   'swebench-multiturn',
   'terminalbench-multiturn',
@@ -177,8 +186,16 @@ export function CoveragePage({
   const canonicalCoverage = usesCanonicalCoverage(dataScope);
 
   const coveragePlan = useMemo(() => {
-    const singleProfiles = usesCanonicalCoverage(dataScope) ? CURRENT_SINGLE_PROFILES : ARCHIVE_SINGLE_PROFILES;
-    const multiProfiles = usesCanonicalCoverage(dataScope) ? CURRENT_MULTI_PROFILES : ARCHIVE_MULTI_PROFILES;
+    const singleProfiles = dataScope === 'archive'
+      ? ARCHIVE_SINGLE_PROFILES
+      : dataScope === 'fixed'
+        ? FIXED_SINGLE_PROFILES
+        : CURRENT_SINGLE_PROFILES;
+    const multiProfiles = dataScope === 'archive'
+      ? ARCHIVE_MULTI_PROFILES
+      : dataScope === 'fixed'
+        ? FIXED_MULTI_PROFILES
+        : CURRENT_MULTI_PROFILES;
     const singleConcs = dataScope === 'current' ? CURRENT_SINGLE_CONCS : (dataScope === 'fixed' ? FIXED_SINGLE_CONCS : ARCHIVE_SINGLE_CONCS);
     const multiConcs = dataScope === 'current' ? CURRENT_MULTI_CONCS : (dataScope === 'fixed' ? FIXED_MULTI_CONCS : ARCHIVE_MULTI_CONCS);
     return {
@@ -473,7 +490,7 @@ export function CoveragePage({
   const scopeSummary = dataScope === 'current'
     ? '6 paper profiles'
     : dataScope === 'fixed'
-      ? '6 paper profiles on the fixed concurrency grid'
+      ? '5 fixed-scope profiles on the fixed concurrency grid'
       : 'legacy profiles containing full runs of single-turn, short/medium/long multi-turn, and stress workloads';
   const coverageLabel = dataScope === 'current'
     ? 'Canonical coverage'
@@ -827,7 +844,7 @@ function CoverageLegend({ dataScope }: { dataScope: DataScope }) {
   const scopeNote = dataScope === 'current'
     ? 'Current coverage tracks the canonical paper profile surface and expected concurrency grid.'
     : dataScope === 'fixed'
-      ? 'Fixed coverage tracks the canonical paper profile surface on the fixed concurrency grid.'
+      ? 'Fixed coverage tracks chat-singleturn plus all canonical multi-turn profiles on the corrected concurrency grid; context-overflow cells show as infeasible.'
       : 'Archive coverage is inventory-style: it shows historical runs that exist and does not count missing legacy cells.';
 
   return (
