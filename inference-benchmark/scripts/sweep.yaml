@@ -115,13 +115,18 @@ presets:
   fixed_single:
     max_len: 32768
     gpu_mem: 0.85
-    concurrencies: [5, 40, 80, 200, 320]
-    profiles: [chat-singleturn, coding-singleturn]
+    concurrencies: [200, 320]
+    profiles: [chat-singleturn]
   fixed_multi:
-    max_len: 8192
+    max_len: 32768
     gpu_mem: 0.85
-    concurrencies: [5, 40, 80, 200, 320]
-    profiles: [chat-multiturn, osworld-multiturn]
+    concurrencies: [40, 80, 200, 320]
+    profiles: [chat-multiturn, swebench-multiturn, terminalbench-multiturn, osworld-multiturn]
+  mse_multi:
+    max_len: 32768
+    gpu_mem: 0.85
+    concurrencies: [40, 80]
+    profiles: [swebench-multiturn-mse, terminalbench-multiturn-mse, osworld-multiturn-mse, swebench-multiturn-short, terminalbench-multiturn-short, osworld-multiturn-short]
 
 # --------------------------------------------------------------------------
 # Feasibility rule (mirrors CoveragePage.tsx checkFeasibility)
@@ -377,7 +382,7 @@ cells:
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: multi,  backend: sglang, preset: multi_tight, max_len: 8192, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
 
 # === Fixed-scope cells (rerun of all current-scope with corrected num_sessions) ===
-  # Same model x host x tp x mode as current-scope, but with fixed concurrencies [5,40,80,200,320].
+  # Same model x host x tp x mode as current-scope, but with fixed concurrencies [200,320].
   # gpu-4
   - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single }
   - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi }
@@ -422,12 +427,12 @@ cells:
   - { host: gpu-4, model: Qwen3.5-9B, tp: 4, mode: single, preset: fixed_single, backend: sglang }
   - { host: gpu-4, model: Qwen3.5-9B, tp: 4, mode: multi, preset: fixed_multi, backend: sglang }
   # 2080ti
-  - { host: 2080ti, model: Llama-3.1-8B, tp: 2, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn, coding-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1,2 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
-  - { host: 2080ti, model: Llama-3.1-8B, tp: 4, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn, coding-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Llama-3.1-8B, tp: 2, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1,2 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Llama-3.1-8B, tp: 4, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B, tp: 4, mode: multi, preset: fixed_multi, extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
-  - { host: 2080ti, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 32768, profiles: [chat-singleturn, coding-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 32768, profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi, extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
-  - { host: 2080ti, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn, coding-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B, tp: 2, mode: multi, preset: fixed_multi, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-27B, tp: 4, mode: single, preset: fixed_single, max_len: 8192, extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-27B, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192, extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
@@ -436,7 +441,7 @@ cells:
   - { host: 2080ti, model: gpt-oss-20b, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 8192, profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 4096, extra_env: "CUDA_VISIBLE_DEVICES=1 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 4096, extra_env: "CUDA_VISIBLE_DEVICES=1 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
-  - { host: 2080ti, model: Qwen3.5-9B, tp: 4, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn, coding-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
+  - { host: 2080ti, model: Qwen3.5-9B, tp: 4, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 32768, backend: sglang, extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
   - { host: 2080ti, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.85, max_len: 8192, backend: sglang, extra_env: "CUDA_VISIBLE_DEVICES=5 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, max_len: 32768, backend: sglang, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
@@ -519,3 +524,11 @@ cells:
   - { host: 3090, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi, backend: sglang }
   - { host: 3090, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 8192, backend: sglang, extra_env: "CUDA_VISIBLE_DEVICES=0,1" }
   - { host: 3090, model: Qwen3.5-9B, tp: 2, mode: multi, preset: fixed_multi, gpu_mem: 0.85, max_len: 8192, backend: sglang, extra_env: "CUDA_VISIBLE_DEVICES=0,1" }
+
+  # === MSE validation cells (distributional-mse vs legacy-short on same hardware) ===
+  # H100
+  - { host: h100, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, extra_env: "DASHBOARD_SCOPE=mse" }
+  # A100 (gpu-4)
+  - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, extra_env: "DASHBOARD_SCOPE=mse" }
+  # RTX3090
+  - { host: 3090, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, extra_env: "DASHBOARD_SCOPE=mse" }

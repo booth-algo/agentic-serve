@@ -91,8 +91,8 @@ Job ID format: `<host>_<model_short>_tp<N>_<mode>[_sglang]`
 | `single_tight` | 4096 | 1,10,20,40,80,160,256,320 | chat-singleturn |
 | `multi_small` | 32768 | 5,20,40,80,160 | chat/swebench/terminalbench/osworld-multiturn |
 | `multi_medium` | 8192 | 5,20,40,80,160 | chat/swebench/terminalbench/osworld-multiturn |
-| `fixed_single` | 32768 | 5,40,80,200,320 | chat-singleturn, coding-singleturn |
-| `fixed_multi` | 8192 | 5,40,80,200,320 | chat-multiturn, osworld-multiturn |
+| `fixed_single` | 32768 | 200,320 | chat-singleturn |
+| `fixed_multi` | 8192 | 200,320 | chat/swebench/terminalbench/osworld-multiturn |
 
 ## Known constraints
 
@@ -101,8 +101,8 @@ Job ID format: `<host>_<model_short>_tp<N>_<mode>[_sglang]`
   zero-result launches as skipped after warmup.
 - **Qwen3.5-27B on H100**: Model not downloaded. Jobs will fail.
 - **gpt-oss-20b on 2080ti**: MXFP4 needs sm80+. 2080ti is sm75. Known OOM in sweep.yaml.
-- **Multi-turn context overflow**: `fixed_multi` uses max_len=8192 to avoid swebench/terminalbench sessions overflowing 32K+ context at high concurrency.
-- **coding-singleturn**: Requires max_len >= 32768 (17K ISL). Only feasible on `single_small` and `fixed_single` presets.
+- **Multi-turn context overflow**: `fixed_multi` keeps swebench/terminalbench in the coverage surface, but profile-infeasible rules mark their max_len<32768 cells as N/A instead of dispatching impossible runs.
+- **coding-singleturn**: Requires max_len >= 32768 (17K ISL). It remains part of current-scope `single_small`, but is excluded from fixed scope.
 
 ## Monitoring
 

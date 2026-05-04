@@ -26,6 +26,13 @@ mkdir -p "$STATE_DIR"
 
 log() { echo "$(date -Is) $*" | tee -a "$LOG"; }
 
+LOCK_FILE="/tmp/bench_orchestrator.lock"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    log "another bench_orchestrator.sh tick is already running; exiting"
+    exit 0
+fi
+
 host_prefix() {
     case "$1" in
         gpu-4)  echo "a100"  ;;
@@ -130,10 +137,14 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
         log "$JID: job shape changed since terminal $STATUS; retrying as pending"
         STATUS="pending"
         write_status "$JID" pending
+        echo "0" > "$STATE_DIR/${JID}.attempt"
+        rm -f "$STATE_DIR/${JID}.max_len_override"
     elif [[ "$STATUS" =~ ^(skipped|failed)$ && -z "$OLD_SIGNATURE" && "$MODE" == "multi" && "$PROFILES" != *"swebench-multiturn"* && "$PROFILES" != *"terminalbench-multiturn"* ]]; then
         log "$JID: legacy terminal $STATUS predates profile filtering; retrying reduced-profile job"
         STATUS="pending"
         write_status "$JID" pending
+        echo "0" > "$STATE_DIR/${JID}.attempt"
+        rm -f "$STATE_DIR/${JID}.max_len_override"
     fi
     PREFIX=$(host_prefix "$HOST")
     RESULT_DIR_NAME="${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
@@ -163,11 +174,22 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             if [[ -f "$STATUS_FILE" ]]; then
                 AGE=$(( $(date +%s) - $(stat -c %Y "$STATUS_FILE") ))
                 if [[ "$AGE" -lt "$WARMUP_TIMEOUT" ]]; then
-                    log "$JID: dispatched ${AGE}s ago (<$(( WARMUP_TIMEOUT / 60 ))min), still warming up on port $JOB_PORT"
-                    JOB_GPUS=$(cat "$STATE_DIR/${JID}.gpus" 2>/dev/null || true)
-                    [[ -n "$JOB_GPUS" ]] && HOST_USED_GPUS[$HOST]="${HOST_USED_GPUS[$HOST]:-} ${JOB_GPUS//,/ } "
-                    HOST_USED_PORTS[$HOST]="${HOST_USED_PORTS[$HOST]:-} $JOB_PORT "
-                    continue
+                    if [[ "$BACKEND" == "sglang" ]]; then
+                        SCRIPT_NAME="sweep_all_profiles_sglang.sh"
+                        [[ "$MODE" == "multi" ]] && SCRIPT_NAME="sweep_multiturn_profiles_sglang.sh"
+                    else
+                        SCRIPT_NAME="sweep_all_profiles.sh"
+                        [[ "$MODE" == "multi" ]] && SCRIPT_NAME="sweep_multiturn_profiles.sh"
+                    fi
+                    REMOTE_SCRIPT_ALIVE=$(ssh "$HOST" "ps -eo args= | awk -v script='/tmp/inference-benchmark/scripts/${SCRIPT_NAME}' -v needle=' ${TP} ${SHORT} ${BACKEND} ' -v concs=' ${CONCS} ' '\$1 == \"bash\" && \$2 == script && index(\$0, needle) && index(\$0, concs) { found=1 } END { exit found ? 0 : 1 }' && echo yes" < /dev/null 2>/dev/null || true)
+                    if [[ "$REMOTE_SCRIPT_ALIVE" == "yes" ]]; then
+                        log "$JID: dispatched ${AGE}s ago (<$(( WARMUP_TIMEOUT / 60 ))min), still warming up on port $JOB_PORT"
+                        JOB_GPUS=$(cat "$STATE_DIR/${JID}.gpus" 2>/dev/null || true)
+                        [[ -n "$JOB_GPUS" ]] && HOST_USED_GPUS[$HOST]="${HOST_USED_GPUS[$HOST]:-} ${JOB_GPUS//,/ } "
+                        HOST_USED_PORTS[$HOST]="${HOST_USED_PORTS[$HOST]:-} $JOB_PORT "
+                        continue
+                    fi
+                    log "$JID: no listener and no live sweep process after ${AGE}s; finalizing early"
                 fi
             fi
             log "$JID: slot idle after ${AGE}s warmup ($BACKEND) — finalizing"

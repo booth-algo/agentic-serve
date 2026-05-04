@@ -211,7 +211,7 @@ export function ServingPredictionsPage({ dataScope }: { dataScope: DataScope }) 
         <div>
           <h2 className="text-lg font-semibold text-[#e6edf3]">Serving Latency Predictions</h2>
           <p className="mt-1 max-w-3xl text-xs text-[#8b949e]">
-            High-concurrency predictions vs measured benchmark results. {dataScope === 'archive' ? 'Showing archived legacy and stress profiles.' : 'Showing the canonical paper profiles.'}
+            High-concurrency predictions vs measured benchmark results. {dataScope === 'archive' ? 'Showing archived legacy and stress profiles.' : dataScope === 'fixed' ? 'Showing the fixed-scope profile subset.' : 'Showing the canonical paper profiles.'}
             Multi-turn TTFT reflects cache-aware serving behavior, not cumulative full-prefill latency.
           </p>
         </div>

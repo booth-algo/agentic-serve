@@ -21,6 +21,14 @@ export const CURRENT_PROFILES = [
   'osworld-multiturn',
 ] as const;
 
+export const FIXED_PROFILES = [
+  'chat-singleturn',
+  'chat-multiturn',
+  'swebench-multiturn',
+  'terminalbench-multiturn',
+  'osworld-multiturn',
+] as const;
+
 export const ARCHIVE_PROFILES = [
   'chat-short',
   'chat-medium',
@@ -45,6 +53,7 @@ export const ARCHIVE_PROFILES = [
 ] as const;
 
 const CURRENT_PROFILE_SET = new Set<string>(CURRENT_PROFILES);
+const FIXED_PROFILE_SET = new Set<string>(FIXED_PROFILES);
 const ARCHIVE_PROFILE_SET = new Set<string>(ARCHIVE_PROFILES);
 
 const PROFILE_ALIASES: Record<string, string> = {
@@ -132,6 +141,9 @@ export function isProfileInScope(profile: string, scope: DataScope): boolean {
   const normalized = normalizeProfileName(profile);
   if (scope === 'archive') {
     return ARCHIVE_PROFILE_SET.has(normalized);
+  }
+  if (scope === 'fixed') {
+    return FIXED_PROFILE_SET.has(normalized);
   }
   return CURRENT_PROFILE_SET.has(normalized);
 }
