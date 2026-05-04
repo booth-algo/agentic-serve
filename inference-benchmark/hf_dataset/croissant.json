@@ -114,63 +114,126 @@
           "@id": "trace-replay-summary/run_id",
           "name": "run_id",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "trace-replay-summary-parquet" }, "extract": { "column": "run_id" } }
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "run_id"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "trace-replay-summary/model",
           "name": "model",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "trace-replay-summary-parquet" }, "extract": { "column": "model" } }
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "model"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "trace-replay-summary/hardware",
           "name": "hardware",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "trace-replay-summary-parquet" }, "extract": { "column": "hardware" } }
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "hardware"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "trace-replay-summary/engine",
           "name": "engine",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "trace-replay-summary-parquet" }, "extract": { "column": "engine" } }
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "engine"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "trace-replay-summary/profile",
           "name": "profile",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "trace-replay-summary-parquet" }, "extract": { "column": "profile" } }
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "profile"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "trace-replay-summary/concurrency",
           "name": "concurrency",
           "dataType": "sc:Integer",
-          "source": { "fileObject": { "@id": "trace-replay-summary-parquet" }, "extract": { "column": "concurrency" } }
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "concurrency"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "trace-replay-summary/request_throughput",
           "name": "request_throughput",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "trace-replay-summary-parquet" }, "extract": { "column": "request_throughput" } }
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "request_throughput"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "trace-replay-summary/median_ttft_ms",
           "name": "median_ttft_ms",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "trace-replay-summary-parquet" }, "extract": { "column": "median_ttft_ms" } }
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "median_ttft_ms"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "trace-replay-summary/median_tpot_ms",
           "name": "median_tpot_ms",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "trace-replay-summary-parquet" }, "extract": { "column": "median_tpot_ms" } }
+          "source": {
+            "fileObject": {
+              "@id": "trace-replay-summary-parquet"
+            },
+            "extract": {
+              "column": "median_tpot_ms"
+            }
+          }
         }
       ]
     },
@@ -185,63 +248,126 @@
           "@id": "distributional-summary/run_id",
           "name": "run_id",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "distributional-summary-parquet" }, "extract": { "column": "run_id" } }
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "run_id"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "distributional-summary/model",
           "name": "model",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "distributional-summary-parquet" }, "extract": { "column": "model" } }
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "model"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "distributional-summary/hardware",
           "name": "hardware",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "distributional-summary-parquet" }, "extract": { "column": "hardware" } }
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "hardware"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "distributional-summary/engine",
           "name": "engine",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "distributional-summary-parquet" }, "extract": { "column": "engine" } }
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "engine"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "distributional-summary/profile",
           "name": "profile",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "distributional-summary-parquet" }, "extract": { "column": "profile" } }
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "profile"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "distributional-summary/concurrency",
           "name": "concurrency",
           "dataType": "sc:Integer",
-          "source": { "fileObject": { "@id": "distributional-summary-parquet" }, "extract": { "column": "concurrency" } }
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "concurrency"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "distributional-summary/request_throughput",
           "name": "request_throughput",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "distributional-summary-parquet" }, "extract": { "column": "request_throughput" } }
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "request_throughput"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "distributional-summary/median_ttft_ms",
           "name": "median_ttft_ms",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "distributional-summary-parquet" }, "extract": { "column": "median_ttft_ms" } }
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "median_ttft_ms"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "distributional-summary/median_tpot_ms",
           "name": "median_tpot_ms",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "distributional-summary-parquet" }, "extract": { "column": "median_tpot_ms" } }
+          "source": {
+            "fileObject": {
+              "@id": "distributional-summary-parquet"
+            },
+            "extract": {
+              "column": "median_tpot_ms"
+            }
+          }
         }
       ]
     },
@@ -256,49 +382,98 @@
           "@id": "kernels-labeled/source",
           "name": "source",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "kernels-labeled-parquet" }, "extract": { "column": "source" } }
+          "source": {
+            "fileObject": {
+              "@id": "kernels-labeled-parquet"
+            },
+            "extract": {
+              "column": "source"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "kernels-labeled/gpu",
           "name": "gpu",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "kernels-labeled-parquet" }, "extract": { "column": "gpu" } }
+          "source": {
+            "fileObject": {
+              "@id": "kernels-labeled-parquet"
+            },
+            "extract": {
+              "column": "gpu"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "kernels-labeled/model",
           "name": "model",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "kernels-labeled-parquet" }, "extract": { "column": "model" } }
+          "source": {
+            "fileObject": {
+              "@id": "kernels-labeled-parquet"
+            },
+            "extract": {
+              "column": "model"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "kernels-labeled/kernel_family",
           "name": "kernel_family",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "kernels-labeled-parquet" }, "extract": { "column": "kernel_family" } }
+          "source": {
+            "fileObject": {
+              "@id": "kernels-labeled-parquet"
+            },
+            "extract": {
+              "column": "kernel_family"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "kernels-labeled/kernel_name",
           "name": "kernel_name",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "kernels-labeled-parquet" }, "extract": { "column": "kernel_name" } }
+          "source": {
+            "fileObject": {
+              "@id": "kernels-labeled-parquet"
+            },
+            "extract": {
+              "column": "kernel_name"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "kernels-labeled/gpu_time_duration_ms",
           "name": "gpu_time_duration_ms",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "kernels-labeled-parquet" }, "extract": { "column": "gpu_time_duration_ms" } }
+          "source": {
+            "fileObject": {
+              "@id": "kernels-labeled-parquet"
+            },
+            "extract": {
+              "column": "gpu_time_duration_ms"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "kernels-labeled/dram_bytes_sum",
           "name": "dram_bytes_sum",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "kernels-labeled-parquet" }, "extract": { "column": "dram_bytes_sum" } }
+          "source": {
+            "fileObject": {
+              "@id": "kernels-labeled-parquet"
+            },
+            "extract": {
+              "column": "dram_bytes_sum"
+            }
+          }
         }
       ]
     },
@@ -313,28 +488,56 @@
           "@id": "roofline-quadrant/model",
           "name": "model",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "roofline-quadrant-parquet" }, "extract": { "column": "model" } }
+          "source": {
+            "fileObject": {
+              "@id": "roofline-quadrant-parquet"
+            },
+            "extract": {
+              "column": "model"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "roofline-quadrant/hardware",
           "name": "hardware",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "roofline-quadrant-parquet" }, "extract": { "column": "hardware" } }
+          "source": {
+            "fileObject": {
+              "@id": "roofline-quadrant-parquet"
+            },
+            "extract": {
+              "column": "hardware"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "roofline-quadrant/oi",
           "name": "oi",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "roofline-quadrant-parquet" }, "extract": { "column": "oi" } }
+          "source": {
+            "fileObject": {
+              "@id": "roofline-quadrant-parquet"
+            },
+            "extract": {
+              "column": "oi"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "roofline-quadrant/output_tput",
           "name": "output_tput",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "roofline-quadrant-parquet" }, "extract": { "column": "output_tput" } }
+          "source": {
+            "fileObject": {
+              "@id": "roofline-quadrant-parquet"
+            },
+            "extract": {
+              "column": "output_tput"
+            }
+          }
         }
       ]
     },
@@ -349,91 +552,182 @@
           "@id": "predictions/hardware_config",
           "name": "hardware_config",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "hardware_config" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "hardware_config"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/model",
           "name": "model",
           "dataType": "sc:Text",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "model" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "model"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/ttft_pred",
           "name": "ttft_pred",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "ttft_pred" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "ttft_pred"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/ttft_meas",
           "name": "ttft_meas",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "ttft_meas" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "ttft_meas"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/ttft_err",
           "name": "ttft_err",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "ttft_err" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "ttft_err"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/tpot_pred",
           "name": "tpot_pred",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "tpot_pred" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "tpot_pred"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/tpot_meas",
           "name": "tpot_meas",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "tpot_meas" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "tpot_meas"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/tpot_err",
           "name": "tpot_err",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "tpot_err" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "tpot_err"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/e2el_pred",
           "name": "e2el_pred",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "e2el_pred" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "e2el_pred"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/e2el_meas",
           "name": "e2el_meas",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "e2el_meas" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "e2el_meas"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/e2el_err",
           "name": "e2el_err",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "e2el_err" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "e2el_err"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/cache_hit_rate",
           "name": "cache_hit_rate",
           "dataType": "sc:Float",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "cache_hit_rate" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "cache_hit_rate"
+            }
+          }
         },
         {
           "@type": "cr:Field",
           "@id": "predictions/cache_aware_applied",
           "name": "cache_aware_applied",
           "dataType": "sc:Boolean",
-          "source": { "fileObject": { "@id": "predictions-parquet" }, "extract": { "column": "cache_aware_applied" } }
+          "source": {
+            "fileObject": {
+              "@id": "predictions-parquet"
+            },
+            "extract": {
+              "column": "cache_aware_applied"
+            }
+          }
         }
       ]
     }
@@ -466,5 +760,12 @@
     "@type": "prov:Activity",
     "name": "AgentPerfBench benchmark collection",
     "description": "Deploy model on target GPU with specified engine and tensor parallelism. Send requests per configuration after warmup using closed-loop concurrency control. Record per-request TTFT, TPOT, ITL, E2EL, and token counts. Compute summary statistics. Sanitize credentials and convert to Parquet."
-  }
+  },
+  "rai:dataCollection": "Automated benchmark collection. Models deployed on target GPU with specified engine and tensor parallelism. Requests sent per workload profile using closed-loop concurrency control with semaphore. Per-request TTFT, TPOT, ITL, E2EL, and token counts recorded. Kernel profiles collected via Nsight Compute (ncu) with hardware counter metrics.",
+  "rai:dataCollectionType": "Automated measurement via benchmarking scripts. No human subjects or crowdsourcing.",
+  "rai:dataCollectionMissingData": "Some model-hardware-concurrency combinations are absent due to OOM or engine incompatibility. Concurrency levels exceeding the session-pool size were filtered (see Concurrency filtering in README).",
+  "rai:dataPreprocessing": "Credentials and API endpoints stripped. Concurrency-buggy rows filtered. Summary statistics (mean, median, p90, p99) computed from per-request measurements. Kernel names demangled from NCU output.",
+  "rai:dataAnnotationProtocol": "Not applicable. Fully automated benchmark collection with no human annotation.",
+  "rai:dataAnnotationPlatform": "Not applicable. No human annotation.",
+  "rai:dataAnnotationAnalysis": "Not applicable. No human annotation."
 }
