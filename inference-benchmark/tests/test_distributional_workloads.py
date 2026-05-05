@@ -1,7 +1,12 @@
-import unittest
 import json
+import os
+import subprocess
+import sys
 import tempfile
+import textwrap
+import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.workloads.distributional import DistributionalSampler
 from src.workloads.dataset import DistributionalMultiTurnDataset, make_dataset
@@ -10,6 +15,11 @@ from src.workloads.trace_distributions import (
     TraceDistributionError,
     parse_trace_distribution,
 )
+
+
+class WhitespaceTokenizer:
+    def encode(self, text, add_special_tokens=False):
+        return text.split()
 
 
 def fixture_distribution():
@@ -46,6 +56,57 @@ def fixture_distribution():
         },
     }
     return parse_trace_distribution(payload, path=Path("fixture.json"))
+
+
+def source_session_fixture_distribution():
+    payload = {
+        "schema_version": 1,
+        "name": "source_session_fixture",
+        "source": {"kind": "unit-test"},
+        "summary": {},
+        "samples": {
+            "turn_count": [2, 2],
+            "turns": [
+                {
+                    "source_session_id": "session-a",
+                    "token_source": "captured_vllm_input_tokens",
+                    "turn_index": 0,
+                    "total_context_tokens": 100,
+                    "new_prefill_tokens": 100,
+                    "output_tokens": 10,
+                    "cache_hit_rate": 0.0,
+                },
+                {
+                    "source_session_id": "session-a",
+                    "token_source": "captured_vllm_input_tokens",
+                    "turn_index": 1,
+                    "total_context_tokens": 150,
+                    "new_prefill_tokens": 50,
+                    "output_tokens": 10,
+                    "cache_hit_rate": 100 / 150,
+                },
+                {
+                    "source_session_id": "session-b",
+                    "token_source": "captured_vllm_input_tokens",
+                    "turn_index": 0,
+                    "total_context_tokens": 200,
+                    "new_prefill_tokens": 200,
+                    "output_tokens": 20,
+                    "cache_hit_rate": 0.0,
+                },
+                {
+                    "source_session_id": "session-b",
+                    "token_source": "captured_vllm_input_tokens",
+                    "turn_index": 1,
+                    "total_context_tokens": 260,
+                    "new_prefill_tokens": 60,
+                    "output_tokens": 20,
+                    "cache_hit_rate": 200 / 260,
+                },
+            ],
+        },
+    }
+    return parse_trace_distribution(payload, path=Path("source.json"))
 
 
 class TraceDistributionLoaderTests(unittest.TestCase):
@@ -175,6 +236,105 @@ class DistributionalSamplerTests(unittest.TestCase):
 
         self.assertEqual(first_specs, second_specs)
 
+    def test_source_session_samples_are_not_mixed_by_turn_index(self):
+        distribution = source_session_fixture_distribution()
+        session = DistributionalSampler(distribution, seed=3).sample_session(session_id=0)
+
+        sampled_source_ids = {
+            request.metadata["sampled_source_session_id"]
+            for request in session.turns
+        }
+        contexts = [spec.total_context_tokens for spec in session.specs]
+
+        self.assertEqual(len(sampled_source_ids), 1)
+        self.assertIn(contexts, ([100, 150], [200, 260]))
+
+    def test_sample_sessions_uses_source_sessions_without_replacement(self):
+        sampler = DistributionalSampler(source_session_fixture_distribution(), seed=7)
+
+        sessions = sampler.sample_sessions(2)
+        sampled_source_ids = [
+            session.turns[0].metadata["sampled_source_session_id"]
+            for session in sessions
+        ]
+
+        self.assertEqual(len(sampled_source_ids), 2)
+        self.assertEqual(set(sampled_source_ids), {"session-a", "session-b"})
+
+    def test_source_locked_sessions_follow_requested_source_order(self):
+        sampler = DistributionalSampler(source_session_fixture_distribution(), seed=7)
+
+        sessions = sampler.sample_source_locked_sessions(["session-b", "session-a"])
+        sampled_source_ids = [
+            session.turns[0].metadata["sampled_source_session_id"]
+            for session in sessions
+        ]
+        contexts = [
+            [spec.total_context_tokens for spec in session.specs]
+            for session in sessions
+        ]
+
+        self.assertEqual(sampled_source_ids, ["session-b", "session-a"])
+        self.assertEqual(contexts, [[200, 260], [100, 150]])
+        with self.assertRaisesRegex(ValueError, "Unknown source_session_id"):
+            sampler.sample_source_locked_sessions(["missing-session"])
+
+    def test_stable_text_seed_ignores_python_hash_seed(self):
+        script = textwrap.dedent(
+            """
+            from src.workloads.distributional import _stable_text_seed
+            print(_stable_text_seed("s0_t0_user_0"))
+            """
+        )
+
+        pythonpath = str(Path(__file__).resolve().parents[1])
+        env_one = {**os.environ, "PYTHONHASHSEED": "1", "PYTHONPATH": pythonpath}
+        env_two = {**os.environ, "PYTHONHASHSEED": "2", "PYTHONPATH": pythonpath}
+
+        first = subprocess.check_output([sys.executable, "-c", script], env=env_one, text=True)
+        second = subprocess.check_output([sys.executable, "-c", script], env=env_two, text=True)
+
+        self.assertEqual(first, second)
+
+    def test_codelike_synthetic_style_targets_chars_per_token(self):
+        sampler = DistributionalSampler(fixture_distribution(), seed=7)
+        sampler._tokenizer = WhitespaceTokenizer()
+        sampler.synthetic_filler_style = "code"
+        sampler.target_chars_per_token = 4.0
+
+        text = sampler._synthetic_text("fixture", 50)
+        token_count = len(sampler._tokenizer.encode(text, add_special_tokens=False))
+        chars_per_token = len(text) / token_count
+
+        self.assertEqual(token_count, 50)
+        self.assertLess(chars_per_token, 5.0)
+
+    def test_prefix_aware_mode_adds_shared_block_aligned_prefix(self):
+        env = {
+            "DISTRIBUTIONAL_PREFIX_AWARE": "1",
+            "DISTRIBUTIONAL_SHARED_PREFIX_TOKENS": "64",
+            "DISTRIBUTIONAL_PREFIX_BLOCK_SIZE": "16",
+        }
+        with patch.dict(os.environ, env):
+            sampler = DistributionalSampler(source_session_fixture_distribution(), seed=7)
+            sampler._tokenizer = WhitespaceTokenizer()
+
+            sessions = sampler.sample_sessions(2)
+
+        first_prefix = sessions[0].turns[0].messages[0]["content"]
+        second_prefix = sessions[1].turns[0].messages[0]["content"]
+        first_meta = sessions[0].turns[0].metadata
+
+        self.assertEqual(first_prefix, second_prefix)
+        self.assertEqual(sessions[0].turns[0].messages[0]["role"], "system")
+        self.assertTrue(first_meta["prefix_aware_synthetic"])
+        self.assertEqual(first_meta["shared_prefix_requested_tokens"], 64)
+        self.assertEqual(first_meta["shared_prefix_target_tokens"], 64)
+        self.assertEqual(first_meta["shared_prefix_actual_tokens"], 64)
+        self.assertTrue(first_meta["shared_prefix_block_aligned"])
+        self.assertEqual(first_meta["planned_total_context_tokens"], 100)
+        self.assertEqual(first_meta["planned_new_user_tokens"], 36)
+
 
 class DistributionalMultiTurnDatasetTests(unittest.TestCase):
     def test_benchmark_request_metadata_uses_independent_default_dicts(self):
@@ -229,6 +389,7 @@ class DistributionalMultiTurnDatasetTests(unittest.TestCase):
                 description="fixture",
                 dataset="distributional-multi-turn",
                 file_path=str(path),
+                system_prompt="",
                 mode="multi-turn",
                 num_sessions=2,
                 agent_type="coding",
