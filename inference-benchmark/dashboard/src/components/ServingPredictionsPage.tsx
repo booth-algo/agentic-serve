@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
+  DATA_SCOPE_META,
   type DataScope,
   isProfileInScope,
+  normalizeDataScope,
   normalizeProfileName,
   profileDisplayName,
 } from '../profileMeta';
@@ -22,8 +24,8 @@ interface ServingTurnPrediction {
 
 interface ServingRow {
   model: string; backend?: string; profile: string; concurrency?: number; isl: number; osl: number;
-  data_scope?: DataScope;
-  dataScope?: DataScope;
+  data_scope?: string;
+  dataScope?: string;
   total_context_tokens?: number;
   new_prefill_tokens?: number;
   cached_context_tokens?: number;
@@ -78,6 +80,7 @@ interface ServingScopeIndex {
 }
 
 interface ServingIndex {
+  synthetic: ServingScopeIndex;
   current: ServingScopeIndex;
   archive: ServingScopeIndex;
   fixed: ServingScopeIndex;
@@ -211,7 +214,7 @@ export function ServingPredictionsPage({ dataScope }: { dataScope: DataScope }) 
         <div>
           <h2 className="text-lg font-semibold text-[#e6edf3]">Serving Latency Predictions</h2>
           <p className="mt-1 max-w-3xl text-xs text-[#8b949e]">
-            High-concurrency predictions vs measured benchmark results. {dataScope === 'archive' ? 'Showing archived legacy and stress profiles.' : dataScope === 'fixed' ? 'Showing the fixed-scope profile subset.' : 'Showing the canonical paper profiles.'}
+            High-concurrency predictions vs measured benchmark results from {DATA_SCOPE_META[dataScope].label.toLowerCase()}.
             Multi-turn TTFT reflects cache-aware serving behavior, not cumulative full-prefill latency.
           </p>
         </div>
@@ -385,6 +388,7 @@ function createServingScopeIndex(): ServingScopeIndex {
 
 function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
   const index: ServingIndex = {
+    synthetic: createServingScopeIndex(),
     current: createServingScopeIndex(),
     archive: createServingScopeIndex(),
     fixed: createServingScopeIndex(),
@@ -393,7 +397,7 @@ function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
 
   for (const [gpu, rows] of Object.entries(data)) {
     for (const row of rows) {
-      const dataScope = row.data_scope ?? row.dataScope ?? 'archive';
+      const dataScope = normalizeDataScope(row.data_scope ?? row.dataScope ?? null) ?? 'archive';
       if (dataScope !== 'current' && dataScope !== 'archive' && dataScope !== 'fixed') continue;
 
       const profile = normalizeProfileName(row.profile);
@@ -406,7 +410,7 @@ function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
     }
   }
 
-  for (const scope of ['current', 'archive', 'fixed'] as const) {
+  for (const scope of ['synthetic', 'current', 'archive', 'fixed', 'mse'] as const) {
     const scopeIndex = index[scope];
     scopeIndex.gpuOptions = Object.keys(scopeIndex.rowsByGpu)
       .filter(gpu => scopeIndex.rowsByGpu[gpu].length > 0)

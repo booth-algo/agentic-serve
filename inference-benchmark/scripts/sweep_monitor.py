@@ -118,11 +118,16 @@ def scope_matches(item: dict[str, Any], scope: str) -> bool:
     return scope == "all" or str(item.get("data_scope") or "current") == scope
 
 
+def coverage_grid_scope(scope: str) -> str:
+    return "fixed" if scope == "latest" else scope
+
+
 def expected_points_from_state(state: dict[str, Any], scope: str) -> set[PointKey]:
     blocked_profiles = {profile_key(item) for item in state.get("profile_infeasible", [])}
     points: set[PointKey] = set()
+    grid_scope = coverage_grid_scope(scope)
     for cell in state.get("cells", []):
-        if not scope_matches(cell, scope):
+        if not scope_matches(cell, grid_scope):
             continue
         if cell.get("status") == "known_oom":
             continue
@@ -415,7 +420,7 @@ def main() -> int:
     parser.add_argument("--published-base", default=DEFAULT_PUBLIC_BASE)
     parser.add_argument("--published-state", default=None)
     parser.add_argument("--published-data", default=None)
-    parser.add_argument("--scope", choices=("current", "fixed", "archive", "all"), default="current")
+    parser.add_argument("--scope", choices=("synthetic", "latest", "current", "fixed", "mse", "archive", "all"), default="current")
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--limit", type=int, default=25)
     parser.add_argument("--fail-on-drift", action="store_true")

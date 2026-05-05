@@ -14,7 +14,7 @@ import { CoveragePage } from './components/CoveragePage';
 import { GemmPage } from './components/GemmPage';
 import { ServingPredictionsPage } from './components/ServingPredictionsPage';
 import type { TabId } from './types';
-import type { DataScope } from './profileMeta';
+import { hasServingPredictions, normalizeDataScope, type DataScope } from './profileMeta';
 import './index.css';
 
 type PageId = 'benchmark' | 'coverage' | 'gemm' | 'serving';
@@ -24,9 +24,10 @@ const DATA_SCOPE_STORAGE_KEY = 'inference-dashboard-data-scope';
 function initialDataScope(): DataScope {
   const params = new URLSearchParams(window.location.search);
   const urlScope = params.get('scope');
-  if (urlScope === 'archive' || urlScope === 'current' || urlScope === 'fixed') return urlScope;
+  const normalizedUrlScope = normalizeDataScope(urlScope);
+  if (normalizedUrlScope) return normalizedUrlScope;
   const storedScope = window.localStorage.getItem(DATA_SCOPE_STORAGE_KEY);
-  return storedScope === 'archive' || storedScope === 'fixed' ? storedScope : 'current';
+  return normalizeDataScope(storedScope) ?? 'current';
 }
 
 function initialPage(): PageId {
@@ -41,7 +42,7 @@ function pageUrl(page: PageId): string {
 }
 
 function pageAvailableInScope(page: PageId, scope: DataScope): boolean {
-  return scope !== 'archive' || page !== 'serving';
+  return page !== 'serving' || hasServingPredictions(scope);
 }
 
 function App() {
@@ -87,7 +88,7 @@ function App() {
   const setDataScope = useCallback((scope: DataScope) => {
     window.localStorage.setItem(DATA_SCOPE_STORAGE_KEY, scope);
     const url = new URL(window.location.href);
-    if (scope === 'archive' || scope === 'fixed') {
+    if (scope !== 'current') {
       url.searchParams.set('scope', scope);
     } else {
       url.searchParams.delete('scope');

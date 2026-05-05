@@ -1,10 +1,10 @@
 // Runtime sweep state published by scripts/publish_sweep_state.py to R2.
 // Schema mirrors sweep.yaml + /tmp/bench_jobs/state/<jid>.status.
 
-export type CellStatus = 'pending' | 'running' | 'done' | 'skipped' | 'known_oom';
+export type CellStatus = 'pending' | 'running' | 'done' | 'skipped' | 'failed' | 'known_oom';
 
 export interface SweepCell {
-  data_scope?: 'current' | 'fixed';
+  data_scope?: 'synthetic' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
   host: string;
   hw_label: string;  // e.g. "A100-40GBx4"
   model: string;
@@ -33,7 +33,7 @@ export interface SweepModel {
 }
 
 export interface SweepProfileInfeasible {
-  data_scope?: 'current' | 'fixed';
+  data_scope?: 'synthetic' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
   host: string;
   hw_label: string;
   model: string;

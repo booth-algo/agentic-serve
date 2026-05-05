@@ -16,6 +16,7 @@ from src.benchmark.runner import (
     BENCHMARK_SCHEMA_VERSION,
     _resolve_cache_state,
     _resolve_tri_state,
+    resolve_multi_turn_num_sessions,
     save_results,
 )
 from src.workloads.dataset import BenchmarkRequest
@@ -196,6 +197,26 @@ class RunnerCacheMetadataTests(unittest.TestCase):
             (0.0 + 192 / 260) / 2,
         )
 
+    def test_per_turn_summary_preserves_nonzero_cache_estimates_from_run_results(self):
+        result = annotate_multi_turn_cache_estimate(
+            RequestResult(success=True, input_tokens=1531, output_tokens=9),
+            session_id=0,
+            turn_index=1,
+            previous_context_tokens=1416,
+            cache_block_size=16,
+        )
+
+        summary = aggregate_per_turn({1: [result]})[0]
+
+        self.assertEqual(summary.avg_cached_context_tokens, 1416)
+        self.assertEqual(summary.median_cached_context_tokens, 1416)
+        self.assertEqual(summary.avg_new_prefill_tokens, 115)
+        self.assertEqual(summary.median_new_prefill_tokens, 115)
+        self.assertAlmostEqual(summary.avg_cache_hit_rate, 1416 / 1531)
+        self.assertAlmostEqual(summary.median_cache_hit_rate, 1416 / 1531)
+        self.assertEqual(summary.avg_block_aligned_cached_context_tokens, 1408)
+        self.assertEqual(summary.median_block_aligned_cached_context_tokens, 1408)
+
     def test_per_turn_summary_includes_client_queue_wait_median(self):
         first = RequestResult(success=True, input_tokens=100, output_tokens=20)
         first.client_queue_wait_s = 0.010
@@ -278,6 +299,14 @@ class RunnerCacheMetadataTests(unittest.TestCase):
     def test_tri_state_metadata_resolution(self):
         self.assertEqual(_resolve_tri_state("auto"), ("unknown", "not_reported"))
         self.assertEqual(_resolve_tri_state("on"), ("on", "cli"))
+
+    def test_synthetic_multiturn_sessions_floor_at_concurrency(self):
+        profile = get_profile("swebench-multiturn-synth")
+
+        sessions, source = resolve_multi_turn_num_sessions(profile, concurrency=320)
+
+        self.assertEqual(sessions, 320)
+        self.assertEqual(source, "concurrency_floor")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,10 @@
 import type { ReactNode } from 'react';
-import type { DataScope } from '../profileMeta';
+import {
+  DATA_SCOPE_META,
+  DATA_SCOPE_OPTIONS,
+  hasServingPredictions,
+  type DataScope,
+} from '../profileMeta';
 
 type PageId = 'benchmark' | 'coverage' | 'gemm' | 'serving';
 
@@ -69,9 +74,10 @@ export function Layout({
   onDataScopeChange,
   scopePending = false,
 }: LayoutProps) {
-  const navPages = dataScope === 'archive'
-    ? NAV_PAGES.filter((page) => page.id !== 'serving')
-    : NAV_PAGES;
+  const scopeMeta = DATA_SCOPE_META[dataScope];
+  const navPages = hasServingPredictions(dataScope)
+    ? NAV_PAGES
+    : NAV_PAGES.filter((page) => page.id !== 'serving');
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]" aria-busy={loading || scopePending}>
@@ -115,21 +121,11 @@ export function Layout({
 
           {/* Right: status */}
           <div className="flex items-center gap-3 text-sm text-[#8b949e]">
-            <div className="hidden items-center rounded-md border border-[#30363d] bg-[#0d1117] p-0.5 sm:flex">
-              {(['current', 'archive', 'fixed'] as const).map((scope) => (
-                <button
-                  key={scope}
-                  onClick={() => onDataScopeChange(scope)}
-                  className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
-                    dataScope === scope
-                      ? 'bg-[#1f6feb] text-white'
-                      : 'text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]'
-                  }`}
-                >
-                  {scope}
-                </button>
-              ))}
-            </div>
+            <ScopeSwitcher
+              dataScope={dataScope}
+              onDataScopeChange={onDataScopeChange}
+              className="hidden sm:flex"
+            />
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#ff9800]" />
@@ -165,20 +161,32 @@ export function Layout({
               {page.label}
             </button>
           ))}
-          <div className="ml-auto flex items-center rounded-md border border-[#30363d] bg-[#0d1117] p-0.5">
-            {(['current', 'archive', 'fixed'] as const).map((scope) => (
-              <button
-                key={scope}
-                onClick={() => onDataScopeChange(scope)}
-                className={`rounded px-2 py-1 text-xs font-medium capitalize transition-colors ${
-                  dataScope === scope
-                    ? 'bg-[#1f6feb] text-white'
-                    : 'text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]'
-                }`}
-              >
-                {scope}
-              </button>
-            ))}
+          <ScopeSwitcher
+            dataScope={dataScope}
+            onDataScopeChange={onDataScopeChange}
+            className="ml-auto"
+            compact
+          />
+        </div>
+
+        <div className="border-t border-[#21262d] bg-[#0d1117]">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs sm:px-6">
+            <span
+              className="font-semibold uppercase tracking-wide"
+              style={{ color: scopeMeta.accent }}
+            >
+              {scopeMeta.label}
+            </span>
+            <span className="text-[#6e7681]">{scopeMeta.eyebrow}</span>
+            <span className="hidden text-[#8b949e] md:inline">{scopeMeta.description}</span>
+            {!hasServingPredictions(dataScope) && (
+              <span className="rounded border border-[#30363d] bg-[#161b22] px-2 py-0.5 text-[10px] font-medium text-[#8b949e]">
+                Serving hidden for this run set
+              </span>
+            )}
+            <span className="ml-auto hidden font-mono text-[#6e7681] sm:inline">
+              {totalRuns} {scopeMeta.rowsLabel}
+            </span>
           </div>
         </div>
       </nav>
@@ -187,6 +195,52 @@ export function Layout({
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         {children}
       </main>
+    </div>
+  );
+}
+
+function ScopeSwitcher({
+  dataScope,
+  onDataScopeChange,
+  className = '',
+  compact = false,
+}: {
+  dataScope: DataScope;
+  onDataScopeChange: (scope: DataScope) => void;
+  className?: string;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`inline-flex items-center rounded-md border border-[#30363d] bg-[#0d1117] p-0.5 ${className}`}>
+      {DATA_SCOPE_OPTIONS.map((scope) => {
+        const meta = DATA_SCOPE_META[scope];
+        const selected = dataScope === scope;
+        return (
+          <button
+            key={scope}
+            onClick={() => onDataScopeChange(scope)}
+            aria-pressed={selected}
+            title={meta.description}
+            className={`rounded px-2 py-1 text-left text-xs font-medium transition-colors ${
+              selected
+                ? 'text-white'
+                : 'text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]'
+            }`}
+            style={{
+              backgroundColor: selected ? `${meta.accent}33` : undefined,
+              boxShadow: selected ? `inset 0 0 0 1px ${meta.accent}99` : undefined,
+              color: selected ? '#ffffff' : undefined,
+            }}
+          >
+            <span className="whitespace-nowrap">{compact ? meta.shortLabel : meta.shortLabel}</span>
+            {!compact && (
+              <span className="ml-1 hidden text-[10px] font-normal text-[#8b949e] xl:inline">
+                {meta.eyebrow}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

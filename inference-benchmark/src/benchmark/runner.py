@@ -78,6 +78,7 @@ async def run_benchmark(
         max_context_tokens=max_context_tokens,
         random_seed=seed,
         context_safety_margin_tokens=context_safety_margin_tokens,
+        tokenizer_name=model,
     )
     arrival_times = make_arrival_times(
         pattern=arrival_pattern,
@@ -136,6 +137,16 @@ async def run_benchmark(
         tasks = [dispatch(i, t) for i, t in enumerate(arrival_times)]
         await asyncio.gather(*tasks)
 
+        ok = sum(1 for r in results if r is not None and r.success)
+        fail = num_requests - ok
+        if fail > 0 and fail >= num_requests * 0.9:
+            print(
+                f"ABORT: {fail}/{num_requests} requests failed "
+                f"({fail / num_requests * 100:.0f}%). "
+                f"Server may not be functional. Check server logs."
+            )
+            sys.exit(1)
+
     benchmark_duration = time.perf_counter() - benchmark_start
     return results, benchmark_duration
 
@@ -155,6 +166,7 @@ async def run_multi_turn_benchmark(
     seed: int = 42,
     cache_block_size: int | None = 16,
     num_sessions: int | None = None,
+    source_session_ids: list[str] | None = None,
 ):
     """
     Run a multi-turn benchmark with interleaved round-robin scheduling.
@@ -183,6 +195,8 @@ async def run_multi_turn_benchmark(
         random_seed=seed,
         context_safety_margin_tokens=context_safety_margin_tokens,
         num_sessions=num_sessions,
+        tokenizer_name=model,
+        source_session_ids=source_session_ids,
     )
 
     if not isinstance(dataset, (DistributionalMultiTurnDataset, ShareGPTMultiTurnDataset, TrajectoryMultiTurnDataset)):
@@ -274,6 +288,15 @@ async def run_multi_turn_benchmark(
             ]
             completed = await asyncio.gather(*tasks)
 
+            turn_ok = sum(1 for _, _, r in completed if r is not None and r.success)
+            turn_fail = len(completed) - turn_ok
+            if turn_fail == len(completed):
+                print(
+                    f"ABORT: All {len(completed)} requests in turn {turn_idx + 1} "
+                    f"failed. Server may not be functional."
+                )
+                sys.exit(1)
+
             for sid, t_idx, result in completed:
                 results_by_turn[t_idx].append(result)
                 if result.success and result.input_tokens > 0:
@@ -290,6 +313,38 @@ async def run_multi_turn_benchmark(
             all_results.append(r)
 
     return all_results, results_by_turn, benchmark_duration
+
+
+def _check_success_rate(summary, min_rate: float):
+    """Exit with error if success rate is below the minimum threshold."""
+    if summary.num_requests == 0:
+        print(f"ABORT: No requests completed. Minimum success rate: {min_rate:.0%}")
+        sys.exit(1)
+    rate = summary.successful_requests / summary.num_requests
+    if rate < min_rate:
+        print(f"ABORT: Success rate {rate:.1%} below minimum {min_rate:.0%} "
+              f"({summary.successful_requests}/{summary.num_requests})")
+        sys.exit(1)
+
+
+def _load_source_session_ids(path: str | None) -> list[str] | None:
+    if not path:
+        return None
+    source_path = Path(path)
+    ids = []
+    seen = set()
+    for line in source_path.read_text(encoding="utf-8").splitlines():
+        source_session_id = line.strip()
+        if not source_session_id or source_session_id.startswith("#"):
+            continue
+        if source_session_id in seen:
+            continue
+        ids.append(source_session_id)
+        seen.add(source_session_id)
+    if not ids:
+        print(f"Error: --source-session-ids-file had no usable IDs: {path}")
+        sys.exit(1)
+    return ids
 
 
 def save_results(summary, results, output_path: str, config: dict):
@@ -386,10 +441,20 @@ def _resolve_tri_state(cli_value: str) -> tuple[str, str]:
     return "unknown", "not_reported"
 
 
-def resolve_multi_turn_num_sessions(profile, concurrency: int) -> tuple[int, str]:
+def resolve_multi_turn_num_sessions(
+    profile,
+    concurrency: int,
+    override: int | None = None,
+) -> tuple[int, str]:
     """Multi-turn runs need enough sessions to saturate the requested concurrency."""
     if profile.mode != "multi-turn":
         return profile.num_sessions, "profile_default"
+
+    if override is not None:
+        effective_num_sessions = max(override, concurrency)
+        if effective_num_sessions == override:
+            return effective_num_sessions, "cli"
+        return effective_num_sessions, "cli_concurrency_floor"
 
     effective_num_sessions = max(profile.num_sessions, concurrency)
     if effective_num_sessions == profile.num_sessions:
@@ -405,6 +470,10 @@ def get_args():
                         help="Backend type (vllm/sglang/openai → /v1/chat/completions, trtllm → /generate_stream)")
     parser.add_argument("--profile", default="chat-singleturn", help="Workload profile name")
     parser.add_argument("--concurrency", type=int, default=10)
+    parser.add_argument("--multi-turn-sessions", type=int, default=None,
+                        help="Override number of multi-turn sessions to load/sample. Floored at --concurrency.")
+    parser.add_argument("--source-session-ids-file", default=None,
+                        help="Validation mode: source-lock distributional multi-turn sampling to these source_session_id values.")
     parser.add_argument("--num-requests", type=int, default=100)
     parser.add_argument("--api-key", default="test")
     parser.add_argument("--arrival", default="steady", choices=["steady", "poisson", "ramp"])
@@ -444,8 +513,10 @@ def get_args():
     parser.add_argument("--mode", choices=["stress-test", "single-turn", "multi-turn"],
                         help="Benchmark mode (sets profile defaults and required flags). "
                              "Use --profile for a specific profile within a mode.")
-    parser.add_argument("--scope", choices=["current", "archive", "fixed", "mse"],
-                        default=None, help="Dashboard scope override (default: active→fixed, inactive→archive)")
+    parser.add_argument("--scope", choices=["synthetic", "latest", "current", "archive", "fixed", "mse"],
+                        default=None, help="Dashboard scope override (default: *-synth→synthetic, active→fixed, inactive→archive)")
+    parser.add_argument("--min-success-rate", type=float, default=0.75, dest="min_success_rate",
+                        help="Minimum success rate (0.0-1.0). Runs below this threshold exit with an error. Default: 0.75")
     parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
     parser.add_argument("--include-inactive", action="store_true",
                         help="With --list-profiles, include legacy/inactive profiles")
@@ -506,10 +577,21 @@ if __name__ == "__main__":
 
     profile = get_profile(args.profile)
     profile_name = profile.name
+    if args.multi_turn_sessions is not None and args.multi_turn_sessions <= 0:
+        print("Error: --multi-turn-sessions must be positive when provided.")
+        sys.exit(1)
     effective_num_sessions, num_sessions_source = resolve_multi_turn_num_sessions(
         profile,
         args.concurrency,
+        args.multi_turn_sessions,
     )
+    source_session_ids = _load_source_session_ids(args.source_session_ids_file)
+    if source_session_ids is not None and profile.dataset != "distributional-multi-turn":
+        print("--source-session-ids-file is only valid for distributional multi-turn profiles.")
+        sys.exit(1)
+    if source_session_ids is not None:
+        effective_num_sessions = len(source_session_ids)
+        num_sessions_source = "source_session_ids_file"
     prefix_caching_state, prefix_caching_state_source = _resolve_cache_state(
         args.prefix_caching_state,
         profile,
@@ -519,7 +601,7 @@ if __name__ == "__main__":
     )
     scope = args.scope
     if scope is None:
-        scope = "fixed" if profile.active else "archive"
+        scope = "synthetic" if profile_name.endswith("-synth") else ("fixed" if profile.active else "archive")
     config = {
         **vars(args),
         "profile": profile_name,
@@ -540,6 +622,9 @@ if __name__ == "__main__":
             "num_sessions": effective_num_sessions,
             "profile_num_sessions": profile.num_sessions,
             "num_sessions_source": num_sessions_source,
+            "source_session_ids_count": (
+                len(source_session_ids) if source_session_ids is not None else None
+            ),
         },
         "prediction_metadata": {
             "prefix_caching_state": prefix_caching_state,
@@ -578,6 +663,7 @@ if __name__ == "__main__":
             seed=args.seed,
             cache_block_size=args.prefix_cache_block_size,
             num_sessions=effective_num_sessions,
+            source_session_ids=source_session_ids,
         ))
 
         summary = aggregate(
@@ -590,6 +676,7 @@ if __name__ == "__main__":
 
         turn_summaries = aggregate_per_turn(results_by_turn)
         print_multi_turn_summary(turn_summaries, summary)
+        _check_success_rate(summary, args.min_success_rate)
         save_results(summary, all_results, args.output, config)
 
         # Also save per-turn breakdown
@@ -632,4 +719,5 @@ if __name__ == "__main__":
         )
 
         print_summary(summary)
+        _check_success_rate(summary, args.min_success_rate)
         save_results(summary, results, args.output, config)

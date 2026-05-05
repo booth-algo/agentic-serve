@@ -5,6 +5,7 @@ import {
   type DataScope,
   isProfileInScope,
   normalizeProfileName,
+  normalizeDataScope,
 } from '../profileMeta';
 import { dataJsonUrl } from '../dataUrls';
 
@@ -62,7 +63,7 @@ export function useData(dataScope: DataScope, options: UseDataOptions = {}) {
       .then((data: BenchmarkResult[]) => {
         const normalized = data.map((r) => {
           const profile = normalizeProfileName(r.config.profile);
-          const dataScope = r.dataScope ?? 'archive';
+          const dataScope = normalizeDataScope(r.dataScope ?? null) ?? 'archive';
           if (profile === r.config.profile && dataScope === r.dataScope) return r;
           return {
             ...r,
@@ -91,9 +92,9 @@ export function useData(dataScope: DataScope, options: UseDataOptions = {}) {
   }, []);
 
   const scopedDataByScope = useMemo<Record<DataScope, BenchmarkResult[]>>(() => {
-    const next: Record<DataScope, BenchmarkResult[]> = { current: [], archive: [], fixed: [], mse: [] };
+    const next: Record<DataScope, BenchmarkResult[]> = { synthetic: [], current: [], archive: [], fixed: [], mse: [] };
     for (const row of allData) {
-      const scope = row.dataScope ?? 'archive';
+      const scope = normalizeDataScope(row.dataScope ?? null) ?? 'archive';
       if (isProfileInScope(row.config.profile, scope)) next[scope].push(row);
     }
     return next;

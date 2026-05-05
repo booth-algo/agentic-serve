@@ -2,8 +2,9 @@
 """Build sweep-state.json from sweep.yaml + orchestrator state files, upload to R2.
 
 For each cell in sweep.yaml (including `known_oom` entries), produce a status
-record by reading /tmp/bench_jobs/state/<job_id>.status. Cells without a state
-file get status "pending". known_oom entries override runtime status.
+record by reading /tmp/bench_jobs/state/<scope>/<job_id>.status. Legacy root
+state fallback is opt-in via BENCH_STATE_LEGACY_FALLBACK=1. Cells without a
+state file get status "pending". known_oom entries override runtime status.
 
 Output is written to dashboard/public/sweep-state.json and optionally uploaded
 to R2 at s3://agent-bench/json/current/sweep-state.json so the live dashboard
@@ -27,7 +28,8 @@ from pathlib import Path
 
 import yaml
 
-from compile_sweep import profile_infeasible_reasons, resolve
+from compile_sweep import cell_data_scope as manifest_cell_data_scope
+from compile_sweep import cell_for_output_scope, profile_infeasible_reasons, profiles_for_output_scope, resolve
 
 HERE = Path(__file__).resolve().parent
 SWEEP_YAML = HERE / "sweep.yaml"
@@ -37,6 +39,8 @@ OUTPUT_FILE = HERE.parent / "dashboard" / "public" / "sweep-state.json"
 R2_ENDPOINT_DEFAULT = "https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com"
 R2_BUCKET_DEFAULT = "agent-bench"
 R2_KEY = "json/current/sweep-state.json"
+LEGACY_STATE_FALLBACK = os.environ.get("BENCH_STATE_LEGACY_FALLBACK") == "1"
+DERIVED_STATE_SCOPES = ("synthetic",)
 
 
 def hw_label(host_cfg: dict, tp: int) -> str:
@@ -52,32 +56,38 @@ def job_id(host: str, model: str, tp: int, mode: str, backend: str = "vllm") -> 
 
 
 def cell_data_scope(cell: dict) -> str:
-    scope = cell.get("data_scope") or cell.get("dashboard_scope") or cell.get("scope")
-    if scope:
-        return str(scope)
-    preset = str(cell.get("preset", ""))
-    return "fixed" if preset.startswith("fixed_") else "current"
+    return manifest_cell_data_scope(cell)
 
 
-def read_state(jid: str) -> dict:
+def state_file(jid: str, data_scope: str, suffix: str) -> Path:
+    if STATE_DIR.name == data_scope:
+        return STATE_DIR / f"{jid}.{suffix}"
+
+    scoped = STATE_DIR / data_scope / f"{jid}.{suffix}"
+    if scoped.exists() or not LEGACY_STATE_FALLBACK:
+        return scoped
+    return STATE_DIR / f"{jid}.{suffix}"
+
+
+def read_state(jid: str, data_scope: str) -> dict:
     out: dict = {"status": "pending", "attempt": 0, "max_len_override": None, "reason": None, "updated_at": None}
-    p = STATE_DIR / f"{jid}.status"
+    p = state_file(jid, data_scope, "status")
     if p.exists():
         out["status"] = p.read_text().strip() or "pending"
         out["updated_at"] = datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc).isoformat()
-    att = STATE_DIR / f"{jid}.attempt"
+    att = state_file(jid, data_scope, "attempt")
     if att.exists():
         try:
             out["attempt"] = int(att.read_text().strip())
         except ValueError:
             pass
-    ov = STATE_DIR / f"{jid}.max_len_override"
+    ov = state_file(jid, data_scope, "max_len_override")
     if ov.exists():
         try:
             out["max_len_override"] = int(ov.read_text().strip())
         except ValueError:
             pass
-    rs = STATE_DIR / f"{jid}.reason"
+    rs = state_file(jid, data_scope, "reason")
     if rs.exists():
         txt = rs.read_text().strip()
         if txt:
@@ -85,8 +95,8 @@ def read_state(jid: str) -> dict:
     return out
 
 
-def has_signature(jid: str) -> bool:
-    return (STATE_DIR / f"{jid}.signature").exists()
+def has_signature(jid: str, data_scope: str) -> bool:
+    return state_file(jid, data_scope, "signature").exists()
 
 
 def build_state(manifest: dict) -> dict:
@@ -96,8 +106,20 @@ def build_state(manifest: dict) -> dict:
     cells = []
     profile_infeasible = []
 
-    # One record per sweep cell, augmented with runtime state.
-    for cell in manifest["cells"]:
+    # One record per sweep cell, augmented with runtime state. Derived scopes
+    # are materialized here so coverage status uses the same scope/profile names
+    # as the rows emitted by compile_sweep.py.
+    state_cells: list[tuple[dict, dict]] = [(cell, cell) for cell in manifest["cells"]]
+    for scope in DERIVED_STATE_SCOPES:
+        for source_cell in manifest["cells"]:
+            if manifest_cell_data_scope(source_cell) != "fixed":
+                continue
+            derived_cell = cell_for_output_scope(source_cell, scope, manifest)
+            if not resolve(derived_cell, manifest)["profiles"]:
+                continue
+            state_cells.append((derived_cell, source_cell))
+
+    for cell, source_cell in state_cells:
         host_name = str(cell["host"])
         host_cfg = hosts[host_name]
         tp = int(cell["tp"])
@@ -106,9 +128,17 @@ def build_state(manifest: dict) -> dict:
         backend = str(cell.get("backend", "vllm"))
         data_scope = cell_data_scope(cell)
         jid = job_id(host_name, model, tp, mode, backend)
-        rt = read_state(jid)
+        rt = read_state(jid, data_scope)
         resolved = resolve(cell, manifest)
-        profile_reasons = profile_infeasible_reasons(cell, manifest)
+        source_profile_reasons = (
+            {}
+            if data_scope == "synthetic"
+            else profile_infeasible_reasons(source_cell, manifest)
+        )
+        profile_reasons = {}
+        for profile, reason in source_profile_reasons.items():
+            for output_profile in profiles_for_output_scope([profile], data_scope):
+                profile_reasons[output_profile] = reason
         runnable_profiles = [
             str(profile) for profile in resolved["profiles"]
             if str(profile) not in profile_reasons
@@ -117,7 +147,7 @@ def build_state(manifest: dict) -> dict:
             rt["status"] in {"skipped", "failed"}
             and profile_reasons
             and runnable_profiles
-            and not has_signature(jid)
+            and not has_signature(jid, data_scope)
         ):
             rt["status"] = "pending"
             rt["reason"] = "legacy skipped state predates profile filtering; rerun reduced-profile job"
@@ -218,14 +248,19 @@ def upload_r2(path: Path, endpoint: str, bucket: str, profile: str) -> None:
 
 
 def main() -> int:
+    global STATE_DIR
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--yaml", type=Path, default=SWEEP_YAML)
     ap.add_argument("--out", type=Path, default=OUTPUT_FILE)
     ap.add_argument("--no-upload", action="store_true", help="skip R2 upload")
+    ap.add_argument("--state-dir", type=Path, default=Path(os.environ.get("BENCH_STATE_ROOT", str(STATE_DIR))))
     ap.add_argument("--endpoint", default=os.environ.get("R2_ENDPOINT", R2_ENDPOINT_DEFAULT))
     ap.add_argument("--bucket", default=os.environ.get("R2_BUCKET", R2_BUCKET_DEFAULT))
     ap.add_argument("--profile", default=os.environ.get("AWS_PROFILE", "r2"))
     args = ap.parse_args()
+
+    STATE_DIR = args.state_dir
 
     manifest = yaml.safe_load(args.yaml.read_text())
     state = build_state(manifest)

@@ -56,7 +56,7 @@ interface EnrichedResult {
   seriesKey: string;
   filename: string;
   engineVersion?: string;  // e.g. "0.19.0" — from _engine_version.txt sidecar or fallback
-  dataScope: 'current' | 'archive' | 'fixed' | 'mse';
+  dataScope: 'synthetic' | 'current' | 'archive' | 'fixed' | 'mse';
   perTurn?: PerTurnEntry[];
   scatterData?: ScatterPoint[];
 }
@@ -176,10 +176,14 @@ function normalizeProfile(profile: string): string {
   return HISTORICAL_PROFILE_ALIASES[normalized] ?? normalized;
 }
 
-function detectDataScope(raw: RawResult, relDir: string): 'current' | 'archive' | 'fixed' | 'mse' {
+function detectDataScope(raw: RawResult, relDir: string): 'synthetic' | 'current' | 'archive' | 'fixed' | 'mse' {
+  if (raw.config.dashboard_scope === 'synthetic') return 'synthetic';
+  if (raw.config.dashboard_scope === 'latest') return 'synthetic';
   if (raw.config.dashboard_scope === 'mse') return 'mse';
   if (raw.config.dashboard_scope === 'fixed') return 'fixed';
   if (raw.config.dashboard_scope === 'current') return 'current';
+  if (relDir.startsWith('synthetic/') || relDir.startsWith('synthetic\\')) return 'synthetic';
+  if (relDir.startsWith('latest/') || relDir.startsWith('latest\\')) return 'synthetic';
   // Files under the results/current/ R2 namespace are canonical even if
   // the JSON was produced before the dashboard_scope field existed.
   if (relDir.startsWith('current/') || relDir.startsWith('current\\')) return 'current';
@@ -385,11 +389,11 @@ function main() {
     }
   }
 
-  // Deduplicate: if same series+concurrency appears multiple times, keep the one
-  // from the deeper directory (h100_70b_fp8/ subdir files are duplicates of root)
+  // Deduplicate within a data scope only. The same series+concurrency can
+  // legitimately exist in synthetic, current, fixed, MSE, and archive at the same time.
   const seen = new Map<string, EnrichedResult>();
   for (const r of results) {
-    const dedupeKey = `${r.seriesKey}::${r.config.concurrency}`;
+    const dedupeKey = `${r.dataScope}::${r.seriesKey}::${r.config.concurrency}`;
     const existing = seen.get(dedupeKey);
     if (!existing) {
       seen.set(dedupeKey, r);

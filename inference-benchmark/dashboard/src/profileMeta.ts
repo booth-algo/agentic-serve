@@ -10,7 +10,74 @@ export interface ProfileMeta {
   description: string;
 }
 
-export type DataScope = 'current' | 'archive' | 'fixed' | 'mse';
+export type DataScope = 'synthetic' | 'current' | 'archive' | 'fixed' | 'mse';
+
+export interface DataScopeMeta {
+  label: string;
+  shortLabel: string;
+  eyebrow: string;
+  description: string;
+  accent: string;
+  rowsLabel: string;
+}
+
+export const DATA_SCOPE_OPTIONS = ['synthetic', 'current', 'fixed', 'mse', 'archive'] as const;
+
+export const DATA_SCOPE_META: Record<DataScope, DataScopeMeta> = {
+  synthetic: {
+    label: 'Synthetic replay',
+    shortLabel: 'Synthetic',
+    eyebrow: 'APC-aware',
+    description: 'Validated APC-aware synthetic replay grid. Uses synthetic-suffixed profiles on the reduced fixed-scope C=200/320 coverage grid, without coding-singleturn.',
+    accent: '#3fb950',
+    rowsLabel: 'synthetic rows',
+  },
+  current: {
+    label: 'Canonical data',
+    shortLabel: 'Canonical',
+    eyebrow: 'paper surface',
+    description: 'Canonical benchmark profiles on the main sweep grid. This is the default view for paper-facing benchmark and coverage work.',
+    accent: '#00bcd4',
+    rowsLabel: 'canonical rows',
+  },
+  fixed: {
+    label: 'Fixed-grid reruns',
+    shortLabel: 'Fixed grid',
+    eyebrow: 'rerun subset',
+    description: 'Corrected rerun grid for the reduced profile set. Use this for the C=200/320 fixed-scope sweep, not as historical archive coverage.',
+    accent: '#58a6ff',
+    rowsLabel: 'fixed-grid rows',
+  },
+  mse: {
+    label: 'MSE validation',
+    shortLabel: 'MSE',
+    eyebrow: 'validation only',
+    description: 'Synthetic-vs-real validation runs. Keep these separate from predictor training, serving-prediction summaries, and paper coverage claims.',
+    accent: '#f0883e',
+    rowsLabel: 'validation rows',
+  },
+  archive: {
+    label: 'Archive inventory',
+    shortLabel: 'Archive',
+    eyebrow: 'historical',
+    description: 'Historical and legacy runs. This is inventory-style data, so missing cells are not interpreted as active sweep gaps.',
+    accent: '#8b949e',
+    rowsLabel: 'archive rows',
+  },
+};
+
+export function isDataScope(value: string | null): value is DataScope {
+  return value === 'synthetic' || value === 'current' || value === 'fixed' || value === 'mse' || value === 'archive';
+}
+
+export function normalizeDataScope(value: string | null): DataScope | null {
+  if (value === 'latest') return 'synthetic';
+  return isDataScope(value) ? value : null;
+}
+
+export function hasServingPredictions(scope: DataScope): boolean {
+  return scope === 'current' || scope === 'fixed';
+}
 
 export const CURRENT_PROFILES = [
   'chat-singleturn',
@@ -27,6 +94,23 @@ export const FIXED_PROFILES = [
   'swebench-multiturn',
   'terminalbench-multiturn',
   'osworld-multiturn',
+] as const;
+
+export const SYNTHETIC_PROFILES = [
+  'chat-singleturn-synth',
+  'chat-multiturn-synth',
+  'swebench-multiturn-synth',
+  'terminalbench-multiturn-synth',
+  'osworld-multiturn-synth',
+] as const;
+
+export const MSE_PROFILES = [
+  'swebench-multiturn-mse',
+  'swebench-multiturn-short',
+  'terminalbench-multiturn-mse',
+  'terminalbench-multiturn-short',
+  'osworld-multiturn-mse',
+  'osworld-multiturn-short',
 ] as const;
 
 export const ARCHIVE_PROFILES = [
@@ -54,6 +138,8 @@ export const ARCHIVE_PROFILES = [
 
 const CURRENT_PROFILE_SET = new Set<string>(CURRENT_PROFILES);
 const FIXED_PROFILE_SET = new Set<string>(FIXED_PROFILES);
+const SYNTHETIC_PROFILE_SET = new Set<string>(SYNTHETIC_PROFILES);
+const MSE_PROFILE_SET = new Set<string>(MSE_PROFILES);
 const ARCHIVE_PROFILE_SET = new Set<string>(ARCHIVE_PROFILES);
 
 const PROFILE_ALIASES: Record<string, string> = {
@@ -67,10 +153,14 @@ export const PROFILE_META: Record<string, ProfileMeta> = {
   'coding-singleturn':            { displayName: 'coding-singleturn', workloadGroup: 'Agentic coding ST', agentType: 'coding',   turnStyle: 'single-turn', dataSource: 'SWEBench',      isl: 'med ~6.3K', osl: 'med ~280',  description: 'Single planning/model call from SWE-Bench-style coding prompts. Published runs are long-input single-turn workloads, but not ShareGPT chat.' },
   'coding-agent':                 { displayName: 'coding-singleturn', workloadGroup: 'Agentic coding ST', agentType: 'coding',   turnStyle: 'single-turn', dataSource: 'SWEBench',      isl: 'med ~6.3K', osl: 'med ~280',  description: 'Legacy profile tag for coding-singleturn.' },
   'swebench-multiturn':           { displayName: 'swebench-multiturn', workloadGroup: 'Agentic coding MT', agentType: 'coding',   turnStyle: 'multi-turn',  dataSource: 'SWEBench',      isl: 'sampled', osl: 'sampled', description: 'Canonical distributional SWE-bench multi-turn workload sampled from empirical turn-count, new-prefill, and output-token distributions.' },
+  'swebench-multiturn-synth':     { displayName: 'swebench-multiturn-synth', workloadGroup: 'Synthetic coding MT', agentType: 'coding',   turnStyle: 'multi-turn',  dataSource: 'SWEBench',      isl: 'sampled', osl: 'sampled', description: 'APC-aware morphology-calibrated synthetic SWE-bench replay profile.' },
+  'swebench-multiturn-mse':       { displayName: 'swebench-multiturn-mse', workloadGroup: 'MSE validation', agentType: 'coding',   turnStyle: 'multi-turn',  dataSource: 'SWEBench',      isl: '<=32K', osl: '<=2000', description: 'MSE validation synthetic SWE-bench workload filtered to match the real short-trajectory population.' },
   'swebench-multiturn-short':     { displayName: 'swebench-multiturn-short', workloadGroup: 'Agentic coding', agentType: 'coding',   turnStyle: 'multi-turn',  dataSource: 'SWEBench',      isl: 'med ~8.0K',   osl: '<=2000', description: 'Real SWE-bench agent sessions in the shorter step-depth bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
   'swebench-multiturn-medium':    { displayName: 'swebench-multiturn-medium', workloadGroup: 'Agentic coding', agentType: 'coding',   turnStyle: 'multi-turn',  dataSource: 'SWEBench',      isl: 'med ~13.4K',   osl: '<=2000', description: 'Real SWE-bench agent sessions in the medium step-depth bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
   'swebench-multiturn-long':      { displayName: 'swebench-multiturn-long', workloadGroup: 'Agentic coding', agentType: 'coding',   turnStyle: 'multi-turn',  dataSource: 'SWEBench',      isl: '<=128K',  osl: '<=2000', description: 'Long SWE-bench agent sessions. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
   'terminalbench-multiturn':      { displayName: 'terminalbench-multiturn', workloadGroup: 'Agentic terminal MT', agentType: 'terminal', turnStyle: 'multi-turn',  dataSource: 'TerminalBench', isl: 'sampled', osl: 'sampled', description: 'Canonical distributional TerminalBench multi-turn workload sampled from empirical turn-count, new-prefill, and output-token distributions.' },
+  'terminalbench-multiturn-synth': { displayName: 'terminalbench-multiturn-synth', workloadGroup: 'Synthetic terminal MT', agentType: 'terminal', turnStyle: 'multi-turn',  dataSource: 'TerminalBench', isl: 'sampled', osl: 'sampled', description: 'APC-aware morphology-calibrated synthetic TerminalBench replay profile.' },
+  'terminalbench-multiturn-mse':  { displayName: 'terminalbench-multiturn-mse', workloadGroup: 'MSE validation', agentType: 'terminal', turnStyle: 'multi-turn',  dataSource: 'TerminalBench', isl: '<=32K', osl: '<=2000', description: 'MSE validation synthetic TerminalBench workload filtered to match the real short-trajectory population.' },
   'terminalbench-multiturn-short': { displayName: 'terminalbench-multiturn-short', workloadGroup: 'Agentic terminal', agentType: 'terminal', turnStyle: 'multi-turn',  dataSource: 'TerminalBench', isl: 'med ~5.0K',   osl: '<=2000', description: 'Real TerminalBench CLI-agent sessions in the shorter step-depth bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
   'terminalbench-multiturn-medium': { displayName: 'terminalbench-multiturn-medium', workloadGroup: 'Agentic terminal', agentType: 'terminal', turnStyle: 'multi-turn', dataSource: 'TerminalBench', isl: 'med ~10.5K',   osl: '<=2000', description: 'Real TerminalBench CLI-agent sessions in the medium step-depth bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
   'terminalbench-multiturn-long':  { displayName: 'terminalbench-multiturn-long', workloadGroup: 'Agentic terminal', agentType: 'terminal', turnStyle: 'multi-turn',  dataSource: 'TerminalBench', isl: '<=128K',  osl: '<=2000', description: 'Long TerminalBench CLI-agent sessions. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
@@ -79,6 +169,7 @@ export const PROFILE_META: Record<string, ProfileMeta> = {
   'chat-short':                   { displayName: 'chat-short', workloadGroup: 'Legacy chat ST', benchmarkVisible: false, agentType: 'chat',     turnStyle: 'single-turn', dataSource: 'ShareGPT',      isl: 'med ~129',   osl: 'med ~169',  description: 'Retired ShareGPT single-turn variant. It differs mostly by shorter output length, so it is hidden from the main benchmark view.' },
   'chat-medium':                  { displayName: 'chat-medium', workloadGroup: 'Legacy chat ST', benchmarkVisible: false, agentType: 'chat',     turnStyle: 'single-turn', dataSource: 'ShareGPT',      isl: 'med ~157',  osl: 'med ~286', description: 'Retired ShareGPT single-turn variant. It overlaps heavily with chat-singleturn, so new sweeps use chat-singleturn as the canonical natural chat workload.' },
   'chat-singleturn':                    { displayName: 'chat-singleturn', workloadGroup: 'Natural chat ST', agentType: 'chat',     turnStyle: 'single-turn', dataSource: 'ShareGPT',      isl: 'med ~187',  osl: 'med ~299', description: 'Canonical natural ShareGPT single-turn workload. This represents ordinary chat; it is not a long-context prefill stress workload.' },
+  'chat-singleturn-synth':              { displayName: 'chat-singleturn-synth', workloadGroup: 'Synthetic chat ST', agentType: 'chat',     turnStyle: 'single-turn', dataSource: 'ShareGPT',      isl: 'med ~187',  osl: 'med ~299', description: 'Synthetic-scope ShareGPT single-turn chat baseline.' },
 
   // Tier 3: Synthetic Stress Tests
   'prefill-heavy':                { displayName: 'prefill-heavy', workloadGroup: 'Stress', agentType: 'stress',     turnStyle: 'single-turn', dataSource: 'Random',        isl: '8192',   osl: '256',   description: 'Synthetic prefill stress: long random input and short output. Use this for controlled long-context prefill behavior, not ShareGPT chat.' },
@@ -88,12 +179,15 @@ export const PROFILE_META: Record<string, ProfileMeta> = {
 
   // Tier 4: Multi-turn Chat (ShareGPT)
   'chat-multiturn':               { displayName: 'chat-multiturn', workloadGroup: 'Natural chat MT', agentType: 'chat',     turnStyle: 'multi-turn',  dataSource: 'ShareGPT',      isl: 'sampled', osl: 'sampled', description: 'Canonical distributional ShareGPT multi-turn chat workload sampled from empirical turn-count, new-prefill, and output-token summaries.' },
+  'chat-multiturn-synth':         { displayName: 'chat-multiturn-synth', workloadGroup: 'Synthetic chat MT', agentType: 'chat',     turnStyle: 'multi-turn',  dataSource: 'ShareGPT',      isl: 'sampled', osl: 'sampled', description: 'APC-aware synthetic ShareGPT multi-turn replay profile.' },
   'chat-multiturn-short':         { displayName: 'chat-multiturn-short', workloadGroup: 'Natural chat MT', agentType: 'chat',     turnStyle: 'multi-turn',  dataSource: 'ShareGPT',      isl: 'med ~673',    osl: 'med ~298', description: 'Natural ShareGPT multi-turn chat in the shortest turn-depth bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
   'chat-multiturn-medium':        { displayName: 'chat-multiturn-medium', workloadGroup: 'Natural chat MT', agentType: 'chat',     turnStyle: 'multi-turn',  dataSource: 'ShareGPT',      isl: 'med ~835',   osl: 'med ~246', description: 'Natural ShareGPT multi-turn chat in the medium turn-depth bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
   'chat-multiturn-long':          { displayName: 'chat-multiturn-long', workloadGroup: 'Natural chat MT', agentType: 'chat',     turnStyle: 'multi-turn',  dataSource: 'ShareGPT',      isl: 'med ~937',   osl: 'med ~149', description: 'Natural ShareGPT multi-turn chat in the deepest current turn bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
 
   // Tier 5: Computer-Use (OSWorld WebArena trajectories)
   'osworld-multiturn':            { displayName: 'osworld-multiturn', workloadGroup: 'Computer-use MT', agentType: 'computer-use', turnStyle: 'multi-turn', dataSource: 'OSWorld',     isl: 'sampled', osl: 'sampled', description: 'Canonical distributional OSWorld computer-use workload sampled from empirical turn-count, new-prefill, and output-token distributions. Use with the OSWorld trace caveat noted in paper notes.' },
+  'osworld-multiturn-synth':      { displayName: 'osworld-multiturn-synth', workloadGroup: 'Synthetic computer-use MT', agentType: 'computer-use', turnStyle: 'multi-turn', dataSource: 'OSWorld',     isl: 'sampled', osl: 'sampled', description: 'APC-aware synthetic OSWorld computer-use replay profile.' },
+  'osworld-multiturn-mse':        { displayName: 'osworld-multiturn-mse', workloadGroup: 'MSE validation', agentType: 'computer-use', turnStyle: 'multi-turn', dataSource: 'OSWorld',     isl: '<=32K', osl: '<=500', description: 'MSE validation synthetic OSWorld workload filtered to match the real short-trajectory population.' },
   'osworld-multiturn-short':      { displayName: 'osworld-multiturn-short', workloadGroup: 'Computer-use', agentType: 'computer-use', turnStyle: 'multi-turn', dataSource: 'OSWorld',     isl: 'med ~5.0K',   osl: '<=800',  description: 'Real OSWorld computer-use sessions in the short step-depth bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
   'osworld-multiturn-medium':     { displayName: 'osworld-multiturn-medium', workloadGroup: 'Computer-use', agentType: 'computer-use', turnStyle: 'multi-turn', dataSource: 'OSWorld',     isl: 'med ~4.7K',   osl: '<=1000', description: 'Real OSWorld computer-use sessions in the medium step-depth bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
   'osworld-multiturn-long':       { displayName: 'osworld-multiturn-long', workloadGroup: 'Computer-use', agentType: 'computer-use', turnStyle: 'multi-turn', dataSource: 'OSWorld',     isl: '<=64K',   osl: '<=1200', description: 'Longest OSWorld computer-use step-depth bucket. Short/medium/long denote turn depth, not monotonic ISL or OSL.' },
@@ -142,12 +236,18 @@ export function isProfileInScope(profile: string, scope: DataScope): boolean {
   if (scope === 'archive') {
     return ARCHIVE_PROFILE_SET.has(normalized);
   }
+  if (scope === 'synthetic') {
+    return SYNTHETIC_PROFILE_SET.has(normalized);
+  }
   if (scope === 'fixed') {
     return FIXED_PROFILE_SET.has(normalized);
+  }
+  if (scope === 'mse') {
+    return MSE_PROFILE_SET.has(normalized);
   }
   return CURRENT_PROFILE_SET.has(normalized);
 }
 
 export function scopeLabel(scope: DataScope): string {
-  return scope === 'current' ? 'Current' : scope === 'fixed' ? 'Fixed' : scope === 'mse' ? 'MSE' : 'Archive';
+  return DATA_SCOPE_META[scope].label;
 }

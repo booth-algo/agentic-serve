@@ -24,6 +24,8 @@ class TraceTurnSample:
     new_prefill_tokens: int
     output_tokens: int
     cache_hit_rate: float
+    source_session_id: str | None = None
+    token_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +131,8 @@ def _parse_turn_sample(row: Any) -> TraceTurnSample:
         new_prefill_tokens=_positive_int(row.get("new_prefill_tokens"), "new_prefill_tokens"),
         output_tokens=_positive_int(row.get("output_tokens"), "output_tokens"),
         cache_hit_rate=_bounded_float(row.get("cache_hit_rate"), "cache_hit_rate"),
+        source_session_id=_optional_str(row.get("source_session_id"), "source_session_id"),
+        token_source=_optional_str(row.get("token_source"), "token_source"),
     )
 
 
@@ -151,3 +155,11 @@ def _bounded_float(value: Any, field: str) -> float:
     if out < 0.0 or out > 1.0:
         raise TraceDistributionError(f"{field} must be in [0, 1]")
     return out
+
+
+def _optional_str(value: Any, field: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise TraceDistributionError(f"{field} must be a non-empty string when provided")
+    return value

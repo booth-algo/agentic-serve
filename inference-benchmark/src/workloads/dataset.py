@@ -749,6 +749,8 @@ class DistributionalMultiTurnDataset(BaseDataset):
         max_context_tokens: Optional[int] = None,
         context_safety_margin_tokens: int = 256,
         system_prompt: str = "",
+        tokenizer_name: str = "",
+        source_session_ids: Optional[list[str]] = None,
     ):
         self.filepath = filepath
         self.num_sessions = num_sessions
@@ -756,6 +758,8 @@ class DistributionalMultiTurnDataset(BaseDataset):
         self.max_context_tokens = max_context_tokens
         self.context_safety_margin_tokens = context_safety_margin_tokens
         self.system_prompt = system_prompt
+        self.tokenizer_name = tokenizer_name
+        self.source_session_ids = source_session_ids
         self._sessions: Optional[list[MultiTurnSession]] = None
         self._session_specs: Optional[dict[int, list]] = None
         self._flat_requests: Optional[list[BenchmarkRequest]] = None
@@ -779,8 +783,12 @@ class DistributionalMultiTurnDataset(BaseDataset):
                 max_context_tokens=self.max_context_tokens,
                 context_safety_margin_tokens=self.context_safety_margin_tokens,
                 system_prompt=self.system_prompt,
+                tokenizer_name=self.tokenizer_name,
             )
-            synthetic_sessions = sampler.sample_sessions(self.num_sessions)
+            if self.source_session_ids:
+                synthetic_sessions = sampler.sample_source_locked_sessions(self.source_session_ids)
+            else:
+                synthetic_sessions = sampler.sample_sessions(self.num_sessions)
             self._sessions = [
                 MultiTurnSession(session_id=s.session_id, turns=s.turns)
                 for s in synthetic_sessions
@@ -832,6 +840,8 @@ def make_dataset(
     random_seed: int = 42,
     context_safety_margin_tokens: int = 256,
     num_sessions: Optional[int] = None,
+    tokenizer_name: str = "",
+    source_session_ids: Optional[list[str]] = None,
 ) -> BaseDataset:
     """Factory: create the right dataset for a workload profile."""
     from .profiles import WorkloadProfile
@@ -906,6 +916,8 @@ def make_dataset(
             max_context_tokens=max_context_tokens or profile.isl_tokens,
             context_safety_margin_tokens=context_safety_margin_tokens,
             system_prompt=profile.system_prompt,
+            tokenizer_name=tokenizer_name or profile.tokenizer_name,
+            source_session_ids=source_session_ids,
         )
     elif profile.dataset == "jsonl":
         return JsonlDataset(

@@ -47,6 +47,8 @@ class TurnSample:
     new_prefill_tokens: int
     output_tokens: int
     cache_hit_rate: float
+    source_session_id: str | None = None
+    token_source: str | None = None
 
 
 @dataclass
@@ -115,14 +117,40 @@ def int_histogram(values: Iterable[int]) -> dict[str, int]:
     return {str(k): v for k, v in sorted(Counter(values).items())}
 
 
-def round_turn_sample(sample: TurnSample) -> dict[str, int | float]:
-    return {
+def round_turn_sample(sample: TurnSample) -> dict[str, int | float | str]:
+    row: dict[str, int | float | str] = {
         "turn_index": sample.turn_index,
         "total_context_tokens": sample.total_context_tokens,
         "new_prefill_tokens": sample.new_prefill_tokens,
         "output_tokens": sample.output_tokens,
         "cache_hit_rate": round(sample.cache_hit_rate, 4),
     }
+    if sample.source_session_id:
+        row["source_session_id"] = sample.source_session_id
+    if sample.token_source:
+        row["token_source"] = sample.token_source
+    return row
+
+
+CAPTURED_MSE_SHORT_SOURCES = {
+    "swebench_multiturn_short_tracereplay_filtered-mse": {
+        "filename": "h100_real_swebench-short_conc5.json",
+        "min_turns": 13,
+        "max_turns": 30,
+    },
+    "terminalbench_multiturn_short_tracereplay_filtered-mse": {
+        "filename": "h100_real_terminalbench-short_conc5.json",
+        "min_turns": 2,
+        "max_turns": 30,
+    },
+}
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT.resolve()))
+    except ValueError:
+        return str(path)
 
 
 def build_trajectory_distribution(name: str, path: Path) -> dict[str, Any]:
@@ -279,6 +307,117 @@ def build_chat_distribution_from_results(name: str, path: Path) -> dict[str, Any
     )
 
 
+def build_captured_real_distribution(
+    *,
+    name: str,
+    path: Path,
+    min_turns: int,
+    max_turns: int,
+) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    per_request = payload.get("per_request")
+    if not isinstance(per_request, list):
+        raise ValueError(f"{path} does not contain a per_request list")
+
+    grouped: dict[str, dict[int, dict[str, Any]]] = defaultdict(dict)
+    skipped_requests = 0
+    for row in per_request:
+        if not isinstance(row, dict) or not row.get("success"):
+            skipped_requests += 1
+            continue
+        total_context = int(row.get("input_tokens") or 0)
+        if total_context <= 0:
+            skipped_requests += 1
+            continue
+        metadata = row.get("request_metadata") or {}
+        source_session_id = metadata.get("source_session_id")
+        source_turn_index = metadata.get("source_turn_index", row.get("turn_index"))
+        if source_session_id is None or source_turn_index is None:
+            skipped_requests += 1
+            continue
+        turn_index = int(source_turn_index)
+        if turn_index >= max_turns:
+            continue
+        grouped[str(source_session_id)].setdefault(turn_index, row)
+
+    sessions: list[SessionSample] = []
+    skipped_sessions = 0
+    for source_session_id, rows_by_turn in grouped.items():
+        turns: list[TurnSample] = []
+        previous_context = 0
+        context_decrease_turns = 0
+        context_non_growth_turns = 0
+        for expected_turn_index in range(max_turns):
+            row = rows_by_turn.get(expected_turn_index)
+            if row is None:
+                break
+            total_context = int(row.get("input_tokens") or 0)
+            if total_context <= 0:
+                break
+            raw_new_prefill = row.get("new_prefill_tokens")
+            new_prefill = int(raw_new_prefill) if raw_new_prefill else max(1, total_context - previous_context)
+            if turns and total_context < previous_context:
+                context_decrease_turns += 1
+            if turns and total_context <= previous_context:
+                context_non_growth_turns += 1
+            output_tokens = int(
+                row.get("output_tokens")
+                or (row.get("request_metadata") or {}).get("planned_output_tokens")
+                or 1
+            )
+            cache_hit_rate = float(
+                row.get("cache_hit_rate")
+                if row.get("cache_hit_rate") is not None
+                else max(0.0, min(1.0, 1.0 - new_prefill / total_context))
+            )
+            turns.append(
+                TurnSample(
+                    turn_index=expected_turn_index,
+                    total_context_tokens=total_context,
+                    new_prefill_tokens=max(1, new_prefill),
+                    output_tokens=max(1, output_tokens),
+                    cache_hit_rate=max(0.0, min(1.0, cache_hit_rate)),
+                    source_session_id=source_session_id,
+                    token_source="captured_vllm_input_tokens",
+                )
+            )
+            previous_context = total_context
+
+        if len(turns) < min_turns:
+            skipped_sessions += 1
+            continue
+        sessions.append(
+            SessionSample(
+                session_id=source_session_id,
+                turn_count=len(turns),
+                turns=turns,
+                context_decrease_turns=context_decrease_turns,
+                context_non_growth_turns=context_non_growth_turns,
+                estimated_context_turns=0,
+            )
+        )
+
+    if not sessions:
+        raise ValueError(f"No captured REAL sessions in {path} passed min_turns={min_turns}")
+
+    return build_distribution_json(
+        name=name,
+        source_kind="captured_vllm_real_per_request",
+        source_path=path,
+        sessions=sessions,
+        skipped_sessions=skipped_sessions,
+        skipped_requests=skipped_requests,
+        token_estimator="captured_vllm_input_tokens",
+        note=(
+            "Built from successful REAL validation per_request rows. "
+            "total_context_tokens uses vLLM-reported input_tokens, preserving "
+            "the server tokenizer and chat-template accounting."
+        ),
+    )
+
+
 def build_distribution_json(
     *,
     name: str,
@@ -286,6 +425,8 @@ def build_distribution_json(
     source_path: Path,
     sessions: list[SessionSample],
     skipped_sessions: int,
+    skipped_requests: int = 0,
+    token_estimator: str = "estimated_tokens = int(word_count * 1.35) when raw input_tokens are absent",
     note: str | None = None,
 ) -> dict[str, Any]:
     turns = [turn for session in sessions for turn in session.turns]
@@ -302,12 +443,13 @@ def build_distribution_json(
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "source": {
             "kind": source_kind,
-            "path": str(source_path.relative_to(ROOT)),
+            "path": _display_path(source_path),
             "sessions": len(sessions),
             "turns": len(turns),
             "skipped_sessions": skipped_sessions,
+            "skipped_requests": skipped_requests,
         },
-        "token_estimator": "estimated_tokens = int(word_count * 1.35) when raw input_tokens are absent",
+        "token_estimator": token_estimator,
         "summary": {
             "turn_count": stats([s.turn_count for s in sessions], round_digits=2),
             "total_context_tokens": stats([t.total_context_tokens for t in turns], round_digits=2),
@@ -378,6 +520,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Do not derive chat_multiturn from dashboard per-turn summaries.",
     )
+    parser.add_argument(
+        "--skip-trajectory",
+        action="store_true",
+        help="Do not rebuild the standard trajectory-derived distribution files.",
+    )
+    parser.add_argument(
+        "--captured-real-results-dir",
+        type=Path,
+        default=None,
+        help="Directory containing REAL validation result JSONs used to rebuild short MSE distributions.",
+    )
+    parser.add_argument(
+        "--captured-real-only",
+        action="store_true",
+        help="Only write captured REAL short MSE distributions.",
+    )
     return parser.parse_args()
 
 
@@ -385,20 +543,42 @@ def main() -> int:
     args = parse_args()
     wrote: list[Path] = []
 
-    for name, path in TRAJECTORY_SOURCES.items():
-        if not path.exists():
-            print(f"[skip] {name}: missing {path}")
-            continue
-        payload = build_trajectory_distribution(name, path)
-        out_path = args.out_dir / f"{name}.json"
-        write_json(out_path, payload)
-        wrote.append(out_path)
-        print(
-            f"[write] {out_path} "
-            f"({payload['source']['sessions']} sessions, {payload['source']['turns']} turns)"
-        )
+    if args.captured_real_results_dir is not None:
+        for name, spec in CAPTURED_MSE_SHORT_SOURCES.items():
+            path = args.captured_real_results_dir / str(spec["filename"])
+            if not path.exists():
+                print(f"[skip] {name}: missing {path}")
+                continue
+            payload = build_captured_real_distribution(
+                name=name,
+                path=path,
+                min_turns=int(spec["min_turns"]),
+                max_turns=int(spec["max_turns"]),
+            )
+            out_path = args.out_dir / f"{name}.json"
+            write_json(out_path, payload)
+            wrote.append(out_path)
+            print(
+                f"[write] {out_path} "
+                f"({payload['source']['sessions']} sessions, {payload['source']['turns']} turns, "
+                f"token_source={payload['token_estimator']})"
+            )
 
-    if not args.skip_chat:
+    if not args.skip_trajectory and not args.captured_real_only:
+        for name, path in TRAJECTORY_SOURCES.items():
+            if not path.exists():
+                print(f"[skip] {name}: missing {path}")
+                continue
+            payload = build_trajectory_distribution(name, path)
+            out_path = args.out_dir / f"{name}.json"
+            write_json(out_path, payload)
+            wrote.append(out_path)
+            print(
+                f"[write] {out_path} "
+                f"({payload['source']['sessions']} sessions, {payload['source']['turns']} turns)"
+            )
+
+    if not args.skip_chat and not args.captured_real_only:
         payload = build_chat_distribution_from_results("chat_multiturn", args.dashboard_data)
         if payload is None:
             print(f"[skip] chat_multiturn: no usable perTurn summaries in {args.dashboard_data}")

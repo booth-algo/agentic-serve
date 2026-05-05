@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { BenchmarkResult } from '../types';
 import type { SweepCell, SweepState } from '../types-sweep';
-import { profileDisplayName, type DataScope } from '../profileMeta';
+import { DATA_SCOPE_META, normalizeDataScope, profileDisplayName, type DataScope } from '../profileMeta';
 
 
 interface CoveragePageProps {
@@ -15,6 +15,10 @@ const CURRENT_SINGLE_CONCS = [1, 10, 20, 40, 80, 160, 256, 320];
 const CURRENT_MULTI_CONCS = [5, 20, 40, 80, 160];
 const FIXED_SINGLE_CONCS = [200, 320];
 const FIXED_MULTI_CONCS = [200, 320];
+const SYNTHETIC_SINGLE_CONCS = [200, 320];
+const SYNTHETIC_MULTI_CONCS = [200, 320];
+const MSE_SINGLE_CONCS: number[] = [];
+const MSE_MULTI_CONCS = [40, 80];
 const ARCHIVE_SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
 const ARCHIVE_MULTI_CONCS = [5, 10, 20, 40, 80, 120, 160, 200, 256, 320];
 
@@ -36,6 +40,24 @@ const FIXED_MULTI_PROFILES = [
   'swebench-multiturn',
   'terminalbench-multiturn',
   'osworld-multiturn',
+];
+const SYNTHETIC_SINGLE_PROFILES = [
+  'chat-singleturn-synth',
+];
+const SYNTHETIC_MULTI_PROFILES = [
+  'chat-multiturn-synth',
+  'swebench-multiturn-synth',
+  'terminalbench-multiturn-synth',
+  'osworld-multiturn-synth',
+];
+const MSE_SINGLE_PROFILES: string[] = [];
+const MSE_MULTI_PROFILES = [
+  'swebench-multiturn-mse',
+  'swebench-multiturn-short',
+  'terminalbench-multiturn-mse',
+  'terminalbench-multiturn-short',
+  'osworld-multiturn-mse',
+  'osworld-multiturn-short',
 ];
 const ARCHIVE_SINGLE_PROFILES = [
   'chat-short', 'chat-medium', 'chat-singleturn',
@@ -150,7 +172,7 @@ function infeasibilityReason(
 }
 
 const STATUS_PRIORITY: Record<SweepCell['status'], number> = {
-  known_oom: 5, skipped: 4, running: 3, pending: 2, done: 1,
+  known_oom: 5, skipped: 4, failed: 4, running: 3, pending: 2, done: 1,
 };
 
 function aggregateCells(cells: SweepCell[]): Map<string, SweepCell> {
@@ -166,7 +188,7 @@ function aggregateCells(cells: SweepCell[]): Map<string, SweepCell> {
 }
 
 function stateCellScope(cell: SweepCell): DataScope {
-  return cell.data_scope ?? 'current';
+  return normalizeDataScope(cell.data_scope ?? null) ?? 'current';
 }
 
 function isMultiTurnProfile(profile: string): boolean {
@@ -177,6 +199,10 @@ function usesCanonicalCoverage(scope: DataScope): boolean {
   return scope !== 'archive';
 }
 
+function coverageGridScope(scope: DataScope): DataScope {
+  return scope;
+}
+
 export function CoveragePage({
   allData,
   sweepState,
@@ -184,20 +210,45 @@ export function CoveragePage({
   dataScope,
 }: CoveragePageProps) {
   const canonicalCoverage = usesCanonicalCoverage(dataScope);
+  const gridScope = coverageGridScope(dataScope);
 
   const coveragePlan = useMemo(() => {
-    const singleProfiles = dataScope === 'archive'
+    const singleProfiles = gridScope === 'archive'
       ? ARCHIVE_SINGLE_PROFILES
-      : dataScope === 'fixed'
+      : gridScope === 'synthetic'
+        ? SYNTHETIC_SINGLE_PROFILES
+      : gridScope === 'fixed'
         ? FIXED_SINGLE_PROFILES
+        : gridScope === 'mse'
+          ? MSE_SINGLE_PROFILES
         : CURRENT_SINGLE_PROFILES;
-    const multiProfiles = dataScope === 'archive'
+    const multiProfiles = gridScope === 'archive'
       ? ARCHIVE_MULTI_PROFILES
-      : dataScope === 'fixed'
+      : gridScope === 'synthetic'
+        ? SYNTHETIC_MULTI_PROFILES
+      : gridScope === 'fixed'
         ? FIXED_MULTI_PROFILES
+        : gridScope === 'mse'
+          ? MSE_MULTI_PROFILES
         : CURRENT_MULTI_PROFILES;
-    const singleConcs = dataScope === 'current' ? CURRENT_SINGLE_CONCS : (dataScope === 'fixed' ? FIXED_SINGLE_CONCS : ARCHIVE_SINGLE_CONCS);
-    const multiConcs = dataScope === 'current' ? CURRENT_MULTI_CONCS : (dataScope === 'fixed' ? FIXED_MULTI_CONCS : ARCHIVE_MULTI_CONCS);
+    const singleConcs = gridScope === 'current'
+      ? CURRENT_SINGLE_CONCS
+      : gridScope === 'synthetic'
+        ? SYNTHETIC_SINGLE_CONCS
+        : gridScope === 'fixed'
+          ? FIXED_SINGLE_CONCS
+          : gridScope === 'mse'
+            ? MSE_SINGLE_CONCS
+            : ARCHIVE_SINGLE_CONCS;
+    const multiConcs = gridScope === 'current'
+      ? CURRENT_MULTI_CONCS
+      : gridScope === 'synthetic'
+        ? SYNTHETIC_MULTI_CONCS
+        : gridScope === 'fixed'
+          ? FIXED_MULTI_CONCS
+          : gridScope === 'mse'
+            ? MSE_MULTI_CONCS
+            : ARCHIVE_MULTI_CONCS;
     return {
       singleProfiles,
       multiProfiles,
@@ -205,10 +256,11 @@ export function CoveragePage({
       multiConcs,
       expectedCellsPerModel: singleProfiles.length * singleConcs.length + multiProfiles.length * multiConcs.length,
     };
-  }, [dataScope]);
+  }, [gridScope]);
 
   const { groups, hardwareList } = useMemo(() => {
     const { singleProfiles, multiProfiles, singleConcs, multiConcs, expectedCellsPerModel } = coveragePlan;
+    const scopedSweepCells = sweepState?.cells.filter((cell) => stateCellScope(cell) === gridScope) ?? [];
     const baseHwLabels = sweepState
       ? Object.values(sweepState.hosts).map((h) => h.hardware_label)
       : ['A100-40GB', '3090', '2080Ti', 'H100'];
@@ -216,6 +268,9 @@ export function CoveragePage({
     const expectedHw: string[] = [];
     if (dataScope === 'archive') {
       expectedHw.push(...Array.from(dataHw).sort());
+    } else if (dataScope === 'mse') {
+      const mseHw = new Set<string>([...scopedSweepCells.map((cell) => cell.hw_label), ...dataHw]);
+      expectedHw.push(...Array.from(mseHw).sort());
     } else {
       for (const base of baseHwLabels) {
         for (const tp of TP_OPTIONS) expectedHw.push(hwLabel(base, tp));
@@ -226,7 +281,13 @@ export function CoveragePage({
     }
 
     const expectedModels = new Set<string>();
-    if (canonicalCoverage && sweepState) for (const m of Object.keys(sweepState.models)) expectedModels.add(m);
+    if (canonicalCoverage && sweepState) {
+      if (dataScope === 'mse') {
+        for (const cell of scopedSweepCells) expectedModels.add(cell.model);
+      } else {
+        for (const m of Object.keys(sweepState.models)) expectedModels.add(m);
+      }
+    }
     for (const r of allData) expectedModels.add(r.modelShort);
     const modelList = Array.from(expectedModels).sort(compareModels);
 
@@ -248,7 +309,7 @@ export function CoveragePage({
     const profileInfeasible = new Map<string, string>();
     if (canonicalCoverage) {
       for (const item of sweepState?.profile_infeasible ?? []) {
-        if ((item.data_scope ?? 'current') !== dataScope) continue;
+        if ((item.data_scope ?? 'current') !== gridScope) continue;
         profileInfeasible.set(
           `${item.hw_label}|${item.model}|${item.backend}|${item.profile}`,
           item.reason,
@@ -293,7 +354,7 @@ export function CoveragePage({
     }
 
     const aggStatus = sweepState
-      ? aggregateCells(sweepState.cells.filter((cell) => stateCellScope(cell) === dataScope))
+      ? aggregateCells(scopedSweepCells)
       : new Map<string, SweepCell>();
 
     const hwGroups: HwGroup[] = [];
@@ -310,9 +371,19 @@ export function CoveragePage({
         // other known backend that actually has data for this (hw, model).
         const backendSet = new Set<string>();
         if (canonicalCoverage) {
-          for (const b of ACTIVE_BACKENDS) backendSet.add(b);
-          for (const b of KNOWN_BACKENDS) {
-            if (mbHasData.get(hw)?.has(`${model}|${b}`)) backendSet.add(b);
+          if (dataScope === 'mse') {
+            for (const cell of scopedSweepCells) {
+              if (cell.hw_label === hw && cell.model === model) backendSet.add(cell.backend);
+            }
+            for (const item of mbHasData.get(hw) ?? []) {
+              const [dataModel, dataBackend] = item.split('|');
+              if (dataModel === model && dataBackend) backendSet.add(dataBackend);
+            }
+          } else {
+            for (const b of ACTIVE_BACKENDS) backendSet.add(b);
+            for (const b of KNOWN_BACKENDS) {
+              if (mbHasData.get(hw)?.has(`${model}|${b}`)) backendSet.add(b);
+            }
           }
         } else {
           for (const item of mbHasData.get(hw) ?? []) {
@@ -414,7 +485,7 @@ export function CoveragePage({
     }
 
     return { groups: hwGroups, hardwareList: expectedHw };
-  }, [allData, canonicalCoverage, coveragePlan, dataScope, sweepState]);
+  }, [allData, canonicalCoverage, coveragePlan, dataScope, gridScope, sweepState]);
 
   const [expandedHw, setExpandedHw] = useState<Set<string>>(new Set());
   const [expandedModel, setExpandedModel] = useState<Set<string>>(new Set());
@@ -487,16 +558,16 @@ export function CoveragePage({
     ? `${grand.totalHave} cells filled`
     : `${grand.totalHave}/${grand.totalNeed} expected cells`;
   const primarySummary = dataScope === 'archive' ? `${grand.totalHave} cells filled` : `${pct}%`;
-  const scopeSummary = dataScope === 'current'
-    ? '6 paper profiles'
-    : dataScope === 'fixed'
+  const scopeSummary = dataScope === 'synthetic'
+    ? '5 APC-aware synthetic profiles on the C=200/320 grid'
+    : dataScope === 'current'
+      ? '6 paper profiles'
+      : dataScope === 'fixed'
       ? '5 fixed-scope profiles on the fixed concurrency grid'
+      : dataScope === 'mse'
+        ? 'synthetic-vs-real validation pairs at C=40/80'
       : 'legacy profiles containing full runs of single-turn, short/medium/long multi-turn, and stress workloads';
-  const coverageLabel = dataScope === 'current'
-    ? 'Canonical coverage'
-    : dataScope === 'fixed'
-      ? 'Fixed coverage'
-      : 'Archive coverage';
+  const coverageLabel = `${DATA_SCOPE_META[dataScope].shortLabel} coverage`;
 
   return (
     <div className="space-y-4">
@@ -841,10 +912,14 @@ function GroupChip({
 
 function CoverageLegend({ dataScope }: { dataScope: DataScope }) {
   const canonicalCoverage = usesCanonicalCoverage(dataScope);
-  const scopeNote = dataScope === 'current'
-    ? 'Current coverage tracks the canonical paper profile surface and expected concurrency grid.'
-    : dataScope === 'fixed'
+  const scopeNote = dataScope === 'synthetic'
+    ? 'Synthetic coverage tracks APC-aware synthetic-suffixed profiles on the reduced C=200/320 grid. coding-singleturn is intentionally excluded.'
+    : dataScope === 'current'
+      ? 'Current coverage tracks the canonical paper profile surface and expected concurrency grid.'
+      : dataScope === 'fixed'
       ? 'Fixed coverage tracks chat-singleturn plus all canonical multi-turn profiles on the corrected concurrency grid; context-overflow cells show as infeasible.'
+      : dataScope === 'mse'
+        ? 'MSE coverage tracks validation pairs only: one synthetic distributional run and one matched real short-trajectory run per dataset and concurrency.'
       : 'Archive coverage is inventory-style: it shows historical runs that exist and does not count missing legacy cells.';
 
   return (

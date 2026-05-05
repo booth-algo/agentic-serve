@@ -7,6 +7,7 @@
     "dev": "vite",
     "build:data": "tsx scripts/build-data.ts",
     "validate:data": "tsx scripts/validate-data.ts",
+    "test:data-pipeline": "tsx scripts/test-data-pipeline.ts",
     "refresh:data": "bash ../scripts/refresh-dashboard-data.sh",
     "build:local-data": "npm run build:data && npm run validate:data",
     "refresh:local-data": "npm run refresh:data && npm run validate:data",

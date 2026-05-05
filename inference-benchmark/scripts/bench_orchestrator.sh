@@ -12,7 +12,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 JOBS_FILE="$REPO_ROOT/inference-benchmark/scripts/bench_jobs.txt"
-STATE_DIR="/tmp/bench_jobs/state"
+STATE_ROOT="${BENCH_STATE_ROOT:-/tmp/bench_jobs/state}"
 LOG="/tmp/bench_orchestrator.log"
 EP="${R2_ENDPOINT:-https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com}"
 BUCKET="${R2_BUCKET:-agent-bench}"
@@ -20,9 +20,7 @@ PROFILE="${AWS_PROFILE:-r2}"
 # Raw benchmark outputs are namespaced so the new distributional/current runs
 # cannot overwrite historical flat-prefix artifacts in R2. Override only for
 # one-off maintenance, e.g. RESULT_SCOPE=archive/foo.
-RESULT_SCOPE="${RESULT_SCOPE:-current}"
-
-mkdir -p "$STATE_DIR"
+DEFAULT_RESULT_SCOPE="${RESULT_SCOPE:-}"
 
 log() { echo "$(date -Is) $*" | tee -a "$LOG"; }
 
@@ -32,6 +30,22 @@ if ! flock -n 9; then
     log "another bench_orchestrator.sh tick is already running; exiting"
     exit 0
 fi
+
+JOBS_SCOPE=$(awk -F': ' '/^# SCOPE:/ {print $2; exit}' "$JOBS_FILE" 2>/dev/null || true)
+EXPECTED_JOBS_SCOPE="${BENCH_JOBS_SCOPE:-${JOBS_SCOPE:-fixed}}"
+if [[ "$EXPECTED_JOBS_SCOPE" != "all" ]]; then
+    if [[ "$JOBS_SCOPE" != "$EXPECTED_JOBS_SCOPE" ]]; then
+        log "refusing to run: $JOBS_FILE has scope='${JOBS_SCOPE:-missing}', expected '$EXPECTED_JOBS_SCOPE'"
+        exit 1
+    fi
+fi
+STATE_SCOPE="$EXPECTED_JOBS_SCOPE"
+if [[ "$STATE_SCOPE" == "all" ]]; then
+    STATE_SCOPE="${JOBS_SCOPE:-all}"
+fi
+STATE_DIR="$STATE_ROOT/$STATE_SCOPE"
+mkdir -p "$STATE_DIR"
+log "using jobs scope=${JOBS_SCOPE:-missing} expected_scope=$EXPECTED_JOBS_SCOPE state_dir=$STATE_DIR"
 
 host_prefix() {
     case "$1" in
@@ -50,12 +64,13 @@ host_python() {
             gpu-4)       echo "/data/kevinlau/miniconda3/envs/sglang/bin/python" ;;
             3090|2080ti) echo "/home/kevinlau/miniconda3/envs/sglang/bin/python" ;;
             h100)        echo "/data/kevinlau/miniconda3/envs/sglang/bin/python" ;;
+            h100-2)      echo "/home/kevinlau/miniconda3/envs/sglang/bin/python" ;;
         esac
     else
         case "$host" in
             gpu-4)       echo "/data/kevinlau/miniconda3/bin/python" ;;
             3090|2080ti) echo "/home/kevinlau/miniconda3/envs/vllm/bin/python" ;;
-            h100)        echo "/data/kevinlau/miniconda3/envs/vllm/bin/python" ;;
+            h100|h100-2) echo "/home/kevinlau/miniconda3/envs/vllm/bin/python" ;;
         esac
     fi
 }
@@ -71,6 +86,30 @@ job_id() {
     echo "$jid"
 }
 
+extra_env_value() {
+    local key="$1" text="${2:-}" part
+    for part in $text; do
+        if [[ "$part" == "$key="* ]]; then
+            echo "${part#*=}"
+            return
+        fi
+    done
+}
+
+row_result_scope() {
+    local extra_env="${1:-}" scope
+    scope=$(extra_env_value "RESULT_SCOPE" "$extra_env")
+    [[ -n "$scope" ]] && { echo "$scope"; return; }
+    scope=$(extra_env_value "DASHBOARD_SCOPE" "$extra_env")
+    [[ -n "$scope" ]] && { echo "$scope"; return; }
+    scope=$(extra_env_value "SCOPE" "$extra_env")
+    [[ -n "$scope" ]] && { echo "$scope"; return; }
+    [[ -n "$DEFAULT_RESULT_SCOPE" ]] && { echo "$DEFAULT_RESULT_SCOPE"; return; }
+    [[ "$JOBS_SCOPE" != "all" && -n "$JOBS_SCOPE" ]] && { echo "$JOBS_SCOPE"; return; }
+    [[ "$EXPECTED_JOBS_SCOPE" != "all" && -n "$EXPECTED_JOBS_SCOPE" ]] && { echo "$EXPECTED_JOBS_SCOPE"; return; }
+    echo "current"
+}
+
 read_status()  { cat "$STATE_DIR/${1}.status" 2>/dev/null || echo "pending"; }
 write_status() { echo "$2" > "$STATE_DIR/${1}.status"; }
 read_attempt() { cat "$STATE_DIR/${1}.attempt" 2>/dev/null || echo "0"; }
@@ -79,12 +118,12 @@ read_signature() { cat "$STATE_DIR/${1}.signature" 2>/dev/null || true; }
 write_signature() { echo "$2" > "$STATE_DIR/${1}.signature"; }
 
 # Phase 1: multi-slot GPU scheduling — scan per-GPU and per-port usage.
-declare -A HOST_GPU_COUNT=( [gpu-4]=8 [3090]=8 [2080ti]=8 [h100]=8 )
+declare -A HOST_GPU_COUNT=( [gpu-4]=8 [3090]=8 [2080ti]=8 [h100]=8 [h100-2]=4 )
 PORT_RANGE=(8089 8090 8091 8092 8093 8094 8095 8096)
 declare -A HOST_USED_GPUS
 declare -A HOST_USED_PORTS
 
-for HOST in gpu-4 3090 2080ti h100; do
+for HOST in gpu-4 3090 2080ti h100 h100-2; do
     SLOT_INFO=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "$HOST" '
         echo "GPUS:$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits 2>/dev/null | awk -F", " "\$2 > 100 {printf \$1\" \"}")"
         echo "PORTS:$(for p in 8089 8090 8091 8092 8093 8094 8095 8096; do ss -ltn 2>/dev/null | grep -q ":${p} " && printf "%s " $p; done)"
@@ -127,11 +166,16 @@ claim_slot() {
 while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONCS PROFILES EXTRA_ENV || [[ -n "$HOST" ]]; do
     HOST=$(echo "$HOST" | tr -d ' ')
     [[ -z "$HOST" || "${HOST:0:1}" == "#" ]] && continue
+    if [[ "$EXPECTED_JOBS_SCOPE" == "fixed" && "$CONCS" != "200 320" ]]; then
+        log "skipping non-fixed-grid row for $HOST/$SHORT/tp$TP/$MODE/$BACKEND: CONCS='$CONCS'"
+        continue
+    fi
 
     : "${BACKEND:=vllm}"  # default if column missing (legacy rows)
+    ROW_RESULT_SCOPE=$(row_result_scope "$EXTRA_ENV")
     JID=$(job_id "$HOST" "$SHORT" "$TP" "$MODE" "$BACKEND")
     STATUS=$(read_status "$JID")
-    JOB_SIGNATURE="${MAX_LEN}|${GPU_MEM}|${CONCS}|${PROFILES}|${EXTRA_ENV}"
+    JOB_SIGNATURE="${ROW_RESULT_SCOPE}|${MAX_LEN}|${GPU_MEM}|${CONCS}|${PROFILES}|${EXTRA_ENV}"
     OLD_SIGNATURE=$(read_signature "$JID")
     if [[ "$STATUS" =~ ^(done|skipped|failed)$ && -n "$OLD_SIGNATURE" && "$OLD_SIGNATURE" != "$JOB_SIGNATURE" ]]; then
         log "$JID: job shape changed since terminal $STATUS; retrying as pending"
@@ -148,12 +192,12 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
     fi
     PREFIX=$(host_prefix "$HOST")
     RESULT_DIR_NAME="${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
-    OUT_DIR_REMOTE="/tmp/results/${RESULT_SCOPE}/${RESULT_DIR_NAME}"
+    OUT_DIR_REMOTE="/tmp/results/${ROW_RESULT_SCOPE}/${RESULT_DIR_NAME}"
     # Fallback for jobs launched before RESULT_SCOPE existed; completed jobs
     # still upload into the current R2 namespace to avoid legacy collisions.
     LEGACY_OUT_DIR_REMOTE="/tmp/results/${RESULT_DIR_NAME}"
-    OUT_DIR_LOCAL="/tmp/bench_${RESULT_SCOPE//\//_}_${RESULT_DIR_NAME}"
-    R2_DIR="${RESULT_SCOPE}/${RESULT_DIR_NAME}"
+    OUT_DIR_LOCAL="/tmp/bench_${ROW_RESULT_SCOPE//\//_}_${RESULT_DIR_NAME}"
+    R2_DIR="${ROW_RESULT_SCOPE}/${RESULT_DIR_NAME}"
 
     case "$STATUS" in
         done|skipped|failed)
@@ -268,7 +312,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             echo "$SLOT_GPUS" > "$STATE_DIR/${JID}.gpus"
             write_signature "$JID" "$JOB_SIGNATURE"
 
-            log "$JID: dispatching on $HOST:$SLOT_PORT gpus=[$SLOT_GPUS] ($BACKEND, max_len=$MAX_LEN, mode=$MODE)"
+            log "$JID: dispatching on $HOST:$SLOT_PORT gpus=[$SLOT_GPUS] ($BACKEND, scope=$ROW_RESULT_SCOPE, max_len=$MAX_LEN, mode=$MODE)"
             write_status "$JID" running
 
             # Build env: PORT + CUDA_VISIBLE_DEVICES (unless cell already pins)
@@ -277,7 +321,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                 SLOT_ENV="$SLOT_ENV CUDA_VISIBLE_DEVICES=$SLOT_GPUS"
             fi
 
-            CMD="$SLOT_ENV ${EXTRA_ENV} bash /tmp/inference-benchmark/scripts/${SCRIPT} \
+            CMD="$SLOT_ENV ${EXTRA_ENV} RESULT_SCOPE=${ROW_RESULT_SCOPE} DASHBOARD_SCOPE=${ROW_RESULT_SCOPE} bash /tmp/inference-benchmark/scripts/${SCRIPT} \
                 ${MODEL_PATH} ${TP} ${SHORT} ${BACKEND} ${OUT_DIR_REMOTE} \
                 ${PY} ${GPU_MEM} ${MAX_LEN} \"${CONCS}\" \"${PROFILES}\""
             REMOTE_LOG="/tmp/bench_${SHORT}_tp${TP}_${MODE}_${BACKEND}_p${SLOT_PORT}.log"
@@ -291,6 +335,7 @@ done < "$JOBS_FILE"
 # status (pending/running/done/skipped/known_oom). Non-fatal — if this
 # fails, the tick still succeeds; the next tick will republish.
 python3 "$REPO_ROOT/inference-benchmark/scripts/publish_sweep_state.py" \
+    --state-dir "$STATE_ROOT" \
     --endpoint "$EP" --bucket "$BUCKET" --profile "$PROFILE" \
     >> "$LOG" 2>&1 || log "publish_sweep_state.py failed"
 

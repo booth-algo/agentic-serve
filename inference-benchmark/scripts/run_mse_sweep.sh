@@ -39,7 +39,7 @@ launch_vllm() {
         --dtype auto \
         --enable-prefix-caching \
         --enable-chunked-prefill \
-        --disable-log-requests \
+        --no-enable-log-requests \
         &>/tmp/vllm_mse.log &
     VLLM_PID=$!
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import shlex
 import sys
 from pathlib import Path
 
@@ -24,6 +25,23 @@ BENCH_JOBS_TXT = HERE / "bench_jobs.txt"
 
 PRESET_KEYS = ("max_len", "gpu_mem", "concurrencies", "profiles")
 CELL_REQUIRED = ("host", "model", "tp", "mode", "preset")
+SYNTHETIC_PROFILE_MAP = {
+    "chat-singleturn": "chat-singleturn-synth",
+    "chat-multiturn": "chat-multiturn-synth",
+    "swebench-multiturn": "swebench-multiturn-synth",
+    "terminalbench-multiturn": "terminalbench-multiturn-synth",
+    "osworld-multiturn": "osworld-multiturn-synth",
+}
+SYNTHETIC_EXTRA_ENV = {
+    "DISTRIBUTIONAL_SYNTHETIC_STYLE": "code",
+    "DISTRIBUTIONAL_TARGET_CHARS_PER_TOKEN": "3.8",
+    "DISTRIBUTIONAL_PREFIX_AWARE": "1",
+    "DISTRIBUTIONAL_SHARED_PREFIX_TOKENS": "1024",
+}
+DERIVED_SCOPE_SOURCE = {
+    "latest": "fixed",  # legacy alias; the dashboard now exposes synthetic instead.
+    "synthetic": "fixed",
+}
 
 
 def load_manifest(path: Path) -> dict:
@@ -137,6 +155,24 @@ def profile_infeasible_reasons(cell: dict, manifest: dict) -> dict[str, str]:
     return reasons
 
 
+def _extra_env_value(extra_env: str, key: str) -> str | None:
+    try:
+        parts = shlex.split(extra_env)
+    except ValueError:
+        parts = extra_env.split()
+    prefix = f"{key}="
+    for part in parts:
+        if part.startswith(prefix):
+            return part[len(prefix):]
+    return None
+
+
+def _ensure_extra_env(extra_env: str, key: str, value: str) -> str:
+    if _extra_env_value(extra_env, key) is not None:
+        return extra_env
+    return f"{extra_env} {key}={value}".strip()
+
+
 def render_row(cell: dict, manifest: dict) -> str:
     host = manifest["hosts"][cell["host"]]
     model = manifest["models"][cell["model"]]
@@ -145,9 +181,9 @@ def render_row(cell: dict, manifest: dict) -> str:
     concs = " ".join(str(c) for c in resolved["concurrencies"])
     profiles = " ".join(resolved["profiles"])
     extra_env = resolved.get("extra_env", "")
-    scope = cell.get("scope", "")
-    if scope:
-        extra_env = f"{extra_env} SCOPE={scope}".strip()
+    data_scope = cell_data_scope(cell)
+    extra_env = _ensure_extra_env(str(extra_env), "DASHBOARD_SCOPE", data_scope)
+    extra_env = _ensure_extra_env(extra_env, "RESULT_SCOPE", data_scope)
     backend = str(cell.get("backend", "vllm"))
     fields = [
         str(cell["host"]),
@@ -169,15 +205,54 @@ def cell_data_scope(cell: dict) -> str:
     scope = cell.get("data_scope") or cell.get("dashboard_scope") or cell.get("scope")
     if scope:
         return str(scope)
+    extra = str(cell.get("extra_env", ""))
+    for key in ("DASHBOARD_SCOPE", "RESULT_SCOPE", "SCOPE"):
+        scope = _extra_env_value(extra, key)
+        if scope:
+            return scope
     return "fixed" if str(cell.get("preset", "")).startswith("fixed_") else "current"
+
+
+def coverage_grid_scope(scope: str) -> str:
+    return DERIVED_SCOPE_SOURCE.get(scope, scope)
+
+
+def profiles_for_output_scope(profiles, requested_scope: str) -> list[str]:
+    if requested_scope != "synthetic":
+        return [str(profile) for profile in profiles]
+    return [
+        SYNTHETIC_PROFILE_MAP[str(profile)]
+        for profile in profiles
+        if str(profile) in SYNTHETIC_PROFILE_MAP
+    ]
+
+
+def cell_for_output_scope(cell: dict, requested_scope: str, manifest: dict | None = None) -> dict:
+    if requested_scope not in DERIVED_SCOPE_SOURCE:
+        return cell
+    out = dict(cell)
+    out["data_scope"] = requested_scope
+    if requested_scope == "synthetic":
+        profiles = out.get("profiles")
+        if profiles is None:
+            if manifest is None:
+                raise ValueError("manifest is required to derive synthetic profiles")
+            profiles = resolve(cell, manifest)["profiles"]
+        out["profiles"] = profiles_for_output_scope(profiles, requested_scope)
+        extra_env = str(out.get("extra_env", ""))
+        for key, value in SYNTHETIC_EXTRA_ENV.items():
+            extra_env = _ensure_extra_env(extra_env, key, value)
+        out["extra_env"] = extra_env
+    return out
 
 
 def compile_jobs(manifest: dict, scope: str = "all"):
     emitted: list[tuple[dict, str]] = []
     skipped: list[tuple[dict, str, str]] = []  # (cell, status, reason)
+    grid_scope = coverage_grid_scope(scope)
 
     for cell in manifest["cells"]:
-        if scope != "all" and cell_data_scope(cell) != scope:
+        if grid_scope != "all" and cell_data_scope(cell) != grid_scope:
             continue
         reason = is_known_oom(cell, manifest)
         if reason:
@@ -187,7 +262,7 @@ def compile_jobs(manifest: dict, scope: str = "all"):
         if reason:
             skipped.append((cell, "infeasible", reason))
             continue
-        profile_reasons = profile_infeasible_reasons(cell, manifest)
+        profile_reasons = {} if scope == "synthetic" else profile_infeasible_reasons(cell, manifest)
         if profile_reasons:
             resolved = resolve(cell, manifest)
             runnable_profiles = [
@@ -201,12 +276,20 @@ def compile_jobs(manifest: dict, scope: str = "all"):
             if not runnable_profiles:
                 skipped.append((cell, "profile_infeasible", blocked))
                 continue
-            emitted_cell = dict(cell)
+            emitted_cell = cell_for_output_scope(cell, scope, manifest)
             emitted_cell["profiles"] = runnable_profiles
+            emitted_cell["profiles"] = profiles_for_output_scope(emitted_cell["profiles"], scope)
+            if not emitted_cell["profiles"]:
+                skipped.append((cell, "profile_infeasible", blocked))
+                continue
             skipped.append((cell, "profile_infeasible", blocked))
             emitted.append((emitted_cell, render_row(emitted_cell, manifest)))
             continue
-        emitted.append((cell, render_row(cell, manifest)))
+        emitted_cell = cell_for_output_scope(cell, scope, manifest)
+        if not resolve(emitted_cell, manifest)["profiles"]:
+            skipped.append((cell, "empty_scope", f"no profiles map into scope={scope}"))
+            continue
+        emitted.append((emitted_cell, render_row(emitted_cell, manifest)))
     return emitted, skipped
 
 
@@ -237,7 +320,7 @@ def main() -> int:
     ap.add_argument("--yaml", type=Path, default=SWEEP_YAML)
     ap.add_argument("--out", type=Path, default=BENCH_JOBS_TXT)
     ap.add_argument("--dry-run", action="store_true", help="print to stdout, don't write")
-    ap.add_argument("--scope", choices=("all", "current", "fixed"), default="all", help="emit only one dashboard scope")
+    ap.add_argument("--scope", choices=("all", "synthetic", "latest", "current", "fixed", "mse"), default="all", help="emit only one dashboard scope")
     ap.add_argument("--verbose", "-v", action="store_true", help="show skip reasons")
     args = ap.parse_args()
 

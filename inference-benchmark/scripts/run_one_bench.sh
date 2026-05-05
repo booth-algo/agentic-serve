@@ -63,6 +63,19 @@ for i in $(seq 1 120); do
     sleep 5
 done
 
+# Verify the API is actually functional with a real chat completion.
+HEALTH_JSON='{"model":"'"$MODEL_PATH"'","messages":[{"role":"user","content":"Hi"}],"max_tokens":1}'
+if ! curl -sf -m 120 "http://localhost:$PORT/v1/chat/completions" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$HEALTH_JSON" > /dev/null 2>&1; then
+    echo "[bench] API health check failed — server is reachable but chat completions are not functional"
+    echo "[bench] tail of server log:"
+    tail -30 /tmp/vllm_${PORT}.log
+    exit 1
+fi
+echo "[bench] API health check passed"
+
 cd /tmp/inference-benchmark
 
 RUNNER_MODE_ARGS=(--mode single-turn)

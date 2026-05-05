@@ -41,22 +41,23 @@ tail -80 /tmp/bench_orchestrator.log 2>/dev/null > "$TMP_DIR/orchestrator.tail.l
 # Job state summary.
 {
     echo "# Non-done job states:"
-    for f in /tmp/bench_jobs/state/*.status; do
+    while IFS= read -r f; do
         [[ -f "$f" ]] || continue
         s=$(cat "$f")
         if [[ "$s" != "done" ]]; then
-            name=$(basename "$f" .status)
+            name=${f#/tmp/bench_jobs/state/}
+            name=${name%.status}
             att=$(cat "${f%.status}.attempt" 2>/dev/null || echo "-")
             ovr=$(cat "${f%.status}.max_len_override" 2>/dev/null || echo "-")
             printf "  %-45s %s  attempt=%s  max_len_override=%s\n" "$name" "$s" "$att" "$ovr"
         fi
-    done
+    done < <(find /tmp/bench_jobs/state -name '*.status' -type f 2>/dev/null | sort)
     echo ""
     echo "# Counts:"
-    echo "  done      : $(grep -l done /tmp/bench_jobs/state/*.status 2>/dev/null | wc -l)"
-    echo "  skipped : $(grep -l skipped /tmp/bench_jobs/state/*.status 2>/dev/null | wc -l)"
-    echo "  running   : $(grep -l running /tmp/bench_jobs/state/*.status 2>/dev/null | wc -l)"
-    echo "  pending   : $(grep -l pending /tmp/bench_jobs/state/*.status 2>/dev/null | wc -l)"
+    echo "  done      : $(find /tmp/bench_jobs/state -name '*.status' -type f -exec grep -l '^done$' {} + 2>/dev/null | wc -l)"
+    echo "  skipped   : $(find /tmp/bench_jobs/state -name '*.status' -type f -exec grep -l '^skipped$' {} + 2>/dev/null | wc -l)"
+    echo "  running   : $(find /tmp/bench_jobs/state -name '*.status' -type f -exec grep -l '^running$' {} + 2>/dev/null | wc -l)"
+    echo "  pending   : $(find /tmp/bench_jobs/state -name '*.status' -type f -exec grep -l '^pending$' {} + 2>/dev/null | wc -l)"
 } > "$TMP_DIR/job-state.txt"
 
 # Host liveness snapshot (best effort; if ssh fails, note and continue).

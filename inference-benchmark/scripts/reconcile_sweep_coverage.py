@@ -127,6 +127,10 @@ def scope_matches(scope_value: str, scope: str) -> bool:
     return scope == "all" or scope_value == scope
 
 
+def coverage_grid_scope(scope: str) -> str:
+    return "fixed" if scope == "latest" else scope
+
+
 def profile_key(item: dict[str, Any]) -> ProfileKey:
     return (
         str(item.get("data_scope") or "current"),
@@ -178,11 +182,13 @@ def expected_by_job(
 ) -> dict[str, JobCoverage]:
     blocked_profiles = {profile_key(item) for item in state.get("profile_infeasible", [])}
     jobs: dict[str, JobCoverage] = {}
+    grid_scope = coverage_grid_scope(scope)
 
     for cell in state.get("cells", []):
         data_scope = str(cell.get("data_scope") or "current")
-        if not scope_matches(data_scope, scope):
+        if not scope_matches(data_scope, grid_scope):
             continue
+        output_scope = scope if scope in {"latest", "synthetic"} else data_scope
 
         host = str(cell.get("host", ""))
         model = str(cell.get("model", ""))
@@ -200,7 +206,7 @@ def expected_by_job(
         if cov is None:
             cov = JobCoverage(
                 job_id=jid,
-                data_scope=data_scope,
+                data_scope=output_scope,
                 host=host,
                 hw_label=hw_label,
                 model=model,
@@ -278,6 +284,17 @@ def compiled_bench_jobs(manifest: dict[str, Any]) -> tuple[dict[str, str], dict[
         )
         rows[jid] = row
         rows_by_scope[publish_sweep_state.cell_data_scope(cell)][jid] = row
+    synthetic_emitted, _synthetic_skipped = compile_sweep.compile_jobs(manifest, "synthetic")
+    for cell, row in synthetic_emitted:
+        backend = str(cell.get("backend", "vllm"))
+        jid = publish_sweep_state.job_id(
+            str(cell["host"]),
+            str(cell["model"]),
+            int(cell["tp"]),
+            str(cell["mode"]),
+            backend,
+        )
+        rows_by_scope["synthetic"][jid] = row
     return rows, rows_by_scope, compile_sweep.render_file(emitted), len(skipped)
 
 
@@ -295,17 +312,18 @@ def reset_stale_jobs(
     write_reason: bool,
 ) -> list[JobCoverage]:
     targets = [cov for cov in jobs if cov.status in reset_statuses and cov.missing]
-    state_dir.mkdir(parents=True, exist_ok=True)
     timestamp = now_iso()
     for cov in targets:
-        (state_dir / f"{cov.job_id}.status").write_text("pending\n")
+        target_state_dir = state_dir if state_dir.name == cov.data_scope else state_dir / cov.data_scope
+        target_state_dir.mkdir(parents=True, exist_ok=True)
+        (target_state_dir / f"{cov.job_id}.status").write_text("pending\n")
         if write_reason:
             reason = (
                 f"coverage incomplete for scope={scope}: "
                 f"missing {len(cov.missing)}/{len(cov.expected)} points; "
                 f"reset by reconcile_sweep_coverage.py at {timestamp}"
             )
-            (state_dir / f"{cov.job_id}.reason").write_text(reason + "\n")
+            (target_state_dir / f"{cov.job_id}.reason").write_text(reason + "\n")
     return targets
 
 
@@ -455,7 +473,7 @@ def write_missing_bench_jobs(path: Path, missing_jobs: list[JobCoverage], compil
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scope", choices=("current", "fixed", "archive", "all"), default="fixed")
+    parser.add_argument("--scope", choices=("synthetic", "latest", "current", "fixed", "mse", "archive", "all"), default="fixed")
     parser.add_argument("--data", default=DEFAULT_DATA, help="data.json file path or URL; defaults to published R2 current data")
     parser.add_argument("--sweep-yaml", type=Path, default=DEFAULT_SWEEP_YAML)
     parser.add_argument("--bench-jobs", type=Path, default=DEFAULT_BENCH_JOBS)

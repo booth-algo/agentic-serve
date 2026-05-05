@@ -30,6 +30,7 @@ DEFAULT_JOBS_FILE = HERE / "bench_jobs.txt"
 DEFAULT_STATE_DIR = Path("/tmp/bench_jobs/state")
 DEFAULT_HOSTS = ("gpu-4", "3090", "2080ti", "h100")
 PORTS = tuple(range(8089, 8097))
+LEGACY_STATE_FALLBACK = os.environ.get("BENCH_STATE_LEGACY_FALLBACK") == "1"
 
 REMOTE_SNAPSHOT_SCRIPT = r"""
 set -uo pipefail
@@ -65,6 +66,7 @@ class Job:
     concs: str
     profiles: str
     extra_env: str
+    scope: str
     line_no: int
 
     @property
@@ -172,16 +174,26 @@ def read_text(path: Path, default: str = "") -> str:
         return default
 
 
-def state_path(state_dir: Path, job_id: str, suffix: str) -> Path:
+def state_path(state_dir: Path, job: Job, suffix: str) -> Path:
     # Job IDs contain model-version dots, so Path.with_suffix() would corrupt
     # names like Llama-3.1-8B_tp4_multi.
-    return state_dir / f"{job_id}.{suffix}"
+    if job.scope and job.scope != "all":
+        if state_dir.name == job.scope:
+            return state_dir / f"{job.job_id}.{suffix}"
+        scoped = state_dir / job.scope / f"{job.job_id}.{suffix}"
+        if scoped.exists() or not LEGACY_STATE_FALLBACK:
+            return scoped
+    return state_dir / f"{job.job_id}.{suffix}"
 
 
 def parse_jobs(jobs_file: Path) -> list[Job]:
     jobs: list[Job] = []
+    scope = "all"
     for line_no, raw in enumerate(jobs_file.read_text().splitlines(), start=1):
         line = raw.strip()
+        if line.startswith("# SCOPE:"):
+            scope = line.split(":", 1)[1].strip() or "all"
+            continue
         if not line or line.startswith("#"):
             continue
         parts = raw.rstrip("\n").split("|")
@@ -203,6 +215,7 @@ def parse_jobs(jobs_file: Path) -> list[Job]:
                 concs=concs.strip(),
                 profiles=profiles.strip(),
                 extra_env=extra_env.strip(),
+                scope=scope,
                 line_no=line_no,
             )
         )
@@ -213,7 +226,7 @@ def load_job_states(jobs: Iterable[Job], state_dir: Path) -> list[JobState]:
     states: list[JobState] = []
     now = time.time()
     for job in jobs:
-        status_file = state_path(state_dir, job.job_id, "status")
+        status_file = state_path(state_dir, job, "status")
         status = read_text(status_file, "pending") or "pending"
         age_seconds: int | None = None
         try:
@@ -224,11 +237,11 @@ def load_job_states(jobs: Iterable[Job], state_dir: Path) -> list[JobState]:
             JobState(
                 job=job,
                 status=status,
-                gpus=read_text(state_path(state_dir, job.job_id, "gpus")),
-                port=read_text(state_path(state_dir, job.job_id, "port")),
-                attempt=read_text(state_path(state_dir, job.job_id, "attempt"), "0") or "0",
+                gpus=read_text(state_path(state_dir, job, "gpus")),
+                port=read_text(state_path(state_dir, job, "port")),
+                attempt=read_text(state_path(state_dir, job, "attempt"), "0") or "0",
                 age_seconds=age_seconds,
-                max_len_override=read_text(state_path(state_dir, job.job_id, "max_len_override")),
+                max_len_override=read_text(state_path(state_dir, job, "max_len_override")),
             )
         )
     return states
@@ -338,8 +351,11 @@ def classify_process(proc: GpuProcess, snapshot: HostSnapshot, sweep_jobs: list[
         "sweep_all_profiles",
         "sweep_multiturn_profiles",
         "src.benchmark.runner",
+        "/tmp/results/synthetic",
+        "/tmp/results/latest",
         "/tmp/results/current",
         "/tmp/results/fixed",
+        "/tmp/results/mse",
     )
     if any(marker in cmd for marker in markers):
         return "sweep"

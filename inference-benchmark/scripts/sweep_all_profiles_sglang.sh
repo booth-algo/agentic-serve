@@ -72,7 +72,13 @@ except Exception:
     raise SystemExit(1)
 
 scope = (raw.get("config") or {}).get("dashboard_scope")
-raise SystemExit(0 if scope == sys.argv[2] else 1)
+if scope != sys.argv[2]:
+    raise SystemExit(1)
+
+# Refuse to skip a file that has no successful requests — it is garbage
+# from a previous failed run and would block a valid re-run forever.
+success_count = sum(1 for r in raw.get("per_request", []) if r.get("success"))
+raise SystemExit(0 if success_count > 0 else 1)
 PY
 }
 
@@ -119,6 +125,19 @@ for i in $(seq 1 180); do
     fi
     sleep 5
 done
+
+# Verify the API is actually functional with a real chat completion.
+HEALTH_JSON='{"model":"'"$MODEL_PATH"'","messages":[{"role":"user","content":"Hi"}],"max_tokens":1}'
+if ! curl -sf -m 120 "http://localhost:$PORT/v1/chat/completions" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$HEALTH_JSON" > /dev/null 2>&1; then
+    echo "[sweep-sglang] API health check failed — server is reachable but chat completions are not functional"
+    echo "[sweep-sglang] tail of server log:"
+    tail -30 /tmp/vllm_${PORT}.log
+    exit 1
+fi
+echo "[sweep-sglang] API health check passed"
 
 cd /tmp/inference-benchmark
 

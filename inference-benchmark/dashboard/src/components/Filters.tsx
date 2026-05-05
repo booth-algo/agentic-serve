@@ -8,6 +8,8 @@ import {
   profileDisplayName,
   CURRENT_PROFILES,
   FIXED_PROFILES,
+  SYNTHETIC_PROFILES,
+  MSE_PROFILES,
   ARCHIVE_PROFILES,
   type DataScope,
 } from '../profileMeta';
@@ -30,12 +32,18 @@ const CATEGORY_COLORS: Record<keyof FilterState, string> = {
 };
 
 const PROFILE_GROUP_ORDER = [
+  'Synthetic chat ST',
+  'Synthetic chat MT',
+  'Synthetic coding MT',
+  'Synthetic terminal MT',
+  'Synthetic computer-use MT',
   'Natural chat ST',
   'Natural chat MT',
   'Agentic coding ST',
   'Agentic coding MT',
   'Agentic terminal MT',
   'Computer-use MT',
+  'MSE validation',
   'Agentic coding',
   'Agentic terminal',
   'Computer-use',
@@ -45,11 +53,22 @@ const PROFILE_GROUP_ORDER = [
 
 const PROFILE_ORDER = [
   'chat-singleturn',
+  'chat-singleturn-synth',
   'coding-singleturn',
   'chat-multiturn',
+  'chat-multiturn-synth',
   'swebench-multiturn',
+  'swebench-multiturn-synth',
+  'swebench-multiturn-mse',
+  'swebench-multiturn-short',
   'terminalbench-multiturn',
+  'terminalbench-multiturn-synth',
+  'terminalbench-multiturn-mse',
+  'terminalbench-multiturn-short',
   'osworld-multiturn',
+  'osworld-multiturn-synth',
+  'osworld-multiturn-mse',
+  'osworld-multiturn-short',
   'chat-short',
   'chat-medium',
   'fixed-seq128',
@@ -71,12 +90,18 @@ const PROFILE_ORDER = [
 ];
 
 const GROUP_LABELS: Record<string, string> = {
+  'Synthetic chat ST': 'Synthetic chat',
+  'Synthetic chat MT': 'Synthetic chat, multi-turn',
+  'Synthetic coding MT': 'Synthetic coding, multi-turn',
+  'Synthetic terminal MT': 'Synthetic terminal, multi-turn',
+  'Synthetic computer-use MT': 'Synthetic computer-use, multi-turn',
   'Natural chat ST': 'Natural chat',
   'Natural chat MT': 'Natural chat, multi-turn',
   'Agentic coding ST': 'Agentic coding',
   'Agentic coding MT': 'Agentic coding, multi-turn',
   'Agentic terminal MT': 'Agentic terminal, multi-turn',
   'Computer-use MT': 'Computer-use, multi-turn',
+  'MSE validation': 'MSE validation pairs',
   'Agentic coding': 'Agentic coding',
   'Agentic terminal': 'Agentic terminal',
   'Computer-use': 'Computer-use',
@@ -85,12 +110,18 @@ const GROUP_LABELS: Record<string, string> = {
 };
 
 const GROUP_ACCENTS: Record<string, string> = {
+  'Synthetic chat ST': '#3fb950',
+  'Synthetic chat MT': '#3fb950',
+  'Synthetic coding MT': '#00bcd4',
+  'Synthetic terminal MT': '#f97583',
+  'Synthetic computer-use MT': '#ec4899',
   'Natural chat ST': '#3fb950',
   'Natural chat MT': '#3fb950',
   'Agentic coding ST': '#00bcd4',
   'Agentic coding MT': '#00bcd4',
   'Agentic terminal MT': '#f97583',
   'Computer-use MT': '#ec4899',
+  'MSE validation': '#f0883e',
   'Agentic coding': '#00bcd4',
   'Agentic terminal': '#f97583',
   'Computer-use': '#ec4899',
@@ -204,7 +235,9 @@ export function Filters({ filters, options, dataScope, onToggle, onClear }: Filt
   const allProfiles = useMemo(
     () => Array.from(
       dataScope === 'archive' ? ARCHIVE_PROFILES :
+      dataScope === 'synthetic' ? SYNTHETIC_PROFILES :
       dataScope === 'fixed' ? FIXED_PROFILES :
+      dataScope === 'mse' ? MSE_PROFILES :
       CURRENT_PROFILES,
     )
       .filter((profile) => PROFILE_META[profile])
