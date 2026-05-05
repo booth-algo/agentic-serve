@@ -51,10 +51,6 @@ dataset_info:
         dtype: int64
       - name: duration_s
         dtype: float64
-      - name: successful_requests
-        dtype: int64
-      - name: failed_requests
-        dtype: int64
       - name: request_throughput
         dtype: float64
       - name: input_token_throughput
@@ -97,8 +93,8 @@ dataset_info:
         dtype: float64
     splits:
       - name: summary
-        num_examples: 3147
-        num_bytes: 694254
+        num_examples: 2902
+        num_bytes: 640182
   - config_name: distributional
     features:
       - name: run_id
@@ -121,10 +117,6 @@ dataset_info:
         dtype: int64
       - name: duration_s
         dtype: float64
-      - name: successful_requests
-        dtype: int64
-      - name: failed_requests
-        dtype: int64
       - name: request_throughput
         dtype: float64
       - name: input_token_throughput
@@ -222,11 +214,11 @@ dataset_info:
 
 # AgentPerfBench
 
-LLM inference benchmark: 3,392 serving runs and 148,077 per-kernel NCU profiles across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
+LLM inference benchmark: 3,147 serving runs and 148,077 per-kernel NCU profiles across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
 
 ## Dataset configurations
 
-### trace_replay (3,147 rows)
+### trace_replay (2,902 rows)
 
 Replays exact ISL/OSL sequences from recorded agent sessions (SWE-Bench, TerminalBench, OSWorld, ShareGPT). 77 (model, hardware, engine) combinations, 17 profiles, 6 concurrency levels.
 
@@ -248,17 +240,19 @@ Concurrency is controlled by a fixed-size connection pool. Trace replay uses lev
 
 Early runs used a session-pool size smaller than the declared concurrency (`num_sessions=100` for trace replay, `num_sessions=10` for distributional), capping actual load below the nominal value. Rows where declared concurrency exceeded the session pool were dropped.
 
+Configurations where fewer than 75% of requests completed successfully are excluded.
+
 | Config | Rows |
 |--------|------|
-| trace_replay | 3,147 |
+| trace_replay | 2,902 |
 | distributional | 245 |
-| **Total** | **3,392** |
+| **Total** | **3,147** |
 
 ## Coverage
 
 ### Hardware
 
-All benchmarks collected on PyTorch 2.10.0, CUDA 12.8.
+All benchmarks collected on PyTorch 2.10.0.
 
 | GPU | VRAM | HBM bandwidth | Peak half-precision TFLOPS |
 |-----|------|---------------|---------------------------|
@@ -306,8 +300,6 @@ Each row in `summary.parquet` (both configs):
 | concurrency | int | Concurrent request level |
 | num_requests | int | Total requests in run |
 | duration_s | float | Total run duration |
-| successful_requests | int | Completed requests |
-| failed_requests | int | Failed requests |
 | request_throughput | float | Requests/second |
 | input_token_throughput | float | Input tokens/second |
 | output_token_throughput | float | Output tokens/second |

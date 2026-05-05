@@ -17,8 +17,8 @@ from sanitize import (
 
 SUMMARY_COLUMNS = [
     "run_id", "model", "model_family", "hardware", "engine", "tensor_parallelism",
-    "profile", "concurrency", "num_requests", "duration_s", "successful_requests",
-    "failed_requests", "request_throughput", "input_token_throughput",
+    "profile", "concurrency", "num_requests", "duration_s",
+    "request_throughput", "input_token_throughput",
     "output_token_throughput", "total_token_throughput",
     "mean_ttft_ms", "median_ttft_ms", "p90_ttft_ms", "p99_ttft_ms",
     "mean_tpot_ms", "median_tpot_ms", "p90_tpot_ms", "p99_tpot_ms",
@@ -63,6 +63,39 @@ def should_filter(entry: dict, config_name: str) -> bool:
     return False
 
 
+def compute_success_rate(entry: dict) -> float:
+    s = entry.get("summary", {})
+    success = s.get("successful_requests", 0) or 0
+    failed = s.get("failed_requests", 0) or 0
+    total = success + failed
+    if total == 0:
+        return 1.0
+    return success / total
+
+
+def _entry_key(entry: dict) -> str:
+    c = entry.get("config", {})
+    model = entry.get("modelShort") or resolve_model_name(c.get("model", ""))
+    return f"{model}|{entry.get('hardware', '')}|{c.get('backend', '')}|{c.get('profile', '')}|{c.get('concurrency', 0)}"
+
+
+def dedup_current_fixed(entries: list[dict]) -> list[dict]:
+    """For distributional entries, prefer 'fixed' over 'current' when both exist."""
+    by_key: dict[str, dict] = {}
+    for e in entries:
+        key = _entry_key(e)
+        scope = e.get("dataScope", "")
+        existing = by_key.get(key)
+        if existing is None:
+            by_key[key] = e
+        elif scope == "fixed":
+            by_key[key] = e
+    deduped = list(by_key.values())
+    if len(deduped) < len(entries):
+        print(f"  Dedup current/fixed: {len(entries)} -> {len(deduped)} ({len(entries) - len(deduped)} current entries replaced by fixed)")
+    return deduped
+
+
 def entry_to_row(entry: dict) -> dict:
     config = entry["config"]
     summary = entry["summary"]
@@ -87,7 +120,7 @@ def entry_to_row(entry: dict) -> dict:
     }
 
     metric_keys = [
-        "num_requests", "duration_s", "successful_requests", "failed_requests",
+        "num_requests", "duration_s",
         "request_throughput", "input_token_throughput", "output_token_throughput",
         "total_token_throughput", "mean_ttft_ms", "median_ttft_ms", "p90_ttft_ms",
         "p99_ttft_ms", "mean_tpot_ms", "median_tpot_ms", "p90_tpot_ms", "p99_tpot_ms",
@@ -135,8 +168,6 @@ def build_parquet(rows: list[dict], output_path: Path) -> pd.DataFrame:
     df["tensor_parallelism"] = df["tensor_parallelism"].astype("int64")
     df["concurrency"] = df["concurrency"].astype("int64")
     df["num_requests"] = df["num_requests"].astype("Int64")
-    df["successful_requests"] = df["successful_requests"].astype("Int64")
-    df["failed_requests"] = df["failed_requests"].astype("Int64")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(output_path, index=False)
@@ -179,7 +210,13 @@ def print_retention_report(stats: dict):
     print("\n--- Retention Report ---")
     for config_name, s in stats.items():
         pct = (s["after"] / s["before"] * 100) if s["before"] else 0
-        print(f"  {config_name}: {s['before']} -> {s['after']} rows ({pct:.1f}% retained, {s['filtered']} filtered)")
+        parts = [f"{s['filtered']} filtered"]
+        if s.get("concurrency_filtered"):
+            parts.append(f"{s['concurrency_filtered']} concurrency")
+        if s.get("success_filtered"):
+            parts.append(f"{s['success_filtered']} success-rate")
+        detail = ", ".join(parts)
+        print(f"  {config_name}: {s['before']} -> {s['after']} rows ({pct:.1f}% retained, {detail})")
     total_before = sum(s["before"] for s in stats.values())
     total_after = sum(s["after"] for s in stats.values())
     total_filtered = sum(s["filtered"] for s in stats.values())
@@ -193,6 +230,8 @@ def main():
     parser.add_argument("--r2-json", type=Path, default=None, help="Path to R2 data JSON (optional)")
     parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parent.parent.parent / "hf_dataset",
                         help="Output directory for parquets")
+    parser.add_argument("--min-success-rate", type=float, default=0.75,
+                        help="Drop runs with success/(success+failed) below this threshold (default: 0.75)")
     args = parser.parse_args()
 
     data_json_path = args.data_json or find_data_json()
@@ -210,16 +249,28 @@ def main():
     for config_name in ("trace_replay", "distributional"):
         entries = [e for e in data if classify_scope(e.get("dataScope", "")) == config_name]
         before_count = len(entries)
-        filtered = [e for e in entries if not should_filter(e, config_name)]
-        after_count = len(filtered)
+
+        if config_name == "distributional":
+            entries = dedup_current_fixed(entries)
+
+        after_concurrency = [e for e in entries if not should_filter(e, config_name)]
+        concurrency_dropped = len(entries) - len(after_concurrency)
+
+        after_success = [e for e in after_concurrency if compute_success_rate(e) >= args.min_success_rate]
+        success_dropped = len(after_concurrency) - len(after_success)
+
+        if success_dropped:
+            print(f"  {config_name}: dropped {success_dropped} rows below {args.min_success_rate:.0%} success rate")
 
         stats[config_name] = {
             "before": before_count,
-            "after": after_count,
-            "filtered": before_count - after_count,
+            "after": len(after_success),
+            "filtered": before_count - len(after_success),
+            "concurrency_filtered": concurrency_dropped,
+            "success_filtered": success_dropped,
         }
 
-        rows = [entry_to_row(e) for e in filtered]
+        rows = [entry_to_row(e) for e in after_success]
         configs[config_name] = rows
 
     hashes = {}

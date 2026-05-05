@@ -67,7 +67,7 @@
       "name": "trace_replay/summary.parquet",
       "contentUrl": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench/resolve/main/trace_replay/summary.parquet",
       "encodingFormat": "application/x-parquet",
-      "sha256": "a9cd2565a9292e75f54791e8108f2491b7bb371fdfeeefb81cdb00833860dd23"
+      "sha256": "19dfc3ed8e2f09c52449045cded6bce29a00c0b9c4e563a407ed8e9960333da3"
     },
     {
       "@type": "cr:FileObject",
@@ -75,7 +75,7 @@
       "name": "distributional/summary.parquet",
       "contentUrl": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench/resolve/main/distributional/summary.parquet",
       "encodingFormat": "application/x-parquet",
-      "sha256": "bb9a48351e0b612b3125c5d0a8e200638d790269f821e45aae342a4042bfd951"
+      "sha256": "67d63072831143e929e0b6d6464744756f783b53ac30fed0232bc01c601676ec"
     },
     {
       "@type": "cr:FileObject",
@@ -494,7 +494,7 @@
   "rai:dataCollection": "Automated benchmark collection. Models deployed on target GPU with specified engine and tensor parallelism. Requests sent per workload profile using closed-loop concurrency control with semaphore. Per-request TTFT, TPOT, ITL, E2EL, and token counts recorded. Kernel profiles collected via Nsight Compute (ncu) with hardware counter metrics.",
   "rai:dataCollectionType": "Automated measurement via benchmarking scripts. No human subjects or crowdsourcing.",
   "rai:dataCollectionMissingData": "Some model-hardware-concurrency combinations are absent due to OOM or engine incompatibility. Concurrency levels exceeding the session-pool size were filtered (see Concurrency filtering in README).",
-  "rai:dataPreprocessing": "Credentials and API endpoints stripped. Concurrency-buggy rows filtered. Summary statistics (mean, median, p90, p99) computed from per-request measurements. Kernel names demangled from NCU output.",
+  "rai:dataPreprocessing": "Credentials and API endpoints stripped. Concurrency-buggy rows filtered. Configurations with completion rates below 75% are excluded. Summary statistics (mean, median, p90, p99) computed from per-request measurements. Kernel names demangled from NCU output.",
   "rai:dataAnnotationProtocol": "Not applicable. Fully automated benchmark collection with no human annotation.",
   "rai:dataAnnotationPlatform": "Not applicable. No human annotation.",
   "rai:dataAnnotationAnalysis": "Not applicable. No human annotation."
