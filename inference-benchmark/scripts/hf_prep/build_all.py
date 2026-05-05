@@ -16,7 +16,7 @@ DEFAULT_REPO = "agent-perf-bench/AgentPerfBench"
 
 EXPECTED_PARQUETS = [
     "trace_replay/summary.parquet",
-    "distributional/summary.parquet",
+    "synthetic_distributional/summary.parquet",
     "kernel_profiles/kernels_labeled.parquet",
 ]
 

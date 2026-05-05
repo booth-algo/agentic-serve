@@ -32,7 +32,7 @@ def main():
 
     expected_files = [
         "trace_replay/summary.parquet",
-        "distributional/summary.parquet",
+        "synthetic_distributional/summary.parquet",
         "kernel_profiles/kernels_labeled.parquet",
     ]
     missing = [f for f in expected_files if not (args.dataset_dir / f).exists()]

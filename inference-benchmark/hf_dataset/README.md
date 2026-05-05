@@ -20,10 +20,10 @@ configs:
     data_files:
       - split: summary
         path: trace_replay/summary.parquet
-  - config_name: distributional
+  - config_name: synthetic_distributional
     data_files:
       - split: summary
-        path: distributional/summary.parquet
+        path: synthetic_distributional/summary.parquet
   - config_name: kernels_labeled
     data_files:
       - split: train
@@ -95,7 +95,7 @@ dataset_info:
       - name: summary
         num_examples: 2902
         num_bytes: 640182
-  - config_name: distributional
+  - config_name: synthetic_distributional
     features:
       - name: run_id
         dtype: string
@@ -224,7 +224,7 @@ Replays exact ISL/OSL sequences from recorded agent sessions (SWE-Bench, Termina
 
 17 profiles: `chat-medium`, `chat-multiturn-long`, `chat-multiturn-medium`, `chat-multiturn-short`, `chat-short`, `chat-singleturn`, `coding-singleturn`, `decode-heavy`, `osworld-multiturn-long`, `osworld-multiturn-medium`, `osworld-multiturn-short`, `prefill-heavy`, `random-1k`, `swebench-multiturn-medium`, `swebench-multiturn-short`, `terminalbench-multiturn-medium`, `terminalbench-multiturn-short`
 
-### distributional (245 rows)
+### synthetic_distributional (245 rows)
 
 ISL/OSL sampled from lognormal fits to real workload statistics. 42 combinations, 6 profiles, 7 concurrency levels.
 
@@ -236,16 +236,16 @@ Per-kernel Nsight Compute (ncu) profiles across 4 GPUs (A100, H100, RTX 3090, RT
 
 ### Concurrency filtering
 
-Concurrency is controlled by a fixed-size connection pool. Trace replay uses levels {1, 5, 10, 20, 40, 80}; distributional uses {1, 5, 10, 40, 80, 200, 320}.
+Concurrency is controlled by a fixed-size connection pool. Trace replay uses levels {1, 5, 10, 20, 40, 80}; synthetic_distributional uses {1, 5, 10, 40, 80, 200, 320}.
 
-Early runs used a session-pool size smaller than the declared concurrency (`num_sessions=100` for trace replay, `num_sessions=10` for distributional), capping actual load below the nominal value. Rows where declared concurrency exceeded the session pool were dropped.
+Early runs used a session-pool size smaller than the declared concurrency (`num_sessions=100` for trace replay, `num_sessions=10` for synthetic_distributional), capping actual load below the nominal value. Rows where declared concurrency exceeded the session pool were dropped.
 
 Configurations where fewer than 75% of requests completed successfully are excluded.
 
 | Config | Rows |
 |--------|------|
 | trace_replay | 2,902 |
-| distributional | 245 |
+| synthetic_distributional | 245 |
 | **Total** | **3,147** |
 
 ## Coverage
@@ -315,7 +315,7 @@ Each row in `summary.parquet` (both configs):
 from datasets import load_dataset
 
 ds = load_dataset("agent-perf-bench/AgentPerfBench", "trace_replay")
-# or "distributional", "kernels_labeled"
+# or "synthetic_distributional", "kernels_labeled"
 ```
 
 ## Benchmark methodology

@@ -49,7 +49,7 @@
   },
   "@type": "sc:Dataset",
   "name": "AgentPerfBench",
-  "description": "LLM inference benchmark dataset measuring serving performance (TTFT, TPOT, throughput) across 9 models, 4 GPU platforms, 2 serving engines under agentic and chat workloads. Three configurations: trace_replay, distributional, and kernels_labeled.",
+  "description": "LLM inference benchmark dataset measuring serving performance (TTFT, TPOT, throughput) across 9 models, 4 GPU platforms, 2 serving engines under agentic and chat workloads. Three configurations: trace_replay, synthetic_distributional, and kernels_labeled.",
   "url": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench",
   "license": "https://spdx.org/licenses/Apache-2.0.html",
   "conformsTo": "http://mlcommons.org/croissant/1.1",
@@ -71,9 +71,9 @@
     },
     {
       "@type": "cr:FileObject",
-      "@id": "distributional-summary-parquet",
-      "name": "distributional/summary.parquet",
-      "contentUrl": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench/resolve/main/distributional/summary.parquet",
+      "@id": "synthetic-distributional-summary-parquet",
+      "name": "synthetic_distributional/summary.parquet",
+      "contentUrl": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench/resolve/main/synthetic_distributional/summary.parquet",
       "encodingFormat": "application/x-parquet",
       "sha256": "67d63072831143e929e0b6d6464744756f783b53ac30fed0232bc01c601676ec"
     },
@@ -223,18 +223,18 @@
     },
     {
       "@type": "cr:RecordSet",
-      "@id": "distributional-summary",
-      "name": "Distributional Summary",
-      "description": "One row per benchmark configuration from distributional runs (statistical sampling from lognormal fits to recorded workload statistics).",
+      "@id": "synthetic-distributional-summary",
+      "name": "Synthetic Distributional Summary",
+      "description": "One row per benchmark configuration from synthetic distributional runs (statistical sampling from lognormal fits to recorded workload statistics).",
       "field": [
         {
           "@type": "cr:Field",
-          "@id": "distributional-summary/run_id",
+          "@id": "synthetic-distributional-summary/run_id",
           "name": "run_id",
           "dataType": "sc:Text",
           "source": {
             "fileObject": {
-              "@id": "distributional-summary-parquet"
+              "@id": "synthetic-distributional-summary-parquet"
             },
             "extract": {
               "column": "run_id"
@@ -243,12 +243,12 @@
         },
         {
           "@type": "cr:Field",
-          "@id": "distributional-summary/model",
+          "@id": "synthetic-distributional-summary/model",
           "name": "model",
           "dataType": "sc:Text",
           "source": {
             "fileObject": {
-              "@id": "distributional-summary-parquet"
+              "@id": "synthetic-distributional-summary-parquet"
             },
             "extract": {
               "column": "model"
@@ -257,12 +257,12 @@
         },
         {
           "@type": "cr:Field",
-          "@id": "distributional-summary/hardware",
+          "@id": "synthetic-distributional-summary/hardware",
           "name": "hardware",
           "dataType": "sc:Text",
           "source": {
             "fileObject": {
-              "@id": "distributional-summary-parquet"
+              "@id": "synthetic-distributional-summary-parquet"
             },
             "extract": {
               "column": "hardware"
@@ -271,12 +271,12 @@
         },
         {
           "@type": "cr:Field",
-          "@id": "distributional-summary/engine",
+          "@id": "synthetic-distributional-summary/engine",
           "name": "engine",
           "dataType": "sc:Text",
           "source": {
             "fileObject": {
-              "@id": "distributional-summary-parquet"
+              "@id": "synthetic-distributional-summary-parquet"
             },
             "extract": {
               "column": "engine"
@@ -285,12 +285,12 @@
         },
         {
           "@type": "cr:Field",
-          "@id": "distributional-summary/profile",
+          "@id": "synthetic-distributional-summary/profile",
           "name": "profile",
           "dataType": "sc:Text",
           "source": {
             "fileObject": {
-              "@id": "distributional-summary-parquet"
+              "@id": "synthetic-distributional-summary-parquet"
             },
             "extract": {
               "column": "profile"
@@ -299,12 +299,12 @@
         },
         {
           "@type": "cr:Field",
-          "@id": "distributional-summary/concurrency",
+          "@id": "synthetic-distributional-summary/concurrency",
           "name": "concurrency",
           "dataType": "sc:Integer",
           "source": {
             "fileObject": {
-              "@id": "distributional-summary-parquet"
+              "@id": "synthetic-distributional-summary-parquet"
             },
             "extract": {
               "column": "concurrency"
@@ -313,12 +313,12 @@
         },
         {
           "@type": "cr:Field",
-          "@id": "distributional-summary/request_throughput",
+          "@id": "synthetic-distributional-summary/request_throughput",
           "name": "request_throughput",
           "dataType": "sc:Float",
           "source": {
             "fileObject": {
-              "@id": "distributional-summary-parquet"
+              "@id": "synthetic-distributional-summary-parquet"
             },
             "extract": {
               "column": "request_throughput"
@@ -327,12 +327,12 @@
         },
         {
           "@type": "cr:Field",
-          "@id": "distributional-summary/median_ttft_ms",
+          "@id": "synthetic-distributional-summary/median_ttft_ms",
           "name": "median_ttft_ms",
           "dataType": "sc:Float",
           "source": {
             "fileObject": {
-              "@id": "distributional-summary-parquet"
+              "@id": "synthetic-distributional-summary-parquet"
             },
             "extract": {
               "column": "median_ttft_ms"
@@ -341,12 +341,12 @@
         },
         {
           "@type": "cr:Field",
-          "@id": "distributional-summary/median_tpot_ms",
+          "@id": "synthetic-distributional-summary/median_tpot_ms",
           "name": "median_tpot_ms",
           "dataType": "sc:Float",
           "source": {
             "fileObject": {
-              "@id": "distributional-summary-parquet"
+              "@id": "synthetic-distributional-summary-parquet"
             },
             "extract": {
               "column": "median_tpot_ms"

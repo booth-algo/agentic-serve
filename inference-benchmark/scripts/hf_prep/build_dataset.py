@@ -49,7 +49,7 @@ def classify_scope(data_scope: str) -> str:
     if data_scope == "archive":
         return "trace_replay"
     if data_scope in ("current", "fixed"):
-        return "distributional"
+        return "synthetic_distributional"
     return "unknown"
 
 
@@ -58,7 +58,7 @@ def should_filter(entry: dict, config_name: str) -> bool:
     data_scope = entry.get("dataScope", "")
     if config_name == "trace_replay" and concurrency > 100:
         return True
-    if config_name == "distributional" and data_scope == "current" and concurrency > 10:
+    if config_name == "synthetic_distributional" and data_scope == "current" and concurrency > 10:
         return True
     return False
 
@@ -191,7 +191,7 @@ def update_croissant(output_dir: Path, hashes: dict[str, str]):
 
     id_to_hash = {
         "trace-replay-summary-parquet": hashes.get("trace_replay"),
-        "distributional-summary-parquet": hashes.get("distributional"),
+        "synthetic-distributional-summary-parquet": hashes.get("synthetic_distributional"),
         "kernels-labeled-parquet": hashes.get("kernels_labeled"),
     }
 
@@ -243,14 +243,14 @@ def main():
         print(f"Loading R2 supplement: {args.r2_json}")
         data = merge_r2_data(data, args.r2_json)
 
-    configs = {"trace_replay": [], "distributional": []}
+    configs = {"trace_replay": [], "synthetic_distributional": []}
     stats = {}
 
-    for config_name in ("trace_replay", "distributional"):
+    for config_name in ("trace_replay", "synthetic_distributional"):
         entries = [e for e in data if classify_scope(e.get("dataScope", "")) == config_name]
         before_count = len(entries)
 
-        if config_name == "distributional":
+        if config_name == "synthetic_distributional":
             entries = dedup_current_fixed(entries)
 
         after_concurrency = [e for e in entries if not should_filter(e, config_name)]
