@@ -268,9 +268,9 @@ export function CoveragePage({
     const expectedHw: string[] = [];
     if (dataScope === 'archive') {
       expectedHw.push(...Array.from(dataHw).sort());
-    } else if (dataScope === 'mse') {
-      const mseHw = new Set<string>([...scopedSweepCells.map((cell) => cell.hw_label), ...dataHw]);
-      expectedHw.push(...Array.from(mseHw).sort());
+    } else if (dataScope === 'mse' || dataScope === 'synthetic' || dataScope === 'fixed') {
+      const scopedHw = new Set<string>([...scopedSweepCells.map((cell) => cell.hw_label), ...dataHw]);
+      expectedHw.push(...Array.from(scopedHw).sort());
     } else {
       for (const base of baseHwLabels) {
         for (const tp of TP_OPTIONS) expectedHw.push(hwLabel(base, tp));
@@ -282,7 +282,7 @@ export function CoveragePage({
 
     const expectedModels = new Set<string>();
     if (canonicalCoverage && sweepState) {
-      if (dataScope === 'mse') {
+      if (dataScope === 'mse' || dataScope === 'synthetic' || dataScope === 'fixed') {
         for (const cell of scopedSweepCells) expectedModels.add(cell.model);
       } else {
         for (const m of Object.keys(sweepState.models)) expectedModels.add(m);
@@ -324,6 +324,17 @@ export function CoveragePage({
     ): string | undefined =>
       profileInfeasible.get(`${hw}|${model}|${backend}|${profile}`);
     const expectedCountFor = (hw: string, model: string, backend: string): number => {
+      // For scoped sweeps, derive expected count from the actual sweep-state cells,
+      // not the full profile×concurrency cross-product.
+      if (dataScope === 'synthetic' || dataScope === 'fixed' || dataScope === 'mse') {
+        let total = 0;
+        for (const cell of scopedSweepCells) {
+          if (cell.hw_label === hw && cell.model === model && cell.backend === backend) {
+            total += (cell.profiles ?? []).length * (cell.concurrencies ?? []).length;
+          }
+        }
+        return total;
+      }
       let total = 0;
       for (const profile of singleProfiles) {
         if (!profileInfeasibleReasonFor(hw, model, backend, profile)) total += singleConcs.length;
@@ -371,7 +382,7 @@ export function CoveragePage({
         // other known backend that actually has data for this (hw, model).
         const backendSet = new Set<string>();
         if (canonicalCoverage) {
-          if (dataScope === 'mse') {
+          if (dataScope === 'mse' || dataScope === 'synthetic' || dataScope === 'fixed') {
             for (const cell of scopedSweepCells) {
               if (cell.hw_label === hw && cell.model === model) backendSet.add(cell.backend);
             }
@@ -415,13 +426,25 @@ export function CoveragePage({
                 profiles.push({ profile, isMultiTurn: isMultiTurnProfile(profile), expected: observedConcs, present });
               }
             } else {
+              const isScoped = dataScope === 'synthetic' || dataScope === 'fixed' || dataScope === 'mse';
+              const expectedProfiles = isScoped
+                ? (() => {
+                    const ep = new Set<string>();
+                    for (const c of scopedSweepCells) {
+                      if (c.hw_label === hw && c.model === model && c.backend === backend) {
+                        for (const p of c.profiles ?? []) ep.add(p);
+                      }
+                    }
+                    return ep;
+                  })()
+                : null;
               for (const profile of singleProfiles) {
                 const present = bucket.get(`${hw}|${model}|${backend}|${profile}`) ?? new Set<number>();
                 const infeasibleReason = profileInfeasibleReasonFor(hw, model, backend, profile);
                 if (!infeasibleReason) {
                   const have = [...present].filter((c) => singleConcs.includes(c)).length;
                   totalHave += have;
-                  totalNeed += singleConcs.length;
+                  if (!isScoped || expectedProfiles?.has(profile)) totalNeed += singleConcs.length;
                 }
                 profiles.push({ profile, isMultiTurn: false, expected: singleConcs, present, infeasibleReason });
               }
@@ -431,7 +454,7 @@ export function CoveragePage({
                 if (!infeasibleReason) {
                   const have = [...present].filter((c) => multiConcs.includes(c)).length;
                   totalHave += have;
-                  totalNeed += multiConcs.length;
+                  if (!isScoped || expectedProfiles?.has(profile)) totalNeed += multiConcs.length;
                 }
                 profiles.push({ profile, isMultiTurn: true, expected: multiConcs, present, infeasibleReason });
               }
@@ -458,8 +481,9 @@ export function CoveragePage({
               continue;
             }
             if (cell.status === 'skipped') {
-              models.push({ kind: 'status', hardware: hw, model, backend, status: 'skipped', reason: cell.reason ?? undefined, attempt: cell.attempt, totalNeed: 0 });
+              models.push({ kind: 'status', hardware: hw, model, backend, status: 'skipped', reason: cell.reason ?? undefined, attempt: cell.attempt, totalNeed: expectedForModel });
               summary.skipped += 1;
+              summary.totalNeed += expectedForModel;
               continue;
             }
             if (cell.status === 'pending' || cell.status === 'done') {
