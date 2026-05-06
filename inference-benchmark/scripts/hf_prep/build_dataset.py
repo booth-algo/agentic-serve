@@ -58,7 +58,7 @@ def should_filter(entry: dict, config_name: str) -> bool:
     data_scope = entry.get("dataScope", "")
     if config_name == "trace_replay" and concurrency > 100:
         return True
-    if config_name == "synthetic_distributional" and data_scope == "current" and concurrency > 10:
+    if config_name == "synthetic_distributional" and concurrency > 10:
         return True
     return False
 

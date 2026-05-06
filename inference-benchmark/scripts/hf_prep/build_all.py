@@ -18,6 +18,7 @@ EXPECTED_PARQUETS = [
     "trace_replay/summary.parquet",
     "synthetic_distributional/summary.parquet",
     "kernel_profiles/kernels_labeled.parquet",
+    "per_layer_kernel/summary.parquet",
 ]
 
 
@@ -76,6 +77,11 @@ def main():
         ])
 
     run_script("build_kernels.py", [
+        "--r2-base", r2_base,
+        "--output-dir", str(output_dir),
+    ])
+
+    run_script("build_perkernel.py", [
         "--r2-base", r2_base,
         "--output-dir", str(output_dir),
     ])

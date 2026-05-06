@@ -34,6 +34,7 @@ def main():
         "trace_replay/summary.parquet",
         "synthetic_distributional/summary.parquet",
         "kernel_profiles/kernels_labeled.parquet",
+        "per_layer_kernel/summary.parquet",
     ]
     missing = [f for f in expected_files if not (args.dataset_dir / f).exists()]
     if missing:
@@ -41,6 +42,15 @@ def main():
 
     api = HfApi(token=token)
     api.create_repo(repo_id=args.repo, repo_type="dataset", exist_ok=True)
+
+    deprecated = ["layer_roofline", "per_layer_oi_cf"]
+    for folder in deprecated:
+        try:
+            api.delete_folder(path_in_repo=folder, repo_id=args.repo, repo_type="dataset")
+            print(f"  Deleted deprecated folder: {folder}")
+        except Exception:
+            pass
+
     print(f"Uploading {args.dataset_dir} to {args.repo}")
 
     api.upload_folder(
