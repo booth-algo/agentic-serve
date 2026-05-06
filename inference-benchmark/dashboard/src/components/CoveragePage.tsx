@@ -1067,7 +1067,7 @@ function StatusBadge({ kind }: { kind: BadgeKind }) {
     infeasible: ['bg-[#64b5f6]/15 text-[#64b5f6] border-[#64b5f6]/40', 'N/A'],
     running:    ['bg-[#58a6ff]/15 text-[#58a6ff] border-[#58a6ff]/40', 'RUN'],
     pending:    ['bg-[#ff9800]/10 text-[#ff9800] border-[#ff9800]/40', 'TODO'],
-    skipped:  ['bg-[#64b5f6]/15 text-[#64b5f6] border-[#64b5f6]/40', 'N/A'],
+    skipped:  ['bg-[#ff9800]/10 text-[#ff9800] border-[#ff9800]/40', 'TODO'],
     untested:   ['bg-[#ff9800]/10 text-[#ff9800] border-[#ff9800]/40', 'TODO'],
   };
   const [cls, label] = map[kind];
