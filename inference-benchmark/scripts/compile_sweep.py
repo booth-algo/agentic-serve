@@ -262,7 +262,7 @@ def compile_jobs(manifest: dict, scope: str = "all"):
         if reason:
             skipped.append((cell, "infeasible", reason))
             continue
-        profile_reasons = {} if scope == "synthetic" else profile_infeasible_reasons(cell, manifest)
+        profile_reasons = profile_infeasible_reasons(cell, manifest)
         if profile_reasons:
             resolved = resolve(cell, manifest)
             runnable_profiles = [
