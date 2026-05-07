@@ -914,6 +914,7 @@
       ]
     }
   ],
+  "rai:hasSyntheticData": true,
   "rai:dataLimitations": "Results cover NVIDIA H100, A100, RTX 3090, and RTX 2080 Ti GPUs only and may not generalize to other accelerators (AMD, Intel, TPU). Benchmark configurations are pinned to vLLM 0.19.0 and SGLang 0.5.9; results do not represent other engine versions. Concurrency levels (1-320) may not cover extreme-scale deployments. Not recommended as sole basis for hardware purchasing decisions or for comparing model task quality.",
   "rai:dataBiases": "Model selection over-represents Meta Llama and Alibaba Qwen families. Hardware is exclusively NVIDIA GPUs. Workload profiles are author-designed approximations of production traffic; real deployment patterns may differ.",
   "rai:personalSensitiveInformation": "No personally identifiable information is present. All API endpoints and credentials are stripped. Workload traces use synthetic random tokens or publicly available coding benchmarks.",
