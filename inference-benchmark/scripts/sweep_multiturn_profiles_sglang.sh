@@ -78,6 +78,7 @@ echo "[mt-sweep-sglang] dashboard scope: $DASHBOARD_SCOPE"
     --mem-fraction-static "$GPU_MEM" \
     --context-length "$MAX_LEN" \
     --trust-remote-code \
+    $SGLANG_CUDA_GRAPH_ARGS \
     > /tmp/vllm_${PORT}.log 2>&1 &
 SERVER_PID=$!
 echo "[mt-sweep-sglang] sglang PID=$SERVER_PID (port $PORT)"
