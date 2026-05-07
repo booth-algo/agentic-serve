@@ -49,7 +49,7 @@
   },
   "@type": "sc:Dataset",
   "name": "AgentPerfBench",
-  "description": "LLM inference benchmark dataset: 3,327 main sweep rows measuring TTFT, TPOT, ITL, and throughput across 9 models, up to 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). Also includes 148,077 per-kernel NCU profiles, 28 MSE validation rows, and 37 per-layer kernel validation rows.",
+  "description": "LLM inference benchmark dataset: 3,197 main sweep rows measuring TTFT, TPOT, ITL, and throughput across 9 models, up to 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). Also includes 148,077 per-kernel NCU profiles, 28 MSE validation rows, and 37 per-layer kernel validation rows.",
   "url": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench",
   "license": "https://spdx.org/licenses/Apache-2.0.html",
   "conformsTo": "http://mlcommons.org/croissant/1.1",
@@ -75,7 +75,7 @@
       "name": "synthetic_distributional/summary.parquet",
       "contentUrl": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench/resolve/main/synthetic_distributional/summary.parquet",
       "encodingFormat": "application/x-parquet",
-      "sha256": "440699a183b52baad4abcd4da9d4d1fc9c3061e54c79dafa2fa772c970c19529"
+      "sha256": "db70f78a09cec9dee9159c5011892fb28510e06d2824cc175d26bb47d0e39585"
     },
     {
       "@type": "cr:FileObject",

@@ -55,11 +55,13 @@ def classify_scope(data_scope: str) -> str:
 
 def should_filter(entry: dict, config_name: str) -> bool:
     concurrency = entry["config"]["concurrency"]
-    data_scope = entry.get("dataScope", "")
     if config_name == "trace_replay" and concurrency > 100:
         return True
-    if config_name == "synthetic_distributional" and concurrency > 400:
-        return True
+    if config_name == "synthetic_distributional":
+        if concurrency > 400:
+            return True
+        if not entry["config"]["profile"].endswith("-synth"):
+            return True
     return False
 
 
