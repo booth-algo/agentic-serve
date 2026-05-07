@@ -165,6 +165,31 @@ profile_infeasible:
     max_len_lt: 32768
     reason: "context too short for long multi-turn traces; requires max_len=32768"
 
+  # sgl-kernel 0.3.21 wheels only ship sm100/sm90 precompiled shared objects.
+  # A100 (sm80) and 2080Ti (sm75) cannot load them; sglang falls back to
+  # triton/flashinfer backends but the fallback is unreliable for multi-turn
+  # profiles, so we mark all synthetic sglang profiles infeasible on these hosts.
+  - host: gpu-4
+    backend: sglang
+    profiles:
+      - chat-singleturn
+      - coding-singleturn
+      - chat-multiturn
+      - swebench-multiturn
+      - terminalbench-multiturn
+      - osworld-multiturn
+    reason: "sgl-kernel sm100/sm90 only; A100 sm80 unsupported"
+  - host: 2080ti
+    backend: sglang
+    profiles:
+      - chat-singleturn
+      - coding-singleturn
+      - chat-multiturn
+      - swebench-multiturn
+      - terminalbench-multiturn
+      - osworld-multiturn
+    reason: "sgl-kernel sm100/sm90 only; 2080Ti sm75 unsupported"
+
 # --------------------------------------------------------------------------
 # Active sweep cells
 # --------------------------------------------------------------------------
