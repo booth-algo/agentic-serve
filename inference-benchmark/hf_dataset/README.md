@@ -24,10 +24,18 @@ configs:
     data_files:
       - split: summary
         path: synthetic_distributional/summary.parquet
+  - config_name: per_layer_kernel
+    data_files:
+      - split: summary
+        path: per_layer_kernel/summary.parquet
   - config_name: kernels_labeled
     data_files:
       - split: train
         path: kernel_profiles/kernels_labeled.parquet
+  - config_name: mse_validation
+    data_files:
+      - split: summary
+        path: mse_validation/summary.parquet
 dataset_info:
   - config_name: trace_replay
     features:
@@ -93,7 +101,7 @@ dataset_info:
         dtype: float64
     splits:
       - name: summary
-        num_examples: 2902
+        num_examples: 2932
         num_bytes: 640182
   - config_name: synthetic_distributional
     features:
@@ -159,8 +167,61 @@ dataset_info:
         dtype: float64
     splits:
       - name: summary
-        num_examples: 245
-        num_bytes: 70836
+        num_examples: 1365
+  - config_name: per_layer_kernel
+    features:
+      - name: record_type
+        dtype: string
+      - name: model
+        dtype: string
+      - name: hardware
+        dtype: string
+      - name: phase
+        dtype: string
+      - name: batch_size
+        dtype: int64
+      - name: sequence_length
+        dtype: int64
+      - name: component_name
+        dtype: string
+      - name: bound
+        dtype: string
+      - name: flops
+        dtype: float64
+      - name: bytes_accessed
+        dtype: float64
+      - name: operational_intensity
+        dtype: float64
+      - name: ridge_point
+        dtype: float64
+      - name: kernel_id
+        dtype: int64
+      - name: kernel_name
+        dtype: string
+      - name: block_size
+        dtype: string
+      - name: grid_size
+        dtype: string
+      - name: duration_us
+        dtype: float64
+      - name: compute_sm_throughput_pct
+        dtype: float64
+      - name: dram_throughput_pct
+        dtype: float64
+      - name: memory_throughput_pct
+        dtype: float64
+      - name: l1_tex_cache_throughput_pct
+        dtype: float64
+      - name: l2_cache_throughput_pct
+        dtype: float64
+      - name: sm_frequency_ghz
+        dtype: float64
+      - name: dram_frequency_ghz
+        dtype: float64
+    splits:
+      - name: summary
+        num_examples: 37
+        num_bytes: 12000
   - config_name: kernels_labeled
     features:
       - name: source
@@ -210,43 +271,82 @@ dataset_info:
     splits:
       - name: train
         num_examples: 148077
+  - config_name: mse_validation
+    features:
+      - name: run_id
+        dtype: string
+      - name: model
+        dtype: string
+      - name: hardware
+        dtype: string
+      - name: engine
+        dtype: string
+      - name: profile
+        dtype: string
+      - name: concurrency
+        dtype: int64
+      - name: num_requests
+        dtype: int64
+      - name: successful_requests
+        dtype: int64
+      - name: failed_requests
+        dtype: int64
+      - name: duration_s
+        dtype: float64
+      - name: request_throughput
+        dtype: float64
+      - name: mean_ttft_ms
+        dtype: float64
+      - name: mean_tpot_ms
+        dtype: float64
+      - name: mean_e2el_ms
+        dtype: float64
+    splits:
+      - name: summary
+        num_examples: 28
 ---
 
 # AgentPerfBench
 
-LLM inference benchmark: 3,147 serving runs and 148,077 per-kernel NCU profiles across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
+LLM inference benchmark: 4,297 main sweep rows and 37 per-layer kernel validation rows, plus 148,077 per-kernel NCU profiles, across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
 
 ## Dataset configurations
 
-### trace_replay (2,902 rows)
+### trace_replay (2,932 rows)
 
-Replays exact ISL/OSL sequences from recorded agent sessions (SWE-Bench, TerminalBench, OSWorld, ShareGPT). 77 (model, hardware, engine) combinations, 17 profiles, 6 concurrency levels.
+Replays exact ISL/OSL sequences from recorded agent sessions (SWE-Bench, TerminalBench, OSWorld, ShareGPT). 77 unique (model, hardware, engine) combinations, 17 profiles, 6 concurrency levels {1, 5, 10, 20, 40, 80}, 11.4% matrix fill.
 
 17 profiles: `chat-medium`, `chat-multiturn-long`, `chat-multiturn-medium`, `chat-multiturn-short`, `chat-short`, `chat-singleturn`, `coding-singleturn`, `decode-heavy`, `osworld-multiturn-long`, `osworld-multiturn-medium`, `osworld-multiturn-short`, `prefill-heavy`, `random-1k`, `swebench-multiturn-medium`, `swebench-multiturn-short`, `terminalbench-multiturn-medium`, `terminalbench-multiturn-short`
 
-### synthetic_distributional (245 rows)
+### synthetic_distributional (1,365 rows)
 
-ISL/OSL sampled from lognormal fits to real workload statistics. 42 combinations, 6 profiles, 7 concurrency levels.
+ISL/OSL sampled from lognormal fits to real workload statistics. 49 unique (model, hardware, engine) combinations, 20 profiles, 11 concurrency levels {1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320}, 6.5% matrix fill.
 
-6 profiles: `chat-multiturn`, `chat-singleturn`, `coding-singleturn`, `osworld-multiturn`, `swebench-multiturn`, `terminalbench-multiturn`
+20 profiles: `chat-medium`, `chat-multiturn`, `chat-multiturn-long`, `chat-multiturn-medium`, `chat-multiturn-short`, `chat-multiturn-synth`, `chat-short`, `chat-singleturn`, `chat-singleturn-synth`, `coding-singleturn`, `osworld-multiturn`, `osworld-multiturn-long`, `osworld-multiturn-medium`, `osworld-multiturn-short`, `osworld-multiturn-synth`, `swebench-multiturn`, `swebench-multiturn-synth`, `terminalbench-multiturn`, `terminalbench-multiturn-short`, `terminalbench-multiturn-synth`
+
+### per_layer_kernel (37 rows)
+
+Per-component operational intensity decomposition and Nsight Compute kernel profiles for Llama-3.1-8B on H100 (prefill phase). Analytical rows provide computed FLOPs, bytes, and OI per model component at batch sizes 1 and 80. NCU rows report measured SM and memory throughput per kernel from an 8-layer forward pass. Record types: `analytical_total`, `analytical_component`, `ncu_kernel`.
 
 ### kernels_labeled (148,077 rows)
 
 Per-kernel Nsight Compute (ncu) profiles across 4 GPUs (A100, H100, RTX 3090, RTX 2080 Ti) and 13 model/sweep sources.
 
-### Concurrency filtering
+### mse_validation (28 rows)
 
-Concurrency is controlled by a fixed-size connection pool. Trace replay uses levels {1, 5, 10, 20, 40, 80}; synthetic_distributional uses {1, 5, 10, 40, 80, 200, 320}.
+Curated H100 / Llama-3.1-8B / vLLM validation table for the distributional synthetic replay generator. Paired synthetic and real trace replay runs; supplementary rows preserve no-replacement and high-concurrency debug runs. Raw JSON artifacts referenced through R2 URI columns. Per-run successful/failed request counts retained.
 
-Early runs used a session-pool size smaller than the declared concurrency (`num_sessions=100` for trace replay, `num_sessions=10` for synthetic_distributional), capping actual load below the nominal value. Rows where declared concurrency exceeded the session pool were dropped.
+### Quality filtering
 
-Configurations where fewer than 75% of requests completed successfully are excluded.
+Concurrency levels: trace_replay {1, 5, 10, 20, 40, 80}, synthetic_distributional {1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320}. Configurations where fewer than 75% of requests completed successfully are excluded. Summary metrics are computed from successful requests only.
 
 | Config | Rows |
 |--------|------|
-| trace_replay | 2,902 |
-| synthetic_distributional | 245 |
-| **Total** | **3,147** |
+| trace_replay | 2,932 |
+| synthetic_distributional | 1,365 |
+| per_layer_kernel | 37 |
+| kernels_labeled | 148,077 |
+| mse_validation | 28 |
 
 ## Coverage
 
@@ -286,7 +386,7 @@ All models served in BF16 unless noted.
 
 ## Schema
 
-Each row in `summary.parquet` (both configs):
+Each row in `summary.parquet` (trace_replay and synthetic_distributional):
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -315,7 +415,7 @@ Each row in `summary.parquet` (both configs):
 from datasets import load_dataset
 
 ds = load_dataset("agent-perf-bench/AgentPerfBench", "trace_replay")
-# or "synthetic_distributional", "kernels_labeled"
+# or "synthetic_distributional", "per_layer_kernel", "kernels_labeled", "mse_validation"
 ```
 
 ## Benchmark methodology
@@ -345,6 +445,12 @@ Benchmark data released under Apache-2.0. Source datasets retain their original 
 - [TerminalBench](https://github.com/TerminalBench/TerminalBench)
 - [ShareGPT (Aeala/ShareGPT_Vicuna_unfiltered)](https://huggingface.co/datasets/Aeala/ShareGPT_Vicuna_unfiltered)
 - [OSWorld](https://github.com/xlang-ai/OSWorld)
+
+## Future releases
+
+- Additional hardware configurations and model families.
+- Open-loop (Poisson) arrival mode.
+- Additional per-kernel roofline profiles.
 
 ## Citation
 

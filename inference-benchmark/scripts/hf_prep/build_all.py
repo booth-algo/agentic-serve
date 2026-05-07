@@ -1,6 +1,8 @@
 """Orchestrate the full HuggingFace dataset build pipeline."""
 
 import argparse
+import hashlib
+import json
 import subprocess
 import sys
 import tempfile
@@ -50,6 +52,46 @@ def validate(output_dir: Path) -> list[tuple[str, int]]:
     return results
 
 
+PARQUET_TO_CROISSANT_ID = {
+    "trace_replay/summary.parquet": "trace-replay-summary-parquet",
+    "synthetic_distributional/summary.parquet": "synthetic-distributional-summary-parquet",
+    "kernel_profiles/kernels_labeled.parquet": "kernels-labeled-parquet",
+    "mse_validation/summary.parquet": "mse-validation-summary-parquet",
+    "per_layer_kernel/summary.parquet": "per-layer-kernel-summary-parquet",
+}
+
+
+def rehash_croissant(output_dir: Path):
+    croissant_path = output_dir / "croissant.json"
+    if not croissant_path.exists():
+        print("  No croissant.json found, skipping")
+        return
+    with open(croissant_path) as f:
+        croissant = json.load(f)
+
+    id_to_hash = {}
+    for rel_path, croissant_id in PARQUET_TO_CROISSANT_ID.items():
+        path = output_dir / rel_path
+        if path.exists():
+            h = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(8192), b""):
+                    h.update(chunk)
+            id_to_hash[croissant_id] = h.hexdigest()
+
+    updated = 0
+    for dist in croissant.get("distribution", []):
+        file_id = dist.get("@id", "")
+        if file_id in id_to_hash:
+            dist["sha256"] = id_to_hash[file_id]
+            updated += 1
+
+    with open(croissant_path, "w") as f:
+        json.dump(croissant, f, indent=2)
+        f.write("\n")
+    print(f"  Updated {updated} SHA256 hashes in croissant.json")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build all HuggingFace dataset parquets")
     parser.add_argument("--r2-base", type=str, default=R2_BASE, help="R2 base URL")
@@ -88,6 +130,9 @@ def main():
 
     print("\nValidating parquets...")
     results = validate(output_dir)
+
+    print("\nRecomputing croissant hashes for all parquets...")
+    rehash_croissant(output_dir)
 
     if args.upload:
         upload_args = ["--repo", args.repo, "--dataset-dir", str(output_dir)]

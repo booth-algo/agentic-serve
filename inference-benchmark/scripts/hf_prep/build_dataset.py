@@ -48,7 +48,7 @@ def load_json(path: Path) -> list[dict]:
 def classify_scope(data_scope: str) -> str:
     if data_scope == "archive":
         return "trace_replay"
-    if data_scope in ("current", "fixed"):
+    if data_scope in ("current", "fixed", "synthetic"):
         return "synthetic_distributional"
     return "unknown"
 
@@ -58,7 +58,7 @@ def should_filter(entry: dict, config_name: str) -> bool:
     data_scope = entry.get("dataScope", "")
     if config_name == "trace_replay" and concurrency > 100:
         return True
-    if config_name == "synthetic_distributional" and concurrency > 10:
+    if config_name == "synthetic_distributional" and concurrency > 400:
         return True
     return False
 
@@ -80,7 +80,8 @@ def _entry_key(entry: dict) -> str:
 
 
 def dedup_current_fixed(entries: list[dict]) -> list[dict]:
-    """For distributional entries, prefer 'fixed' over 'current' when both exist."""
+    """For distributional entries, prefer 'fixed' > 'synthetic' > 'current' when duplicates exist."""
+    SCOPE_PRIORITY = {"fixed": 3, "synthetic": 2, "current": 1}
     by_key: dict[str, dict] = {}
     for e in entries:
         key = _entry_key(e)
@@ -88,11 +89,11 @@ def dedup_current_fixed(entries: list[dict]) -> list[dict]:
         existing = by_key.get(key)
         if existing is None:
             by_key[key] = e
-        elif scope == "fixed":
+        elif SCOPE_PRIORITY.get(scope, 0) > SCOPE_PRIORITY.get(existing.get("dataScope", ""), 0):
             by_key[key] = e
     deduped = list(by_key.values())
     if len(deduped) < len(entries):
-        print(f"  Dedup current/fixed: {len(entries)} -> {len(deduped)} ({len(entries) - len(deduped)} current entries replaced by fixed)")
+        print(f"  Dedup scopes: {len(entries)} -> {len(deduped)} ({len(entries) - len(deduped)} duplicates resolved)")
     return deduped
 
 
@@ -193,6 +194,8 @@ def update_croissant(output_dir: Path, hashes: dict[str, str]):
         "trace-replay-summary-parquet": hashes.get("trace_replay"),
         "synthetic-distributional-summary-parquet": hashes.get("synthetic_distributional"),
         "kernels-labeled-parquet": hashes.get("kernels_labeled"),
+        "mse-validation-summary-parquet": hashes.get("mse_validation"),
+        "per-layer-kernel-summary-parquet": hashes.get("per_layer_kernel"),
     }
 
     for dist in croissant.get("distribution", []):
@@ -288,6 +291,8 @@ def main():
 
     supplementary = {
         "kernels_labeled": "kernel_profiles/kernels_labeled.parquet",
+        "mse_validation": "mse_validation/summary.parquet",
+        "per_layer_kernel": "per_layer_kernel/summary.parquet",
     }
     for key, rel_path in supplementary.items():
         path = args.output_dir / rel_path
