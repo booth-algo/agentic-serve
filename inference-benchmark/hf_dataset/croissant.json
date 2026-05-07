@@ -49,7 +49,7 @@
   },
   "@type": "sc:Dataset",
   "name": "AgentPerfBench",
-  "description": "LLM inference benchmark dataset: 4,297 main sweep rows measuring TTFT, TPOT, ITL, and throughput across 9 models, up to 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). Also includes 148,077 per-kernel NCU profiles, 28 MSE validation rows, and 37 per-layer kernel validation rows.",
+  "description": "LLM inference benchmark dataset: 3,327 main sweep rows measuring TTFT, TPOT, ITL, and throughput across 9 models, up to 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). Also includes 148,077 per-kernel NCU profiles, 28 MSE validation rows, and 37 per-layer kernel validation rows.",
   "url": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench",
   "license": "https://spdx.org/licenses/Apache-2.0.html",
   "conformsTo": "http://mlcommons.org/croissant/1.1",
@@ -75,7 +75,7 @@
       "name": "synthetic_distributional/summary.parquet",
       "contentUrl": "https://huggingface.co/datasets/agent-perf-bench/AgentPerfBench/resolve/main/synthetic_distributional/summary.parquet",
       "encodingFormat": "application/x-parquet",
-      "sha256": "7e641197686e02248ff063fceb9046efaf03e5e2e7fbb50d5d57f785e17c9157"
+      "sha256": "440699a183b52baad4abcd4da9d4d1fc9c3061e54c79dafa2fa772c970c19529"
     },
     {
       "@type": "cr:FileObject",
@@ -919,7 +919,6 @@
   "rai:personalSensitiveInformation": "No personally identifiable information is present. All API endpoints and credentials are stripped. Workload traces use synthetic random tokens or publicly available coding benchmarks.",
   "rai:dataUseCases": "Established uses: relative comparison of inference engine throughput, latency benchmarking under controlled conditions, TTFT scaling with context length in multi-turn sessions, per-kernel performance modelling. Not established: absolute latency prediction for production, model quality comparison, cost estimation.",
   "rai:dataSocialImpact": "Enables reproducible comparison of open-source LLM serving systems, supporting infrastructure research and reducing vendor lock-in.",
-  "rai:hasSyntheticData": true,
   "prov:wasDerivedFrom": [
     {
       "@id": "https://huggingface.co/datasets/princeton-nlp/SWE-bench",
@@ -938,15 +937,40 @@
       "name": "ShareGPT"
     }
   ],
-  "prov:wasGeneratedBy": {
-    "@type": "prov:Activity",
-    "name": "AgentPerfBench benchmark collection",
-    "description": "Deploy model on target GPU with specified engine and tensor parallelism. Send requests per configuration after warmup using closed-loop concurrency control. Record per-request TTFT, TPOT, ITL, E2EL, and token counts. Compute summary statistics. Sanitize credentials and convert to Parquet."
-  },
+  "prov:wasGeneratedBy": [
+    {
+      "@type": "prov:Activity",
+      "@id": "collection-activity",
+      "name": "Benchmark data collection",
+      "description": "Models deployed on target GPU with specified serving engine (vLLM 0.19.0 or SGLang 0.5.9) and tensor parallelism. Requests sent per workload profile using closed-loop concurrency control with semaphore-based admission. 3-request warmup before each configuration. Per-request TTFT, TPOT, ITL, E2EL, and token counts recorded via streaming API responses. Kernel profiles collected via Nsight Compute (ncu) with hardware counter metrics. Collection period: March 2026 onwards.",
+      "prov:qualifiedAssociation": {
+        "@type": "prov:Association",
+        "prov:hadRole": "data collector",
+        "prov:agent": {
+          "@type": "prov:SoftwareAgent",
+          "name": "AgentPerfBench benchmarking harness"
+        }
+      }
+    },
+    {
+      "@type": "prov:Activity",
+      "@id": "preprocessing-activity",
+      "name": "Data preprocessing and quality filtering",
+      "description": "API credentials and endpoint URLs stripped from all records. Configurations with fewer than 75% of requests completing successfully are excluded. Summary statistics (mean, median, p90, p99 for TTFT, TPOT, ITL, E2EL) computed from successful requests only. Kernel names demangled from NCU output. Duplicate runs deduplicated by (model, hardware, engine, profile, concurrency) key. Results converted to Apache Parquet.",
+      "prov:qualifiedAssociation": {
+        "@type": "prov:Association",
+        "prov:hadRole": "data preprocessor",
+        "prov:agent": {
+          "@type": "prov:SoftwareAgent",
+          "name": "AgentPerfBench build pipeline (build_dataset.py, build_kernels.py, build_perkernel.py)"
+        }
+      }
+    }
+  ],
   "rai:dataCollection": "Automated benchmark collection. Models deployed on target GPU with specified engine and tensor parallelism. Requests sent per workload profile using closed-loop concurrency control with semaphore. Per-request TTFT, TPOT, ITL, E2EL, and token counts recorded. Kernel profiles collected via Nsight Compute (ncu) with hardware counter metrics.",
   "rai:dataCollectionType": "Automated measurement via benchmarking scripts. No human subjects or crowdsourcing.",
   "rai:dataCollectionMissingData": "Some model-hardware-concurrency combinations are absent due to OOM or engine incompatibility. Concurrency levels exceeding the session-pool size were filtered (see Concurrency filtering in README).",
-  "rai:dataPreprocessing": "Credentials and API endpoints stripped. Configurations with fewer than 75% of requests completing successfully are excluded. Summary statistics computed from successful requests. Kernel names demangled from NCU output.",
+  "rai:dataPreprocessingProtocol": "Credentials and API endpoints stripped. Configurations with fewer than 75% of requests completing successfully are excluded. Summary statistics computed from successful requests. Kernel names demangled from NCU output. Duplicate runs deduplicated by (model, hardware, engine, profile, concurrency) key.",
   "rai:dataAnnotationProtocol": "Not applicable. Fully automated benchmark collection with no human annotation.",
   "rai:dataAnnotationPlatform": "Not applicable. No human annotation.",
   "rai:dataAnnotationAnalysis": "Not applicable. No human annotation."

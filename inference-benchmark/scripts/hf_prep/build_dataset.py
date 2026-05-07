@@ -48,7 +48,7 @@ def load_json(path: Path) -> list[dict]:
 def classify_scope(data_scope: str) -> str:
     if data_scope == "archive":
         return "trace_replay"
-    if data_scope in ("current", "fixed", "synthetic"):
+    if data_scope == "synthetic":
         return "synthetic_distributional"
     return "unknown"
 

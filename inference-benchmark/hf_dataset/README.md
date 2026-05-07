@@ -167,7 +167,7 @@ dataset_info:
         dtype: float64
     splits:
       - name: summary
-        num_examples: 1365
+        num_examples: 395
   - config_name: per_layer_kernel
     features:
       - name: record_type
@@ -308,7 +308,7 @@ dataset_info:
 
 # AgentPerfBench
 
-LLM inference benchmark: 4,297 main sweep rows and 37 per-layer kernel validation rows, plus 148,077 per-kernel NCU profiles, across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
+LLM inference benchmark: 3,327 main sweep rows and 37 per-layer kernel validation rows, plus 148,077 per-kernel NCU profiles, across 9 models, 14 GPU configurations, and 2 serving engines (vLLM 0.19.0, SGLang 0.5.9). All models served in BF16 except gpt-oss, which uses mxfp4 for projection weights.
 
 ## Dataset configurations
 
@@ -318,11 +318,11 @@ Replays exact ISL/OSL sequences from recorded agent sessions (SWE-Bench, Termina
 
 17 profiles: `chat-medium`, `chat-multiturn-long`, `chat-multiturn-medium`, `chat-multiturn-short`, `chat-short`, `chat-singleturn`, `coding-singleturn`, `decode-heavy`, `osworld-multiturn-long`, `osworld-multiturn-medium`, `osworld-multiturn-short`, `prefill-heavy`, `random-1k`, `swebench-multiturn-medium`, `swebench-multiturn-short`, `terminalbench-multiturn-medium`, `terminalbench-multiturn-short`
 
-### synthetic_distributional (1,365 rows)
+### synthetic_distributional (395 rows)
 
-ISL/OSL sampled from lognormal fits to real workload statistics. 49 unique (model, hardware, engine) combinations, 20 profiles, 11 concurrency levels {1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320}, 6.5% matrix fill.
+ISL/OSL sampled from lognormal fits to real workload statistics. 42 unique (model, hardware, engine) combinations, 15 profiles, 11 concurrency levels {1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320}, 5.7% matrix fill.
 
-20 profiles: `chat-medium`, `chat-multiturn`, `chat-multiturn-long`, `chat-multiturn-medium`, `chat-multiturn-short`, `chat-multiturn-synth`, `chat-short`, `chat-singleturn`, `chat-singleturn-synth`, `coding-singleturn`, `osworld-multiturn`, `osworld-multiturn-long`, `osworld-multiturn-medium`, `osworld-multiturn-short`, `osworld-multiturn-synth`, `swebench-multiturn`, `swebench-multiturn-synth`, `terminalbench-multiturn`, `terminalbench-multiturn-short`, `terminalbench-multiturn-synth`
+15 profiles: `chat-medium`, `chat-multiturn-long`, `chat-multiturn-medium`, `chat-multiturn-short`, `chat-multiturn-synth`, `chat-short`, `chat-singleturn`, `chat-singleturn-synth`, `osworld-multiturn-long`, `osworld-multiturn-medium`, `osworld-multiturn-short`, `osworld-multiturn-synth`, `swebench-multiturn-synth`, `terminalbench-multiturn-short`, `terminalbench-multiturn-synth`
 
 ### per_layer_kernel (37 rows)
 
@@ -343,7 +343,7 @@ Concurrency levels: trace_replay {1, 5, 10, 20, 40, 80}, synthetic_distributiona
 | Config | Rows |
 |--------|------|
 | trace_replay | 2,932 |
-| synthetic_distributional | 1,365 |
+| synthetic_distributional | 395 |
 | per_layer_kernel | 37 |
 | kernels_labeled | 148,077 |
 | mse_validation | 28 |
