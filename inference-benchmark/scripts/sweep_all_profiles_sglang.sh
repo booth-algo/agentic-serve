@@ -89,6 +89,15 @@ echo "[sweep-sglang] profiles: $PROFILES"
 echo "[sweep-sglang] min requests per run: $MIN_NREQ (single-turn uses at least 2x concurrency)"
 echo "[sweep-sglang] dashboard scope: $DASHBOARD_SCOPE"
 
+# Detect GPU arch - 2080Ti (sm75) has no CUDA graph kernel images.
+# sm_75 kernels are not included in sglang 0.5.9 prebuilt wheels.
+SGLANG_CUDA_GRAPH_ARGS=""
+GPU_ARCH=$(python3 -c "import torch; print(torch.cuda.get_device_capability()[0])" 2>/dev/null || echo 0)
+if [ "$GPU_ARCH" = "7" ]; then
+    SGLANG_CUDA_GRAPH_ARGS="--disable-cuda-graph"
+    echo "[sweep-sglang] sm75 detected; disabling CUDA graphs"
+fi
+
 # sglang.launch_server flags:
 #   --model-path         path to HF model dir
 #   --host / --port      bind address
@@ -106,6 +115,7 @@ echo "[sweep-sglang] dashboard scope: $DASHBOARD_SCOPE"
     --mem-fraction-static "$GPU_MEM" \
     --context-length "$MAX_LEN" \
     --trust-remote-code \
+    $SGLANG_CUDA_GRAPH_ARGS \
     > /tmp/vllm_${PORT}.log 2>&1 &
 SERVER_PID=$!
 echo "[sweep-sglang] sglang PID=$SERVER_PID (port $PORT)"

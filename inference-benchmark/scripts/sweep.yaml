@@ -165,6 +165,20 @@ profile_infeasible:
     max_len_lt: 32768
     reason: "context too short for long multi-turn traces; requires max_len=32768"
 
+  # sglang 0.5.9 custom CUDA ops (RMSNorm, GemmaRMSNorm, CUDA graphs)
+  # have no sm75 (Turing) kernel images. 2080Ti sglang is fundamentally
+  # unsupported without rebuilding sglang from source for sm75.
+  - host: 2080ti
+    backend: sglang
+    profiles:
+      - chat-singleturn
+      - coding-singleturn
+      - chat-multiturn
+      - swebench-multiturn
+      - terminalbench-multiturn
+      - osworld-multiturn
+    reason: "sglang 0.5.9 custom ops lack sm75 (Turing) kernels; rebuild from source required"
+
 # --------------------------------------------------------------------------
 # Active sweep cells
 # --------------------------------------------------------------------------
