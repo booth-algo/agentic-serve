@@ -314,13 +314,13 @@ LLM inference benchmark: 3,197 main sweep rows and 37 per-layer kernel validatio
 
 ### trace_replay (2,932 rows)
 
-Replays exact ISL/OSL sequences from recorded agent sessions (SWE-Bench, TerminalBench, OSWorld, ShareGPT). 77 unique (model, hardware, engine) combinations, 17 profiles, 6 concurrency levels {1, 5, 10, 20, 40, 80}, 11.4% matrix fill.
+Replays exact ISL/OSL sequences from recorded agent sessions (SWE-Bench, TerminalBench, OSWorld, ShareGPT). 77 unique (model, hardware, engine) combinations across 17 profiles.
 
 17 profiles: `chat-medium`, `chat-multiturn-long`, `chat-multiturn-medium`, `chat-multiturn-short`, `chat-short`, `chat-singleturn`, `coding-singleturn`, `decode-heavy`, `osworld-multiturn-long`, `osworld-multiturn-medium`, `osworld-multiturn-short`, `prefill-heavy`, `random-1k`, `swebench-multiturn-medium`, `swebench-multiturn-short`, `terminalbench-multiturn-medium`, `terminalbench-multiturn-short`
 
 ### synthetic_distributional (265 rows)
 
-ISL/OSL sampled from lognormal fits to real workload statistics. 38 unique (model, hardware, engine) combinations, 5 profiles, 2 concurrency levels {200, 320}, 69.7% matrix fill.
+ISL/OSL sampled from lognormal fits to real workload statistics. 38 unique (model, hardware, engine) combinations across 5 profiles.
 
 5 profiles: `chat-multiturn-synth`, `chat-singleturn-synth`, `osworld-multiturn-synth`, `swebench-multiturn-synth`, `terminalbench-multiturn-synth`
 
@@ -338,7 +338,7 @@ Curated H100 / Llama-3.1-8B / vLLM validation table for the distributional synth
 
 ### Quality filtering
 
-Concurrency levels: trace_replay {1, 5, 10, 20, 40, 80}, synthetic_distributional {200, 320}. Configurations where fewer than 75% of requests completed successfully are excluded. Summary metrics are computed from successful requests only.
+Configurations where fewer than 75% of requests completed successfully are excluded. Summary metrics are computed from successful requests only.
 
 | Config | Rows |
 |--------|------|
