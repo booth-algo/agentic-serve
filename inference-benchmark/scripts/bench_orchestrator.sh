@@ -375,6 +375,11 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
     LEGACY_OUT_DIR_REMOTE="/tmp/results/${RESULT_DIR_NAME}"
     R2_DIR="${ROW_STORAGE_SCOPE}/${RESULT_DIR_NAME}"
     OUT_DIR_LOCAL="$LOCAL_RESULTS_ROOT/$R2_DIR"
+    RUN_MAX_LEN="$MAX_LEN"
+    OVERRIDE_FILE="$(state_read_file "$JID" max_len_override)"
+    if [[ -f "$OVERRIDE_FILE" ]]; then
+        RUN_MAX_LEN=$(cat "$OVERRIDE_FILE")
+    fi
 
     case "$STATUS" in
         done|skipped|failed)
@@ -451,10 +456,10 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                     else
                         OOM=$(oom_log_on_host "$HOST" "$JOB_PORT")
                         ATT=$(read_attempt "$JID")
-                        if can_retry_oom "$OOM" "$ATT" "$MAX_LEN"; then
+                        if can_retry_oom "$OOM" "$ATT" "$RUN_MAX_LEN"; then
                             bump_attempt "$JID"
                             write_status "$JID" pending
-                            NEW_MAX=$(next_oom_max_len "$MAX_LEN")
+                            NEW_MAX=$(next_oom_max_len "$RUN_MAX_LEN")
                             write_state_value "$JID" max_len_override "$NEW_MAX"
                             log "$JID: zero expected outputs after copying $COUNT files; OOM detected, retry with max_len=$NEW_MAX"
                         else
@@ -471,10 +476,10 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                 # which are reported as ValueError rather than torch OOM.
                 OOM=$(oom_log_on_host "$HOST" "$JOB_PORT")
                 ATT=$(read_attempt "$JID")
-                if can_retry_oom "$OOM" "$ATT" "$MAX_LEN"; then
+                if can_retry_oom "$OOM" "$ATT" "$RUN_MAX_LEN"; then
                     bump_attempt "$JID"
                     write_status "$JID" pending
-                    NEW_MAX=$(next_oom_max_len "$MAX_LEN")
+                    NEW_MAX=$(next_oom_max_len "$RUN_MAX_LEN")
                     write_state_value "$JID" max_len_override "$NEW_MAX"
                     log "$JID: OOM detected, retry with max_len=$NEW_MAX"
                 else
@@ -511,10 +516,6 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             SLOT_PORT=$(find_free_port "$HOST")
             [[ -z "$SLOT_PORT" ]] && continue
 
-            OVERRIDE_FILE="$(state_read_file "$JID" max_len_override)"
-            if [[ -f "$OVERRIDE_FILE" ]]; then
-                MAX_LEN=$(cat "$OVERRIDE_FILE")
-            fi
             PY=$(host_python "$HOST" "$BACKEND")
             if [[ "$BACKEND" == "sglang" ]]; then
                 SCRIPT="sweep_all_profiles_sglang.sh"
@@ -529,7 +530,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             write_state_value "$JID" gpus "$SLOT_GPUS"
             write_signature "$JID" "$JOB_SIGNATURE"
 
-            log "$JID: dispatching on $HOST:$SLOT_PORT gpus=[$SLOT_GPUS] ($BACKEND, scope=$ROW_DASHBOARD_SCOPE, storage=$ROW_STORAGE_SCOPE, max_len=$MAX_LEN, mode=$MODE)"
+            log "$JID: dispatching on $HOST:$SLOT_PORT gpus=[$SLOT_GPUS] ($BACKEND, scope=$ROW_DASHBOARD_SCOPE, storage=$ROW_STORAGE_SCOPE, max_len=$RUN_MAX_LEN, mode=$MODE)"
             write_status "$JID" running
 
             # Build env: PORT + CUDA_VISIBLE_DEVICES (unless cell already pins)
@@ -540,7 +541,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
 
             CMD="$SLOT_ENV ${EXTRA_ENV} RESULT_SCOPE=${ROW_STORAGE_SCOPE} DASHBOARD_SCOPE=${ROW_DASHBOARD_SCOPE} bash /tmp/inference-benchmark/scripts/${SCRIPT} \
                 ${MODEL_PATH} ${TP} ${SHORT} ${BACKEND} ${OUT_DIR_REMOTE} \
-                ${PY} ${GPU_MEM} ${MAX_LEN} \"${CONCS}\" \"${PROFILES}\""
+                ${PY} ${GPU_MEM} ${RUN_MAX_LEN} \"${CONCS}\" \"${PROFILES}\""
             REMOTE_LOG="/tmp/bench_${SHORT}_tp${TP}_${MODE}_${BACKEND}_p${SLOT_PORT}.log"
             if dry_run; then
                 log "$JID: dry-run would run on $HOST: setsid bash -c '$CMD' > '$REMOTE_LOG' 2>&1 </dev/null &"
