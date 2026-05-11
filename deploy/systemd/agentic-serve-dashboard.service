@@ -1,0 +1,14 @@
+[Unit]
+Description=Agentic Serve dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/agentic-serve/inference-benchmark/dashboard
+ExecStart=/usr/bin/npm run preview -- --host 127.0.0.1 --port 4180
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
