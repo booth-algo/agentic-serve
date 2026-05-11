@@ -53,6 +53,57 @@ class RealTraceWorkloadTests(unittest.TestCase):
             180 - 10,
         )
 
+    def test_sharegpt_dataset_uses_tokenizer_prompt_count_when_available(self):
+        fake_dataset = [
+            {
+                "conversations": [
+                    {"from": "human", "value": words(100)},
+                    {"from": "gpt", "value": words(40)},
+                ],
+            },
+            {
+                "conversations": [
+                    {"from": "human", "value": words(70)},
+                    {"from": "gpt", "value": words(30)},
+                ],
+            },
+        ]
+        fake_datasets_module = types.SimpleNamespace(
+            load_dataset=lambda *args, **kwargs: fake_dataset
+        )
+
+        class FakeTokenizer:
+            def apply_chat_template(self, messages, add_generation_prompt, tokenize):
+                content = " ".join(message["content"] for message in messages)
+                return [0] * (180 if "w99" in content else 100)
+
+        fake_transformers_module = types.SimpleNamespace(
+            AutoTokenizer=types.SimpleNamespace(
+                from_pretrained=lambda *args, **kwargs: FakeTokenizer()
+            )
+        )
+
+        with patch.dict(sys.modules, {
+            "datasets": fake_datasets_module,
+            "transformers": fake_transformers_module,
+        }):
+            dataset = ShareGPTDataset(
+                num_prompts=10,
+                system_prompt="",
+                max_isl_tokens=4096,
+                max_osl_tokens=4096,
+                min_osl_tokens=1,
+                max_total_tokens=210,
+                context_safety_margin_tokens=10,
+                tokenizer_name="fake-tokenizer",
+            )
+            dataset._load()
+
+            self.assertEqual(len(dataset._samples), 1)
+            request = dataset.get_next_request()
+
+        self.assertEqual(request.max_tokens, int(30 * 1.35))
+
     def test_trajectory_dataset_reserves_output_and_safety_margin(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "trace.jsonl"

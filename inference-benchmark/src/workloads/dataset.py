@@ -160,6 +160,7 @@ class ShareGPTDataset(BaseDataset):
         min_osl_tokens: int = 50,     # filter: skip very short replies
         max_total_tokens: Optional[int] = None,
         context_safety_margin_tokens: int = 0,
+        tokenizer_name: str = "",
     ):
         self.num_prompts = num_prompts
         self.random_seed = random_seed
@@ -169,10 +170,23 @@ class ShareGPTDataset(BaseDataset):
         self.min_osl_tokens = min_osl_tokens
         self.max_total_tokens = max_total_tokens
         self.context_safety_margin_tokens = context_safety_margin_tokens
+        self.tokenizer_name = tokenizer_name
         self._samples: Optional[list[tuple]] = None   # list of (messages, osl)
         self._available: Optional[list[tuple]] = None
         self._lock = threading.Lock()
         self._rng = random.Random(random_seed)
+
+    @staticmethod
+    def _prompt_token_count(tokenizer, messages: list[dict[str, str]]) -> int:
+        try:
+            return len(tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                tokenize=True,
+            ))
+        except Exception:
+            text = "\n".join(str(message.get("content", "")) for message in messages)
+            return len(tokenizer.encode(text, add_special_tokens=True))
 
     def _load(self):
         if self._samples is not None:
@@ -185,6 +199,13 @@ class ShareGPTDataset(BaseDataset):
                 "Aeala/ShareGPT_Vicuna_unfiltered",
                 split="train",
             )
+            tokenizer = None
+            if self.tokenizer_name:
+                try:
+                    from transformers import AutoTokenizer
+                    tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
+                except Exception:
+                    tokenizer = None
             samples = []
             for item in ds:
                 convs = item["conversations"]
@@ -210,18 +231,23 @@ class ShareGPTDataset(BaseDataset):
                     continue
                 if osl_est < self.min_osl_tokens:
                     continue
-                if self.max_total_tokens is not None:
-                    prompt_budget = (
-                        self.max_total_tokens
-                        - osl_est
-                        - self.context_safety_margin_tokens
-                    )
-                    if prompt_budget < 1 or isl_est > prompt_budget:
-                        continue
                 messages = []
                 if self.system_prompt:
                     messages.append({"role": "system", "content": self.system_prompt})
                 messages.append({"role": "user", "content": user_msg})
+                if self.max_total_tokens is not None:
+                    prompt_tokens = (
+                        self._prompt_token_count(tokenizer, messages)
+                        if tokenizer is not None
+                        else isl_est
+                    )
+                    if (
+                        prompt_tokens
+                        + osl_est
+                        + self.context_safety_margin_tokens
+                        > self.max_total_tokens
+                    ):
+                        continue
                 samples.append((messages, osl_est))
                 if len(samples) >= self.num_prompts * 3:  # load 3x, shuffle, take num_prompts
                     break
@@ -882,6 +908,7 @@ def make_dataset(
             max_osl_tokens=profile.osl_tokens,
             max_total_tokens=max_context_tokens,
             context_safety_margin_tokens=context_safety_margin_tokens,
+            tokenizer_name=tokenizer_name or profile.tokenizer_name,
         )
     elif profile.dataset == "random":
         return RandomTokenDataset(
