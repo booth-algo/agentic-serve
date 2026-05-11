@@ -1,6 +1,6 @@
 # Tailscale Dashboard Hosting
 
-Verified on 2026-05-11 02:52 UTC.
+Verified on 2026-05-11 03:03 UTC.
 
 ## Live Setup
 
@@ -15,7 +15,6 @@ Current host state:
 tailscaled.service: enabled, active
 agentic-serve-dashboard.service: enabled, active
 agentic-serve-dashboard-refresh.timer: enabled, active
-agentperfbench-dashboard.service: disabled, stale AgenticServeNew unit
 ```
 
 Current Tailscale Serve route:
@@ -122,6 +121,15 @@ script currently launching it on every boot. The boot-critical service is the
 standard OS `tailscaled.service`, and the repo-owned part is the localhost
 dashboard service plus refresh timer.
 
-`/etc/systemd/system/agentperfbench-dashboard.service` was part of the deleted
-AgenticServeNew setup and points at `/root/AgenticServeNew/scripts/serve-dashboard-dev.sh`.
-It is disabled and should not be used for the current dashboard.
+The legacy `/etc/systemd/system/agentperfbench-dashboard.service` unit was part
+of the deleted AgenticServeNew setup. It should not exist on current installs.
+If it is still present, disable and remove it:
+
+```bash
+systemctl disable --now agentperfbench-dashboard.service
+rm -f /etc/systemd/system/agentperfbench-dashboard.service
+systemctl daemon-reload
+```
+
+The only dashboard service that should remain is
+`agentic-serve-dashboard.service`.
