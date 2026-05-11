@@ -158,6 +158,8 @@ class ShareGPTDataset(BaseDataset):
         max_isl_tokens: int = 8192,   # filter: skip conversations where user msg > this
         max_osl_tokens: int = 2048,   # filter: skip conversations where assistant reply > this
         min_osl_tokens: int = 50,     # filter: skip very short replies
+        max_total_tokens: Optional[int] = None,
+        context_safety_margin_tokens: int = 0,
     ):
         self.num_prompts = num_prompts
         self.random_seed = random_seed
@@ -165,6 +167,8 @@ class ShareGPTDataset(BaseDataset):
         self.max_isl_tokens = max_isl_tokens
         self.max_osl_tokens = max_osl_tokens
         self.min_osl_tokens = min_osl_tokens
+        self.max_total_tokens = max_total_tokens
+        self.context_safety_margin_tokens = context_safety_margin_tokens
         self._samples: Optional[list[tuple]] = None   # list of (messages, osl)
         self._available: Optional[list[tuple]] = None
         self._lock = threading.Lock()
@@ -206,6 +210,14 @@ class ShareGPTDataset(BaseDataset):
                     continue
                 if osl_est < self.min_osl_tokens:
                     continue
+                if self.max_total_tokens is not None:
+                    prompt_budget = (
+                        self.max_total_tokens
+                        - osl_est
+                        - self.context_safety_margin_tokens
+                    )
+                    if prompt_budget < 1 or isl_est > prompt_budget:
+                        continue
                 messages = []
                 if self.system_prompt:
                     messages.append({"role": "system", "content": self.system_prompt})
@@ -868,6 +880,8 @@ def make_dataset(
             system_prompt=profile.system_prompt,
             max_isl_tokens=profile.isl_tokens,
             max_osl_tokens=profile.osl_tokens,
+            max_total_tokens=max_context_tokens,
+            context_safety_margin_tokens=context_safety_margin_tokens,
         )
     elif profile.dataset == "random":
         return RandomTokenDataset(

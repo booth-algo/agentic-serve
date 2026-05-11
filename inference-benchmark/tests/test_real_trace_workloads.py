@@ -1,9 +1,12 @@
 import json
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from src.workloads.dataset import TrajectoryMultiTurnDataset, make_dataset
+from src.workloads.dataset import ShareGPTDataset, TrajectoryMultiTurnDataset, make_dataset
 from src.workloads.profiles import WorkloadProfile
 
 
@@ -12,6 +15,44 @@ def words(n: int) -> str:
 
 
 class RealTraceWorkloadTests(unittest.TestCase):
+    def test_sharegpt_dataset_reserves_output_and_safety_margin(self):
+        fake_dataset = [
+            {
+                "conversations": [
+                    {"from": "human", "value": words(100)},
+                    {"from": "gpt", "value": words(40)},
+                ],
+            },
+            {
+                "conversations": [
+                    {"from": "human", "value": words(70)},
+                    {"from": "gpt", "value": words(30)},
+                ],
+            },
+        ]
+        fake_datasets_module = types.SimpleNamespace(
+            load_dataset=lambda *args, **kwargs: fake_dataset
+        )
+
+        with patch.dict(sys.modules, {"datasets": fake_datasets_module}):
+            dataset = ShareGPTDataset(
+                num_prompts=10,
+                system_prompt="",
+                max_isl_tokens=4096,
+                max_osl_tokens=4096,
+                min_osl_tokens=1,
+                max_total_tokens=180,
+                context_safety_margin_tokens=10,
+            )
+
+            request = dataset.get_next_request()
+
+        self.assertEqual(request.max_tokens, int(30 * 1.35))
+        self.assertLessEqual(
+            int(70 * 1.35) + request.max_tokens,
+            180 - 10,
+        )
+
     def test_trajectory_dataset_reserves_output_and_safety_margin(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "trace.jsonl"

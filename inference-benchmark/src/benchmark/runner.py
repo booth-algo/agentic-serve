@@ -463,7 +463,7 @@ def resolve_multi_turn_num_sessions(
 
 
 def normalize_dashboard_scope(scope: str) -> str:
-    if scope in {"latest", "synthetic", "synthetic_distributional"}:
+    if scope in {"latest", "synthetic", "synthetic-distributional", "synthetic_distributional"}:
         return "synthetic_distributional"
     if scope in {"archive", "trace_replay"}:
         return "trace_replay"
@@ -527,6 +527,7 @@ def get_args():
         "--scope",
         choices=[
             "synthetic_distributional",
+            "synthetic-distributional",
             "trace_replay",
             "archived",
             "synthetic",

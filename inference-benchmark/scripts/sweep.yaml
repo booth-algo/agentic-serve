@@ -179,6 +179,21 @@ profile_infeasible:
       - osworld-multiturn
     reason: "sglang 0.5.9 custom ops lack sm75 (Turing) kernels; rebuild from source required"
 
+  # vLLM 0.19 fails H100/gpt-oss-20b/tp1 startup in the MXFP4 MoE Triton
+  # profile run before any request is served:
+  # AttributeError: 'tuple' object has no attribute 'mask_metadata'
+  - host: h100
+    model: gpt-oss-20b
+    tp: 1
+    backend: vllm
+    profiles:
+      - chat-singleturn
+      - chat-multiturn
+      - swebench-multiturn
+      - terminalbench-multiturn
+      - osworld-multiturn
+    reason: "vLLM 0.19 gpt-oss MXFP4 MoE Triton startup crash on H100 tp1"
+
 # --------------------------------------------------------------------------
 # Active sweep cells
 # --------------------------------------------------------------------------

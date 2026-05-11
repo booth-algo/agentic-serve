@@ -33,6 +33,7 @@ MAX_LEN="${8:-32768}"
 CONCS="${9:-1 10 20 40 80 160 256 320}"
 PROFILES="${10:-chat-singleturn coding-singleturn}"
 MIN_NREQ="${11:-100}"
+CONTEXT_SAFETY_MARGIN_TOKENS="${CONTEXT_SAFETY_MARGIN_TOKENS:-256}"
 
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
@@ -67,6 +68,7 @@ echo "[sweep] concurrencies: $CONCS"
 echo "[sweep] profiles: $PROFILES"
 echo "[sweep] min requests per run: $MIN_NREQ (single-turn uses at least 2x concurrency)"
 echo "[sweep] dashboard scope: $DASHBOARD_SCOPE"
+echo "[sweep] context cap: $MAX_LEN tokens, safety margin: $CONTEXT_SAFETY_MARGIN_TOKENS"
 
 VLLM_EXTRA_ARGS=()
 if "$PY" -m vllm.entrypoints.openai.api_server --help 2>&1 | grep -q -- '--gdn-prefill-backend'; then
@@ -159,6 +161,8 @@ for PROFILE in $PROFILES; do
             --prefix-caching-state on \
             --chunked-prefill on \
             --max-model-len "$MAX_LEN" \
+            --max-context-tokens "$MAX_LEN" \
+            --context-safety-margin-tokens "$CONTEXT_SAFETY_MARGIN_TOKENS" \
             --gpu-memory-utilization "$GPU_MEM" \
             --tensor-parallel-size "$TP" \
             --warmup     2 \
