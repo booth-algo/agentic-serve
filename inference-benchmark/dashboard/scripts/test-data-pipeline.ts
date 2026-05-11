@@ -70,6 +70,16 @@ function testBuildDataKeepsScopesSeparate(tmp: string) {
   const rows = JSON.parse(fs.readFileSync(outputPath, "utf8"));
   const scopes = rows.map((row: { dataScope: string }) => row.dataScope).sort();
   assert.deepEqual(scopes, ["archived", "synthetic_distributional", "trace_replay"]);
+
+  for (const scope of scopes) {
+    const scopedPath = path.join(tmp, `data.${scope}.json`);
+    assert.equal(fs.existsSync(scopedPath), true, `${scopedPath} should be written`);
+    const scopedRows = JSON.parse(fs.readFileSync(scopedPath, "utf8"));
+    assert.deepEqual(
+      scopedRows.map((row: { dataScope: string }) => row.dataScope),
+      [scope],
+    );
+  }
 }
 
 function testValidateRejectsEmptyCompletedScope(tmp: string) {

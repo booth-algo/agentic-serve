@@ -52,7 +52,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>('latency');
   const [scopePending, startScopeTransition] = useTransition();
   const visiblePage = pageAvailableInScope(activePage, dataScope) ? activePage : 'benchmark';
-  const deriveBenchmarkData = visiblePage !== 'gemm' && visiblePage !== 'serving' && visiblePage !== 'gpu';
+  const needsBenchmarkData = visiblePage === 'benchmark' || visiblePage === 'coverage';
   const {
     allData,
     data,
@@ -64,7 +64,7 @@ function App() {
     toggleFilter,
     clearFilters,
     clearWorkloadFilters,
-  } = useData(dataScope, { deriveBenchmarkData });
+  } = useData(dataScope, { deriveBenchmarkData: needsBenchmarkData, enabled: needsBenchmarkData });
   const { sweepState } = useSweepState();
 
   const setActivePage = useCallback((page: PageId) => {

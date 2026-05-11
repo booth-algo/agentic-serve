@@ -56,12 +56,19 @@ jobs:
         working-directory: inference-benchmark/dashboard
         run: npm run validate:data
 
-      - name: Upload data.json to R2
+      - name: Upload benchmark data JSON to R2
         working-directory: inference-benchmark
         run: |
-          aws s3 cp dashboard/public/data.json s3://agent-bench/json/current/data.json \
-            --endpoint-url $R2_ENDPOINT
-          echo "Uploaded data.json ($(du -h dashboard/public/data.json | cut -f1))"
+          for artifact in \
+            data.json \
+            data.trace_replay.json \
+            data.synthetic_distributional.json \
+            data.archived.json
+          do
+            aws s3 cp "dashboard/public/$artifact" "s3://agent-bench/json/current/$artifact" \
+              --endpoint-url $R2_ENDPOINT
+            echo "Uploaded $artifact ($(du -h "dashboard/public/$artifact" | cut -f1))"
+          done
 
       - name: Upload sweep-state.json to R2
         working-directory: inference-benchmark
@@ -77,11 +84,16 @@ jobs:
             --endpoint-url $R2_ENDPOINT
           echo "Uploaded serving-predictions.json ($(du -h dashboard/public/serving-predictions.json | cut -f1))"
 
-      - name: Verify R2 data.json
+      - name: Verify R2 benchmark data JSON
         working-directory: inference-benchmark/dashboard
         run: |
           aws s3 cp s3://agent-bench/json/current/data.json /tmp/dashboard-r2-data.json \
             --endpoint-url $R2_ENDPOINT
+          for scope in trace_replay synthetic_distributional archived
+          do
+            aws s3 cp "s3://agent-bench/json/current/data.$scope.json" "/tmp/dashboard-r2-data.$scope.json" \
+              --endpoint-url $R2_ENDPOINT
+          done
           npm run validate:data -- /tmp/dashboard-r2-data.json
 
       - name: Verify R2 sweep-state.json

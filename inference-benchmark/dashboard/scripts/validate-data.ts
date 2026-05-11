@@ -29,12 +29,31 @@ function fail(message: string): never {
 }
 
 type ValidScope = 'trace_replay' | 'synthetic_distributional' | 'archived';
+const DATA_SCOPES: ValidScope[] = ['trace_replay', 'synthetic_distributional', 'archived'];
 
 function normalizeScope(scope: string | undefined): ValidScope {
   if (scope === 'synthetic_distributional' || scope === 'synthetic' || scope === 'latest') return 'synthetic_distributional';
   if (scope === 'trace_replay' || scope === 'archive') return 'trace_replay';
   if (scope === 'archived' || scope === 'current' || scope === 'canonical' || scope === 'fixed' || scope === 'fixed-grid' || scope === 'mse') return 'archived';
   return 'trace_replay';
+}
+
+function scopedDataPath(dataPath: string, scope: ValidScope): string {
+  const ext = path.extname(dataPath);
+  const base = path.basename(dataPath, ext);
+  return path.join(path.dirname(dataPath), `${base}.${scope}${ext || '.json'}`);
+}
+
+function readRows(dataPath: string): DataRow[] {
+  if (!fs.existsSync(dataPath)) {
+    fail(`missing data file at ${dataPath}`);
+  }
+
+  const parsed = JSON.parse(fs.readFileSync(dataPath, 'utf8')) as unknown;
+  if (!Array.isArray(parsed)) {
+    fail(`data file must contain a JSON array: ${dataPath}`);
+  }
+  return parsed as DataRow[];
 }
 
 function readExpectedScopes(dataPath: string): Set<ValidScope> {
@@ -66,16 +85,7 @@ function readExpectedScopes(dataPath: string): Set<ValidScope> {
 
 const dataPath = path.resolve(process.argv[2] ?? path.join(__dirname, '../public/data.json'));
 
-if (!fs.existsSync(dataPath)) {
-  fail(`missing data file at ${dataPath}`);
-}
-
-const parsed = JSON.parse(fs.readFileSync(dataPath, 'utf8')) as unknown;
-if (!Array.isArray(parsed)) {
-  fail('data file must contain a JSON array');
-}
-
-const rows = parsed as DataRow[];
+const rows = readRows(dataPath);
 const scopeCounts: Record<ValidScope, number> = { trace_replay: 0, synthetic_distributional: 0, archived: 0 };
 const expectedScopes = readExpectedScopes(dataPath);
 
@@ -95,9 +105,27 @@ for (const scope of expectedScopes) {
   }
 }
 
+const scopedCounts: Partial<Record<ValidScope, number>> = {};
+const presentScopeFiles = DATA_SCOPES.filter((scope) => fs.existsSync(scopedDataPath(dataPath, scope)));
+for (const scope of presentScopeFiles) {
+  const scopePath = scopedDataPath(dataPath, scope);
+  const scopedRows = readRows(scopePath);
+  scopedCounts[scope] = scopedRows.length;
+  for (const row of scopedRows) {
+    const rowScope = normalizeScope(row.dataScope);
+    if (rowScope !== scope) {
+      fail(`scope file ${scopePath} contains ${rowScope} row`);
+    }
+  }
+  if (scopedRows.length !== scopeCounts[scope]) {
+    fail(`scope file ${scopePath} has ${scopedRows.length} rows but aggregate has ${scopeCounts[scope]}`);
+  }
+}
+
 console.log(JSON.stringify({
   path: dataPath,
   rows: rows.length,
   scopes: scopeCounts,
+  scopedFiles: scopedCounts,
   expectedScopes: [...expectedScopes].sort(),
 }, null, 2));

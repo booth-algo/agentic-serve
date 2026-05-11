@@ -61,6 +61,10 @@ interface EnrichedResult {
   scatterData?: ScatterPoint[];
 }
 
+type DataScope = EnrichedResult['dataScope'];
+
+const DATA_SCOPES: DataScope[] = ['trace_replay', 'synthetic_distributional', 'archived'];
+
 // Fallback engine versions applied to historical runs without an
 // `_engine_version.txt` sidecar. Update when hosts upgrade or when
 // back-annotating historical data. New runs capture this at sweep time
@@ -76,6 +80,13 @@ const RESULTS_DIR = path.resolve(
 const OUTPUT_FILE = path.resolve(
   process.env.DASHBOARD_DATA_OUTPUT ?? path.resolve(__dirname, '../public/data.json'),
 );
+const OUTPUT_DIR = path.dirname(OUTPUT_FILE);
+
+function scopedOutputFile(scope: DataScope): string {
+  const ext = path.extname(OUTPUT_FILE);
+  const base = path.basename(OUTPUT_FILE, ext);
+  return path.join(OUTPUT_DIR, `${base}.${scope}${ext || '.json'}`);
+}
 
 // Files to skip — test files, debug files, symlinks
 const SKIP_PATTERNS = [
@@ -469,14 +480,28 @@ function main() {
   });
 
   // Ensure output directory exists
-  fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(slimResults));
+
+  const scopedCounts: Record<DataScope, number> = {
+    trace_replay: 0,
+    synthetic_distributional: 0,
+    archived: 0,
+  };
+  for (const scope of DATA_SCOPES) {
+    const scopedResults = slimResults.filter((r) => r.dataScope === scope);
+    scopedCounts[scope] = scopedResults.length;
+    fs.writeFileSync(scopedOutputFile(scope), JSON.stringify(scopedResults));
+  }
 
   console.log(`\nResults:`);
   console.log(`  Included: ${dedupedResults.length}`);
   console.log(`  Skipped:  ${skipped}`);
   console.log(`  Errors:   ${errors}`);
   console.log(`  Output:   ${OUTPUT_FILE}`);
+  for (const scope of DATA_SCOPES) {
+    console.log(`  ${scope}: ${scopedOutputFile(scope)} (${scopedCounts[scope]} rows)`);
+  }
 
   // Print series summary
   const seriesMap = new Map<string, number>();

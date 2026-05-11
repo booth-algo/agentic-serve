@@ -1,3 +1,5 @@
+import type { DataScope } from './profileMeta';
+
 declare const __BUILD_HASH__: string;
 
 const DEFAULT_R2_JSON_BASE = 'https://pub-38e30ed030784867856634f1625c7130.r2.dev/json/current';
@@ -16,6 +18,16 @@ const jsonBase = import.meta.env.VITE_R2_JSON_BASE || DEFAULT_R2_JSON_BASE;
 export const dataJsonUrl = withBuildHash(
   import.meta.env.VITE_DATA_JSON_URL || joinUrl(jsonBase, 'data.json'),
 );
+
+const scopedDataUrlOverrides: Partial<Record<DataScope, string | undefined>> = {
+  trace_replay: import.meta.env.VITE_TRACE_REPLAY_DATA_JSON_URL,
+  synthetic_distributional: import.meta.env.VITE_SYNTHETIC_DISTRIBUTIONAL_DATA_JSON_URL,
+  archived: import.meta.env.VITE_ARCHIVED_DATA_JSON_URL,
+};
+
+export function dataJsonUrlForScope(scope: DataScope): string {
+  return withBuildHash(scopedDataUrlOverrides[scope] || joinUrl(jsonBase, `data.${scope}.json`));
+}
 
 export const sweepStateUrl = withBuildHash(
   import.meta.env.VITE_SWEEP_STATE_URL || joinUrl(jsonBase, 'sweep-state.json'),

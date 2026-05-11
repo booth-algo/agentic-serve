@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { BenchmarkResult, FilterState, FilterOptions } from '../types';
 import {
   PROFILE_META,
@@ -7,11 +7,14 @@ import {
   normalizeProfileName,
   normalizeDataScope,
 } from '../profileMeta';
-import { dataJsonUrl } from '../dataUrls';
+import { dataJsonUrl, dataJsonUrlForScope } from '../dataUrls';
 
 interface UseDataOptions {
   deriveBenchmarkData?: boolean;
+  enabled?: boolean;
 }
+
+const dataCache: Partial<Record<DataScope, BenchmarkResult[]>> = {};
 
 const EMPTY_FILTER_OPTIONS: FilterOptions = {
   hardware: [],
@@ -23,6 +26,32 @@ const EMPTY_FILTER_OPTIONS: FilterOptions = {
 };
 
 const EMPTY_SERIES_DATA = new Map<string, BenchmarkResult[]>();
+
+async function fetchBenchmarkRows(dataScope: DataScope): Promise<BenchmarkResult[]> {
+  const scopedResponse = await fetch(dataJsonUrlForScope(dataScope));
+  if (scopedResponse.ok) return (await scopedResponse.json()) as BenchmarkResult[];
+  if (scopedResponse.status !== 404) throw new Error(`HTTP ${scopedResponse.status}`);
+
+  const aggregateResponse = await fetch(dataJsonUrl);
+  if (!aggregateResponse.ok) throw new Error(`HTTP ${aggregateResponse.status}`);
+  return (await aggregateResponse.json()) as BenchmarkResult[];
+}
+
+function normalizeRows(rows: BenchmarkResult[], targetScope: DataScope): BenchmarkResult[] {
+  return rows
+    .map((r) => {
+      const profile = normalizeProfileName(r.config.profile);
+      const dataScope = normalizeDataScope(r.dataScope ?? null) ?? 'trace_replay';
+      if (profile === r.config.profile && dataScope === r.dataScope) return r;
+      return {
+        ...r,
+        config: { ...r.config, profile },
+        seriesKey: `${r.hardware} / ${r.modelShort} ${r.quant} / ${r.config.backend} / ${profile}`,
+        dataScope,
+      };
+    })
+    .filter((row) => row.dataScope === targetScope && isProfileInScope(row.config.profile, targetScope));
+}
 
 function defaultHardwareForScope(rows: BenchmarkResult[]): string | undefined {
   const hardware = Array.from(new Set(rows.map((r) => r.hardware))).sort();
@@ -40,9 +69,9 @@ function defaultHardwareForScope(rows: BenchmarkResult[]): string | undefined {
 
 export function useData(dataScope: DataScope, options: UseDataOptions = {}) {
   const deriveBenchmarkData = options.deriveBenchmarkData ?? true;
-  const initialDataScope = useRef<DataScope>(dataScope);
+  const enabled = options.enabled ?? true;
   const [allData, setAllData] = useState<BenchmarkResult[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>({
     hardware: [],
@@ -54,57 +83,53 @@ export function useData(dataScope: DataScope, options: UseDataOptions = {}) {
   });
 
   useEffect(() => {
-    // Cache-bust with build-time hash so deploys always serve fresh data
-    fetch(dataJsonUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    if (!enabled) {
+      setAllData([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    const cached = dataCache[dataScope];
+    if (cached) {
+      setAllData(cached);
+      setError(null);
+      setLoading(false);
+      const defaultHardware = defaultHardwareForScope(cached);
+      setFilters((prev) => ({ ...prev, hardware: defaultHardware ? [defaultHardware] : [] }));
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchBenchmarkRows(dataScope)
       .then((data: BenchmarkResult[]) => {
-        const normalized = data.map((r) => {
-          const profile = normalizeProfileName(r.config.profile);
-          const dataScope = normalizeDataScope(r.dataScope ?? null) ?? 'trace_replay';
-          if (profile === r.config.profile && dataScope === r.dataScope) return r;
-          return {
-            ...r,
-            config: { ...r.config, profile },
-            seriesKey: `${r.hardware} / ${r.modelShort} ${r.quant} / ${r.config.backend} / ${profile}`,
-            dataScope,
-          };
-        });
+        const normalized = normalizeRows(data, dataScope);
+        if (cancelled) return;
+        dataCache[dataScope] = normalized;
         setAllData(normalized);
-        // Default within the active scope to avoid filtering across renamed
-        // trace replay / archived result surfaces.
-        const scopedForDefault = normalized.filter(
-          (r) => (r.dataScope ?? 'trace_replay') === initialDataScope.current
-            && isProfileInScope(r.config.profile, initialDataScope.current),
-        );
-        const defaultHardware = defaultHardwareForScope(scopedForDefault);
-        if (defaultHardware) {
-          setFilters((prev) => ({ ...prev, hardware: [defaultHardware] }));
-        }
+        const defaultHardware = defaultHardwareForScope(normalized);
+        setFilters((prev) => ({ ...prev, hardware: defaultHardware ? [defaultHardware] : [] }));
         setLoading(false);
       })
       .catch((err) => {
+        if (cancelled) return;
         setError(err.message);
         setLoading(false);
       });
-  }, []);
-
-  const scopedDataByScope = useMemo<Record<DataScope, BenchmarkResult[]>>(() => {
-    const next: Record<DataScope, BenchmarkResult[]> = {
-      trace_replay: [],
-      synthetic_distributional: [],
-      archived: [],
+    return () => {
+      cancelled = true;
     };
-    for (const row of allData) {
-      const scope = normalizeDataScope(row.dataScope ?? null) ?? 'trace_replay';
-      if (isProfileInScope(row.config.profile, scope)) next[scope].push(row);
-    }
-    return next;
-  }, [allData]);
+  }, [dataScope, enabled]);
 
-  const scopedData = scopedDataByScope[dataScope];
+  const scopedData = useMemo(() => {
+    if (!enabled) return [];
+    return allData.filter((row) => {
+      const scope = normalizeDataScope(row.dataScope ?? null) ?? dataScope;
+      return scope === dataScope && isProfileInScope(row.config.profile, dataScope);
+    });
+  }, [allData, dataScope, enabled]);
 
   const filterOptions = useMemo<FilterOptions>(() => {
     if (!deriveBenchmarkData) return EMPTY_FILTER_OPTIONS;

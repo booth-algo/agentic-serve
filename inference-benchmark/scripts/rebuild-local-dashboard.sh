@@ -119,7 +119,8 @@ echo "Building local dashboard bundle with JSON base $JSON_BASE"
 
 echo "Building private gpu-state.json from $STATE_ROOT"
 gpu_state_args=(
-    --jobs-file "$SCRIPT_DIR/bench_jobs.txt"
+    --jobs-config "$SCRIPT_DIR/sweep.yaml"
+    --scope "${BENCH_JOBS_SCOPE:-synthetic_distributional}"
     --state-dir "$STATE_ROOT"
     --ssh-timeout "$GPU_STATE_SSH_TIMEOUT"
     --out "$GPU_STATE_REPORT"
@@ -139,6 +140,9 @@ if [[ "$MIRROR_R2" == "1" ]]; then
         # user, port, and process occupancy details for the Tailscale dashboard.
         for artifact in \
             data.json \
+            data.trace_replay.json \
+            data.synthetic_distributional.json \
+            data.archived.json \
             sweep-state.json \
             gemm-eval.json \
             serving-predictions.json \
