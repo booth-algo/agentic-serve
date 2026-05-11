@@ -63,4 +63,13 @@ if [[ "$(cat "$STATE_ROOT/synthetic/3090_Tiny_tp1_multi_sglang.status")" != "run
     exit 1
 fi
 
+NEXT_LEN_SNIPPET=$(awk '/^next_oom_max_len\(\)/,/^}/ {print}' "$SCRIPT_DIR/bench_orchestrator.sh")
+NEXT_LEN_OUTPUT=$(bash -c "$NEXT_LEN_SNIPPET; next_oom_max_len 32768 11328; next_oom_max_len 4096; next_oom_max_len 4096 1024")
+EXPECTED_NEXT_LEN=$'8192\n2048\n2048'
+if [[ "$NEXT_LEN_OUTPUT" != "$EXPECTED_NEXT_LEN" ]]; then
+    echo "unexpected OOM max_len retry plan:" >&2
+    echo "$NEXT_LEN_OUTPUT" >&2
+    exit 1
+fi
+
 echo "bench orchestrator service dry-run smoke test passed"

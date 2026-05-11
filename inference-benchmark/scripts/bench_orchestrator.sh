@@ -210,9 +210,23 @@ oom_log_on_host() {
     ssh "$host" "grep -l -i -E 'OutOfMemoryError|CUDA out of memory|out of memory|No available memory for the cache blocks|Available KV cache memory: -|larger than the available KV cache memory|estimated maximum model length|max seq len .*larger than' /tmp/vllm_${port}.log 2>/dev/null" < /dev/null || true
 }
 
+oom_max_len_hint_on_host() {
+    local host="$1" port="$2"
+    ssh "$host" "grep -oi -E 'estimated maximum model length is [0-9]+' /tmp/vllm_${port}.log 2>/dev/null | tail -1 | awk '{print \$NF}'" < /dev/null || true
+}
+
 next_oom_max_len() {
-    local max_len="$1" next
+    local max_len="$1" hint="${2:-}" next
     next=$((max_len / 2))
+    if [[ "$hint" =~ ^[0-9]+$ && "$hint" -gt 0 && "$hint" -lt "$next" ]]; then
+        # Keep retries on the existing 2K/4K/8K/... grid while respecting
+        # vLLM's own max-length estimate when it provides one.
+        local rounded=2048
+        while [[ $((rounded * 2)) -le "$hint" ]]; do
+            rounded=$((rounded * 2))
+        done
+        next="$rounded"
+    fi
     [[ "$next" -lt 2048 ]] && next=2048
     echo "$next"
 }
@@ -468,11 +482,12 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                         OOM=$(oom_log_on_host "$HOST" "$JOB_PORT")
                         ATT=$(read_attempt "$JID")
                         if can_retry_oom "$OOM" "$ATT" "$RUN_MAX_LEN"; then
+                            HINT=$(oom_max_len_hint_on_host "$HOST" "$JOB_PORT")
                             bump_attempt "$JID"
                             write_status "$JID" pending
-                            NEW_MAX=$(next_oom_max_len "$RUN_MAX_LEN")
+                            NEW_MAX=$(next_oom_max_len "$RUN_MAX_LEN" "$HINT")
                             write_state_value "$JID" max_len_override "$NEW_MAX"
-                            log "$JID: zero expected outputs after copying $COUNT files; OOM detected, retry with max_len=$NEW_MAX"
+                            log "$JID: zero expected outputs after copying $COUNT files; OOM detected, retry with max_len=$NEW_MAX${HINT:+ (vllm estimate=$HINT)}"
                         else
                             write_status "$JID" skipped
                             log "$JID: SKIPPED (0/$EXPECTED_OUTPUT_TOTAL expected outputs; copied only stale/non-matching files from $REMOTE_SYNC_DIR; attempt=$ATT, oom_log=$OOM)"
@@ -488,11 +503,12 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                 OOM=$(oom_log_on_host "$HOST" "$JOB_PORT")
                 ATT=$(read_attempt "$JID")
                 if can_retry_oom "$OOM" "$ATT" "$RUN_MAX_LEN"; then
+                    HINT=$(oom_max_len_hint_on_host "$HOST" "$JOB_PORT")
                     bump_attempt "$JID"
                     write_status "$JID" pending
-                    NEW_MAX=$(next_oom_max_len "$RUN_MAX_LEN")
+                    NEW_MAX=$(next_oom_max_len "$RUN_MAX_LEN" "$HINT")
                     write_state_value "$JID" max_len_override "$NEW_MAX"
-                    log "$JID: OOM detected, retry with max_len=$NEW_MAX"
+                    log "$JID: OOM detected, retry with max_len=$NEW_MAX${HINT:+ (vllm estimate=$HINT)}"
                 else
                     write_status "$JID" skipped
                     log "$JID: SKIPPED (zero results, attempt=$ATT, oom_log=$OOM)"
