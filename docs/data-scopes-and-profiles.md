@@ -2,6 +2,12 @@
 
 Date: 2026-05-03 | For: HuggingFace dataset setup
 
+2026-05-11 rename: the dashboard/storage boundary now uses
+`trace_replay` for the old `archive` real-trace subset,
+`synthetic_distributional` for the synthetic Hugging Face subset, and
+`archived` for retired canonical, fixed-grid, and MSE result surfaces. Older
+sections below use the original names for historical context.
+
 This document explains the four data scopes (`archive`, `current`, `fixed`, and MSE validation) — what profiles they contain, what's been run, what hasn't, how they're filtered, and how they produce the `data.json` consumed by the dashboard.
 
 ---

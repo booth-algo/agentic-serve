@@ -46,7 +46,7 @@ The `TOKEN_WORD_RATIO = 1.35` heuristic in `distributional.py` is wrong for thes
 - **Filtered distributions**: `data/distributions/swebench_multiturn_filtered.json` (138/165 sessions), `terminalbench_multiturn_filtered.json` (242/267), `osworld_multiturn_filtered.json` (60/60) — ISL≤32768 filter matching legacy short profiles
 - **MSE profiles**: `swebench-multiturn-mse`, `terminalbench-multiturn-mse`, `osworld-multiturn-mse` (`active=False`, use filtered JSONs)
 - **Sweep cells**: in `sweep.yaml` with `mse_multi` preset at C=40,80 on H100, A100, 3090
-- **Scope**: `--scope mse`, results isolated from current/archive/fixed
+- **Scope**: dashboard rows use `--scope archived`; raw storage uses the `archived/mse` sub-scope
 - **Orchestrator**: picks up MSE cells from `bench_jobs.txt` on next tick (every 2 min)
 
 ## Pending

@@ -36,3 +36,7 @@ export const profilingStateJsonUrl = withBuildHash(
 export const predictorCoverageJsonUrl = withBuildHash(
   import.meta.env.VITE_PREDICTOR_COVERAGE_JSON_URL || joinUrl(jsonBase, 'predictor-coverage.json'),
 );
+
+export const gpuStateJsonUrl = withBuildHash(
+  import.meta.env.VITE_GPU_STATE_JSON_URL || joinUrl(jsonBase, 'gpu-state.json'),
+);

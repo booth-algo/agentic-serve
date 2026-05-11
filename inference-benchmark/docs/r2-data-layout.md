@@ -10,31 +10,46 @@ Private S3 endpoint:
 
 ## Current Top-Level Prefixes
 
-As of 2026-04-30 the bucket is split into a few different kinds of data:
+As of 2026-05-10 the bucket root is intentionally small:
 
 | Prefix | Role | Keep active? |
 | --- | --- | --- |
+| `archive/` | Dated snapshots of retired generated artifacts and retired auxiliary prefixes. | Yes |
 | `data/` | Source trace datasets such as SWE-bench, TerminalBench, OSWorld, and coding single-turn prompts. | Yes |
-| `profiling-data/` | Kernel profiling source data and raw profiling assets. | Yes |
-| `predictor/` | Predictor artifacts: GEMM tables, elementwise calibration, trained models, serving shapes. | Yes |
+| `json/` | Generated dashboard/state bundles, with `json/current/` as the public dashboard feed. | Yes |
 | `results/` | Raw benchmark result JSONs from benchmark sweeps. | Archive old runs; keep new canonical runs active. |
-| bucket root `*.json` | Generated dashboard/state bundles consumed by the website. | Move toward `json/current/`. |
+| bucket root `*.json` | Legacy generated dashboard/state bundles from the pre-`json/current/` layout. | No |
+
+The old top-level `bench_mse/`, `perkernel/`, `predictor/`, and
+`profiling-data/` prefixes were moved to
+`archive/2026-05-10-prefix-cleanup/`. The active dashboard publication path is
+`json/current/`; the local `/mnt/100g/agent-bench` tree is the durable source of
+truth for rebuilds and private dashboard freshness.
 
 The generated dashboard JSONs are not under `results/` because `results/` is the
 raw measurement layer. Files like `data.json`, `sweep-state.json`, and
 `predictor-coverage.json` are derived publication artifacts. They should be
 grouped under a generated-artifact prefix, not mixed into raw benchmark output.
 
-## Proposed Layout
+## Current Results Layout
 
 ```text
 s3://agent-bench/
+  archive/
+    2026-05-10-prefix-cleanup/
+      bench_mse/
+      perkernel/
+      predictor/
+      profiling-data/
   data/                         # source workload/trace corpora
-  profiling-data/               # raw/profiled kernel data
-  predictor/                    # trained predictor inputs/artifacts
   results/
-    current/                    # canonical benchmark outputs for the current paper surface
-    archive/<stamp>/            # old raw benchmark outputs
+    trace_replay/               # real trace replay rows; matches Hugging Face split naming
+    synthetic_distributional/   # APC-aware synthetic distributional rows
+    archived/
+      canonical/                # retired former results/current/ outputs
+      fixed-grid/               # retired former fixed-grid outputs
+      mse/                      # retired MSE validation outputs
+      <stamp>/                  # dated cleanup archives
   json/
     current/                    # generated dashboard/state bundles
     archive/<stamp>/            # snapshots of old generated bundles
@@ -53,9 +68,9 @@ json/current/gemm-eval.json
 json/current/serving-predictions.json
 ```
 
-Keep root copies temporarily while the live dashboard and publish scripts are
-transitioned. Once the dashboard fetches `json/current/...` and all publishers
-dual-publish or publish only there, the root JSONs can be removed.
+Do not publish generated JSONs at the bucket root. Current publishers should
+write only to `json/current/...`; old root JSONs should be retained only in a
+dated archive snapshot.
 
 ## Archive Policy
 
@@ -65,18 +80,22 @@ Use a date-stamped archive name that describes the boundary:
 2026-04-30-pre-distributional
 ```
 
-The safe sequence is:
+The safe sequence for future cleanup is:
 
 1. Inventory the current bucket.
-2. Copy generated root JSONs to `json/archive/<stamp>/`.
-3. Copy the same generated JSONs to `json/current/`.
-4. Leave root JSONs in place until the website has switched to `json/current/`.
-5. Copy old raw result prefixes to `results/archive/<stamp>/`.
-6. Verify object counts and byte totals.
-7. Delete old source paths only after an explicit cleanup approval.
+2. Copy retired generated JSONs to `json/archive/<stamp>/`.
+3. Copy retired auxiliary prefixes to `archive/<stamp>/`.
+4. Copy old raw result prefixes to `results/archived/<stamp>/`.
+5. Verify object counts and byte totals.
+6. Delete old source paths only after an explicit cleanup approval.
 
-The `data/`, `profiling-data/`, and `predictor/` prefixes are reusable inputs
-and should not be archived as old benchmark results.
+The `data/`, `results/trace_replay/`,
+`results/synthetic_distributional/`, and `json/current/` prefixes are the
+active R2 surfaces. `results/archived/` is retained for old canonical,
+fixed-grid, MSE, and dated cleanup runs. Predictor/profiling inputs should be
+restored from
+`archive/2026-05-10-prefix-cleanup/` only if a future R2-based rebuild path
+requires them; the current server rebuild path uses local storage.
 
 ## Helper
 

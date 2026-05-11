@@ -12,13 +12,14 @@ import { PerTurnChart } from './components/charts/PerTurnChart';
 import { DataTable } from './components/DataTable';
 import { CoveragePage } from './components/CoveragePage';
 import { GemmPage } from './components/GemmPage';
+import { GpuStatePage } from './components/GpuStatePage';
 import { ServingPredictionsPage } from './components/ServingPredictionsPage';
 import type { TabId } from './types';
 import { hasServingPredictions, normalizeDataScope, type DataScope } from './profileMeta';
 import './index.css';
 
-type PageId = 'benchmark' | 'coverage' | 'gemm' | 'serving';
-const PAGE_IDS: PageId[] = ['benchmark', 'coverage', 'gemm', 'serving'];
+type PageId = 'benchmark' | 'coverage' | 'gemm' | 'serving' | 'gpu';
+const PAGE_IDS: PageId[] = ['benchmark', 'coverage', 'gemm', 'serving', 'gpu'];
 const DATA_SCOPE_STORAGE_KEY = 'inference-dashboard-data-scope';
 
 function initialDataScope(): DataScope {
@@ -27,7 +28,7 @@ function initialDataScope(): DataScope {
   const normalizedUrlScope = normalizeDataScope(urlScope);
   if (normalizedUrlScope) return normalizedUrlScope;
   const storedScope = window.localStorage.getItem(DATA_SCOPE_STORAGE_KEY);
-  return normalizeDataScope(storedScope) ?? 'current';
+  return normalizeDataScope(storedScope) ?? 'trace_replay';
 }
 
 function initialPage(): PageId {
@@ -51,7 +52,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>('latency');
   const [scopePending, startScopeTransition] = useTransition();
   const visiblePage = pageAvailableInScope(activePage, dataScope) ? activePage : 'benchmark';
-  const deriveBenchmarkData = visiblePage !== 'gemm' && visiblePage !== 'serving';
+  const deriveBenchmarkData = visiblePage !== 'gemm' && visiblePage !== 'serving' && visiblePage !== 'gpu';
   const {
     allData,
     data,
@@ -88,7 +89,7 @@ function App() {
   const setDataScope = useCallback((scope: DataScope) => {
     window.localStorage.setItem(DATA_SCOPE_STORAGE_KEY, scope);
     const url = new URL(window.location.href);
-    if (scope !== 'current') {
+    if (scope !== 'trace_replay') {
       url.searchParams.set('scope', scope);
     } else {
       url.searchParams.delete('scope');
@@ -100,7 +101,7 @@ function App() {
     });
   }, [clearWorkloadFilters]);
 
-  if (error) {
+  if (error && visiblePage !== 'gpu') {
     return (
       <Layout
         totalRuns={0}
@@ -127,14 +128,16 @@ function App() {
   return (
     <Layout
       totalRuns={allData.length}
-      loading={loading}
+      loading={visiblePage === 'gpu' ? false : loading}
       activePage={visiblePage}
       onPageChange={setActivePage}
       dataScope={dataScope}
       onDataScopeChange={setDataScope}
       scopePending={scopePending}
     >
-      {visiblePage === 'gemm' ? (
+      {visiblePage === 'gpu' ? (
+        <GpuStatePage />
+      ) : visiblePage === 'gemm' ? (
         <GemmPage />
       ) : visiblePage === 'serving' ? (
         <ServingPredictionsPage dataScope={dataScope} />

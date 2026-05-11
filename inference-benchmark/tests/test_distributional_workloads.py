@@ -184,6 +184,29 @@ class DistributionalSamplerTests(unittest.TestCase):
             all(s.total_context_tokens + s.output_tokens <= 160 for s in session.specs)
         )
 
+    def test_respects_configured_max_turns(self):
+        sampler = DistributionalSampler(
+            fixture_distribution(),
+            seed=7,
+            max_turns=2,
+        )
+
+        session = sampler.sample_session(session_id=0)
+
+        self.assertEqual(len(session.turns), 2)
+        self.assertEqual([s.total_context_tokens for s in session.specs], [100, 150])
+
+    def test_truncates_source_sessions_to_configured_max_turns(self):
+        sampler = DistributionalSampler(
+            source_session_fixture_distribution(),
+            seed=7,
+            max_turns=1,
+        )
+
+        sessions = sampler.sample_sessions(2)
+
+        self.assertEqual([len(session.turns) for session in sessions], [1, 1])
+
     def test_clips_turn_that_would_cross_context_limit(self):
         sampler = DistributionalSampler(
             fixture_distribution(),
@@ -391,6 +414,7 @@ class DistributionalMultiTurnDatasetTests(unittest.TestCase):
                 file_path=str(path),
                 system_prompt="",
                 mode="multi-turn",
+                max_turns=3,
                 num_sessions=2,
                 agent_type="coding",
                 turn_style="multi-turn",
@@ -462,6 +486,7 @@ class DistributionalMultiTurnDatasetTests(unittest.TestCase):
                 dataset="distributional-multi-turn",
                 file_path=str(path),
                 mode="multi-turn",
+                max_turns=3,
                 num_sessions=2,
                 agent_type="coding",
                 turn_style="multi-turn",
@@ -522,6 +547,7 @@ class DistributionalMultiTurnDatasetTests(unittest.TestCase):
                 dataset="distributional-multi-turn",
                 file_path=str(path),
                 mode="multi-turn",
+                max_turns=3,
                 num_sessions=5,
                 agent_type="coding",
                 turn_style="multi-turn",

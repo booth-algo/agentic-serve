@@ -20,7 +20,7 @@ ENDPOINT="${R2_ENDPOINT:-https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflares
 BUCKET="${R2_BUCKET:-agent-bench}"
 PROFILE="${AWS_PROFILE:-r2}"
 MIRROR_ROOT="${LOCAL_R2_MIRROR:-/mnt/100g/agent-bench}"
-RESULTS_PREFIX="results/current/"
+RESULTS_PREFIX="results/archived/canonical/"
 SYNC_MODE="all"
 HYDRATE_PUBLIC=0
 DELETE_FLAG=()
@@ -33,9 +33,9 @@ usage() {
 Options:
   --mirror-root PATH       Local mirror root (default: /mnt/100g/agent-bench)
   --all                   Sync the whole bucket (default)
-  --current-only           Sync only json/current/ and results/current/
+  --current-only           Sync only json/current/ and results/archived/canonical/
   --results-prefix PREFIX  R2 results prefix for current-only/results-only
-  --all-results            Sync all results/ instead of results/current/
+  --all-results            Sync all results/ instead of results/archived/canonical/
   --json-only              Sync only json/current/
   --results-only           Sync only results
   --hydrate-public         Copy json/current/*.json into dashboard/public/
@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --current-only)
             SYNC_MODE="current"
-            RESULTS_PREFIX="results/current/"
+            RESULTS_PREFIX="results/archived/canonical/"
             shift
             ;;
         --results-prefix)

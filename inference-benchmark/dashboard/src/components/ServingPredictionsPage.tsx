@@ -80,11 +80,9 @@ interface ServingScopeIndex {
 }
 
 interface ServingIndex {
-  synthetic: ServingScopeIndex;
-  current: ServingScopeIndex;
-  archive: ServingScopeIndex;
-  fixed: ServingScopeIndex;
-  mse: ServingScopeIndex;
+  trace_replay: ServingScopeIndex;
+  synthetic_distributional: ServingScopeIndex;
+  archived: ServingScopeIndex;
 }
 
 const EMPTY_GPU_OPTIONS: string[] = [];
@@ -388,17 +386,15 @@ function createServingScopeIndex(): ServingScopeIndex {
 
 function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
   const index: ServingIndex = {
-    synthetic: createServingScopeIndex(),
-    current: createServingScopeIndex(),
-    archive: createServingScopeIndex(),
-    fixed: createServingScopeIndex(),
-    mse: createServingScopeIndex(),
+    trace_replay: createServingScopeIndex(),
+    synthetic_distributional: createServingScopeIndex(),
+    archived: createServingScopeIndex(),
   };
 
   for (const [gpu, rows] of Object.entries(data)) {
     for (const row of rows) {
-      const dataScope = normalizeDataScope(row.data_scope ?? row.dataScope ?? null) ?? 'archive';
-      if (dataScope !== 'current' && dataScope !== 'archive' && dataScope !== 'fixed') continue;
+      const dataScope = normalizeDataScope(row.data_scope ?? row.dataScope ?? null) ?? 'archived';
+      if (dataScope !== 'archived') continue;
 
       const profile = normalizeProfileName(row.profile);
       if (!isProfileInScope(profile, dataScope)) continue;
@@ -410,7 +406,7 @@ function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
     }
   }
 
-  for (const scope of ['synthetic', 'current', 'archive', 'fixed', 'mse'] as const) {
+  for (const scope of ['trace_replay', 'synthetic_distributional', 'archived'] as const) {
     const scopeIndex = index[scope];
     scopeIndex.gpuOptions = Object.keys(scopeIndex.rowsByGpu)
       .filter(gpu => scopeIndex.rowsByGpu[gpu].length > 0)

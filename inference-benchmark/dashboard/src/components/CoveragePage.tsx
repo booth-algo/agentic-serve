@@ -188,7 +188,7 @@ function aggregateCells(cells: SweepCell[]): Map<string, SweepCell> {
 }
 
 function stateCellScope(cell: SweepCell): DataScope {
-  return normalizeDataScope(cell.data_scope ?? null) ?? 'current';
+  return normalizeDataScope(cell.data_scope ?? null) ?? 'archived';
 }
 
 function isMultiTurnProfile(profile: string): boolean {
@@ -196,11 +196,19 @@ function isMultiTurnProfile(profile: string): boolean {
 }
 
 function usesCanonicalCoverage(scope: DataScope): boolean {
-  return scope !== 'archive';
+  return scope === 'synthetic_distributional';
 }
 
 function coverageGridScope(scope: DataScope): DataScope {
   return scope;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function uniqueNumbers(values: number[]): number[] {
+  return Array.from(new Set(values)).sort((a, b) => a - b);
 }
 
 export function CoveragePage({
@@ -213,42 +221,26 @@ export function CoveragePage({
   const gridScope = coverageGridScope(dataScope);
 
   const coveragePlan = useMemo(() => {
-    const singleProfiles = gridScope === 'archive'
+    const singleProfiles = gridScope === 'trace_replay'
       ? ARCHIVE_SINGLE_PROFILES
-      : gridScope === 'synthetic'
+      : gridScope === 'synthetic_distributional'
         ? SYNTHETIC_SINGLE_PROFILES
-      : gridScope === 'fixed'
-        ? FIXED_SINGLE_PROFILES
-        : gridScope === 'mse'
-          ? MSE_SINGLE_PROFILES
-        : CURRENT_SINGLE_PROFILES;
-    const multiProfiles = gridScope === 'archive'
+        : uniqueStrings([...CURRENT_SINGLE_PROFILES, ...FIXED_SINGLE_PROFILES, ...MSE_SINGLE_PROFILES]);
+    const multiProfiles = gridScope === 'trace_replay'
       ? ARCHIVE_MULTI_PROFILES
-      : gridScope === 'synthetic'
+      : gridScope === 'synthetic_distributional'
         ? SYNTHETIC_MULTI_PROFILES
-      : gridScope === 'fixed'
-        ? FIXED_MULTI_PROFILES
-        : gridScope === 'mse'
-          ? MSE_MULTI_PROFILES
-        : CURRENT_MULTI_PROFILES;
-    const singleConcs = gridScope === 'current'
-      ? CURRENT_SINGLE_CONCS
-      : gridScope === 'synthetic'
+        : uniqueStrings([...CURRENT_MULTI_PROFILES, ...FIXED_MULTI_PROFILES, ...MSE_MULTI_PROFILES]);
+    const singleConcs = gridScope === 'trace_replay'
+      ? ARCHIVE_SINGLE_CONCS
+      : gridScope === 'synthetic_distributional'
         ? SYNTHETIC_SINGLE_CONCS
-        : gridScope === 'fixed'
-          ? FIXED_SINGLE_CONCS
-          : gridScope === 'mse'
-            ? MSE_SINGLE_CONCS
-            : ARCHIVE_SINGLE_CONCS;
-    const multiConcs = gridScope === 'current'
-      ? CURRENT_MULTI_CONCS
-      : gridScope === 'synthetic'
+        : uniqueNumbers([...CURRENT_SINGLE_CONCS, ...FIXED_SINGLE_CONCS, ...MSE_SINGLE_CONCS]);
+    const multiConcs = gridScope === 'trace_replay'
+      ? ARCHIVE_MULTI_CONCS
+      : gridScope === 'synthetic_distributional'
         ? SYNTHETIC_MULTI_CONCS
-        : gridScope === 'fixed'
-          ? FIXED_MULTI_CONCS
-          : gridScope === 'mse'
-            ? MSE_MULTI_CONCS
-            : ARCHIVE_MULTI_CONCS;
+        : uniqueNumbers([...CURRENT_MULTI_CONCS, ...FIXED_MULTI_CONCS, ...MSE_MULTI_CONCS]);
     return {
       singleProfiles,
       multiProfiles,
@@ -266,9 +258,9 @@ export function CoveragePage({
       : ['A100-40GB', '3090', '2080Ti', 'H100'];
     const dataHw = new Set(allData.map((r) => r.hardware));
     const expectedHw: string[] = [];
-    if (dataScope === 'archive') {
+    if (!canonicalCoverage) {
       expectedHw.push(...Array.from(dataHw).sort());
-    } else if (dataScope === 'mse' || dataScope === 'synthetic' || dataScope === 'fixed') {
+    } else if (dataScope === 'synthetic_distributional') {
       const scopedHw = new Set<string>([...scopedSweepCells.map((cell) => cell.hw_label), ...dataHw]);
       expectedHw.push(...Array.from(scopedHw).sort());
     } else {
@@ -282,7 +274,7 @@ export function CoveragePage({
 
     const expectedModels = new Set<string>();
     if (canonicalCoverage && sweepState) {
-      if (dataScope === 'mse' || dataScope === 'synthetic' || dataScope === 'fixed') {
+      if (dataScope === 'synthetic_distributional') {
         for (const cell of scopedSweepCells) expectedModels.add(cell.model);
       } else {
         for (const m of Object.keys(sweepState.models)) expectedModels.add(m);
@@ -309,7 +301,7 @@ export function CoveragePage({
     const profileInfeasible = new Map<string, string>();
     if (canonicalCoverage) {
       for (const item of sweepState?.profile_infeasible ?? []) {
-        if ((item.data_scope ?? 'current') !== gridScope) continue;
+        if ((normalizeDataScope(item.data_scope ?? null) ?? 'archived') !== gridScope) continue;
         profileInfeasible.set(
           `${item.hw_label}|${item.model}|${item.backend}|${item.profile}`,
           item.reason,
@@ -326,7 +318,7 @@ export function CoveragePage({
     const expectedCountFor = (hw: string, model: string, backend: string): number => {
       // For scoped sweeps, derive expected count from the actual sweep-state cells,
       // not the full profile×concurrency cross-product.
-      if (dataScope === 'synthetic' || dataScope === 'fixed' || dataScope === 'mse') {
+      if (dataScope === 'synthetic_distributional') {
         let total = 0;
         for (const cell of scopedSweepCells) {
           if (cell.hw_label === hw && cell.model === model && cell.backend === backend) {
@@ -382,7 +374,7 @@ export function CoveragePage({
         // other known backend that actually has data for this (hw, model).
         const backendSet = new Set<string>();
         if (canonicalCoverage) {
-          if (dataScope === 'mse' || dataScope === 'synthetic' || dataScope === 'fixed') {
+          if (dataScope === 'synthetic_distributional') {
             for (const cell of scopedSweepCells) {
               if (cell.hw_label === hw && cell.model === model) backendSet.add(cell.backend);
             }
@@ -415,7 +407,7 @@ export function CoveragePage({
             const profiles: ProfileRow[] = [];
             let totalHave = 0;
             let totalNeed = 0;
-            if (dataScope === 'archive') {
+            if (!canonicalCoverage) {
               const mbKey = `${hw}|${model}|${backend}`;
               const observedProfiles = Array.from(profilesByMb.get(mbKey) ?? []).sort();
               for (const profile of observedProfiles) {
@@ -426,7 +418,7 @@ export function CoveragePage({
                 profiles.push({ profile, isMultiTurn: isMultiTurnProfile(profile), expected: observedConcs, present });
               }
             } else {
-              const isScoped = dataScope === 'synthetic' || dataScope === 'fixed' || dataScope === 'mse';
+              const isScoped = dataScope === 'synthetic_distributional';
               const expectedProfiles = isScoped
                 ? (() => {
                     const ep = new Set<string>();
@@ -541,14 +533,14 @@ export function CoveragePage({
 
   const allConcs = useMemo(
     () => {
-      if (dataScope === 'archive') {
+      if (!canonicalCoverage) {
         const observed = new Set<number>();
         for (const r of allData) observed.add(r.config.concurrency);
         return Array.from(observed).sort((a, b) => a - b);
       }
       return Array.from(new Set([...coveragePlan.singleConcs, ...coveragePlan.multiConcs])).sort((a, b) => a - b);
     },
-    [allData, coveragePlan, dataScope],
+    [allData, canonicalCoverage, coveragePlan],
   );
 
   if (loading) {
@@ -578,19 +570,15 @@ export function CoveragePage({
   const pct = grand.totalNeed > 0
     ? ((grand.totalHave / grand.totalNeed) * 100).toFixed(1)
     : '0.0';
-  const cellSummary = dataScope === 'archive'
+  const cellSummary = !canonicalCoverage
     ? `${grand.totalHave} cells filled`
     : `${grand.totalHave}/${grand.totalNeed} expected cells`;
-  const primarySummary = dataScope === 'archive' ? `${grand.totalHave} cells filled` : `${pct}%`;
-  const scopeSummary = dataScope === 'synthetic'
+  const primarySummary = !canonicalCoverage ? `${grand.totalHave} cells filled` : `${pct}%`;
+  const scopeSummary = dataScope === 'synthetic_distributional'
     ? '5 APC-aware synthetic profiles on the C=200/320 grid'
-    : dataScope === 'current'
-      ? '6 paper profiles'
-      : dataScope === 'fixed'
-      ? '5 fixed-scope profiles on the fixed concurrency grid'
-      : dataScope === 'mse'
-        ? 'synthetic-vs-real validation pairs at C=40/80'
-      : 'legacy profiles containing full runs of single-turn, short/medium/long multi-turn, and stress workloads';
+    : dataScope === 'archived'
+      ? 'retired canonical, fixed-grid, and MSE runs kept as inventory'
+      : 'real trace replay profiles containing full single-turn, short/medium/long multi-turn, and stress workloads';
   const coverageLabel = `${DATA_SCOPE_META[dataScope].shortLabel} coverage`;
 
   return (
@@ -936,15 +924,11 @@ function GroupChip({
 
 function CoverageLegend({ dataScope }: { dataScope: DataScope }) {
   const canonicalCoverage = usesCanonicalCoverage(dataScope);
-  const scopeNote = dataScope === 'synthetic'
+  const scopeNote = dataScope === 'synthetic_distributional'
     ? 'Synthetic coverage tracks APC-aware synthetic-suffixed profiles on the reduced C=200/320 grid. coding-singleturn is intentionally excluded.'
-    : dataScope === 'current'
-      ? 'Current coverage tracks the canonical paper profile surface and expected concurrency grid.'
-      : dataScope === 'fixed'
-      ? 'Fixed coverage tracks chat-singleturn plus all canonical multi-turn profiles on the corrected concurrency grid; context-overflow cells show as infeasible.'
-      : dataScope === 'mse'
-        ? 'MSE coverage tracks validation pairs only: one synthetic distributional run and one matched real short-trajectory run per dataset and concurrency.'
-      : 'Archive coverage is inventory-style: it shows historical runs that exist and does not count missing legacy cells.';
+    : dataScope === 'archived'
+      ? 'Archived coverage is inventory-style: it shows retired canonical, fixed-grid, and MSE runs that exist and does not count missing cells.'
+      : 'Trace replay coverage is inventory-style: it shows real replay runs that exist and does not count missing legacy cells.';
 
   return (
     <div className="rounded-md border border-[#21262d] bg-[#161b22] px-4 py-3 text-xs text-[#8b949e]">

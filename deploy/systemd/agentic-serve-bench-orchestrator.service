@@ -1,0 +1,15 @@
+[Unit]
+Description=Run one Agentic Serve GPU benchmark orchestration tick
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/agentic-serve/inference-benchmark
+Environment=BENCH_STATE_ROOT=/mnt/100g/agent-bench/state
+Environment=BENCH_RESULTS_ROOT=/mnt/100g/agent-bench/results
+Environment=BENCH_JOBS_SCOPE=synthetic
+Environment=BENCH_SYNC_GPU_CODE=1
+Environment=BENCH_SYNC_REQUIRED=0
+Environment=BENCH_REMOTE_ROOT=/tmp/inference-benchmark
+ExecStart=/usr/bin/env bash /root/agentic-serve/inference-benchmark/scripts/run-bench-orchestrator-service.sh

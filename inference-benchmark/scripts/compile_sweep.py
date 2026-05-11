@@ -39,8 +39,9 @@ SYNTHETIC_EXTRA_ENV = {
     "DISTRIBUTIONAL_SHARED_PREFIX_TOKENS": "1024",
 }
 DERIVED_SCOPE_SOURCE = {
-    "latest": "fixed",  # legacy alias; the dashboard now exposes synthetic instead.
+    "latest": "fixed",  # legacy alias; the dashboard now exposes synthetic_distributional.
     "synthetic": "fixed",
+    "synthetic_distributional": "fixed",
 }
 
 
@@ -173,6 +174,39 @@ def _ensure_extra_env(extra_env: str, key: str, value: str) -> str:
     return f"{extra_env} {key}={value}".strip()
 
 
+def _set_extra_env(extra_env: str, key: str, value: str) -> str:
+    try:
+        parts = shlex.split(extra_env)
+    except ValueError:
+        parts = extra_env.split()
+    prefix = f"{key}="
+    kept = [part for part in parts if not part.startswith(prefix)]
+    kept.append(f"{key}={value}")
+    return " ".join(kept)
+
+
+def dashboard_scope_for(scope: str) -> str:
+    if scope in {"latest", "synthetic", "synthetic_distributional"}:
+        return "synthetic_distributional"
+    if scope in {"archive", "trace_replay"}:
+        return "trace_replay"
+    if scope in {"current", "canonical", "fixed", "fixed-grid", "mse", "archived"}:
+        return "archived"
+    return scope
+
+
+def result_scope_for(scope: str) -> str:
+    if scope in {"latest", "synthetic", "synthetic_distributional"}:
+        return "synthetic_distributional"
+    if scope in {"archive", "trace_replay"}:
+        return "trace_replay"
+    if scope in {"canonical"}:
+        return "current"
+    if scope in {"fixed-grid"}:
+        return "fixed"
+    return scope
+
+
 def render_row(cell: dict, manifest: dict) -> str:
     host = manifest["hosts"][cell["host"]]
     model = manifest["models"][cell["model"]]
@@ -181,9 +215,9 @@ def render_row(cell: dict, manifest: dict) -> str:
     concs = " ".join(str(c) for c in resolved["concurrencies"])
     profiles = " ".join(resolved["profiles"])
     extra_env = resolved.get("extra_env", "")
-    data_scope = cell_data_scope(cell)
-    extra_env = _ensure_extra_env(str(extra_env), "DASHBOARD_SCOPE", data_scope)
-    extra_env = _ensure_extra_env(extra_env, "RESULT_SCOPE", data_scope)
+    source_scope = cell_data_scope(cell)
+    extra_env = _set_extra_env(str(extra_env), "DASHBOARD_SCOPE", dashboard_scope_for(source_scope))
+    extra_env = _set_extra_env(extra_env, "RESULT_SCOPE", result_scope_for(source_scope))
     backend = str(cell.get("backend", "vllm"))
     fields = [
         str(cell["host"]),
@@ -217,8 +251,16 @@ def coverage_grid_scope(scope: str) -> str:
     return DERIVED_SCOPE_SOURCE.get(scope, scope)
 
 
+def cell_matches_requested_scope(cell_scope: str, requested_scope: str) -> bool:
+    if requested_scope == "all":
+        return True
+    if requested_scope == "archived":
+        return dashboard_scope_for(cell_scope) == "archived"
+    return cell_scope == coverage_grid_scope(requested_scope)
+
+
 def profiles_for_output_scope(profiles, requested_scope: str) -> list[str]:
-    if requested_scope != "synthetic":
+    if dashboard_scope_for(requested_scope) != "synthetic_distributional":
         return [str(profile) for profile in profiles]
     return [
         SYNTHETIC_PROFILE_MAP[str(profile)]
@@ -231,8 +273,8 @@ def cell_for_output_scope(cell: dict, requested_scope: str, manifest: dict | Non
     if requested_scope not in DERIVED_SCOPE_SOURCE:
         return cell
     out = dict(cell)
-    out["data_scope"] = requested_scope
-    if requested_scope == "synthetic":
+    out["data_scope"] = dashboard_scope_for(requested_scope)
+    if dashboard_scope_for(requested_scope) == "synthetic_distributional":
         profiles = out.get("profiles")
         if profiles is None:
             if manifest is None:
@@ -249,10 +291,9 @@ def cell_for_output_scope(cell: dict, requested_scope: str, manifest: dict | Non
 def compile_jobs(manifest: dict, scope: str = "all"):
     emitted: list[tuple[dict, str]] = []
     skipped: list[tuple[dict, str, str]] = []  # (cell, status, reason)
-    grid_scope = coverage_grid_scope(scope)
 
     for cell in manifest["cells"]:
-        if grid_scope != "all" and cell_data_scope(cell) != grid_scope:
+        if not cell_matches_requested_scope(cell_data_scope(cell), scope):
             continue
         reason = is_known_oom(cell, manifest)
         if reason:
@@ -320,7 +361,22 @@ def main() -> int:
     ap.add_argument("--yaml", type=Path, default=SWEEP_YAML)
     ap.add_argument("--out", type=Path, default=BENCH_JOBS_TXT)
     ap.add_argument("--dry-run", action="store_true", help="print to stdout, don't write")
-    ap.add_argument("--scope", choices=("all", "synthetic", "latest", "current", "fixed", "mse"), default="all", help="emit only one dashboard scope")
+    ap.add_argument(
+        "--scope",
+        choices=(
+            "all",
+            "trace_replay",
+            "synthetic_distributional",
+            "archived",
+            "synthetic",
+            "latest",
+            "current",
+            "fixed",
+            "mse",
+        ),
+        default="all",
+        help="emit only one dashboard scope",
+    )
     ap.add_argument("--verbose", "-v", action="store_true", help="show skip reasons")
     args = ap.parse_args()
 

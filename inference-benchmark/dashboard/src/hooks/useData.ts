@@ -63,7 +63,7 @@ export function useData(dataScope: DataScope, options: UseDataOptions = {}) {
       .then((data: BenchmarkResult[]) => {
         const normalized = data.map((r) => {
           const profile = normalizeProfileName(r.config.profile);
-          const dataScope = normalizeDataScope(r.dataScope ?? null) ?? 'archive';
+          const dataScope = normalizeDataScope(r.dataScope ?? null) ?? 'trace_replay';
           if (profile === r.config.profile && dataScope === r.dataScope) return r;
           return {
             ...r,
@@ -73,10 +73,10 @@ export function useData(dataScope: DataScope, options: UseDataOptions = {}) {
           };
         });
         setAllData(normalized);
-        // Default within the active scope to avoid filtering current rows with
-        // archive-only labels such as plain "H100".
+        // Default within the active scope to avoid filtering across renamed
+        // trace replay / archived result surfaces.
         const scopedForDefault = normalized.filter(
-          (r) => (r.dataScope ?? 'archive') === initialDataScope.current
+          (r) => (r.dataScope ?? 'trace_replay') === initialDataScope.current
             && isProfileInScope(r.config.profile, initialDataScope.current),
         );
         const defaultHardware = defaultHardwareForScope(scopedForDefault);
@@ -92,9 +92,13 @@ export function useData(dataScope: DataScope, options: UseDataOptions = {}) {
   }, []);
 
   const scopedDataByScope = useMemo<Record<DataScope, BenchmarkResult[]>>(() => {
-    const next: Record<DataScope, BenchmarkResult[]> = { synthetic: [], current: [], archive: [], fixed: [], mse: [] };
+    const next: Record<DataScope, BenchmarkResult[]> = {
+      trace_replay: [],
+      synthetic_distributional: [],
+      archived: [],
+    };
     for (const row of allData) {
-      const scope = normalizeDataScope(row.dataScope ?? null) ?? 'archive';
+      const scope = normalizeDataScope(row.dataScope ?? null) ?? 'trace_replay';
       if (isProfileInScope(row.config.profile, scope)) next[scope].push(row);
     }
     return next;

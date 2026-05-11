@@ -6,11 +6,9 @@ import {
   DATA_SOURCE_COLORS,
   FALLBACK_META_COLORS,
   profileDisplayName,
-  CURRENT_PROFILES,
-  FIXED_PROFILES,
   SYNTHETIC_PROFILES,
-  MSE_PROFILES,
   ARCHIVE_PROFILES,
+  ARCHIVED_PROFILES,
   type DataScope,
 } from '../profileMeta';
 
@@ -234,11 +232,9 @@ export function Filters({ filters, options, dataScope, onToggle, onClear }: Filt
 
   const allProfiles = useMemo(
     () => Array.from(
-      dataScope === 'archive' ? ARCHIVE_PROFILES :
-      dataScope === 'synthetic' ? SYNTHETIC_PROFILES :
-      dataScope === 'fixed' ? FIXED_PROFILES :
-      dataScope === 'mse' ? MSE_PROFILES :
-      CURRENT_PROFILES,
+      dataScope === 'trace_replay' ? ARCHIVE_PROFILES :
+      dataScope === 'synthetic_distributional' ? SYNTHETIC_PROFILES :
+      ARCHIVED_PROFILES,
     )
       .filter((profile) => PROFILE_META[profile])
       .sort((a, b) => profileRank(a) - profileRank(b) || a.localeCompare(b)),

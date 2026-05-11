@@ -9,15 +9,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dashboardRoot = path.resolve(__dirname, "..");
 
-const requiredCurrentProfiles = [
-  "chat-singleturn",
-  "coding-singleturn",
-  "chat-multiturn",
-  "osworld-multiturn",
-  "swebench-multiturn",
-  "terminalbench-multiturn",
-];
-
 function runTsx(args: string[], env: NodeJS.ProcessEnv = {}) {
   return spawnSync("npx", ["tsx", ...args], {
     cwd: dashboardRoot,
@@ -26,7 +17,7 @@ function runTsx(args: string[], env: NodeJS.ProcessEnv = {}) {
   });
 }
 
-function baseRow(profile = "chat-singleturn", concurrency = 320, dataScope = "current") {
+function baseRow(profile = "chat-singleturn", concurrency = 320, dataScope = "trace_replay") {
   return {
     config: {
       model: "/models/Llama-3.1-8B-Instruct",
@@ -51,7 +42,7 @@ function baseRow(profile = "chat-singleturn", concurrency = 320, dataScope = "cu
 
 function writeResult(
   root: string,
-  scope: "synthetic" | "current" | "fixed",
+  scope: "trace_replay" | "synthetic_distributional" | "archived",
   profile = "chat-singleturn",
   concurrency = 320,
 ) {
@@ -66,9 +57,9 @@ function writeResult(
 function testBuildDataKeepsScopesSeparate(tmp: string) {
   const resultsDir = path.join(tmp, "results");
   const outputPath = path.join(tmp, "data.json");
-  writeResult(resultsDir, "synthetic", "chat-singleturn-synth");
-  writeResult(resultsDir, "current");
-  writeResult(resultsDir, "fixed");
+  writeResult(resultsDir, "synthetic_distributional", "chat-singleturn-synth");
+  writeResult(resultsDir, "trace_replay");
+  writeResult(resultsDir, "archived");
 
   const result = runTsx(["scripts/build-data.ts"], {
     BENCHMARK_RESULTS_DIR: resultsDir,
@@ -78,27 +69,20 @@ function testBuildDataKeepsScopesSeparate(tmp: string) {
 
   const rows = JSON.parse(fs.readFileSync(outputPath, "utf8"));
   const scopes = rows.map((row: { dataScope: string }) => row.dataScope).sort();
-  assert.deepEqual(scopes, ["current", "fixed", "synthetic"]);
+  assert.deepEqual(scopes, ["archived", "synthetic_distributional", "trace_replay"]);
 }
 
 function testValidateRejectsEmptyCompletedScope(tmp: string) {
-  const dataPath = path.join(tmp, "data-without-fixed.json");
+  const dataPath = path.join(tmp, "data-without-archived.json");
   const sweepStatePath = path.join(tmp, "sweep-state.json");
 
-  const rows = requiredCurrentProfiles.map((profile) => ({
-    dataScope: "current",
-    config: {
-      profile,
-      concurrency: 320,
-    },
-  }));
-  rows.push({
-    dataScope: "archive",
+  const rows = [{
+    dataScope: "trace_replay",
     config: {
       profile: "chat-singleturn",
       concurrency: 320,
     },
-  });
+  }];
 
   fs.writeFileSync(dataPath, JSON.stringify(rows, null, 2));
   fs.writeFileSync(
@@ -107,7 +91,7 @@ function testValidateRejectsEmptyCompletedScope(tmp: string) {
       {
         cells: [
           {
-            data_scope: "fixed",
+            data_scope: "archived",
             status: "done",
             profiles: ["chat-singleturn"],
             concurrencies: [200],
@@ -122,8 +106,8 @@ function testValidateRejectsEmptyCompletedScope(tmp: string) {
   const result = runTsx(["scripts/validate-data.ts", dataPath], {
     SWEEP_STATE_PATH: sweepStatePath,
   });
-  assert.notEqual(result.status, 0, "validation should fail when expected fixed scope is empty");
-  assert.match(result.stderr + result.stdout, /fixed/);
+  assert.notEqual(result.status, 0, "validation should fail when expected archived scope is empty");
+  assert.match(result.stderr + result.stdout, /archived/);
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "agentic-serve-data-pipeline-"));

@@ -24,6 +24,7 @@ from typing import Any
 
 import yaml
 
+import compile_sweep
 import publish_sweep_state
 
 
@@ -76,7 +77,7 @@ def load_local_generated_state(sweep_yaml: Path, state_dir: Path) -> dict[str, A
 
 def cell_key(cell: dict[str, Any]) -> CellKey:
     return (
-        str(cell.get("data_scope") or "current"),
+        str(cell.get("source_scope") or compile_sweep.dashboard_scope_for(str(cell.get("data_scope") or "archived"))),
         str(cell.get("host", "")),
         str(cell.get("model", "")),
         int(cell.get("tp", 0) or 0),
@@ -87,7 +88,7 @@ def cell_key(cell: dict[str, Any]) -> CellKey:
 
 def profile_key(item: dict[str, Any]) -> ProfileKey:
     return (
-        str(item.get("data_scope") or "current"),
+        compile_sweep.dashboard_scope_for(str(item.get("data_scope") or "archived")),
         str(item.get("host", "")),
         str(item.get("model", "")),
         int(item.get("tp", 0) or 0),
@@ -115,23 +116,18 @@ def mode_to_data_mode(mode: str) -> str:
 
 
 def scope_matches(item: dict[str, Any], scope: str) -> bool:
-    return scope == "all" or str(item.get("data_scope") or "current") == scope
-
-
-def coverage_grid_scope(scope: str) -> str:
-    return "fixed" if scope == "latest" else scope
+    return scope == "all" or compile_sweep.dashboard_scope_for(str(item.get("data_scope") or "archived")) == compile_sweep.dashboard_scope_for(scope)
 
 
 def expected_points_from_state(state: dict[str, Any], scope: str) -> set[PointKey]:
     blocked_profiles = {profile_key(item) for item in state.get("profile_infeasible", [])}
     points: set[PointKey] = set()
-    grid_scope = coverage_grid_scope(scope)
     for cell in state.get("cells", []):
-        if not scope_matches(cell, grid_scope):
+        if not scope_matches(cell, scope):
             continue
         if cell.get("status") == "known_oom":
             continue
-        data_scope = str(cell.get("data_scope") or "current")
+        data_scope = compile_sweep.dashboard_scope_for(str(cell.get("data_scope") or "archived"))
         host = str(cell.get("host", ""))
         model = str(cell.get("model", ""))
         tp = int(cell.get("tp", 0) or 0)
@@ -152,7 +148,8 @@ def expected_points_from_state(state: dict[str, Any], scope: str) -> set[PointKe
 def data_points(data: list[dict[str, Any]], scope: str) -> set[PointKey]:
     points: set[PointKey] = set()
     for row in data:
-        if scope != "all" and row.get("dataScope") != scope:
+        row_scope = compile_sweep.dashboard_scope_for(str(row.get("dataScope") or "trace_replay"))
+        if scope != "all" and row_scope != compile_sweep.dashboard_scope_for(scope):
             continue
         cfg = row.get("config") or {}
         hardware = row.get("hardware")
@@ -172,7 +169,7 @@ def data_points(data: list[dict[str, Any]], scope: str) -> set[PointKey]:
 
 
 def data_scope_counts(data: list[dict[str, Any]]) -> Counter[str]:
-    return Counter(str(row.get("dataScope") or "unknown") for row in data)
+    return Counter(compile_sweep.dashboard_scope_for(str(row.get("dataScope") or "unknown")) for row in data)
 
 
 def state_status_counts(state: dict[str, Any]) -> Counter[str]:
@@ -420,7 +417,22 @@ def main() -> int:
     parser.add_argument("--published-base", default=DEFAULT_PUBLIC_BASE)
     parser.add_argument("--published-state", default=None)
     parser.add_argument("--published-data", default=None)
-    parser.add_argument("--scope", choices=("synthetic", "latest", "current", "fixed", "mse", "archive", "all"), default="current")
+    parser.add_argument(
+        "--scope",
+        choices=(
+            "trace_replay",
+            "synthetic_distributional",
+            "archived",
+            "synthetic",
+            "latest",
+            "current",
+            "fixed",
+            "mse",
+            "archive",
+            "all",
+        ),
+        default="synthetic_distributional",
+    )
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--limit", type=int, default=25)
     parser.add_argument("--fail-on-drift", action="store_true")

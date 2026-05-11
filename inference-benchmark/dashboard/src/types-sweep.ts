@@ -4,7 +4,8 @@
 export type CellStatus = 'pending' | 'running' | 'done' | 'skipped' | 'failed' | 'known_oom';
 
 export interface SweepCell {
-  data_scope?: 'synthetic' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
+  data_scope?: 'trace_replay' | 'synthetic_distributional' | 'archived' | 'synthetic' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
+  source_scope?: string;
   host: string;
   hw_label: string;  // e.g. "A100-40GBx4"
   model: string;
@@ -33,7 +34,8 @@ export interface SweepModel {
 }
 
 export interface SweepProfileInfeasible {
-  data_scope?: 'synthetic' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
+  data_scope?: 'trace_replay' | 'synthetic_distributional' | 'archived' | 'synthetic' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
+  source_scope?: string;
   host: string;
   hw_label: string;
   model: string;

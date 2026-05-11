@@ -103,6 +103,8 @@ class DistributionalSampler:
         distribution: TraceDistribution,
         *,
         seed: int = 42,
+        min_turns: int = 1,
+        max_turns: int | None = None,
         max_context_tokens: int | None = None,
         context_safety_margin_tokens: int = DEFAULT_CONTEXT_SAFETY_MARGIN_TOKENS,
         system_prompt: str = "",
@@ -114,6 +116,12 @@ class DistributionalSampler:
             raise ValueError("Distribution has no turn samples")
         if max_context_tokens is not None and max_context_tokens <= 0:
             raise ValueError("max_context_tokens must be positive when provided")
+        if min_turns <= 0:
+            raise ValueError("min_turns must be positive")
+        if max_turns is not None and max_turns <= 0:
+            raise ValueError("max_turns must be positive when provided")
+        if max_turns is not None and min_turns > max_turns:
+            raise ValueError("min_turns must be <= max_turns")
         if context_safety_margin_tokens < 0:
             raise ValueError("context_safety_margin_tokens must be non-negative")
         if (
@@ -124,11 +132,21 @@ class DistributionalSampler:
 
         self.distribution = distribution
         self.rng = random.Random(seed)
+        self.min_turns = min_turns
+        self.max_turns = max_turns
         self.max_context_tokens = max_context_tokens
         self.context_safety_margin_tokens = context_safety_margin_tokens
         self.system_prompt = system_prompt
         self._turns_by_index = distribution.turns_by_index
-        self._source_sessions_by_id = self._group_source_sessions_by_id(distribution.turns)
+        self._turn_counts = self._eligible_turn_counts(distribution.turn_counts)
+        if not self._turn_counts:
+            raise ValueError(
+                f"Distribution has no turn-count samples compatible with "
+                f"min_turns={min_turns}, max_turns={max_turns}"
+            )
+        self._source_sessions_by_id = self._eligible_source_sessions_by_id(
+            self._group_source_sessions_by_id(distribution.turns)
+        )
         self._source_sessions = tuple(self._source_sessions_by_id.values())
         self._tokenizer_name = tokenizer_name
         self._tokenizer = None
@@ -160,7 +178,7 @@ class DistributionalSampler:
         if self._source_sessions:
             samples = self.rng.choice(self._source_sessions)
             return self._build_session_from_samples(session_id=session_id, samples=samples)
-        turn_count = self.rng.choice(self.distribution.turn_counts)
+        turn_count = self.rng.choice(self._turn_counts)
         return self.sample_session_with_turn_count(session_id=session_id, turn_count=turn_count)
 
     def sample_sessions(self, num_sessions: int) -> list[SyntheticSession]:
@@ -201,6 +219,10 @@ class DistributionalSampler:
     def sample_session_with_turn_count(self, *, session_id: int, turn_count: int) -> SyntheticSession:
         if turn_count <= 0:
             raise ValueError("turn_count must be positive")
+        if turn_count < self.min_turns:
+            raise ValueError("turn_count must be >= min_turns")
+        if self.max_turns is not None:
+            turn_count = min(turn_count, self.max_turns)
         samples = [self._sample_turn(turn_index) for turn_index in range(turn_count)]
         return self._build_session_from_samples(session_id=session_id, samples=samples)
 
@@ -438,6 +460,29 @@ class DistributionalSampler:
             for source_session_id, samples in grouped.items()
             if samples
         }
+
+    def _eligible_turn_counts(self, turn_counts: tuple[int, ...]) -> tuple[int, ...]:
+        eligible: list[int] = []
+        for count in turn_counts:
+            if count < self.min_turns:
+                continue
+            if self.max_turns is not None:
+                count = min(count, self.max_turns)
+            eligible.append(count)
+        return tuple(eligible)
+
+    def _eligible_source_sessions_by_id(
+        self,
+        sessions_by_id: dict[str, tuple[TraceTurnSample, ...]],
+    ) -> dict[str, tuple[TraceTurnSample, ...]]:
+        eligible: dict[str, tuple[TraceTurnSample, ...]] = {}
+        for source_session_id, samples in sessions_by_id.items():
+            if len(samples) < self.min_turns:
+                continue
+            if self.max_turns is not None:
+                samples = samples[: self.max_turns]
+            eligible[source_session_id] = samples
+        return eligible
 
 
 def _calibrated_text(label: str, target_tokens: int, tokenizer, rng: random.Random) -> str:

@@ -462,6 +462,16 @@ def resolve_multi_turn_num_sessions(
     return effective_num_sessions, "concurrency_floor"
 
 
+def normalize_dashboard_scope(scope: str) -> str:
+    if scope in {"latest", "synthetic", "synthetic_distributional"}:
+        return "synthetic_distributional"
+    if scope in {"archive", "trace_replay"}:
+        return "trace_replay"
+    if scope in {"current", "canonical", "fixed", "fixed-grid", "mse", "archived"}:
+        return "archived"
+    return scope
+
+
 def get_args():
     parser = argparse.ArgumentParser(description="inference-benchmark runner")
     parser.add_argument("--url", required=False, help="Server endpoint URL")
@@ -513,8 +523,24 @@ def get_args():
     parser.add_argument("--mode", choices=["stress-test", "single-turn", "multi-turn"],
                         help="Benchmark mode (sets profile defaults and required flags). "
                              "Use --profile for a specific profile within a mode.")
-    parser.add_argument("--scope", choices=["synthetic", "latest", "current", "archive", "fixed", "mse"],
-                        default=None, help="Dashboard scope override (default: *-synth→synthetic, active→fixed, inactive→archive)")
+    parser.add_argument(
+        "--scope",
+        choices=[
+            "synthetic_distributional",
+            "trace_replay",
+            "archived",
+            "synthetic",
+            "latest",
+            "current",
+            "canonical",
+            "archive",
+            "fixed",
+            "fixed-grid",
+            "mse",
+        ],
+        default=None,
+        help="Dashboard scope override (default: *-synth→synthetic_distributional, active→archived, inactive→trace_replay)",
+    )
     parser.add_argument("--min-success-rate", type=float, default=0.75, dest="min_success_rate",
                         help="Minimum success rate (0.0-1.0). Runs below this threshold exit with an error. Default: 0.75")
     parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
@@ -601,7 +627,9 @@ if __name__ == "__main__":
     )
     scope = args.scope
     if scope is None:
-        scope = "synthetic" if profile_name.endswith("-synth") else ("fixed" if profile.active else "archive")
+        scope = "synthetic_distributional" if profile_name.endswith("-synth") else ("archived" if profile.active else "trace_replay")
+    else:
+        scope = normalize_dashboard_scope(scope)
     config = {
         **vars(args),
         "profile": profile_name,

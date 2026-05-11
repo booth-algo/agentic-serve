@@ -13,7 +13,7 @@
 #
 # Useful overrides:
 #   PROFILE=swebench-multiturn-mse-short      # or terminalbench-multiturn-mse-short
-#   CONC=5 SESSIONS=40 OUT_DIR=results/mse_validation_fast
+#   CONC=5 SESSIONS=40 OUT_DIR=results/archived/mse_validation_fast
 #   PORT=8089 GPU_MEM=0.75 MAX_LEN=32768 CUDA_VISIBLE_DEVICES=0
 #   SOURCE_SESSION_IDS_FILE=ids.txt            # optional source-locked MSE ablation
 set -euo pipefail
@@ -29,7 +29,7 @@ PY="${3:-${PY:-python3}}"
 PROFILE="${PROFILE:-swebench-multiturn-mse-short}"
 CONC="${CONC:-5}"
 SESSIONS="${SESSIONS:-40}"
-OUT_DIR="${OUT_DIR:-results/mse_validation_fast}"
+OUT_DIR="${OUT_DIR:-results/archived/mse_validation_fast}"
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
 GPU_MEM="${GPU_MEM:-0.75}"
@@ -123,7 +123,7 @@ else
 fi
 
 echo "=== Fast MSE validation: $PROFILE C=$CONC sessions=$SESSIONS ==="
-OPENAI_API_KEY="$API_KEY" DASHBOARD_SCOPE=mse RESULT_SCOPE=mse "$PY" -m src.benchmark.runner \
+OPENAI_API_KEY="$API_KEY" DASHBOARD_SCOPE=archived RESULT_SCOPE=archived/mse "$PY" -m src.benchmark.runner \
     --url "http://127.0.0.1:${PORT}/v1/chat/completions" \
     --model "$MODEL_PATH" \
     --backend vllm \
@@ -136,7 +136,7 @@ OPENAI_API_KEY="$API_KEY" DASHBOARD_SCOPE=mse RESULT_SCOPE=mse "$PY" -m src.benc
     --max-model-len "$MAX_LEN" \
     --gpu-memory-utilization "$GPU_MEM" \
     --tensor-parallel-size "$TP" \
-    --scope mse \
+    --scope archived \
     --warmup "$WARMUP" \
     --timeout "$TIMEOUT" \
     --min-success-rate "$MIN_SUCCESS_RATE" \

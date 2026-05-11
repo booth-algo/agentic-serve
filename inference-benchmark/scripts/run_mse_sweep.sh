@@ -4,7 +4,7 @@
 #
 # Usage (on GPU host):
 #   bash run_mse_sweep.sh /data/models/Llama-3.1-8B-Instruct 1 H100 \
-#       /data/kevinlau/miniconda3/bin/python /tmp/results/mse_sweep
+#       /data/kevinlau/miniconda3/bin/python /tmp/results/archived/mse_sweep
 #
 # DATASETS: swebench terminalbench osworld
 # CONCS: 40 80
@@ -65,7 +65,7 @@ run_one() {
     [[ "$nreq" -lt 20 ]] && nreq=20
 
     echo "  [$tag] C=$concurrency ..."
-    "$PY" -m src.benchmark.runner \
+    DASHBOARD_SCOPE=archived RESULT_SCOPE=archived/mse "$PY" -m src.benchmark.runner \
         --url "http://localhost:$PORT/v1/chat/completions" \
         --model "$MODEL_PATH" \
         --backend vllm \
@@ -77,7 +77,7 @@ run_one() {
         --max-model-len "$MAX_LEN" \
         --gpu-memory-utilization "$GPU_MEM" \
         --tensor-parallel-size "$TP" \
-        --scope mse \
+        --scope archived \
         --warmup 2 \
         --timeout 300 \
         --api-key "$API_KEY" \

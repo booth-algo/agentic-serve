@@ -19,26 +19,26 @@ This is the sweep surface to run now:
 Code now treats `synthetic` as its own scope instead of copying fixed coverage under the label `latest`.
 
 - `scripts/compile_sweep.py`
-  - `--scope synthetic` derives from the fixed C=200/320 grid.
+  - `--scope synthetic_distributional` derives from the fixed C=200/320 grid.
   - Fixed profiles are remapped to `*-synth` names.
   - Every emitted row includes:
     - `DISTRIBUTIONAL_SYNTHETIC_STYLE=code`
     - `DISTRIBUTIONAL_TARGET_CHARS_PER_TOKEN=3.8`
     - `DISTRIBUTIONAL_PREFIX_AWARE=1`
     - `DISTRIBUTIONAL_SHARED_PREFIX_TOKENS=1024`
-    - `DASHBOARD_SCOPE=synthetic`
-    - `RESULT_SCOPE=synthetic`
+    - `DASHBOARD_SCOPE=synthetic_distributional`
+    - `RESULT_SCOPE=synthetic_distributional`
 - `scripts/publish_sweep_state.py`
   - materializes synthetic cells in `sweep-state.json`, so dashboard coverage tracks synthetic status directly.
 - `src/workloads/profiles.py`
   - adds the five `*-synth` profiles.
 - `src/benchmark/runner.py`
-  - accepts `--scope synthetic`.
-  - defaults `*-synth` profiles to `dashboard_scope=synthetic`.
+  - accepts `--scope synthetic_distributional`.
+  - defaults `*-synth` profiles to `dashboard_scope=synthetic_distributional`.
   - keeps the existing guardrail: multi-turn sessions are floored at concurrency, so `num_sessions=1` profiles do not cap C=200/320 runs.
 - Dashboard
   - UI scope is now `Synthetic replay`, not `Latest runs`.
-  - legacy `scope=latest` URLs/localStorage normalize to `synthetic`.
+  - legacy `scope=latest` URLs/localStorage normalize to `synthetic_distributional`.
   - serving predictions are not shown for synthetic until synthetic predictor artifacts exist.
 
 ## Current Generated Matrix
@@ -47,7 +47,7 @@ Generated locally with:
 
 ```bash
 cd /root/agentic-serve/inference-benchmark
-python3 scripts/compile_sweep.py --scope synthetic --out scripts/bench_jobs.txt
+python3 scripts/compile_sweep.py --scope synthetic_distributional --out scripts/bench_jobs.txt
 python3 scripts/publish_sweep_state.py --no-upload
 ```
 
@@ -77,16 +77,16 @@ Do the launch from the Claude Code sweep session, not from this Codex editing se
 cd /root/agentic-serve/inference-benchmark
 
 # Recreate the matrix after pulling/syncing these edits.
-python3 scripts/compile_sweep.py --scope synthetic --out scripts/bench_jobs.txt
+python3 scripts/compile_sweep.py --scope synthetic_distributional --out scripts/bench_jobs.txt
 
 # Sanity checks before launch.
-grep -q '# SCOPE: synthetic' scripts/bench_jobs.txt
+grep -q '# SCOPE: synthetic_distributional' scripts/bench_jobs.txt
 ! grep -q 'coding-singleturn' scripts/bench_jobs.txt
 grep -q 'DISTRIBUTIONAL_PREFIX_AWARE=1' scripts/bench_jobs.txt
 grep -q 'swebench-multiturn-synth' scripts/bench_jobs.txt
 
 # Launch using the existing orchestrator flow.
-BENCH_JOBS_SCOPE=synthetic JOBS_SCOPE=synthetic bash scripts/bench_orchestrator.sh
+BENCH_JOBS_SCOPE=synthetic_distributional JOBS_SCOPE=synthetic_distributional bash scripts/bench_orchestrator.sh
 ```
 
 Recommended monitor pane:
@@ -105,7 +105,7 @@ Coverage reconciliation:
 ```bash
 cd /root/agentic-serve/inference-benchmark
 python3 scripts/reconcile_sweep_coverage.py \
-  --scope synthetic \
+  --scope synthetic_distributional \
   --write-missing-jobs /tmp/bench_jobs/missing_synthetic_bench_jobs.txt \
   --report /tmp/synthetic-coverage-report.md
 ```
