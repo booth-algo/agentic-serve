@@ -11,5 +11,6 @@ This package owns the serving prediction path used for dashboard validation:
 - calibration/export/validation scripts in `training/`, `validate.py`, and
   `export_serving_predictions.py`
 
-The older LLMCompass-derived simulator and per-op/per-kernel training stack now
-lives under `llm_predict_legacy/`.
+The older LLMCompass-derived simulator and per-op/per-kernel training stack has
+been removed from the repository. Historical predictor/profiling dashboard JSON
+artifacts remain published under the dashboard data feed.

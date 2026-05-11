@@ -92,10 +92,9 @@ The safe sequence for future cleanup is:
 The `data/`, `results/trace_replay/`,
 `results/synthetic_distributional/`, and `json/current/` prefixes are the
 active R2 surfaces. `results/archived/` is retained for old canonical,
-fixed-grid, MSE, and dated cleanup runs. Predictor/profiling inputs should be
-restored from
-`archive/2026-05-10-prefix-cleanup/` only if a future R2-based rebuild path
-requires them; the current server rebuild path uses local storage.
+fixed-grid, MSE, and dated cleanup runs. Predictor/profiling JSONs are retained
+as archived dashboard artifacts; their former local source tree was removed from
+the repository, so regenerate them only from an explicit external archive.
 
 ## Helper
 

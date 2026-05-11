@@ -1,4 +1,4 @@
-// Predictor profiler coverage published by scripts/publish_predictor_coverage.py.
+// Archived predictor profiler coverage published as predictor-coverage.json.
 // Mirrors types-sweep.ts shape: per-(gpu, model) row-count breakdowns with
 // expected denominators so the dashboard can render heatmap cells the same
 // way the bench coverage page does.

@@ -65,11 +65,6 @@ agentic-serve/
 │   ├── training/            # Current calibration/training scripts
 │   ├── configs/             # GPU and model configs
 │   └── data/                # Current predictor artifacts
-├── llm_predict_legacy/      # Legacy GPU performance models and predictors
-│   ├── models/              # Hardware, software, serving, and cost models
-│   ├── predictors/          # Per-kernel and per-op predictor runtimes
-│   ├── training/            # Predictor labeling, training, and validation
-│   └── profiling/           # Predictor artifacts and profiling data
 ```
 
 ## Quick Start

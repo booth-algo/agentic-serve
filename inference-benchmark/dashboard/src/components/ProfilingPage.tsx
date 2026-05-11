@@ -244,7 +244,7 @@ export function ProfilingPage({ profilingState, loading }: ProfilingPageProps) {
       <div className="flex h-64 items-center justify-center rounded-lg border border-[#21262d] bg-[#161b22]">
         <div className="text-center text-sm text-[#8b949e]">
           <div className="mb-2 text-base font-semibold text-[#c9d1d9]">No predictor data available</div>
-          <div>Run <code className="rounded bg-[#21262d] px-1">python scripts/publish_profiling_state.py --no-upload</code> to generate profiling-state.json</div>
+          <div>Archived predictor data is published as profiling-state.json when available.</div>
         </div>
       </div>
     );
