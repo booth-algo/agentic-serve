@@ -18,11 +18,17 @@ cat > "$JOBS_FILE" <<'EOF'
 # Format: HOST|MODEL_PATH|TP|SHORT|MODE|BACKEND|MAX_LEN|GPU_MEM|CONCS|PROFILES|EXTRA_ENV
 gpu-4|/models/Tiny|1|Tiny|single|vllm|2048|0.5|1|chat-singleturn-synth|RESULT_SCOPE=synthetic_distributional DASHBOARD_SCOPE=synthetic_distributional
 3090|/models/Tiny|1|Tiny|multi|sglang|2048|0.5|1|chat-multiturn-synth|RESULT_SCOPE=synthetic_distributional DASHBOARD_SCOPE=synthetic_distributional
+2080ti|/models/Busy|1|Busy|single|vllm|2048|0.5|1|chat-singleturn-synth|CUDA_VISIBLE_DEVICES=1 RESULT_SCOPE=synthetic_distributional DASHBOARD_SCOPE=synthetic_distributional
+2080ti|/models/Tiny|1|Tiny|single|vllm|2048|0.5|1|chat-singleturn-synth|CUDA_VISIBLE_DEVICES=1 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH RESULT_SCOPE=synthetic_distributional DASHBOARD_SCOPE=synthetic_distributional
 EOF
 
 mkdir -p "$STATE_ROOT/synthetic"
 printf 'running\n' > "$STATE_ROOT/synthetic/3090_Tiny_tp1_multi_sglang.status"
 printf '8089\n' > "$STATE_ROOT/synthetic/3090_Tiny_tp1_multi_sglang.port"
+mkdir -p "$STATE_ROOT/synthetic_distributional"
+printf 'running\n' > "$STATE_ROOT/synthetic_distributional/2080ti_Busy_tp1_single.status"
+printf '8090\n' > "$STATE_ROOT/synthetic_distributional/2080ti_Busy_tp1_single.port"
+printf '1\n' > "$STATE_ROOT/synthetic_distributional/2080ti_Busy_tp1_single.gpus"
 
 BENCH_JOBS_FILE="$JOBS_FILE" \
 BENCH_JOBS_SCOPE=synthetic \
@@ -38,6 +44,8 @@ grep -q "dry-run enabled" "$LOG"
 grep -q "remote slot probing disabled" "$LOG"
 grep -q "gpu-4_Tiny_tp1_single: dry-run would run on gpu-4" "$LOG"
 grep -q "3090_Tiny_tp1_multi_sglang: dry-run would inspect remote outputs" "$LOG"
+grep -q "2080ti_Tiny_tp1_single: preferred CUDA_VISIBLE_DEVICES=\\[1\\] busy; flexing to \\[0\\]" "$LOG"
+grep -q "2080ti_Tiny_tp1_single: dry-run would run on 2080ti: setsid bash -c 'PORT=8089 CUDA_VISIBLE_DEVICES=0 PATH=" "$LOG"
 grep -q "dry-run: skipping sweep-state publish" "$LOG"
 
 if [[ -e "$STATE_ROOT/synthetic_distributional/gpu-4_Tiny_tp1_single.status" ]]; then

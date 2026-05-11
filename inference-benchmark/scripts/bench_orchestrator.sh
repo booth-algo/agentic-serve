@@ -25,6 +25,7 @@ PROFILE="${AWS_PROFILE:-r2}"
 DEFAULT_RESULT_SCOPE="${RESULT_SCOPE:-}"
 DRY_RUN="${BENCH_ORCHESTRATOR_DRY_RUN:-0}"
 SKIP_REMOTE_PROBE="${BENCH_ORCHESTRATOR_SKIP_REMOTE_PROBE:-0}"
+FLEXIBLE_PINNED_GPUS="${BENCH_FLEXIBLE_PINNED_GPUS:-1}"
 MAX_DISPATCHES="${BENCH_ORCHESTRATOR_MAX_DISPATCHES:-0}"
 DISPATCHES=0
 MAX_OOM_RETRIES="${BENCH_ORCHESTRATOR_MAX_OOM_RETRIES:-3}"
@@ -132,6 +133,16 @@ extra_env_value() {
             return
         fi
     done
+}
+
+remove_extra_env_key() {
+    local key="$1" text="${2:-}" part
+    local out=()
+    for part in $text; do
+        [[ "$part" == "$key="* ]] && continue
+        out+=("$part")
+    done
+    echo "${out[*]}"
 }
 
 row_result_scope() {
@@ -500,14 +511,23 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             fi
 
             if [[ -n "$CELL_CVD" ]]; then
-                # Cell pins specific GPUs — check they're all free
+                # Treat legacy CUDA_VISIBLE_DEVICES rows as preferred placement.
+                # If the requested devices are busy and flexible placement is
+                # enabled, fall back to any free GPU set of the same TP width.
                 SLOT_FREE=1
                 USED=" ${HOST_USED_GPUS[$HOST]:-} "
                 for g in ${CELL_CVD//,/ }; do
                     [[ "$USED" == *" $g "* ]] && SLOT_FREE=0 && break
                 done
-                [[ "$SLOT_FREE" == "0" ]] && continue
-                SLOT_GPUS="$CELL_CVD"
+                if [[ "$SLOT_FREE" == "1" ]]; then
+                    SLOT_GPUS="$CELL_CVD"
+                elif truthy "$FLEXIBLE_PINNED_GPUS"; then
+                    SLOT_GPUS=$(find_free_gpus "$HOST" "$TP")
+                    [[ -z "$SLOT_GPUS" ]] && continue
+                    log "$JID: preferred CUDA_VISIBLE_DEVICES=[$CELL_CVD] busy; flexing to [$SLOT_GPUS]"
+                else
+                    continue
+                fi
             else
                 SLOT_GPUS=$(find_free_gpus "$HOST" "$TP")
                 [[ -z "$SLOT_GPUS" ]] && continue
@@ -533,13 +553,13 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             log "$JID: dispatching on $HOST:$SLOT_PORT gpus=[$SLOT_GPUS] ($BACKEND, scope=$ROW_DASHBOARD_SCOPE, storage=$ROW_STORAGE_SCOPE, max_len=$RUN_MAX_LEN, mode=$MODE)"
             write_status "$JID" running
 
-            # Build env: PORT + CUDA_VISIBLE_DEVICES (unless cell already pins)
-            SLOT_ENV="PORT=$SLOT_PORT"
-            if [[ -z "$CELL_CVD" ]]; then
-                SLOT_ENV="$SLOT_ENV CUDA_VISIBLE_DEVICES=$SLOT_GPUS"
-            fi
+            # Build env with the scheduler's chosen slot. Strip legacy
+            # CUDA_VISIBLE_DEVICES from EXTRA_ENV so preferred pins cannot
+            # override a flexible placement decision at launch time.
+            SLOT_ENV="PORT=$SLOT_PORT CUDA_VISIBLE_DEVICES=$SLOT_GPUS"
+            LAUNCH_EXTRA_ENV=$(remove_extra_env_key "CUDA_VISIBLE_DEVICES" "$EXTRA_ENV")
 
-            CMD="$SLOT_ENV ${EXTRA_ENV} RESULT_SCOPE=${ROW_STORAGE_SCOPE} DASHBOARD_SCOPE=${ROW_DASHBOARD_SCOPE} bash /tmp/inference-benchmark/scripts/${SCRIPT} \
+            CMD="$SLOT_ENV ${LAUNCH_EXTRA_ENV} RESULT_SCOPE=${ROW_STORAGE_SCOPE} DASHBOARD_SCOPE=${ROW_DASHBOARD_SCOPE} bash /tmp/inference-benchmark/scripts/${SCRIPT} \
                 ${MODEL_PATH} ${TP} ${SHORT} ${BACKEND} ${OUT_DIR_REMOTE} \
                 ${PY} ${GPU_MEM} ${RUN_MAX_LEN} \"${CONCS}\" \"${PROFILES}\""
             REMOTE_LOG="/tmp/bench_${SHORT}_tp${TP}_${MODE}_${BACKEND}_p${SLOT_PORT}.log"
