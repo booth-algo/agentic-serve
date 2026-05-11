@@ -55,7 +55,7 @@ export function isDataScope(value: string | null): value is DataScope {
 }
 
 export function normalizeDataScope(value: string | null): DataScope | null {
-  if (value === 'latest' || value === 'synthetic') return 'synthetic_distributional';
+  if (value === 'latest' || value === 'synthetic' || value === 'synthetic-distributional') return 'synthetic_distributional';
   if (value === 'archive') return 'trace_replay';
   if (value === 'current' || value === 'canonical' || value === 'fixed' || value === 'fixed-grid' || value === 'mse') return 'archived';
   return isDataScope(value) ? value : null;

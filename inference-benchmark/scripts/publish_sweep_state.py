@@ -153,10 +153,10 @@ def build_state(manifest: dict) -> dict:
         jid = job_id(host_name, model, tp, mode, backend)
         rt = read_state(jid, state_scope)
         resolved = resolve(cell, manifest)
-        source_profile_reasons = (
-            {}
-            if data_scope == "synthetic_distributional"
-            else profile_infeasible_reasons(source_cell, manifest)
+        source_profile_reasons = profile_infeasible_reasons(
+            source_cell,
+            manifest,
+            ignore_max_len_rules=data_scope == "synthetic_distributional",
         )
         profile_reasons = {}
         for profile, reason in source_profile_reasons.items():

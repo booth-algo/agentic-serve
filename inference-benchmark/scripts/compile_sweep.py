@@ -146,11 +146,13 @@ def _matches_rule(cell: dict, resolved: dict, rule: dict, profile: str) -> bool:
     return True
 
 
-def profile_infeasible_reasons(cell: dict, manifest: dict) -> dict[str, str]:
+def profile_infeasible_reasons(cell: dict, manifest: dict, *, ignore_max_len_rules: bool = False) -> dict[str, str]:
     resolved = resolve(cell, manifest)
     reasons: dict[str, str] = {}
     for profile in resolved["profiles"]:
         for rule in manifest.get("profile_infeasible", []):
+            if ignore_max_len_rules and any(str(key).startswith("max_len_") for key in rule):
+                continue
             if _matches_rule(cell, resolved, rule, str(profile)):
                 reasons[str(profile)] = str(rule["reason"])
                 break
@@ -304,7 +306,14 @@ def compile_jobs(manifest: dict, scope: str = "all"):
         if reason:
             skipped.append((cell, "infeasible", reason))
             continue
-        profile_reasons = profile_infeasible_reasons(cell, manifest)
+        # Synthetic profiles are generated to fit the requested launch shape,
+        # so they do not inherit real-trace max_len profile filters. Keep
+        # structural filters such as unsupported GPU kernels.
+        profile_reasons = profile_infeasible_reasons(
+            cell,
+            manifest,
+            ignore_max_len_rules=dashboard_scope_for(scope) == "synthetic_distributional",
+        )
         if profile_reasons:
             resolved = resolve(cell, manifest)
             runnable_profiles = [
