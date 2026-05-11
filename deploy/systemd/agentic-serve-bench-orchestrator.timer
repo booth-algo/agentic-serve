@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Agentic Serve GPU benchmark orchestration every 10 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+RandomizedDelaySec=60s
+Persistent=true
+Unit=agentic-serve-bench-orchestrator.service
+
+[Install]
+WantedBy=timers.target

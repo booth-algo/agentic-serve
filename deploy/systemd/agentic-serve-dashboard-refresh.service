@@ -1,0 +1,14 @@
+[Unit]
+Description=Rebuild Agentic Serve dashboard artifacts from local benchmark results
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/agentic-serve/inference-benchmark
+Environment=BENCHMARK_RESULTS_DIR=/mnt/100g/agent-bench/results
+Environment=BENCH_STATE_ROOT=/mnt/100g/agent-bench/state
+Environment=DASHBOARD_JSON_BASE=/agentic-serve
+Environment=GPU_STATE_SSH_TIMEOUT=12
+Environment=MIRROR_R2=1
+ExecStart=/usr/bin/env bash /root/agentic-serve/inference-benchmark/scripts/rebuild-local-dashboard.sh

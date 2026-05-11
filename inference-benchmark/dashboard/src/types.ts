@@ -16,7 +16,7 @@ export interface BenchmarkConfig {
   mode?: string | null;
   benchmark_schema_version?: number;
   workload_schema_version?: string;
-  dashboard_scope?: 'synthetic' | 'latest' | 'current' | 'archive' | 'fixed' | 'mse';
+  dashboard_scope?: 'trace_replay' | 'synthetic_distributional' | 'archived' | 'synthetic' | 'latest' | 'current' | 'archive' | 'fixed' | 'mse';
   profile_metadata?: Record<string, unknown>;
   prediction_metadata?: Record<string, unknown>;
 }
@@ -103,7 +103,7 @@ export interface BenchmarkResult {
   seriesKey: string;
   filename: string;
   engineVersion?: string;  // "0.19.0" — from _engine_version.txt sidecar or fallback
-  dataScope?: 'synthetic' | 'latest' | 'current' | 'archive' | 'fixed' | 'mse';
+  dataScope?: 'trace_replay' | 'synthetic_distributional' | 'archived' | 'synthetic' | 'latest' | 'current' | 'archive' | 'fixed' | 'mse';
   perTurn?: PerTurnEntry[];
   scatterData?: ScatterPoint[];
 }

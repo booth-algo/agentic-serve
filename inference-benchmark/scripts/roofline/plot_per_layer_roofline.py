@@ -195,6 +195,12 @@ def plot_cf_panel(ax, avg_ISL=640, avg_OSL=256):
     # Compute ceiling
     ax.axhline(P_PEAK, color="black", lw=1.8, zorder=3)
 
+    # Attention bandwidth ceiling (OI=64, bandwidth-bound regardless of C)
+    ATTN_CEILING = min(P_PEAK, BW * 64 / 1000.0)  # ~215 TFLOP/s
+    ax.axhline(ATTN_CEILING, color="#D55E00", lw=0.8, ls="--", zorder=4)
+    ax.text(cf_max * 0.97, ATTN_CEILING * 1.3, f"attention\n(BW-limited, {ATTN_CEILING:.0f} TFLOP/s)",
+            fontsize=6, color="#D55E00", ha="right", va="bottom")
+
     # Weight vertical
     ax.axvline(wt_total, color="#aaaaaa", lw=0.7, ls="--", zorder=2)
     ax.text(wt_total + 0.3, 1.8, f"weights\n({wt_total:.0f} GB)",

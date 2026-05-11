@@ -11,7 +11,7 @@
     "refresh:data": "bash ../scripts/refresh-dashboard-data.sh",
     "build:local-data": "npm run build:data && npm run validate:data",
     "refresh:local-data": "npm run refresh:data && npm run validate:data",
-    "build:local": "npm run validate:data && VITE_DATA_JSON_URL=/agentic-serve/data.json VITE_SWEEP_STATE_URL=/agentic-serve/sweep-state.json npm run build",
+    "build:local": "npm run validate:data && VITE_R2_JSON_BASE=/agentic-serve npm run build",
     "preview:local": "npm run preview -- --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

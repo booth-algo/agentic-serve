@@ -124,16 +124,12 @@ def mode_to_data_mode(mode: str) -> str:
 
 
 def scope_matches(scope_value: str, scope: str) -> bool:
-    return scope == "all" or scope_value == scope
-
-
-def coverage_grid_scope(scope: str) -> str:
-    return "fixed" if scope == "latest" else scope
+    return scope == "all" or compile_sweep.dashboard_scope_for(scope_value) == compile_sweep.dashboard_scope_for(scope)
 
 
 def profile_key(item: dict[str, Any]) -> ProfileKey:
     return (
-        str(item.get("data_scope") or "current"),
+        compile_sweep.dashboard_scope_for(str(item.get("data_scope") or "archived")),
         str(item.get("host", "")),
         str(item.get("model", "")),
         int(item.get("tp", 0) or 0),
@@ -163,7 +159,8 @@ def point_from_row(row: dict[str, Any]) -> PointKey | None:
 def data_points(data: list[dict[str, Any]], scope: str) -> set[PointKey]:
     points: set[PointKey] = set()
     for row in data:
-        if scope != "all" and row.get("dataScope") != scope:
+        row_scope = compile_sweep.dashboard_scope_for(str(row.get("dataScope") or "trace_replay"))
+        if scope != "all" and row_scope != compile_sweep.dashboard_scope_for(scope):
             continue
         point = point_from_row(row)
         if point is not None:
@@ -172,7 +169,7 @@ def data_points(data: list[dict[str, Any]], scope: str) -> set[PointKey]:
 
 
 def data_scope_counts(data: list[dict[str, Any]]) -> Counter[str]:
-    return Counter(str(row.get("dataScope") or "unknown") for row in data)
+    return Counter(compile_sweep.dashboard_scope_for(str(row.get("dataScope") or "unknown")) for row in data)
 
 
 def expected_by_job(
@@ -182,13 +179,11 @@ def expected_by_job(
 ) -> dict[str, JobCoverage]:
     blocked_profiles = {profile_key(item) for item in state.get("profile_infeasible", [])}
     jobs: dict[str, JobCoverage] = {}
-    grid_scope = coverage_grid_scope(scope)
-
     for cell in state.get("cells", []):
-        data_scope = str(cell.get("data_scope") or "current")
-        if not scope_matches(data_scope, grid_scope):
+        data_scope = compile_sweep.dashboard_scope_for(str(cell.get("data_scope") or "archived"))
+        if not scope_matches(data_scope, scope):
             continue
-        output_scope = scope if scope in {"latest", "synthetic"} else data_scope
+        output_scope = compile_sweep.dashboard_scope_for(scope) if scope != "all" else data_scope
 
         host = str(cell.get("host", ""))
         model = str(cell.get("model", ""))
@@ -283,8 +278,8 @@ def compiled_bench_jobs(manifest: dict[str, Any]) -> tuple[dict[str, str], dict[
             backend,
         )
         rows[jid] = row
-        rows_by_scope[publish_sweep_state.cell_data_scope(cell)][jid] = row
-    synthetic_emitted, _synthetic_skipped = compile_sweep.compile_jobs(manifest, "synthetic")
+        rows_by_scope[compile_sweep.dashboard_scope_for(publish_sweep_state.cell_data_scope(cell))][jid] = row
+    synthetic_emitted, _synthetic_skipped = compile_sweep.compile_jobs(manifest, "synthetic_distributional")
     for cell, row in synthetic_emitted:
         backend = str(cell.get("backend", "vllm"))
         jid = publish_sweep_state.job_id(
@@ -294,7 +289,7 @@ def compiled_bench_jobs(manifest: dict[str, Any]) -> tuple[dict[str, str], dict[
             str(cell["mode"]),
             backend,
         )
-        rows_by_scope["synthetic"][jid] = row
+        rows_by_scope["synthetic_distributional"][jid] = row
     return rows, rows_by_scope, compile_sweep.render_file(emitted), len(skipped)
 
 
@@ -473,7 +468,22 @@ def write_missing_bench_jobs(path: Path, missing_jobs: list[JobCoverage], compil
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scope", choices=("synthetic", "latest", "current", "fixed", "mse", "archive", "all"), default="fixed")
+    parser.add_argument(
+        "--scope",
+        choices=(
+            "trace_replay",
+            "synthetic_distributional",
+            "archived",
+            "synthetic",
+            "latest",
+            "current",
+            "fixed",
+            "mse",
+            "archive",
+            "all",
+        ),
+        default="synthetic_distributional",
+    )
     parser.add_argument("--data", default=DEFAULT_DATA, help="data.json file path or URL; defaults to published R2 current data")
     parser.add_argument("--sweep-yaml", type=Path, default=DEFAULT_SWEEP_YAML)
     parser.add_argument("--bench-jobs", type=Path, default=DEFAULT_BENCH_JOBS)
@@ -509,7 +519,7 @@ def main() -> int:
     if args.scope == "all":
         compiled_scope_rows = compiled_rows
     else:
-        compiled_scope_rows = compiled_rows_by_scope.get(args.scope, {})
+        compiled_scope_rows = compiled_rows_by_scope.get(compile_sweep.dashboard_scope_for(args.scope), {})
     current_rows = parse_bench_jobs(args.bench_jobs)
 
     data_raw, data_source = load_json_ref(args.data, "coverage data", args.timeout)

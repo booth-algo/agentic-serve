@@ -56,7 +56,7 @@ interface EnrichedResult {
   seriesKey: string;
   filename: string;
   engineVersion?: string;  // e.g. "0.19.0" — from _engine_version.txt sidecar or fallback
-  dataScope: 'synthetic' | 'current' | 'archive' | 'fixed' | 'mse';
+  dataScope: 'trace_replay' | 'synthetic_distributional' | 'archived';
   perTurn?: PerTurnEntry[];
   scatterData?: ScatterPoint[];
 }
@@ -176,18 +176,24 @@ function normalizeProfile(profile: string): string {
   return HISTORICAL_PROFILE_ALIASES[normalized] ?? normalized;
 }
 
-function detectDataScope(raw: RawResult, relDir: string): 'synthetic' | 'current' | 'archive' | 'fixed' | 'mse' {
-  if (raw.config.dashboard_scope === 'synthetic') return 'synthetic';
-  if (raw.config.dashboard_scope === 'latest') return 'synthetic';
-  if (raw.config.dashboard_scope === 'mse') return 'mse';
-  if (raw.config.dashboard_scope === 'fixed') return 'fixed';
-  if (raw.config.dashboard_scope === 'current') return 'current';
-  if (relDir.startsWith('synthetic/') || relDir.startsWith('synthetic\\')) return 'synthetic';
-  if (relDir.startsWith('latest/') || relDir.startsWith('latest\\')) return 'synthetic';
-  // Files under the results/current/ R2 namespace are canonical even if
-  // the JSON was produced before the dashboard_scope field existed.
-  if (relDir.startsWith('current/') || relDir.startsWith('current\\')) return 'current';
-  return 'archive';
+function normalizeDataScope(scope: string | undefined): 'trace_replay' | 'synthetic_distributional' | 'archived' | undefined {
+  if (scope === 'synthetic_distributional' || scope === 'synthetic' || scope === 'latest') return 'synthetic_distributional';
+  if (scope === 'trace_replay' || scope === 'archive') return 'trace_replay';
+  if (scope === 'archived' || scope === 'current' || scope === 'canonical' || scope === 'fixed' || scope === 'fixed-grid' || scope === 'mse') {
+    return 'archived';
+  }
+  return undefined;
+}
+
+function detectDataScope(raw: RawResult, relDir: string): 'trace_replay' | 'synthetic_distributional' | 'archived' {
+  const firstDir = relDir.split(/[\\/]/)[0];
+  const pathScope = normalizeDataScope(firstDir);
+  if (pathScope) return pathScope;
+
+  const configScope = normalizeDataScope(raw.config.dashboard_scope);
+  if (configScope) return configScope;
+
+  return 'trace_replay';
 }
 
 function detectBackendFromFilename(filename: string, configBackend: string): string {
@@ -215,8 +221,9 @@ function collectJsonFiles(dir: string, relDir: string = ''): Array<{ fullPath: s
 }
 
 function shouldSkip(filename: string, relDir: string): boolean {
-  // Skip crossval, inferencex, and archive subdirectories
-  if (relDir.includes('crossval') || relDir.includes('inferencex') || relDir.includes('archive')) return true;
+  // Skip crossval and inferencex subdirectories. The old archive result
+  // namespace was renamed to trace_replay and is now a first-class data source.
+  if (relDir.includes('crossval') || relDir.includes('inferencex')) return true;
 
   for (const pattern of SKIP_PATTERNS) {
     if (pattern.test(filename)) return true;
@@ -390,7 +397,7 @@ function main() {
   }
 
   // Deduplicate within a data scope only. The same series+concurrency can
-  // legitimately exist in synthetic, current, fixed, MSE, and archive at the same time.
+  // legitimately exist in synthetic_distributional, archived, and trace_replay at the same time.
   const seen = new Map<string, EnrichedResult>();
   for (const r of results) {
     const dedupeKey = `${r.dataScope}::${r.seriesKey}::${r.config.concurrency}`;

@@ -30,7 +30,7 @@ jobs:
         run: npm ci
 
       - name: Install predictor dependencies
-        run: python3 -m pip install -q numpy xgboost
+        run: python3 -m pip install -q numpy xgboost pyyaml
 
       - name: Download results from R2
         working-directory: inference-benchmark
@@ -45,6 +45,10 @@ jobs:
         working-directory: inference-benchmark/dashboard
         run: npm run build:data
 
+      - name: Build sweep state
+        working-directory: inference-benchmark
+        run: python3 scripts/publish_sweep_state.py --no-upload
+
       - name: Build serving predictions
         run: python3 -m llm_predict.export_serving_predictions
 
@@ -55,17 +59,20 @@ jobs:
       - name: Upload data.json to R2
         working-directory: inference-benchmark
         run: |
-          aws s3 cp dashboard/public/data.json s3://agent-bench/data.json \
-            --endpoint-url $R2_ENDPOINT
           aws s3 cp dashboard/public/data.json s3://agent-bench/json/current/data.json \
             --endpoint-url $R2_ENDPOINT
           echo "Uploaded data.json ($(du -h dashboard/public/data.json | cut -f1))"
 
+      - name: Upload sweep-state.json to R2
+        working-directory: inference-benchmark
+        run: |
+          aws s3 cp dashboard/public/sweep-state.json s3://agent-bench/json/current/sweep-state.json \
+            --endpoint-url $R2_ENDPOINT
+          echo "Uploaded sweep-state.json ($(du -h dashboard/public/sweep-state.json | cut -f1))"
+
       - name: Upload serving predictions to R2
         working-directory: inference-benchmark
         run: |
-          aws s3 cp dashboard/public/serving-predictions.json s3://agent-bench/serving-predictions.json \
-            --endpoint-url $R2_ENDPOINT
           aws s3 cp dashboard/public/serving-predictions.json s3://agent-bench/json/current/serving-predictions.json \
             --endpoint-url $R2_ENDPOINT
           echo "Uploaded serving-predictions.json ($(du -h dashboard/public/serving-predictions.json | cut -f1))"
@@ -77,6 +84,38 @@ jobs:
             --endpoint-url $R2_ENDPOINT
           npm run validate:data -- /tmp/dashboard-r2-data.json
 
+      - name: Verify R2 sweep-state.json
+        working-directory: inference-benchmark
+        run: |
+          aws s3 cp s3://agent-bench/json/current/sweep-state.json /tmp/dashboard-r2-sweep-state.json \
+            --endpoint-url $R2_ENDPOINT
+          python3 - <<'PY'
+          import json
+          state = json.load(open('/tmp/dashboard-r2-sweep-state.json'))
+          cells = state.get('cells', [])
+          synthetic_cells = [c for c in cells if c.get('data_scope') == 'synthetic_distributional']
+          if not synthetic_cells:
+              raise SystemExit('expected synthetic cells in sweep-state.json')
+          synthetic_profiles = {
+              profile
+              for cell in synthetic_cells
+              for profile in cell.get('profiles', [])
+              if str(profile).endswith('-synth')
+          }
+          expected_profiles = {
+              'chat-singleturn-synth',
+              'chat-multiturn-synth',
+              'swebench-multiturn-synth',
+              'terminalbench-multiturn-synth',
+              'osworld-multiturn-synth',
+          }
+          missing = sorted(expected_profiles - synthetic_profiles)
+          if missing:
+              raise SystemExit(f'missing synthetic profiles in sweep-state.json: {missing}')
+          print(f'synthetic sweep-state cells: {len(synthetic_cells)}')
+          print(f'synthetic profiles: {sorted(synthetic_profiles)}')
+          PY
+
       - name: Verify R2 serving predictions
         working-directory: inference-benchmark
         run: |
@@ -86,21 +125,21 @@ jobs:
           import json
           payload = json.load(open('/tmp/dashboard-r2-serving-predictions.json'))
           rows = payload.values()
-          current = sum(1 for group in rows for row in group if row.get('data_scope') == 'current')
-          if current <= 0:
-              raise SystemExit('expected current serving prediction rows')
-          h100x4_current = sum(1 for row in payload.get('H100x4', []) if row.get('data_scope') == 'current')
-          if h100x4_current <= 0:
-              raise SystemExit('expected current H100x4 serving prediction rows')
-          print(f'current serving prediction rows: {current}')
-          print(f'current H100x4 serving prediction rows: {h100x4_current}')
+          archived = sum(1 for group in rows for row in group if row.get('data_scope') == 'archived')
+          if archived <= 0:
+              raise SystemExit('expected archived serving prediction rows')
+          h100x4_archived = sum(1 for row in payload.get('H100x4', []) if row.get('data_scope') == 'archived')
+          if h100x4_archived <= 0:
+              raise SystemExit('expected archived H100x4 serving prediction rows')
+          print(f'archived serving prediction rows: {archived}')
+          print(f'archived H100x4 serving prediction rows: {h100x4_archived}')
           PY
 
       - name: Upload roofline-quadrant.json to R2
         working-directory: inference-benchmark
         run: |
           if [ -f dashboard/public/roofline-quadrant.json ]; then
-            aws s3 cp dashboard/public/roofline-quadrant.json s3://agent-bench/roofline-quadrant.json \
+            aws s3 cp dashboard/public/roofline-quadrant.json s3://agent-bench/json/current/roofline-quadrant.json \
               --endpoint-url $R2_ENDPOINT
             echo "Uploaded roofline-quadrant.json"
           fi

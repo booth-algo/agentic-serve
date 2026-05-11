@@ -7,22 +7,30 @@
 # - Idempotent — safe to run on cron
 #
 # Cron line:
-#   */30 * * * * bash /root/agentic-serve/inference-benchmark/scripts/bench_orchestrator.sh >> /tmp/bench_orchestrator.cron.log 2>&1
+#   */30 * * * * BENCH_STATE_ROOT=/mnt/100g/agent-bench/state bash /root/agentic-serve/inference-benchmark/scripts/bench_orchestrator.sh >> /tmp/bench_orchestrator.cron.log 2>&1
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-JOBS_FILE="$REPO_ROOT/inference-benchmark/scripts/bench_jobs.txt"
-STATE_ROOT="${BENCH_STATE_ROOT:-/tmp/bench_jobs/state}"
-LOG="/tmp/bench_orchestrator.log"
+JOBS_FILE="${BENCH_JOBS_FILE:-$REPO_ROOT/inference-benchmark/scripts/bench_jobs.txt}"
+STATE_ROOT="${BENCH_STATE_ROOT:-/mnt/100g/agent-bench/state}"
+LEGACY_STATE_ROOT="${BENCH_LEGACY_STATE_ROOT:-/tmp/bench_jobs/state}"
+LOCAL_RESULTS_ROOT="${BENCH_RESULTS_ROOT:-${BENCHMARK_RESULTS_DIR:-/mnt/100g/agent-bench/results}}"
+LOG="${BENCH_ORCHESTRATOR_LOG:-/tmp/bench_orchestrator.log}"
 EP="${R2_ENDPOINT:-https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com}"
 BUCKET="${R2_BUCKET:-agent-bench}"
 PROFILE="${AWS_PROFILE:-r2}"
-# Raw benchmark outputs are namespaced so the new distributional/current runs
-# cannot overwrite historical flat-prefix artifacts in R2. Override only for
-# one-off maintenance, e.g. RESULT_SCOPE=archive/foo.
+# Raw benchmark outputs are namespaced so trace replay, synthetic
+# distributional, and retired archived runs do not overwrite each other in R2.
+# Override only for one-off maintenance, e.g. RESULT_SCOPE=archived/foo.
 DEFAULT_RESULT_SCOPE="${RESULT_SCOPE:-}"
+DRY_RUN="${BENCH_ORCHESTRATOR_DRY_RUN:-0}"
+SKIP_REMOTE_PROBE="${BENCH_ORCHESTRATOR_SKIP_REMOTE_PROBE:-0}"
+MAX_DISPATCHES="${BENCH_ORCHESTRATOR_MAX_DISPATCHES:-0}"
+DISPATCHES=0
 
 log() { echo "$(date -Is) $*" | tee -a "$LOG"; }
+truthy() { [[ "${1:-}" == "1" || "${1:-}" == "true" || "${1:-}" == "yes" ]]; }
+dry_run() { truthy "$DRY_RUN"; }
 
 LOCK_FILE="/tmp/bench_orchestrator.lock"
 exec 9>"$LOCK_FILE"
@@ -44,8 +52,14 @@ if [[ "$STATE_SCOPE" == "all" ]]; then
     STATE_SCOPE="${JOBS_SCOPE:-all}"
 fi
 STATE_DIR="$STATE_ROOT/$STATE_SCOPE"
+LEGACY_STATE_DIR="$LEGACY_STATE_ROOT/$STATE_SCOPE"
 mkdir -p "$STATE_DIR"
-log "using jobs scope=${JOBS_SCOPE:-missing} expected_scope=$EXPECTED_JOBS_SCOPE state_dir=$STATE_DIR"
+mkdir -p "$LOCAL_RESULTS_ROOT"
+log "using jobs scope=${JOBS_SCOPE:-missing} expected_scope=$EXPECTED_JOBS_SCOPE state_dir=$STATE_DIR results_root=$LOCAL_RESULTS_ROOT"
+dry_run && log "dry-run enabled: no state writes, rsync, R2 upload, sweep-state publish, or remote launch"
+if [[ "$MAX_DISPATCHES" =~ ^[0-9]+$ && "$MAX_DISPATCHES" -gt 0 ]]; then
+    log "max dispatches for this tick: $MAX_DISPATCHES"
+fi
 
 host_prefix() {
     case "$1" in
@@ -110,28 +124,85 @@ row_result_scope() {
     echo "current"
 }
 
-read_status()  { cat "$STATE_DIR/${1}.status" 2>/dev/null || echo "pending"; }
-write_status() { echo "$2" > "$STATE_DIR/${1}.status"; }
-read_attempt() { cat "$STATE_DIR/${1}.attempt" 2>/dev/null || echo "0"; }
-bump_attempt() { local n=$(($(read_attempt "$1") + 1)); echo "$n" > "$STATE_DIR/${1}.attempt"; }
-read_signature() { cat "$STATE_DIR/${1}.signature" 2>/dev/null || true; }
-write_signature() { echo "$2" > "$STATE_DIR/${1}.signature"; }
+dashboard_scope_for() {
+    case "$1" in
+        synthetic|latest|synthetic_distributional) echo "synthetic_distributional" ;;
+        archive|trace_replay) echo "trace_replay" ;;
+        current|canonical|fixed|fixed-grid|mse|archived|archived/*) echo "archived" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+storage_scope_for() {
+    case "$1" in
+        synthetic|latest|synthetic_distributional) echo "synthetic_distributional" ;;
+        archive|trace_replay) echo "trace_replay" ;;
+        current|canonical) echo "archived/canonical" ;;
+        fixed|fixed-grid) echo "archived/fixed-grid" ;;
+        mse) echo "archived/mse" ;;
+        archived) echo "archived" ;;
+        archived/*) echo "$1" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+state_read_file() {
+    local jid="$1" suffix="$2" primary legacy
+    primary="$STATE_DIR/${jid}.${suffix}"
+    legacy="$LEGACY_STATE_DIR/${jid}.${suffix}"
+    if [[ -f "$primary" ]]; then
+        echo "$primary"
+    elif [[ "$STATE_DIR" != "$LEGACY_STATE_DIR" && -f "$legacy" ]]; then
+        echo "$legacy"
+    else
+        echo "$primary"
+    fi
+}
+
+read_status()  { cat "$(state_read_file "$1" status)" 2>/dev/null || echo "pending"; }
+write_state_value() {
+    local jid="$1" suffix="$2" value="$3"
+    if dry_run; then
+        log "$jid: dry-run would write ${suffix}=$value"
+    else
+        echo "$value" > "$STATE_DIR/${jid}.${suffix}"
+    fi
+}
+remove_state_file() {
+    local jid="$1" suffix="$2"
+    if dry_run; then
+        log "$jid: dry-run would remove ${suffix}"
+    else
+        rm -f "$STATE_DIR/${jid}.${suffix}"
+    fi
+}
+write_status() { write_state_value "$1" status "$2"; }
+read_attempt() { cat "$(state_read_file "$1" attempt)" 2>/dev/null || echo "0"; }
+bump_attempt() { local n=$(($(read_attempt "$1") + 1)); write_state_value "$1" attempt "$n"; }
+read_signature() { cat "$(state_read_file "$1" signature)" 2>/dev/null || true; }
+write_signature() { write_state_value "$1" signature "$2"; }
 
 # Phase 1: multi-slot GPU scheduling — scan per-GPU and per-port usage.
 declare -A HOST_GPU_COUNT=( [gpu-4]=8 [3090]=8 [2080ti]=8 [h100]=8 [h100-2]=4 )
 PORT_RANGE=(8089 8090 8091 8092 8093 8094 8095 8096)
 declare -A HOST_USED_GPUS
 declare -A HOST_USED_PORTS
+declare -A HOST_OBSERVED_PORTS
 
-for HOST in gpu-4 3090 2080ti h100 h100-2; do
-    SLOT_INFO=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "$HOST" '
-        echo "GPUS:$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits 2>/dev/null | awk -F", " "\$2 > 100 {printf \$1\" \"}")"
-        echo "PORTS:$(for p in 8089 8090 8091 8092 8093 8094 8095 8096; do ss -ltn 2>/dev/null | grep -q ":${p} " && printf "%s " $p; done)"
-    ' 2>/dev/null || true)
-    HOST_USED_GPUS[$HOST]=$(echo "$SLOT_INFO" | grep "^GPUS:" | sed 's/^GPUS://')
-    HOST_USED_PORTS[$HOST]=$(echo "$SLOT_INFO" | grep "^PORTS:" | sed 's/^PORTS://')
-    log "slots $HOST: used_gpus=[${HOST_USED_GPUS[$HOST]:-}] used_ports=[${HOST_USED_PORTS[$HOST]:-}]"
-done
+if truthy "$SKIP_REMOTE_PROBE"; then
+    log "remote slot probing disabled by BENCH_ORCHESTRATOR_SKIP_REMOTE_PROBE"
+else
+    for HOST in gpu-4 3090 2080ti h100 h100-2; do
+        SLOT_INFO=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "$HOST" '
+            echo "GPUS:$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits 2>/dev/null | awk -F", " "\$2 > 100 {printf \$1\" \"}")"
+            echo "PORTS:$(for p in 8089 8090 8091 8092 8093 8094 8095 8096; do ss -ltn 2>/dev/null | grep -q ":${p} " && printf "%s " $p; done)"
+        ' 2>/dev/null || true)
+        HOST_USED_GPUS[$HOST]=$(echo "$SLOT_INFO" | grep "^GPUS:" | sed 's/^GPUS://')
+        HOST_USED_PORTS[$HOST]=$(echo "$SLOT_INFO" | grep "^PORTS:" | sed 's/^PORTS://')
+        HOST_OBSERVED_PORTS[$HOST]="${HOST_USED_PORTS[$HOST]:-}"
+        log "slots $HOST: used_gpus=[${HOST_USED_GPUS[$HOST]:-}] used_ports=[${HOST_USED_PORTS[$HOST]:-}]"
+    done
+fi
 
 find_free_gpus() {
     local host="$1" needed="$2"
@@ -162,6 +233,29 @@ claim_slot() {
     HOST_USED_PORTS[$host]="${HOST_USED_PORTS[$host]:-} $port "
 }
 
+# Reserve recently dispatched running jobs from state before considering
+# pending rows. This protects jobs that are still loading and have not opened a
+# port or allocated noticeable GPU memory yet.
+while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONCS PROFILES EXTRA_ENV || [[ -n "$HOST" ]]; do
+    HOST=$(echo "$HOST" | tr -d ' ')
+    [[ -z "$HOST" || "${HOST:0:1}" == "#" ]] && continue
+    : "${BACKEND:=vllm}"
+    JID=$(job_id "$HOST" "$SHORT" "$TP" "$MODE" "$BACKEND")
+    STATUS=$(read_status "$JID")
+    [[ "$STATUS" != "running" ]] && continue
+
+    JOB_PORT=$(cat "$(state_read_file "$JID" port)" 2>/dev/null || true)
+    JOB_GPUS=$(cat "$(state_read_file "$JID" gpus)" 2>/dev/null || true)
+    [[ -z "$JOB_PORT$JOB_GPUS" ]] && continue
+
+    STATUS_FILE="$(state_read_file "$JID" status)"
+    AGE=999999999
+    [[ -f "$STATUS_FILE" ]] && AGE=$(( $(date +%s) - $(stat -c %Y "$STATUS_FILE") ))
+
+    claim_slot "$HOST" "$JOB_GPUS" "$JOB_PORT"
+    log "$JID: reserving recorded running slot on $HOST port=$JOB_PORT gpus=[$JOB_GPUS] age=${AGE}s"
+done < "$JOBS_FILE"
+
 # Phase 2: scan jobs, decide actions.
 while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONCS PROFILES EXTRA_ENV || [[ -n "$HOST" ]]; do
     HOST=$(echo "$HOST" | tr -d ' ')
@@ -173,39 +267,41 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
 
     : "${BACKEND:=vllm}"  # default if column missing (legacy rows)
     ROW_RESULT_SCOPE=$(row_result_scope "$EXTRA_ENV")
+    ROW_DASHBOARD_SCOPE=$(dashboard_scope_for "$ROW_RESULT_SCOPE")
+    ROW_STORAGE_SCOPE=$(storage_scope_for "$ROW_RESULT_SCOPE")
     JID=$(job_id "$HOST" "$SHORT" "$TP" "$MODE" "$BACKEND")
     STATUS=$(read_status "$JID")
-    JOB_SIGNATURE="${ROW_RESULT_SCOPE}|${MAX_LEN}|${GPU_MEM}|${CONCS}|${PROFILES}|${EXTRA_ENV}"
+    JOB_SIGNATURE="${ROW_STORAGE_SCOPE}|${ROW_DASHBOARD_SCOPE}|${MAX_LEN}|${GPU_MEM}|${CONCS}|${PROFILES}|${EXTRA_ENV}"
     OLD_SIGNATURE=$(read_signature "$JID")
     if [[ "$STATUS" =~ ^(done|skipped|failed)$ && -n "$OLD_SIGNATURE" && "$OLD_SIGNATURE" != "$JOB_SIGNATURE" ]]; then
         log "$JID: job shape changed since terminal $STATUS; retrying as pending"
         STATUS="pending"
         write_status "$JID" pending
-        echo "0" > "$STATE_DIR/${JID}.attempt"
-        rm -f "$STATE_DIR/${JID}.max_len_override"
+        write_state_value "$JID" attempt "0"
+        remove_state_file "$JID" max_len_override
     elif [[ "$STATUS" =~ ^(skipped|failed)$ && -z "$OLD_SIGNATURE" && "$MODE" == "multi" && "$PROFILES" != *"swebench-multiturn"* && "$PROFILES" != *"terminalbench-multiturn"* ]]; then
         log "$JID: legacy terminal $STATUS predates profile filtering; retrying reduced-profile job"
         STATUS="pending"
         write_status "$JID" pending
-        echo "0" > "$STATE_DIR/${JID}.attempt"
-        rm -f "$STATE_DIR/${JID}.max_len_override"
+        write_state_value "$JID" attempt "0"
+        remove_state_file "$JID" max_len_override
     fi
     PREFIX=$(host_prefix "$HOST")
     RESULT_DIR_NAME="${PREFIX}_${SHORT}_tp${TP}_${BACKEND}"
-    OUT_DIR_REMOTE="/tmp/results/${ROW_RESULT_SCOPE}/${RESULT_DIR_NAME}"
+    OUT_DIR_REMOTE="/tmp/results/${ROW_STORAGE_SCOPE}/${RESULT_DIR_NAME}"
     # Fallback for jobs launched before RESULT_SCOPE existed; completed jobs
-    # still upload into the current R2 namespace to avoid legacy collisions.
+    # still upload into the normalized R2 namespace to avoid legacy collisions.
     LEGACY_OUT_DIR_REMOTE="/tmp/results/${RESULT_DIR_NAME}"
-    OUT_DIR_LOCAL="/tmp/bench_${ROW_RESULT_SCOPE//\//_}_${RESULT_DIR_NAME}"
-    R2_DIR="${ROW_RESULT_SCOPE}/${RESULT_DIR_NAME}"
+    R2_DIR="${ROW_STORAGE_SCOPE}/${RESULT_DIR_NAME}"
+    OUT_DIR_LOCAL="$LOCAL_RESULTS_ROOT/$R2_DIR"
 
     case "$STATUS" in
         done|skipped|failed)
             continue
             ;;
         running)
-            JOB_PORT=$(cat "$STATE_DIR/${JID}.port" 2>/dev/null || echo "8089")
-            if [[ " ${HOST_USED_PORTS[$HOST]:-} " == *" $JOB_PORT "* ]]; then
+            JOB_PORT=$(cat "$(state_read_file "$JID" port)" 2>/dev/null || echo "8089")
+            if [[ " ${HOST_OBSERVED_PORTS[$HOST]:-} " == *" $JOB_PORT "* ]]; then
                 log "$JID: still running on $HOST:$JOB_PORT"
                 continue
             fi
@@ -214,7 +310,8 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             # sglang: aggressive torch compilation, 10-15 min for large/MoE models.
             WARMUP_TIMEOUT=600
             [[ "$BACKEND" == "sglang" ]] && WARMUP_TIMEOUT=900
-            STATUS_FILE="$STATE_DIR/${JID}.status"
+            STATUS_FILE="$(state_read_file "$JID" status)"
+            AGE=0
             if [[ -f "$STATUS_FILE" ]]; then
                 AGE=$(( $(date +%s) - $(stat -c %Y "$STATUS_FILE") ))
                 if [[ "$AGE" -lt "$WARMUP_TIMEOUT" ]]; then
@@ -225,10 +322,14 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                         SCRIPT_NAME="sweep_all_profiles.sh"
                         [[ "$MODE" == "multi" ]] && SCRIPT_NAME="sweep_multiturn_profiles.sh"
                     fi
-                    REMOTE_SCRIPT_ALIVE=$(ssh "$HOST" "ps -eo args= | awk -v script='/tmp/inference-benchmark/scripts/${SCRIPT_NAME}' -v needle=' ${TP} ${SHORT} ${BACKEND} ' -v concs=' ${CONCS} ' '\$1 == \"bash\" && \$2 == script && index(\$0, needle) && index(\$0, concs) { found=1 } END { exit found ? 0 : 1 }' && echo yes" < /dev/null 2>/dev/null || true)
+                    if truthy "$SKIP_REMOTE_PROBE"; then
+                        REMOTE_SCRIPT_ALIVE=""
+                    else
+                        REMOTE_SCRIPT_ALIVE=$(ssh "$HOST" "ps -eo args= | awk -v script='/tmp/inference-benchmark/scripts/${SCRIPT_NAME}' -v needle=' ${TP} ${SHORT} ${BACKEND} ' -v concs=' ${CONCS} ' '\$1 == \"bash\" && \$2 == script && index(\$0, needle) && index(\$0, concs) { found=1 } END { exit found ? 0 : 1 }' && echo yes" < /dev/null 2>/dev/null || true)
+                    fi
                     if [[ "$REMOTE_SCRIPT_ALIVE" == "yes" ]]; then
                         log "$JID: dispatched ${AGE}s ago (<$(( WARMUP_TIMEOUT / 60 ))min), still warming up on port $JOB_PORT"
-                        JOB_GPUS=$(cat "$STATE_DIR/${JID}.gpus" 2>/dev/null || true)
+                        JOB_GPUS=$(cat "$(state_read_file "$JID" gpus)" 2>/dev/null || true)
                         [[ -n "$JOB_GPUS" ]] && HOST_USED_GPUS[$HOST]="${HOST_USED_GPUS[$HOST]:-} ${JOB_GPUS//,/ } "
                         HOST_USED_PORTS[$HOST]="${HOST_USED_PORTS[$HOST]:-} $JOB_PORT "
                         continue
@@ -237,6 +338,10 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                 fi
             fi
             log "$JID: slot idle after ${AGE}s warmup ($BACKEND) — finalizing"
+            if dry_run; then
+                log "$JID: dry-run would inspect remote outputs and update terminal state"
+                continue
+            fi
             # All ssh/rsync/aws calls inside this `while read ... done <JOBS`
             # loop must close stdin (`< /dev/null`), otherwise they consume
             # the jobs file and iteration ends early — 2080ti rows were
@@ -245,11 +350,19 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             if [[ -n "$REMOTE_SYNC_DIR" ]]; then
                 COUNT=$(ssh "$HOST" "ls '$REMOTE_SYNC_DIR' 2>/dev/null | wc -l" < /dev/null)
                 mkdir -p "$OUT_DIR_LOCAL"
-                rsync -az "$HOST:$REMOTE_SYNC_DIR/" "$OUT_DIR_LOCAL/" < /dev/null >> "$LOG" 2>&1
-                aws --profile "$PROFILE" --endpoint-url "$EP" s3 sync \
-                    "$OUT_DIR_LOCAL/" "s3://$BUCKET/results/$R2_DIR/" < /dev/null >> "$LOG" 2>&1
-                write_status "$JID" done
-                log "$JID: DONE ($COUNT files uploaded to results/$R2_DIR, warmup=${AGE}s backend=$BACKEND)"
+                if rsync -az "$HOST:$REMOTE_SYNC_DIR/" "$OUT_DIR_LOCAL/" < /dev/null >> "$LOG" 2>&1; then
+                    if aws --profile "$PROFILE" --endpoint-url "$EP" s3 sync \
+                        "$OUT_DIR_LOCAL/" "s3://$BUCKET/results/$R2_DIR/" < /dev/null >> "$LOG" 2>&1; then
+                        MIRROR_STATUS="r2_mirrored"
+                    else
+                        MIRROR_STATUS="r2_mirror_failed"
+                    fi
+                    write_status "$JID" done
+                    log "$JID: DONE ($COUNT files copied to $OUT_DIR_LOCAL, warmup=${AGE}s backend=$BACKEND mirror=$MIRROR_STATUS)"
+                else
+                    write_status "$JID" pending
+                    log "$JID: local rsync failed for $REMOTE_SYNC_DIR -> $OUT_DIR_LOCAL; leaving pending"
+                fi
             else
                 # Widen detection to include vLLM's KV-cache budget failure
                 # ("Available KV cache memory: -...", "No available memory for
@@ -262,7 +375,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                     write_status "$JID" pending
                     NEW_MAX=$((MAX_LEN / 2))
                     [[ "$NEW_MAX" -lt 2048 ]] && NEW_MAX=2048
-                    echo "$NEW_MAX" > "$STATE_DIR/${JID}.max_len_override"
+                    write_state_value "$JID" max_len_override "$NEW_MAX"
                     log "$JID: OOM detected, retry with max_len=$NEW_MAX"
                 else
                     write_status "$JID" skipped
@@ -271,6 +384,10 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             fi
             ;;
         pending)
+            if [[ "$MAX_DISPATCHES" =~ ^[0-9]+$ && "$MAX_DISPATCHES" -gt 0 && "$DISPATCHES" -ge "$MAX_DISPATCHES" ]]; then
+                continue
+            fi
+
             # Extract explicit CUDA_VISIBLE_DEVICES from extra_env if present
             CELL_CVD=""
             if [[ "$EXTRA_ENV" == *CUDA_VISIBLE_DEVICES=* ]]; then
@@ -294,7 +411,7 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             SLOT_PORT=$(find_free_port "$HOST")
             [[ -z "$SLOT_PORT" ]] && continue
 
-            OVERRIDE_FILE="$STATE_DIR/${JID}.max_len_override"
+            OVERRIDE_FILE="$(state_read_file "$JID" max_len_override)"
             if [[ -f "$OVERRIDE_FILE" ]]; then
                 MAX_LEN=$(cat "$OVERRIDE_FILE")
             fi
@@ -308,11 +425,11 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             fi
 
             claim_slot "$HOST" "$SLOT_GPUS" "$SLOT_PORT"
-            echo "$SLOT_PORT" > "$STATE_DIR/${JID}.port"
-            echo "$SLOT_GPUS" > "$STATE_DIR/${JID}.gpus"
+            write_state_value "$JID" port "$SLOT_PORT"
+            write_state_value "$JID" gpus "$SLOT_GPUS"
             write_signature "$JID" "$JOB_SIGNATURE"
 
-            log "$JID: dispatching on $HOST:$SLOT_PORT gpus=[$SLOT_GPUS] ($BACKEND, scope=$ROW_RESULT_SCOPE, max_len=$MAX_LEN, mode=$MODE)"
+            log "$JID: dispatching on $HOST:$SLOT_PORT gpus=[$SLOT_GPUS] ($BACKEND, scope=$ROW_DASHBOARD_SCOPE, storage=$ROW_STORAGE_SCOPE, max_len=$MAX_LEN, mode=$MODE)"
             write_status "$JID" running
 
             # Build env: PORT + CUDA_VISIBLE_DEVICES (unless cell already pins)
@@ -321,22 +438,31 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                 SLOT_ENV="$SLOT_ENV CUDA_VISIBLE_DEVICES=$SLOT_GPUS"
             fi
 
-            CMD="$SLOT_ENV ${EXTRA_ENV} RESULT_SCOPE=${ROW_RESULT_SCOPE} DASHBOARD_SCOPE=${ROW_RESULT_SCOPE} bash /tmp/inference-benchmark/scripts/${SCRIPT} \
+            CMD="$SLOT_ENV ${EXTRA_ENV} RESULT_SCOPE=${ROW_STORAGE_SCOPE} DASHBOARD_SCOPE=${ROW_DASHBOARD_SCOPE} bash /tmp/inference-benchmark/scripts/${SCRIPT} \
                 ${MODEL_PATH} ${TP} ${SHORT} ${BACKEND} ${OUT_DIR_REMOTE} \
                 ${PY} ${GPU_MEM} ${MAX_LEN} \"${CONCS}\" \"${PROFILES}\""
             REMOTE_LOG="/tmp/bench_${SHORT}_tp${TP}_${MODE}_${BACKEND}_p${SLOT_PORT}.log"
-            ssh "$HOST" "setsid bash -c '${CMD}' > '${REMOTE_LOG}' 2>&1 </dev/null &" < /dev/null
-            log "$JID: dispatched"
+            if dry_run; then
+                log "$JID: dry-run would run on $HOST: setsid bash -c '$CMD' > '$REMOTE_LOG' 2>&1 </dev/null &"
+            else
+                ssh "$HOST" "setsid bash -c '${CMD}' > '${REMOTE_LOG}' 2>&1 </dev/null &" < /dev/null
+                log "$JID: dispatched"
+            fi
+            DISPATCHES=$((DISPATCHES + 1))
             ;;
     esac
 done < "$JOBS_FILE"
 
-# Publish sweep-state.json to R2 so the dashboard reflects the latest cell
-# status (pending/running/done/skipped/known_oom). Non-fatal — if this
-# fails, the tick still succeeds; the next tick will republish.
-python3 "$REPO_ROOT/inference-benchmark/scripts/publish_sweep_state.py" \
-    --state-dir "$STATE_ROOT" \
-    --endpoint "$EP" --bucket "$BUCKET" --profile "$PROFILE" \
-    >> "$LOG" 2>&1 || log "publish_sweep_state.py failed"
+if dry_run; then
+    log "dry-run: skipping sweep-state publish"
+else
+    # Publish sweep-state.json to R2 so the dashboard reflects the latest cell
+    # status (pending/running/done/skipped/known_oom). Non-fatal — if this
+    # fails, the tick still succeeds; the next tick will republish.
+    python3 "$REPO_ROOT/inference-benchmark/scripts/publish_sweep_state.py" \
+        --state-dir "$STATE_ROOT" \
+        --endpoint "$EP" --bucket "$BUCKET" --profile "$PROFILE" \
+        >> "$LOG" 2>&1 || log "publish_sweep_state.py failed"
+fi
 
 log "tick complete"

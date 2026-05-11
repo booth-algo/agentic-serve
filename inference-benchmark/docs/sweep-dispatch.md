@@ -25,7 +25,7 @@ sweep.yaml  ──>  compile_sweep.py  ──>  bench_jobs.txt  ──>  bench_o
                                                     ├── sweep_all_profiles.sh (single-turn)
                                                     └── sweep_multiturn_profiles.sh (multi-turn)
                                                                   │
-                                                    Results → R2 (s3://agent-bench/results/current/)
+                                                    Results → R2 (s3://agent-bench/results/<scope>/)
                                                     State  → R2 (sweep-state.json)
 ```
 
@@ -66,7 +66,7 @@ done
 - **Skip logic**: The sweep scripts (`sweep_all_profiles.sh`) skip result files that already exist. Re-dispatching a "done" job is cheap if results are present.
 - **Warmup timeout**: 10 min. If a server doesn't start serving within 10 min, the job is considered failed.
 - **OOM retry**: First OOM halves max_len and retries once.
-- **R2 upload**: `aws s3 sync` on job completion. Results go to `s3://agent-bench/results/current/<hw>_<model>_<tp>_<backend>/`.
+- **R2 upload**: `aws s3 sync` on job completion. Results go to the normalized result scope, e.g. `results/synthetic_distributional/<hw>_<model>_<tp>_<backend>/` for synthetic jobs or `results/archived/canonical/...` for retired canonical runs.
 
 ## State files
 
@@ -102,35 +102,35 @@ Job ID format: `<host>_<model_short>_tp<N>_<mode>[_sglang]`
 - **Qwen3.5-27B on H100**: Model not downloaded. Jobs will fail.
 - **gpt-oss-20b on 2080ti**: MXFP4 needs sm80+. 2080ti is sm75. Known OOM in sweep.yaml.
 - **Multi-turn context overflow**: `fixed_multi` keeps swebench/terminalbench in the coverage surface, but profile-infeasible rules mark their max_len<32768 cells as N/A instead of dispatching impossible runs.
-- **coding-singleturn**: Requires max_len >= 32768 (17K ISL). It remains part of current-scope `single_small`, but is excluded from fixed scope.
+- **coding-singleturn**: Requires max_len >= 32768 (17K ISL). It remains part of the retired canonical `single_small` surface, but is excluded from the synthetic distributional grid.
 
 ## Monitoring
 
 ```bash
-# Quick status against fixed-scope data published to the website
-python3 scripts/sweep_monitor.py --scope fixed --limit 5
+# Quick status against synthetic distributional data published to the website
+python3 scripts/sweep_monitor.py --scope synthetic_distributional --limit 5
 
 # Coverage-aware job reconciliation.
-# Dry-run: reports missing fixed-scope points and which done/skipped/failed jobs hide them.
-python3 scripts/reconcile_sweep_coverage.py --scope fixed --limit 30
+# Dry-run: reports missing synthetic_distributional points and which done/skipped/failed jobs hide them.
+python3 scripts/reconcile_sweep_coverage.py --scope synthetic_distributional --limit 30
 
 # Repair stale completed jobs after reviewing the dry-run.
 # Default reset target is only `done`, so old partial jobs rerun without
 # automatically relaunching skipped/failed jobs that may need OOM classification.
-python3 scripts/reconcile_sweep_coverage.py --scope fixed --reset-stale --write-sweep-state
+python3 scripts/reconcile_sweep_coverage.py --scope synthetic_distributional --reset-stale --write-sweep-state
 
 # Broader repair if the dry-run shows local blocking state that should not be
 # terminal for a runnable sweep.yaml row.
-python3 scripts/reconcile_sweep_coverage.py --scope fixed --reset-stale --reset-statuses done,known_oom --write-sweep-state
+python3 scripts/reconcile_sweep_coverage.py --scope synthetic_distributional --reset-stale --reset-statuses done,known_oom --write-sweep-state
 
 # If bench_jobs.txt drifted from sweep.yaml, rewrite it from the YAML source of truth.
-python3 scripts/reconcile_sweep_coverage.py --scope fixed --write-bench-jobs
+python3 scripts/reconcile_sweep_coverage.py --scope synthetic_distributional --write-bench-jobs
 
 # Write a bench_jobs-format subset for the jobs that still have missing coverage.
-python3 scripts/reconcile_sweep_coverage.py --scope fixed --write-missing-jobs
+python3 scripts/reconcile_sweep_coverage.py --scope synthetic_distributional --write-missing-jobs
 
-# Continuous fixed-scope dispatcher loop with a duplicate-run lock
-setsid -f bash -lc 'cd /root/agentic-serve/inference-benchmark; exec flock -n /tmp/fixed-scope-sweep-loop.lock bash -lc '\''while true; do date -Is; bash scripts/bench_orchestrator.sh; sleep 120; done'\''' >> /tmp/fixed-scope-sweep-loop.log 2>&1
+# Continuous synthetic distributional dispatcher loop with a duplicate-run lock
+setsid -f bash -lc 'cd /root/agentic-serve/inference-benchmark; exec flock -n /tmp/synthetic-distributional-sweep-loop.lock bash -lc '\''while true; do date -Is; bash scripts/bench_orchestrator.sh; sleep 120; done'\''' >> /tmp/synthetic-distributional-sweep-loop.log 2>&1
 
 # Continuous read-only progress reporter.
 # Writes the latest per-host/per-GPU markdown report and appends a history log.

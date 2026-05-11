@@ -30,7 +30,7 @@ CONTEXT_SAFETY_MARGIN_TOKENS="${CONTEXT_SAFETY_MARGIN_TOKENS:-256}"
 
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
-DASHBOARD_SCOPE="${DASHBOARD_SCOPE:-fixed}"
+DASHBOARD_SCOPE="${DASHBOARD_SCOPE:-archived}"
 
 result_scope_matches_expected() {
     local file="$1"

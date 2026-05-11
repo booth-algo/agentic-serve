@@ -2,14 +2,15 @@
 """Read-only sweep progress and GPU occupancy reporter.
 
 This script complements bench_orchestrator.sh. It does not dispatch jobs,
-publish data, or edit sweep state. It reads local /tmp/bench_jobs state,
+publish data, or edit sweep state. It reads local durable benchmark state,
 polls each GPU host with nvidia-smi over SSH, and emits a compact Markdown
-snapshot suitable for a long-running monitor loop.
+snapshot suitable for a long-running monitor loop plus optional dashboard JSON.
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import re
 import shlex
@@ -21,14 +22,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Iterable
+from typing import Any, Iterable
 
 
 HERE = Path(__file__).resolve().parent
 BENCH_ROOT = HERE.parent
 DEFAULT_JOBS_FILE = HERE / "bench_jobs.txt"
-DEFAULT_STATE_DIR = Path("/tmp/bench_jobs/state")
-DEFAULT_HOSTS = ("gpu-4", "3090", "2080ti", "h100")
+DEFAULT_STATE_DIR = Path("/mnt/100g/agent-bench/state")
+DEFAULT_HOSTS = ("gpu-4", "3090", "2080ti", "h100", "h100-2")
 PORTS = tuple(range(8089, 8097))
 LEGACY_STATE_FALLBACK = os.environ.get("BENCH_STATE_LEGACY_FALLBACK") == "1"
 
@@ -351,11 +352,9 @@ def classify_process(proc: GpuProcess, snapshot: HostSnapshot, sweep_jobs: list[
         "sweep_all_profiles",
         "sweep_multiturn_profiles",
         "src.benchmark.runner",
-        "/tmp/results/synthetic",
-        "/tmp/results/latest",
-        "/tmp/results/current",
-        "/tmp/results/fixed",
-        "/tmp/results/mse",
+        "/tmp/results/synthetic_distributional",
+        "/tmp/results/trace_replay",
+        "/tmp/results/archived",
     )
     if any(marker in cmd for marker in markers):
         return "sweep"
@@ -372,7 +371,7 @@ def job_label(state: JobState) -> str:
     return f"{state.job.job_id}{port} age={age}"
 
 
-def build_report(args: argparse.Namespace) -> str:
+def collect_progress(args: argparse.Namespace) -> dict[str, Any]:
     jobs = parse_jobs(args.jobs_file)
     states = load_job_states(jobs, args.state_dir)
     states_by_host: dict[str, list[JobState]] = defaultdict(list)
@@ -381,12 +380,28 @@ def build_report(args: argparse.Namespace) -> str:
 
     running_by_gpu = running_jobs_by_host_gpu(states)
     snapshots = [ssh_snapshot(host, args.ssh_timeout) for host in args.hosts]
+    return {
+        "generated_at": now_iso(),
+        "jobs": jobs,
+        "states": states,
+        "states_by_host": states_by_host,
+        "running_by_gpu": running_by_gpu,
+        "snapshots": snapshots,
+    }
+
+
+def build_report(args: argparse.Namespace, progress: dict[str, Any] | None = None) -> str:
+    progress = progress or collect_progress(args)
+    states: list[JobState] = progress["states"]
+    states_by_host: dict[str, list[JobState]] = progress["states_by_host"]
+    running_by_gpu: dict[tuple[str, str], list[JobState]] = progress["running_by_gpu"]
+    snapshots: list[HostSnapshot] = progress["snapshots"]
     lines: list[str] = []
 
     total_counts = Counter(state.status for state in states)
     lines.append("# Sweep Progress Snapshot")
     lines.append("")
-    lines.append(f"- generated_at: {now_iso()}")
+    lines.append(f"- generated_at: {progress['generated_at']}")
     lines.append(f"- jobs_file: {args.jobs_file}")
     lines.append(f"- state_dir: {args.state_dir}")
     lines.append(f"- total_jobs: {len(states)} ({format_counts(total_counts)})")
@@ -457,6 +472,153 @@ def build_report(args: argparse.Namespace) -> str:
     return "\n".join(lines)
 
 
+def port_to_json(line: str) -> dict[str, str]:
+    match = re.match(r"^(\d+)\s+(.*)$", line.strip())
+    if not match:
+        return {"port": "", "detail": line.strip()}
+    port, detail = match.groups()
+    return {"port": port, "detail": detail}
+
+
+def job_state_to_json(state: JobState) -> dict[str, Any]:
+    return {
+        "id": state.job.job_id,
+        "host": state.job.host,
+        "model_path": state.job.model_path,
+        "model_short": state.job.short,
+        "tp": state.job.tp,
+        "mode": state.job.mode,
+        "backend": state.job.backend,
+        "scope": state.job.scope,
+        "status": state.status,
+        "gpus": split_gpu_list(state.gpus),
+        "port": state.port,
+        "attempt": state.attempt,
+        "age_seconds": state.age_seconds,
+        "age": human_age(state.age_seconds),
+        "max_len_override": state.max_len_override,
+    }
+
+
+def process_to_json(proc: GpuProcess) -> dict[str, Any]:
+    return {
+        "gpu_index": proc.gpu_index,
+        "gpu_uuid": proc.gpu_uuid,
+        "pid": proc.pid,
+        "process_name": proc.process_name,
+        "used_memory_mib": proc.used_memory_mib,
+        "user": proc.user,
+        "ppid": proc.ppid,
+        "age_seconds": proc.age_seconds,
+        "age": human_age(proc.age_seconds),
+        "command": compact_cmd(proc.cmd, 160),
+        "kind": proc.kind,
+    }
+
+
+def gpu_status(gpu: GpuInfo, assignments: list[JobState], processes: list[GpuProcess]) -> str:
+    kinds = {proc.kind for proc in processes}
+    has_sweep = bool(assignments) or bool(kinds & {"sweep", "sweep-slot"})
+    has_other = "other-user" in kinds
+    has_same = "same-user-nonsweep" in kinds
+    if has_sweep and has_other:
+        return "mixed-other-user"
+    if has_sweep and has_same:
+        return "mixed-same-user"
+    if has_sweep:
+        return "sweep"
+    if has_other:
+        return "other-user"
+    if has_same:
+        return "same-user-nonsweep"
+    if (gpu.memory_used_mib or 0) > 100 or (gpu.util_pct or 0) > 0:
+        return "unknown-busy"
+    return "free"
+
+
+def build_gpu_state_json(args: argparse.Namespace, progress: dict[str, Any] | None = None) -> dict[str, Any]:
+    progress = progress or collect_progress(args)
+    states: list[JobState] = progress["states"]
+    states_by_host: dict[str, list[JobState]] = progress["states_by_host"]
+    running_by_gpu: dict[tuple[str, str], list[JobState]] = progress["running_by_gpu"]
+    snapshots: list[HostSnapshot] = progress["snapshots"]
+    total_counts = Counter(state.status for state in states)
+
+    summary: Counter[str] = Counter()
+    hosts_json: list[dict[str, Any]] = []
+
+    for snapshot in snapshots:
+        host_states = states_by_host.get(snapshot.host, [])
+        host_counts = Counter(state.status for state in host_states)
+        running = [state for state in host_states if state.status == "running"]
+        host_json: dict[str, Any] = {
+            "host": snapshot.host,
+            "ok": snapshot.ok,
+            "remote_user": snapshot.remote_user,
+            "error": snapshot.error,
+            "job_counts": dict(sorted(host_counts.items())),
+            "jobs_total": len(host_states),
+            "running_jobs": [job_state_to_json(state) for state in running],
+            "ports": [port_to_json(port) for port in (snapshot.ports or [])],
+            "gpus": [],
+            "unmapped_processes": [],
+        }
+
+        summary["hosts_total"] += 1
+        if not snapshot.ok:
+            summary["hosts_error"] += 1
+            hosts_json.append(host_json)
+            continue
+
+        summary["hosts_ok"] += 1
+        processes_by_gpu: dict[str, list[GpuProcess]] = defaultdict(list)
+        for proc in snapshot.processes or []:
+            jobs_for_gpu = running_by_gpu.get((snapshot.host, proc.gpu_index), [])
+            proc.kind = classify_process(proc, snapshot, jobs_for_gpu)
+            if proc.gpu_index == "?":
+                host_json["unmapped_processes"].append(process_to_json(proc))
+            else:
+                processes_by_gpu[proc.gpu_index].append(proc)
+
+        host_statuses: Counter[str] = Counter()
+        for gpu in snapshot.gpus or []:
+            assignments = running_by_gpu.get((snapshot.host, gpu.index), [])
+            processes = sorted(
+                processes_by_gpu.get(gpu.index, []),
+                key=lambda item: (item.kind, item.user, item.pid),
+            )
+            status = gpu_status(gpu, assignments, processes)
+            host_statuses[status] += 1
+            summary["gpus_total"] += 1
+            summary[f"gpus_{status.replace('-', '_')}"] += 1
+            host_json["gpus"].append(
+                {
+                    "index": gpu.index,
+                    "uuid": gpu.uuid,
+                    "name": gpu.name,
+                    "memory_used_mib": gpu.memory_used_mib,
+                    "memory_total_mib": gpu.memory_total_mib,
+                    "util_pct": gpu.util_pct,
+                    "status": status,
+                    "assignments": [job_state_to_json(state) for state in assignments],
+                    "processes": [process_to_json(proc) for proc in processes],
+                }
+            )
+
+        host_json["gpu_status_counts"] = dict(sorted(host_statuses.items()))
+        hosts_json.append(host_json)
+
+    return {
+        "generated_at": progress["generated_at"],
+        "jobs_file": str(args.jobs_file),
+        "state_dir": str(args.state_dir),
+        "total_jobs": len(states),
+        "job_counts": dict(sorted(total_counts.items())),
+        "summary": dict(sorted(summary.items())),
+        "hosts": hosts_json,
+    }
+
+
 def format_counts(counts: Counter[str]) -> str:
     order = ("done", "running", "pending", "skipped", "failed", "known_oom")
     parts = [f"{key}={counts[key]}" for key in order if counts.get(key)]
@@ -490,9 +652,22 @@ def append_history(path: Path, text: str) -> None:
 
 def run_once(args: argparse.Namespace) -> str:
     try:
-        report = build_report(args)
+        progress = collect_progress(args)
+        report = build_report(args, progress)
+        if args.json_out:
+            gpu_state = build_gpu_state_json(args, progress)
+            atomic_write(args.json_out, json.dumps(gpu_state, indent=2, sort_keys=True) + "\n")
     except Exception as exc:  # noqa: BLE001 - monitor must keep running.
         report = f"# Sweep Progress Snapshot\n\n- generated_at: {now_iso()}\n- health: reporter-error\n- error: `{exc}`\n"
+        if args.json_out:
+            fallback = {
+                "generated_at": now_iso(),
+                "health": "reporter-error",
+                "error": str(exc),
+                "hosts": [],
+                "summary": {},
+            }
+            atomic_write(args.json_out, json.dumps(fallback, indent=2, sort_keys=True) + "\n")
     atomic_write(args.out, report)
     if args.history:
         append_history(args.history, report)
@@ -507,6 +682,7 @@ def main() -> int:
     parser.add_argument("--ssh-timeout", type=int, default=20)
     parser.add_argument("--interval-seconds", type=int, default=300)
     parser.add_argument("--out", type=Path, default=Path("/tmp/sweep-progress-latest.md"))
+    parser.add_argument("--json-out", type=Path)
     parser.add_argument("--history", type=Path, default=Path("/tmp/sweep-progress-history.md"))
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()

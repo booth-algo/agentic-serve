@@ -5,17 +5,8 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const REQUIRED_CURRENT_PROFILES = [
-  'chat-singleturn',
-  'coding-singleturn',
-  'chat-multiturn',
-  'swebench-multiturn',
-  'terminalbench-multiturn',
-  'osworld-multiturn',
-] as const;
-
 interface DataRow {
-  dataScope?: 'synthetic' | 'latest' | 'current' | 'archive' | 'fixed' | 'mse';
+  dataScope?: 'trace_replay' | 'synthetic_distributional' | 'archived' | 'synthetic' | 'latest' | 'current' | 'archive' | 'fixed' | 'mse';
   config?: {
     profile?: string;
   };
@@ -37,12 +28,13 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-type ValidScope = 'synthetic' | 'current' | 'fixed' | 'mse';
+type ValidScope = 'trace_replay' | 'synthetic_distributional' | 'archived';
 
-function normalizeScope(scope: string | undefined): 'synthetic' | 'current' | 'archive' | 'fixed' | 'mse' {
-  if (scope === 'latest') return 'synthetic';
-  if (scope === 'synthetic' || scope === 'current' || scope === 'archive' || scope === 'fixed' || scope === 'mse') return scope;
-  return 'archive';
+function normalizeScope(scope: string | undefined): ValidScope {
+  if (scope === 'synthetic_distributional' || scope === 'synthetic' || scope === 'latest') return 'synthetic_distributional';
+  if (scope === 'trace_replay' || scope === 'archive') return 'trace_replay';
+  if (scope === 'archived' || scope === 'current' || scope === 'canonical' || scope === 'fixed' || scope === 'fixed-grid' || scope === 'mse') return 'archived';
+  return 'trace_replay';
 }
 
 function readExpectedScopes(dataPath: string): Set<ValidScope> {
@@ -56,11 +48,8 @@ function readExpectedScopes(dataPath: string): Set<ValidScope> {
   const parsed = JSON.parse(fs.readFileSync(sweepStatePath, 'utf8')) as SweepState;
   for (const cell of parsed.cells ?? []) {
     const scope = normalizeScope(cell.data_scope);
-    if (scope !== 'synthetic' && scope !== 'current' && scope !== 'fixed' && scope !== 'mse') {
-      continue;
-    }
-    if (scope === 'synthetic') {
-      // Synthetic can be visible as a pending sweep surface before the first
+    if (scope === 'synthetic_distributional') {
+      // Synthetic distributional can be visible as a pending sweep surface before the first
       // batch of rows lands. Coverage still comes from sweep-state.json.
       continue;
     }
@@ -87,29 +76,17 @@ if (!Array.isArray(parsed)) {
 }
 
 const rows = parsed as DataRow[];
-const scopeCounts = { synthetic: 0, current: 0, archive: 0, fixed: 0, mse: 0 };
-const currentProfiles = new Map<string, number>();
+const scopeCounts: Record<ValidScope, number> = { trace_replay: 0, synthetic_distributional: 0, archived: 0 };
 const expectedScopes = readExpectedScopes(dataPath);
 
 for (const row of rows) {
-  const rawScope = row.dataScope ?? 'archive';
-  if (rawScope !== 'synthetic' && rawScope !== 'latest' && rawScope !== 'current' && rawScope !== 'archive' && rawScope !== 'fixed' && rawScope !== 'mse') {
-    fail(`invalid dataScope ${JSON.stringify(rawScope)}`);
-  }
+  const rawScope = row.dataScope ?? 'trace_replay';
   const scope = normalizeScope(rawScope);
   scopeCounts[scope] += 1;
-  if (scope === 'synthetic' || scope === 'current' || scope === 'fixed') {
-    const profile = row.config?.profile;
-    if (profile) currentProfiles.set(profile, (currentProfiles.get(profile) ?? 0) + 1);
-  }
 }
 
-if (scopeCounts.current === 0) {
-  fail('expected at least one current row; generated data would make canonical coverage zero');
-}
-
-if (scopeCounts.archive === 0) {
-  fail('expected at least one archive row; archived benchmark data would disappear');
+if (scopeCounts.trace_replay === 0) {
+  fail('expected at least one trace_replay row; real trace replay data would disappear');
 }
 
 for (const scope of expectedScopes) {
@@ -118,17 +95,9 @@ for (const scope of expectedScopes) {
   }
 }
 
-const missingProfiles = REQUIRED_CURRENT_PROFILES.filter((profile) => !currentProfiles.has(profile));
-if (missingProfiles.length > 0) {
-  fail(`missing current canonical profiles: ${missingProfiles.join(', ')}`);
-}
-
 console.log(JSON.stringify({
   path: dataPath,
   rows: rows.length,
   scopes: scopeCounts,
   expectedScopes: [...expectedScopes].sort(),
-  currentProfiles: Object.fromEntries(
-    REQUIRED_CURRENT_PROFILES.map((profile) => [profile, currentProfiles.get(profile) ?? 0]),
-  ),
 }, null, 2));

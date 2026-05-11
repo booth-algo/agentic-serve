@@ -10,7 +10,7 @@ export interface ProfileMeta {
   description: string;
 }
 
-export type DataScope = 'synthetic' | 'current' | 'archive' | 'fixed' | 'mse';
+export type DataScope = 'trace_replay' | 'synthetic_distributional' | 'archived';
 
 export interface DataScopeMeta {
   label: string;
@@ -21,62 +21,48 @@ export interface DataScopeMeta {
   rowsLabel: string;
 }
 
-export const DATA_SCOPE_OPTIONS = ['synthetic', 'current', 'fixed', 'mse', 'archive'] as const;
+export const DATA_SCOPE_OPTIONS = ['trace_replay', 'synthetic_distributional', 'archived'] as const;
 
 export const DATA_SCOPE_META: Record<DataScope, DataScopeMeta> = {
-  synthetic: {
-    label: 'Synthetic replay',
+  trace_replay: {
+    label: 'Trace replay',
+    shortLabel: 'Trace replay',
+    eyebrow: 'HF subset',
+    description: 'Filtered real trace replay data aligned with the Hugging Face dataset naming.',
+    accent: '#8b949e',
+    rowsLabel: 'trace replay rows',
+  },
+  synthetic_distributional: {
+    label: 'Synthetic distributional',
     shortLabel: 'Synthetic',
     eyebrow: 'APC-aware',
     description: 'Validated APC-aware synthetic replay grid. Uses synthetic-suffixed profiles on the reduced fixed-scope C=200/320 coverage grid, without coding-singleturn.',
     accent: '#3fb950',
     rowsLabel: 'synthetic rows',
   },
-  current: {
-    label: 'Canonical data',
-    shortLabel: 'Canonical',
-    eyebrow: 'paper surface',
-    description: 'Canonical benchmark profiles on the main sweep grid. This is the default view for paper-facing benchmark and coverage work.',
+  archived: {
+    label: 'Archived',
+    shortLabel: 'Archived',
+    eyebrow: 'retired scopes',
+    description: 'Retired canonical, fixed-grid, and MSE result scopes kept for reference but not used as the active Hugging Face dataset surface.',
     accent: '#00bcd4',
-    rowsLabel: 'canonical rows',
-  },
-  fixed: {
-    label: 'Fixed-grid reruns',
-    shortLabel: 'Fixed grid',
-    eyebrow: 'rerun subset',
-    description: 'Corrected rerun grid for the reduced profile set. Use this for the C=200/320 fixed-scope sweep, not as historical archive coverage.',
-    accent: '#58a6ff',
-    rowsLabel: 'fixed-grid rows',
-  },
-  mse: {
-    label: 'MSE validation',
-    shortLabel: 'MSE',
-    eyebrow: 'validation only',
-    description: 'Synthetic-vs-real validation runs. Keep these separate from predictor training, serving-prediction summaries, and paper coverage claims.',
-    accent: '#f0883e',
-    rowsLabel: 'validation rows',
-  },
-  archive: {
-    label: 'Archive inventory',
-    shortLabel: 'Archive',
-    eyebrow: 'historical',
-    description: 'Historical and legacy runs. This is inventory-style data, so missing cells are not interpreted as active sweep gaps.',
-    accent: '#8b949e',
-    rowsLabel: 'archive rows',
+    rowsLabel: 'archived rows',
   },
 };
 
 export function isDataScope(value: string | null): value is DataScope {
-  return value === 'synthetic' || value === 'current' || value === 'fixed' || value === 'mse' || value === 'archive';
+  return value === 'trace_replay' || value === 'synthetic_distributional' || value === 'archived';
 }
 
 export function normalizeDataScope(value: string | null): DataScope | null {
-  if (value === 'latest') return 'synthetic';
+  if (value === 'latest' || value === 'synthetic') return 'synthetic_distributional';
+  if (value === 'archive') return 'trace_replay';
+  if (value === 'current' || value === 'canonical' || value === 'fixed' || value === 'fixed-grid' || value === 'mse') return 'archived';
   return isDataScope(value) ? value : null;
 }
 
 export function hasServingPredictions(scope: DataScope): boolean {
-  return scope === 'current' || scope === 'fixed';
+  return scope === 'archived';
 }
 
 export const CURRENT_PROFILES = [
@@ -136,11 +122,15 @@ export const ARCHIVE_PROFILES = [
   'osworld-multiturn-long',
 ] as const;
 
-const CURRENT_PROFILE_SET = new Set<string>(CURRENT_PROFILES);
-const FIXED_PROFILE_SET = new Set<string>(FIXED_PROFILES);
+export const ARCHIVED_PROFILES = [
+  ...CURRENT_PROFILES,
+  ...FIXED_PROFILES,
+  ...MSE_PROFILES,
+] as const;
+
 const SYNTHETIC_PROFILE_SET = new Set<string>(SYNTHETIC_PROFILES);
-const MSE_PROFILE_SET = new Set<string>(MSE_PROFILES);
 const ARCHIVE_PROFILE_SET = new Set<string>(ARCHIVE_PROFILES);
+const ARCHIVED_PROFILE_SET = new Set<string>(ARCHIVED_PROFILES);
 
 const PROFILE_ALIASES: Record<string, string> = {
   'coding-agent': 'coding-singleturn',
@@ -233,19 +223,13 @@ export function normalizeProfileName(profile: string): string {
 
 export function isProfileInScope(profile: string, scope: DataScope): boolean {
   const normalized = normalizeProfileName(profile);
-  if (scope === 'archive') {
+  if (scope === 'trace_replay') {
     return ARCHIVE_PROFILE_SET.has(normalized);
   }
-  if (scope === 'synthetic') {
+  if (scope === 'synthetic_distributional') {
     return SYNTHETIC_PROFILE_SET.has(normalized);
   }
-  if (scope === 'fixed') {
-    return FIXED_PROFILE_SET.has(normalized);
-  }
-  if (scope === 'mse') {
-    return MSE_PROFILE_SET.has(normalized);
-  }
-  return CURRENT_PROFILE_SET.has(normalized);
+  return ARCHIVED_PROFILE_SET.has(normalized);
 }
 
 export function scopeLabel(scope: DataScope): string {

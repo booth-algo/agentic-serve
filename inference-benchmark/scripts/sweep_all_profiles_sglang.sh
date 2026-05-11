@@ -57,7 +57,7 @@ MIN_NREQ="${11:-100}"
 
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
-DASHBOARD_SCOPE="${DASHBOARD_SCOPE:-fixed}"
+DASHBOARD_SCOPE="${DASHBOARD_SCOPE:-archived}"
 
 result_scope_matches_expected() {
     local file="$1"

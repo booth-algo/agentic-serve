@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh Agentic Serve dashboard artifacts every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+RandomizedDelaySec=60s
+Persistent=true
+Unit=agentic-serve-dashboard-refresh.service
+
+[Install]
+WantedBy=timers.target

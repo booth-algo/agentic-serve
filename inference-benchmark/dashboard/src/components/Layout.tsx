@@ -6,7 +6,7 @@ import {
   type DataScope,
 } from '../profileMeta';
 
-type PageId = 'benchmark' | 'coverage' | 'gemm' | 'serving';
+type PageId = 'benchmark' | 'coverage' | 'gemm' | 'serving' | 'gpu';
 
 interface LayoutProps {
   children: ReactNode;
@@ -22,10 +22,21 @@ interface LayoutProps {
 const NAV_PAGES: Array<{ id: PageId; label: string; icon: ReactNode }> = [
   {
     id: 'benchmark',
-    label: 'Benchmark',
+    label: 'Home',
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+      </svg>
+    ),
+  },
+  {
+    id: 'gpu',
+    label: 'GPUs',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <rect x="8" y="8" width="8" height="8" rx="1" />
+        <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3" />
       </svg>
     ),
   },
@@ -83,10 +94,15 @@ export function Layout({
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]" aria-busy={loading || scopePending}>
       {/* Sticky nav */}
       <nav className="sticky top-0 z-50 border-b border-[#21262d] bg-[#161b22]/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
           {/* Left: logo + page switcher */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onPageChange('benchmark')}
+              aria-label="Home"
+              className="flex shrink-0 items-center gap-3 rounded-md text-left transition-colors hover:text-[#00bcd4] focus:outline-none focus:ring-2 focus:ring-[#00bcd4]/50"
+            >
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#00bcd4]/15 text-[#00bcd4]"
                 style={{ boxShadow: '0 0 0 1px rgba(0,188,212,0.2), 0 0 8px rgba(0,188,212,0.12)' }}
@@ -95,18 +111,18 @@ export function Layout({
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
               </div>
-              <h1 className="text-base font-semibold tracking-tight sm:text-lg">
+              <h1 className="hidden text-base font-semibold tracking-tight md:block lg:text-lg">
                 Inference Benchmark
               </h1>
-            </div>
+            </button>
 
             {/* Page nav pills */}
-            <div className="hidden items-center gap-1 sm:flex">
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
               {navPages.map((page) => (
                 <button
                   key={page.id}
                   onClick={() => onPageChange(page.id)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                     activePage === page.id
                       ? 'bg-[#00bcd4]/12 text-[#00bcd4]'
                       : 'text-[#8b949e] hover:bg-[#21262d] hover:text-[#c9d1d9]'
@@ -120,12 +136,7 @@ export function Layout({
           </div>
 
           {/* Right: status */}
-          <div className="flex items-center gap-3 text-sm text-[#8b949e]">
-            <ScopeSwitcher
-              dataScope={dataScope}
-              onDataScopeChange={onDataScopeChange}
-              className="hidden sm:flex"
-            />
+          <div className="hidden shrink-0 items-center gap-3 text-sm text-[#8b949e] lg:flex">
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#ff9800]" />
@@ -136,6 +147,11 @@ export function Layout({
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#58a6ff]" />
                 Updating view...
               </span>
+            ) : activePage === 'gpu' ? (
+              <span className="flex items-center gap-2">
+                <span className="inline-block h-2 w-2 rounded-full bg-[#58a6ff]" />
+                GPU state loaded
+              </span>
             ) : (
               <span className="flex items-center gap-2">
                 <span className="inline-block h-2 w-2 rounded-full bg-[#3fb950]" />
@@ -145,32 +161,14 @@ export function Layout({
           </div>
         </div>
 
-        {/* Mobile page nav */}
-        <div className="flex items-center gap-1 border-t border-[#21262d] px-4 py-2 sm:hidden">
-          {navPages.map((page) => (
-            <button
-              key={page.id}
-              onClick={() => onPageChange(page.id)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                activePage === page.id
-                  ? 'bg-[#00bcd4]/12 text-[#00bcd4]'
-                  : 'text-[#8b949e] hover:bg-[#21262d] hover:text-[#c9d1d9]'
-              }`}
-            >
-              {page.icon}
-              {page.label}
-            </button>
-          ))}
-          <ScopeSwitcher
-            dataScope={dataScope}
-            onDataScopeChange={onDataScopeChange}
-            className="ml-auto"
-            compact
-          />
-        </div>
-
         <div className="border-t border-[#21262d] bg-[#0d1117]">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs sm:px-6">
+            <ScopeSwitcher
+              dataScope={dataScope}
+              onDataScopeChange={onDataScopeChange}
+              className="mr-1 max-w-full overflow-x-auto"
+              compact
+            />
             <span
               className="font-semibold uppercase tracking-wide"
               style={{ color: scopeMeta.accent }}
@@ -185,7 +183,7 @@ export function Layout({
               </span>
             )}
             <span className="ml-auto hidden font-mono text-[#6e7681] sm:inline">
-              {totalRuns} {scopeMeta.rowsLabel}
+              {activePage === 'gpu' ? 'live GPU state' : `${totalRuns} ${scopeMeta.rowsLabel}`}
             </span>
           </div>
         </div>

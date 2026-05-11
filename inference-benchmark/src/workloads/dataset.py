@@ -744,6 +744,8 @@ class DistributionalMultiTurnDataset(BaseDataset):
     def __init__(
         self,
         filepath: str,
+        min_turns: int = 1,
+        max_turns: Optional[int] = None,
         num_sessions: int = 10,
         random_seed: int = 42,
         max_context_tokens: Optional[int] = None,
@@ -753,6 +755,8 @@ class DistributionalMultiTurnDataset(BaseDataset):
         source_session_ids: Optional[list[str]] = None,
     ):
         self.filepath = filepath
+        self.min_turns = min_turns
+        self.max_turns = max_turns
         self.num_sessions = num_sessions
         self.random_seed = random_seed
         self.max_context_tokens = max_context_tokens
@@ -780,6 +784,8 @@ class DistributionalMultiTurnDataset(BaseDataset):
             sampler = DistributionalSampler(
                 distribution,
                 seed=self.random_seed,
+                min_turns=self.min_turns,
+                max_turns=self.max_turns,
                 max_context_tokens=self.max_context_tokens,
                 context_safety_margin_tokens=self.context_safety_margin_tokens,
                 system_prompt=self.system_prompt,
@@ -911,6 +917,8 @@ def make_dataset(
     elif profile.dataset == "distributional-multi-turn":
         return DistributionalMultiTurnDataset(
             filepath=profile.file_path,
+            min_turns=profile.min_turns,
+            max_turns=profile.max_turns,
             num_sessions=effective_num_sessions,
             random_seed=random_seed,
             max_context_tokens=max_context_tokens or profile.isl_tokens,

@@ -2,9 +2,10 @@
 """Build sweep-state.json from sweep.yaml + orchestrator state files, upload to R2.
 
 For each cell in sweep.yaml (including `known_oom` entries), produce a status
-record by reading /tmp/bench_jobs/state/<scope>/<job_id>.status. Legacy root
-state fallback is opt-in via BENCH_STATE_LEGACY_FALLBACK=1. Cells without a
-state file get status "pending". known_oom entries override runtime status.
+record by reading /mnt/100g/agent-bench/state/<scope>/<job_id>.status. Legacy
+/tmp state fallback is enabled during migration and can be disabled with
+BENCH_STATE_LEGACY_FALLBACK=0. Cells without a state file get status "pending".
+known_oom entries override runtime status.
 
 Output is written to dashboard/public/sweep-state.json and optionally uploaded
 to R2 at s3://agent-bench/json/current/sweep-state.json so the live dashboard
@@ -29,18 +30,19 @@ from pathlib import Path
 import yaml
 
 from compile_sweep import cell_data_scope as manifest_cell_data_scope
-from compile_sweep import cell_for_output_scope, profile_infeasible_reasons, profiles_for_output_scope, resolve
+from compile_sweep import cell_for_output_scope, dashboard_scope_for, profile_infeasible_reasons, profiles_for_output_scope, resolve, result_scope_for
 
 HERE = Path(__file__).resolve().parent
 SWEEP_YAML = HERE / "sweep.yaml"
-STATE_DIR = Path("/tmp/bench_jobs/state")
+STATE_DIR = Path(os.environ.get("BENCH_STATE_ROOT", "/mnt/100g/agent-bench/state"))
+LEGACY_STATE_DIR = Path(os.environ.get("BENCH_LEGACY_STATE_ROOT", "/tmp/bench_jobs/state"))
 OUTPUT_FILE = HERE.parent / "dashboard" / "public" / "sweep-state.json"
 
 R2_ENDPOINT_DEFAULT = "https://b33fe7347f25479b27ec9680eff19b78.r2.cloudflarestorage.com"
 R2_BUCKET_DEFAULT = "agent-bench"
 R2_KEY = "json/current/sweep-state.json"
-LEGACY_STATE_FALLBACK = os.environ.get("BENCH_STATE_LEGACY_FALLBACK") == "1"
-DERIVED_STATE_SCOPES = ("synthetic",)
+LEGACY_STATE_FALLBACK = os.environ.get("BENCH_STATE_LEGACY_FALLBACK", "1") != "0"
+DERIVED_STATE_SCOPES = ("synthetic_distributional",)
 
 
 def hw_label(host_cfg: dict, tp: int) -> str:
@@ -59,14 +61,33 @@ def cell_data_scope(cell: dict) -> str:
     return manifest_cell_data_scope(cell)
 
 
-def state_file(jid: str, data_scope: str, suffix: str) -> Path:
-    if STATE_DIR.name == data_scope:
-        return STATE_DIR / f"{jid}.{suffix}"
+def state_scope_aliases(data_scope: str) -> list[str]:
+    aliases = [data_scope]
+    if data_scope == "synthetic_distributional":
+        aliases.append("synthetic")
+    elif data_scope == "trace_replay":
+        aliases.append("archive")
+    return aliases
 
-    scoped = STATE_DIR / data_scope / f"{jid}.{suffix}"
-    if scoped.exists() or not LEGACY_STATE_FALLBACK:
-        return scoped
-    return STATE_DIR / f"{jid}.{suffix}"
+
+def state_file(jid: str, data_scope: str, suffix: str) -> Path:
+    primary = None
+    for scope in state_scope_aliases(data_scope):
+        candidate = STATE_DIR / f"{jid}.{suffix}" if STATE_DIR.name == scope else STATE_DIR / scope / f"{jid}.{suffix}"
+        if primary is None:
+            primary = candidate
+        if candidate.exists():
+            return candidate
+
+    assert primary is not None
+    if not LEGACY_STATE_FALLBACK:
+        return primary
+
+    for scope in state_scope_aliases(data_scope):
+        legacy_scoped = LEGACY_STATE_DIR / scope / f"{jid}.{suffix}"
+        if legacy_scoped.exists():
+            return legacy_scoped
+    return LEGACY_STATE_DIR / f"{jid}.{suffix}"
 
 
 def read_state(jid: str, data_scope: str) -> dict:
@@ -126,18 +147,20 @@ def build_state(manifest: dict) -> dict:
         mode = str(cell["mode"])
         model = str(cell["model"])
         backend = str(cell.get("backend", "vllm"))
-        data_scope = cell_data_scope(cell)
+        source_scope = cell_data_scope(cell)
+        data_scope = dashboard_scope_for(source_scope)
+        state_scope = result_scope_for(source_scope)
         jid = job_id(host_name, model, tp, mode, backend)
-        rt = read_state(jid, data_scope)
+        rt = read_state(jid, state_scope)
         resolved = resolve(cell, manifest)
         source_profile_reasons = (
             {}
-            if data_scope == "synthetic"
+            if data_scope == "synthetic_distributional"
             else profile_infeasible_reasons(source_cell, manifest)
         )
         profile_reasons = {}
         for profile, reason in source_profile_reasons.items():
-            for output_profile in profiles_for_output_scope([profile], data_scope):
+            for output_profile in profiles_for_output_scope([profile], source_scope):
                 profile_reasons[output_profile] = reason
         runnable_profiles = [
             str(profile) for profile in resolved["profiles"]
@@ -147,7 +170,7 @@ def build_state(manifest: dict) -> dict:
             rt["status"] in {"skipped", "failed"}
             and profile_reasons
             and runnable_profiles
-            and not has_signature(jid, data_scope)
+            and not has_signature(jid, state_scope)
         ):
             rt["status"] = "pending"
             rt["reason"] = "legacy skipped state predates profile filtering; rerun reduced-profile job"
@@ -155,6 +178,7 @@ def build_state(manifest: dict) -> dict:
         for profile, reason in profile_reasons.items():
             profile_infeasible.append({
                 "data_scope": data_scope,
+                "source_scope": source_scope,
                 "host": host_name,
                 "hw_label": hw_label(host_cfg, tp),
                 "model": model,
@@ -168,6 +192,7 @@ def build_state(manifest: dict) -> dict:
 
         cells.append({
             "data_scope": data_scope,
+            "source_scope": source_scope,
             "host": host_name,
             "hw_label": hw_label(host_cfg, tp),
             "model": model,
@@ -201,6 +226,8 @@ def build_state(manifest: dict) -> dict:
                 matched = True
         if not matched:
             cells.append({
+                "data_scope": "archived",
+                "source_scope": "known_oom",
                 "host": host_name,
                 "hw_label": label,
                 "model": model,

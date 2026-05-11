@@ -541,8 +541,8 @@ cells:
 
   # === MSE validation cells (distributional-mse vs legacy-short on same hardware) ===
   # H100
-  - { host: h100, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, extra_env: "DASHBOARD_SCOPE=mse" }
+  - { host: h100, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, data_scope: mse }
   # A100 (gpu-4)
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, extra_env: "DASHBOARD_SCOPE=mse" }
+  - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, data_scope: mse }
   # RTX3090
-  - { host: 3090, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, extra_env: "DASHBOARD_SCOPE=mse" }
+  - { host: 3090, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, data_scope: mse }
