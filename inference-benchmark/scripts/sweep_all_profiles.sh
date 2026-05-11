@@ -18,6 +18,10 @@ set -euo pipefail
 # vLLM's default in v0.19+.
 export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
 
+truthy() {
+    [[ "${1:-}" == "1" || "${1:-}" == "true" || "${1:-}" == "yes" || "${1:-}" == "on" ]]
+}
+
 MODEL_PATH="${1:?model path}"
 TP="${2:?tp}"
 SHORT="${3:?short}"
@@ -69,6 +73,10 @@ if "$PY" -m vllm.entrypoints.openai.api_server --help 2>&1 | grep -q -- '--gdn-p
     GDN_PREFILL_BACKEND="${GDN_PREFILL_BACKEND:-triton}"
     VLLM_EXTRA_ARGS+=(--gdn-prefill-backend "$GDN_PREFILL_BACKEND")
     echo "[sweep] gdn prefill backend: $GDN_PREFILL_BACKEND"
+fi
+if truthy "${VLLM_ENFORCE_EAGER:-0}"; then
+    VLLM_EXTRA_ARGS+=(--enforce-eager)
+    echo "[sweep] enforce eager: enabled"
 fi
 
 "$PY" -m vllm.entrypoints.openai.api_server \

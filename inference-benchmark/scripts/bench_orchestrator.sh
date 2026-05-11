@@ -27,6 +27,10 @@ DRY_RUN="${BENCH_ORCHESTRATOR_DRY_RUN:-0}"
 SKIP_REMOTE_PROBE="${BENCH_ORCHESTRATOR_SKIP_REMOTE_PROBE:-0}"
 MAX_DISPATCHES="${BENCH_ORCHESTRATOR_MAX_DISPATCHES:-0}"
 DISPATCHES=0
+MAX_OOM_RETRIES="${BENCH_ORCHESTRATOR_MAX_OOM_RETRIES:-3}"
+if ! [[ "$MAX_OOM_RETRIES" =~ ^[0-9]+$ ]]; then
+    MAX_OOM_RETRIES=3
+fi
 
 log() { echo "$(date -Is) $*" | tee -a "$LOG"; }
 truthy() { [[ "${1:-}" == "1" || "${1:-}" == "true" || "${1:-}" == "yes" ]]; }
@@ -188,6 +192,23 @@ expected_output_summary() {
     EXPECTED_OUTPUT_TOTAL="$total"
     EXPECTED_OUTPUT_PRESENT="$present"
     EXPECTED_OUTPUT_MISSING_SAMPLE="${missing[*]:-}"
+}
+
+oom_log_on_host() {
+    local host="$1" port="$2"
+    ssh "$host" "grep -l -i -E 'OutOfMemoryError|CUDA out of memory|out of memory|No available memory for the cache blocks|Available KV cache memory: -|larger than the available KV cache memory|estimated maximum model length|max seq len .*larger than' /tmp/vllm_${port}.log 2>/dev/null" < /dev/null || true
+}
+
+next_oom_max_len() {
+    local max_len="$1" next
+    next=$((max_len / 2))
+    [[ "$next" -lt 2048 ]] && next=2048
+    echo "$next"
+}
+
+can_retry_oom() {
+    local oom="$1" attempt="$2" max_len="$3"
+    [[ -n "$oom" && "$attempt" -lt "$MAX_OOM_RETRIES" && "$max_len" -gt 2048 ]]
 }
 
 state_read_file() {
@@ -428,13 +449,12 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                         write_status "$JID" pending
                         log "$JID: INCOMPLETE ($EXPECTED_OUTPUT_PRESENT/$EXPECTED_OUTPUT_TOTAL expected outputs; missing=${EXPECTED_OUTPUT_MISSING_SAMPLE:-unknown}; $COUNT files copied to $OUT_DIR_LOCAL, warmup=${AGE}s backend=$BACKEND mirror=$MIRROR_STATUS); leaving pending"
                     else
-                        OOM=$(ssh "$HOST" "grep -l 'OutOfMemoryError\\|out of memory\\|No available memory for the cache blocks\\|Available KV cache memory: -' /tmp/vllm_${JOB_PORT}.log 2>/dev/null" < /dev/null || true)
+                        OOM=$(oom_log_on_host "$HOST" "$JOB_PORT")
                         ATT=$(read_attempt "$JID")
-                        if [[ -n "$OOM" && "$ATT" -lt 1 ]]; then
+                        if can_retry_oom "$OOM" "$ATT" "$MAX_LEN"; then
                             bump_attempt "$JID"
                             write_status "$JID" pending
-                            NEW_MAX=$((MAX_LEN / 2))
-                            [[ "$NEW_MAX" -lt 2048 ]] && NEW_MAX=2048
+                            NEW_MAX=$(next_oom_max_len "$MAX_LEN")
                             write_state_value "$JID" max_len_override "$NEW_MAX"
                             log "$JID: zero expected outputs after copying $COUNT files; OOM detected, retry with max_len=$NEW_MAX"
                         else
@@ -447,17 +467,14 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                     log "$JID: local rsync failed for $REMOTE_SYNC_DIR -> $OUT_DIR_LOCAL; leaving pending"
                 fi
             else
-                # Widen detection to include vLLM's KV-cache budget failure
-                # ("Available KV cache memory: -...", "No available memory for
-                # the cache blocks") so model+cudagraph oversubscription also
-                # triggers the halved-max_len retry path.
-                OOM=$(ssh "$HOST" "grep -l 'OutOfMemoryError\\|out of memory\\|No available memory for the cache blocks\\|Available KV cache memory: -' /tmp/vllm_${JOB_PORT}.log 2>/dev/null" < /dev/null || true)
+                # Widen detection to include vLLM's KV-cache budget failures,
+                # which are reported as ValueError rather than torch OOM.
+                OOM=$(oom_log_on_host "$HOST" "$JOB_PORT")
                 ATT=$(read_attempt "$JID")
-                if [[ -n "$OOM" && "$ATT" -lt 1 ]]; then
+                if can_retry_oom "$OOM" "$ATT" "$MAX_LEN"; then
                     bump_attempt "$JID"
                     write_status "$JID" pending
-                    NEW_MAX=$((MAX_LEN / 2))
-                    [[ "$NEW_MAX" -lt 2048 ]] && NEW_MAX=2048
+                    NEW_MAX=$(next_oom_max_len "$MAX_LEN")
                     write_state_value "$JID" max_len_override "$NEW_MAX"
                     log "$JID: OOM detected, retry with max_len=$NEW_MAX"
                 else
