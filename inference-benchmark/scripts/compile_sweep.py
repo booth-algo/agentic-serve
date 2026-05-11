@@ -38,6 +38,10 @@ SYNTHETIC_EXTRA_ENV = {
     "DISTRIBUTIONAL_PREFIX_AWARE": "1",
     "DISTRIBUTIONAL_SHARED_PREFIX_TOKENS": "1024",
 }
+SYNTHETIC_TRACE_REPLAY_CONCURRENCIES = {
+    "single": [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500],
+    "multi": [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320],
+}
 DERIVED_SCOPE_SOURCE = {
     "latest": "fixed",  # legacy alias; the dashboard now exposes synthetic_distributional.
     "synthetic": "fixed",
@@ -288,6 +292,9 @@ def cell_for_output_scope(cell: dict, requested_scope: str, manifest: dict | Non
         for key, value in SYNTHETIC_EXTRA_ENV.items():
             extra_env = _ensure_extra_env(extra_env, key, value)
         out["extra_env"] = extra_env
+        mode = str(out["mode"])
+        if mode in SYNTHETIC_TRACE_REPLAY_CONCURRENCIES:
+            out["concurrencies"] = list(SYNTHETIC_TRACE_REPLAY_CONCURRENCIES[mode])
     return out
 
 
