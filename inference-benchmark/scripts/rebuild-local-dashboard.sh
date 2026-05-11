@@ -18,7 +18,10 @@ DASHBOARD_DIR="$BENCH_ROOT/dashboard"
 RESULTS_DIR="${BENCHMARK_RESULTS_DIR:-/mnt/100g/agent-bench/results}"
 STATE_ROOT="${BENCH_STATE_ROOT:-/mnt/100g/agent-bench/state}"
 JSON_BASE="${DASHBOARD_JSON_BASE:-/agentic-serve}"
-GPU_STATE_OUT="${GPU_STATE_OUT:-$DASHBOARD_DIR/dist/gpu-state.json}"
+LIVE_DIST="$DASHBOARD_DIR/dist"
+NEXT_DIST="${DASHBOARD_NEXT_DIST:-$DASHBOARD_DIR/dist.next}"
+PREV_DIST="${DASHBOARD_PREV_DIST:-$DASHBOARD_DIR/dist.prev}"
+GPU_STATE_OUT="${GPU_STATE_OUT:-$NEXT_DIST/gpu-state.json}"
 GPU_STATE_REPORT="${GPU_STATE_REPORT:-/tmp/agentic-serve-gpu-state-latest.md}"
 GPU_STATE_SSH_TIMEOUT="${GPU_STATE_SSH_TIMEOUT:-12}"
 GPU_STATE_HOSTS="${GPU_STATE_HOSTS:-}"
@@ -111,10 +114,11 @@ echo "Validating data.json"
     SWEEP_STATE_PATH="$DASHBOARD_DIR/public/sweep-state.json" npm run validate:data
 )
 
-echo "Building local dashboard bundle with JSON base $JSON_BASE"
+echo "Building local dashboard bundle with JSON base $JSON_BASE into $NEXT_DIST"
+rm -rf "$NEXT_DIST"
 (
     cd "$DASHBOARD_DIR"
-    VITE_R2_JSON_BASE="$JSON_BASE" npm run build
+    VITE_R2_JSON_BASE="$JSON_BASE" npm run build -- --outDir "$NEXT_DIST" --emptyOutDir
 )
 
 echo "Building private gpu-state.json from $STATE_ROOT"
@@ -132,6 +136,14 @@ if [[ -n "$GPU_STATE_HOSTS" ]]; then
     gpu_state_args+=(--hosts "${gpu_state_hosts[@]}")
 fi
 python3 "$SCRIPT_DIR/sweep_progress_report.py" "${gpu_state_args[@]}"
+
+echo "Promoting rebuilt dashboard bundle to $LIVE_DIST"
+rm -rf "$PREV_DIST"
+if [[ -d "$LIVE_DIST" ]]; then
+    mv "$LIVE_DIST" "$PREV_DIST"
+fi
+mv "$NEXT_DIST" "$LIVE_DIST"
+rm -rf "$PREV_DIST"
 
 if [[ "$MIRROR_R2" == "1" ]]; then
     if command -v aws >/dev/null 2>&1; then
