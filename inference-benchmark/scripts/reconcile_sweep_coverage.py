@@ -364,8 +364,9 @@ def build_report(
     status_counts = Counter(cov.status for cov in all_jobs)
     missing_by_status = Counter(cov.status for cov in missing_jobs)
 
-    only_current = sorted(set(current_rows) - set(compiled_rows))
-    only_compiled = sorted(set(compiled_rows) - set(current_rows))
+    drift_compiled_rows = compiled_scope_rows if scope != "all" else compiled_rows
+    only_current = sorted(set(current_rows) - set(drift_compiled_rows))
+    only_compiled = sorted(set(drift_compiled_rows) - set(current_rows))
 
     lines = [
         "# Sweep Coverage Reconcile",
@@ -390,7 +391,7 @@ def build_report(
         "",
         "## Bench Jobs Drift",
         f"- current bench_jobs rows: {len(current_rows)}",
-        f"- compiled runnable rows from sweep.yaml: {len(compiled_rows)}",
+        f"- compiled runnable rows from sweep.yaml: {len(drift_compiled_rows)}",
         f"- compiled skipped rows: {compiled_skipped}",
         f"- rows in current bench_jobs only: {len(only_current)}",
         f"- rows in compiled sweep only: {len(only_compiled)}",
