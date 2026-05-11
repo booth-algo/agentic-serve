@@ -273,9 +273,9 @@ def profiles_for_output_scope(profiles, requested_scope: str) -> list[str]:
 
 
 def cell_for_output_scope(cell: dict, requested_scope: str, manifest: dict | None = None) -> dict:
-    if requested_scope not in DERIVED_SCOPE_SOURCE:
-        return cell
     out = dict(cell)
+    if requested_scope not in DERIVED_SCOPE_SOURCE:
+        return out
     out["data_scope"] = dashboard_scope_for(requested_scope)
     if dashboard_scope_for(requested_scope) == "synthetic_distributional":
         profiles = out.get("profiles")
