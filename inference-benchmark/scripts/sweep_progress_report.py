@@ -175,13 +175,42 @@ def read_text(path: Path, default: str = "") -> str:
         return default
 
 
+def extra_env_value(extra_env: str, key: str) -> str:
+    try:
+        parts = shlex.split(extra_env)
+    except ValueError:
+        parts = extra_env.split()
+    prefix = f"{key}="
+    for part in parts:
+        if part.startswith(prefix):
+            return part[len(prefix):]
+    return ""
+
+
+def canonical_state_scope(scope: str) -> str:
+    if scope in {"synthetic", "latest", "synthetic-distributional", "synthetic_distributional"}:
+        return "synthetic_distributional"
+    if scope in {"archive", "trace_replay"}:
+        return "trace_replay"
+    return scope
+
+
+def job_state_scope(job: Job) -> str:
+    for key in ("RESULT_SCOPE", "DASHBOARD_SCOPE", "SCOPE"):
+        value = extra_env_value(job.extra_env, key)
+        if value:
+            return canonical_state_scope(value)
+    return canonical_state_scope(job.scope)
+
+
 def state_path(state_dir: Path, job: Job, suffix: str) -> Path:
     # Job IDs contain model-version dots, so Path.with_suffix() would corrupt
     # names like Llama-3.1-8B_tp4_multi.
-    if job.scope and job.scope != "all":
-        if state_dir.name == job.scope:
+    scope = job_state_scope(job)
+    if scope and scope != "all":
+        if state_dir.name == scope:
             return state_dir / f"{job.job_id}.{suffix}"
-        scoped = state_dir / job.scope / f"{job.job_id}.{suffix}"
+        scoped = state_dir / scope / f"{job.job_id}.{suffix}"
         if scoped.exists() or not LEGACY_STATE_FALLBACK:
             return scoped
     return state_dir / f"{job.job_id}.{suffix}"
