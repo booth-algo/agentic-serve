@@ -15,8 +15,6 @@ const CURRENT_SINGLE_CONCS = [1, 10, 20, 40, 80, 160, 256, 320];
 const CURRENT_MULTI_CONCS = [5, 20, 40, 80, 160];
 const FIXED_SINGLE_CONCS = [200, 320];
 const FIXED_MULTI_CONCS = [200, 320];
-const SYNTHETIC_SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
-const SYNTHETIC_MULTI_CONCS = [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320];
 const MSE_SINGLE_CONCS: number[] = [];
 const MSE_MULTI_CONCS = [40, 80];
 const ARCHIVE_SINGLE_CONCS = [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500];
@@ -40,15 +38,6 @@ const FIXED_MULTI_PROFILES = [
   'swebench-multiturn',
   'terminalbench-multiturn',
   'osworld-multiturn',
-];
-const SYNTHETIC_SINGLE_PROFILES = [
-  'chat-singleturn-synth',
-];
-const SYNTHETIC_MULTI_PROFILES = [
-  'chat-multiturn-synth',
-  'swebench-multiturn-synth',
-  'terminalbench-multiturn-synth',
-  'osworld-multiturn-synth',
 ];
 const MSE_SINGLE_PROFILES: string[] = [];
 const MSE_MULTI_PROFILES = [
@@ -211,6 +200,14 @@ function uniqueNumbers(values: number[]): number[] {
   return Array.from(new Set(values)).sort((a, b) => a - b);
 }
 
+function sweepProfilesForMode(cells: SweepCell[], mode: SweepCell['mode']): string[] {
+  return uniqueStrings(cells.flatMap((cell) => cell.mode === mode ? cell.profiles ?? [] : []));
+}
+
+function sweepConcurrenciesForMode(cells: SweepCell[], mode: SweepCell['mode']): number[] {
+  return uniqueNumbers(cells.flatMap((cell) => cell.mode === mode ? cell.concurrencies ?? [] : []));
+}
+
 export function CoveragePage({
   allData,
   sweepState,
@@ -221,25 +218,26 @@ export function CoveragePage({
   const gridScope = coverageGridScope(dataScope);
 
   const coveragePlan = useMemo(() => {
+    const scopedSweepCells = sweepState?.cells.filter((cell) => stateCellScope(cell) === gridScope) ?? [];
     const singleProfiles = gridScope === 'trace_replay'
       ? ARCHIVE_SINGLE_PROFILES
       : gridScope === 'synthetic_distributional'
-        ? SYNTHETIC_SINGLE_PROFILES
+        ? sweepProfilesForMode(scopedSweepCells, 'single')
         : uniqueStrings([...CURRENT_SINGLE_PROFILES, ...FIXED_SINGLE_PROFILES, ...MSE_SINGLE_PROFILES]);
     const multiProfiles = gridScope === 'trace_replay'
       ? ARCHIVE_MULTI_PROFILES
       : gridScope === 'synthetic_distributional'
-        ? SYNTHETIC_MULTI_PROFILES
+        ? sweepProfilesForMode(scopedSweepCells, 'multi')
         : uniqueStrings([...CURRENT_MULTI_PROFILES, ...FIXED_MULTI_PROFILES, ...MSE_MULTI_PROFILES]);
     const singleConcs = gridScope === 'trace_replay'
       ? ARCHIVE_SINGLE_CONCS
       : gridScope === 'synthetic_distributional'
-        ? SYNTHETIC_SINGLE_CONCS
+        ? sweepConcurrenciesForMode(scopedSweepCells, 'single')
         : uniqueNumbers([...CURRENT_SINGLE_CONCS, ...FIXED_SINGLE_CONCS, ...MSE_SINGLE_CONCS]);
     const multiConcs = gridScope === 'trace_replay'
       ? ARCHIVE_MULTI_CONCS
       : gridScope === 'synthetic_distributional'
-        ? SYNTHETIC_MULTI_CONCS
+        ? sweepConcurrenciesForMode(scopedSweepCells, 'multi')
         : uniqueNumbers([...CURRENT_MULTI_CONCS, ...FIXED_MULTI_CONCS, ...MSE_MULTI_CONCS]);
     return {
       singleProfiles,
@@ -248,7 +246,7 @@ export function CoveragePage({
       multiConcs,
       expectedCellsPerModel: singleProfiles.length * singleConcs.length + multiProfiles.length * multiConcs.length,
     };
-  }, [gridScope]);
+  }, [gridScope, sweepState]);
 
   const { groups, hardwareList } = useMemo(() => {
     const { singleProfiles, multiProfiles, singleConcs, multiConcs, expectedCellsPerModel } = coveragePlan;
