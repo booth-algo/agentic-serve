@@ -41,6 +41,7 @@ SYNTHETIC_EXTRA_ENV = {
 DERIVED_SCOPE_SOURCE = {
     "latest": "fixed",  # legacy alias; the dashboard now exposes synthetic_distributional.
     "synthetic": "fixed",
+    "synthetic-distributional": "fixed",
     "synthetic_distributional": "fixed",
 }
 
@@ -186,7 +187,7 @@ def _set_extra_env(extra_env: str, key: str, value: str) -> str:
 
 
 def dashboard_scope_for(scope: str) -> str:
-    if scope in {"latest", "synthetic", "synthetic_distributional"}:
+    if scope in {"latest", "synthetic", "synthetic-distributional", "synthetic_distributional"}:
         return "synthetic_distributional"
     if scope in {"archive", "trace_replay"}:
         return "trace_replay"
@@ -196,7 +197,7 @@ def dashboard_scope_for(scope: str) -> str:
 
 
 def result_scope_for(scope: str) -> str:
-    if scope in {"latest", "synthetic", "synthetic_distributional"}:
+    if scope in {"latest", "synthetic", "synthetic-distributional", "synthetic_distributional"}:
         return "synthetic_distributional"
     if scope in {"archive", "trace_replay"}:
         return "trace_replay"
@@ -367,6 +368,7 @@ def main() -> int:
             "all",
             "trace_replay",
             "synthetic_distributional",
+            "synthetic-distributional",
             "archived",
             "synthetic",
             "latest",

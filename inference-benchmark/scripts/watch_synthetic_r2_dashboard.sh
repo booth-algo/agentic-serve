@@ -11,7 +11,7 @@ PROFILE="${AWS_PROFILE:-r2}"
 REPORT="${REPORT:-/tmp/synthetic-r2-dashboard-watch-latest.md}"
 HISTORY="${HISTORY:-/tmp/synthetic-r2-dashboard-watch-history.md}"
 RECONCILE_REPORT="${RECONCILE_REPORT:-/tmp/synthetic-coverage-watch-latest.md}"
-MISSING_JOBS="${MISSING_JOBS:-/tmp/bench_jobs/missing_synthetic_bench_jobs.txt}"
+MISSING_JOBS="${MISSING_JOBS:-/tmp/bench_jobs/missing_synthetic_distributional_bench_jobs.txt}"
 AWS_LIST_CACHE="${AWS_LIST_CACHE:-/tmp/synthetic-r2-objects.txt}"
 DATA_JSON_CACHE="${DATA_JSON_CACHE:-/tmp/synthetic-dashboard-json-objects.txt}"
 

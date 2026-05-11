@@ -20,12 +20,12 @@ gpu-4|/models/Tiny|1|Tiny|single|vllm|2048|0.5|1|chat-singleturn-synth|RESULT_SC
 3090|/models/Tiny|1|Tiny|multi|sglang|2048|0.5|1|chat-multiturn-synth|RESULT_SCOPE=synthetic_distributional DASHBOARD_SCOPE=synthetic_distributional
 EOF
 
-mkdir -p "$STATE_ROOT/synthetic_distributional"
-printf 'running\n' > "$STATE_ROOT/synthetic_distributional/3090_Tiny_tp1_multi_sglang.status"
-printf '8089\n' > "$STATE_ROOT/synthetic_distributional/3090_Tiny_tp1_multi_sglang.port"
+mkdir -p "$STATE_ROOT/synthetic"
+printf 'running\n' > "$STATE_ROOT/synthetic/3090_Tiny_tp1_multi_sglang.status"
+printf '8089\n' > "$STATE_ROOT/synthetic/3090_Tiny_tp1_multi_sglang.port"
 
 BENCH_JOBS_FILE="$JOBS_FILE" \
-BENCH_JOBS_SCOPE=synthetic_distributional \
+BENCH_JOBS_SCOPE=synthetic \
 BENCH_STATE_ROOT="$STATE_ROOT" \
 BENCH_RESULTS_ROOT="$RESULTS_ROOT" \
 BENCH_ORCHESTRATOR_LOG="$LOG" \
@@ -45,7 +45,12 @@ if [[ -e "$STATE_ROOT/synthetic_distributional/gpu-4_Tiny_tp1_single.status" ]];
     exit 1
 fi
 
-if [[ "$(cat "$STATE_ROOT/synthetic_distributional/3090_Tiny_tp1_multi_sglang.status")" != "running" ]]; then
+if [[ -e "$STATE_ROOT/synthetic_distributional/3090_Tiny_tp1_multi_sglang.status" ]]; then
+    echo "dry-run unexpectedly migrated legacy synthetic state" >&2
+    exit 1
+fi
+
+if [[ "$(cat "$STATE_ROOT/synthetic/3090_Tiny_tp1_multi_sglang.status")" != "running" ]]; then
     echo "dry-run unexpectedly mutated existing running job state" >&2
     exit 1
 fi

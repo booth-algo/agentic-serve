@@ -69,6 +69,13 @@ echo "[mt-sweep-sglang] concurrencies: $CONCS"
 echo "[mt-sweep-sglang] profiles: $PROFILES"
 echo "[mt-sweep-sglang] dashboard scope: $DASHBOARD_SCOPE"
 
+SGLANG_CUDA_GRAPH_ARGS=""
+GPU_ARCH=$("$PY" -c "import torch; print(torch.cuda.get_device_capability()[0])" 2>/dev/null || echo 0)
+if [[ "$GPU_ARCH" == "7" ]]; then
+    SGLANG_CUDA_GRAPH_ARGS="--disable-cuda-graph"
+    echo "[mt-sweep-sglang] sm75 detected; disabling CUDA graphs"
+fi
+
 "$PY" -m sglang.launch_server \
     --model-path "$MODEL_PATH" \
     --host 0.0.0.0 \

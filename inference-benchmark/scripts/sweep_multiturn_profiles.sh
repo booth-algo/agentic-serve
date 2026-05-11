@@ -61,6 +61,13 @@ echo "[mt-sweep] concurrencies: $CONCS"
 echo "[mt-sweep] profiles: $PROFILES"
 echo "[mt-sweep] dashboard scope: $DASHBOARD_SCOPE"
 
+VLLM_EXTRA_ARGS=()
+if "$PY" -m vllm.entrypoints.openai.api_server --help 2>&1 | grep -q -- '--gdn-prefill-backend'; then
+    GDN_PREFILL_BACKEND="${GDN_PREFILL_BACKEND:-triton}"
+    VLLM_EXTRA_ARGS+=(--gdn-prefill-backend "$GDN_PREFILL_BACKEND")
+    echo "[mt-sweep] gdn prefill backend: $GDN_PREFILL_BACKEND"
+fi
+
 "$PY" -m vllm.entrypoints.openai.api_server \
     --model "$MODEL_PATH" \
     --port "$PORT" \
@@ -71,6 +78,7 @@ echo "[mt-sweep] dashboard scope: $DASHBOARD_SCOPE"
     --gpu-memory-utilization "$GPU_MEM" \
     --max-model-len "$MAX_LEN" \
     --trust-remote-code \
+    "${VLLM_EXTRA_ARGS[@]}" \
     > /tmp/vllm_${PORT}.log 2>&1 &
 SERVER_PID=$!
 echo "[mt-sweep] vllm PID=$SERVER_PID (port $PORT)"

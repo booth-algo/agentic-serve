@@ -32,6 +32,24 @@ log() { echo "$(date -Is) $*" | tee -a "$LOG"; }
 truthy() { [[ "${1:-}" == "1" || "${1:-}" == "true" || "${1:-}" == "yes" ]]; }
 dry_run() { truthy "$DRY_RUN"; }
 
+canonical_scope() {
+    case "${1:-}" in
+        synthetic|latest|synthetic-distributional|synthetic_distributional) echo "synthetic_distributional" ;;
+        archive|trace_replay) echo "trace_replay" ;;
+        current|canonical|fixed|fixed-grid|mse|archived) echo "archived" ;;
+        *) echo "${1:-}" ;;
+    esac
+}
+
+state_scope_aliases() {
+    case "$(canonical_scope "$1")" in
+        synthetic_distributional) echo "synthetic_distributional synthetic latest synthetic-distributional" ;;
+        trace_replay) echo "trace_replay archive" ;;
+        archived) echo "archived current canonical fixed fixed-grid mse" ;;
+        *) echo "$1" ;;
+    esac
+}
+
 LOCK_FILE="/tmp/bench_orchestrator.lock"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
@@ -39,11 +57,13 @@ if ! flock -n 9; then
     exit 0
 fi
 
-JOBS_SCOPE=$(awk -F': ' '/^# SCOPE:/ {print $2; exit}' "$JOBS_FILE" 2>/dev/null || true)
-EXPECTED_JOBS_SCOPE="${BENCH_JOBS_SCOPE:-${JOBS_SCOPE:-fixed}}"
+RAW_JOBS_SCOPE=$(awk -F': ' '/^# SCOPE:/ {print $2; exit}' "$JOBS_FILE" 2>/dev/null || true)
+RAW_EXPECTED_JOBS_SCOPE="${BENCH_JOBS_SCOPE:-${RAW_JOBS_SCOPE:-fixed}}"
+JOBS_SCOPE="$(canonical_scope "$RAW_JOBS_SCOPE")"
+EXPECTED_JOBS_SCOPE="$(canonical_scope "$RAW_EXPECTED_JOBS_SCOPE")"
 if [[ "$EXPECTED_JOBS_SCOPE" != "all" ]]; then
     if [[ "$JOBS_SCOPE" != "$EXPECTED_JOBS_SCOPE" ]]; then
-        log "refusing to run: $JOBS_FILE has scope='${JOBS_SCOPE:-missing}', expected '$EXPECTED_JOBS_SCOPE'"
+        log "refusing to run: $JOBS_FILE has scope='${RAW_JOBS_SCOPE:-missing}' normalized='${JOBS_SCOPE:-missing}', expected '${RAW_EXPECTED_JOBS_SCOPE}' normalized='$EXPECTED_JOBS_SCOPE'"
         exit 1
     fi
 fi
@@ -126,7 +146,7 @@ row_result_scope() {
 
 dashboard_scope_for() {
     case "$1" in
-        synthetic|latest|synthetic_distributional) echo "synthetic_distributional" ;;
+        synthetic|latest|synthetic-distributional|synthetic_distributional) echo "synthetic_distributional" ;;
         archive|trace_replay) echo "trace_replay" ;;
         current|canonical|fixed|fixed-grid|mse|archived|archived/*) echo "archived" ;;
         *) echo "$1" ;;
@@ -135,7 +155,7 @@ dashboard_scope_for() {
 
 storage_scope_for() {
     case "$1" in
-        synthetic|latest|synthetic_distributional) echo "synthetic_distributional" ;;
+        synthetic|latest|synthetic-distributional|synthetic_distributional) echo "synthetic_distributional" ;;
         archive|trace_replay) echo "trace_replay" ;;
         current|canonical) echo "archived/canonical" ;;
         fixed|fixed-grid) echo "archived/fixed-grid" ;;
@@ -146,17 +166,57 @@ storage_scope_for() {
     esac
 }
 
+expected_output_summary() {
+    local dir="$1" short="$2" tp="$3" backend="$4" mode="$5" concs="$6" profiles="$7"
+    local profile conc file total=0 present=0
+    local missing=()
+    for profile in $profiles; do
+        for conc in $concs; do
+            total=$((total + 1))
+            if [[ "$mode" == "multi" ]]; then
+                file="$dir/${profile}_conc${conc}.json"
+            else
+                file="$dir/${short}_tp${tp}_${backend}_${profile}_conc${conc}.json"
+            fi
+            if [[ -s "$file" ]]; then
+                present=$((present + 1))
+            elif [[ "${#missing[@]}" -lt 4 ]]; then
+                missing+=("$(basename "$file")")
+            fi
+        done
+    done
+    EXPECTED_OUTPUT_TOTAL="$total"
+    EXPECTED_OUTPUT_PRESENT="$present"
+    EXPECTED_OUTPUT_MISSING_SAMPLE="${missing[*]:-}"
+}
+
 state_read_file() {
-    local jid="$1" suffix="$2" primary legacy
+    local jid="$1" suffix="$2" primary scope candidate
     primary="$STATE_DIR/${jid}.${suffix}"
-    legacy="$LEGACY_STATE_DIR/${jid}.${suffix}"
     if [[ -f "$primary" ]]; then
         echo "$primary"
-    elif [[ "$STATE_DIR" != "$LEGACY_STATE_DIR" && -f "$legacy" ]]; then
-        echo "$legacy"
-    else
-        echo "$primary"
+        return
     fi
+    for scope in $(state_scope_aliases "$STATE_SCOPE"); do
+        candidate="$STATE_ROOT/$scope/${jid}.${suffix}"
+        if [[ "$candidate" != "$primary" && -f "$candidate" ]]; then
+            echo "$candidate"
+            return
+        fi
+    done
+    for scope in $(state_scope_aliases "$STATE_SCOPE"); do
+        candidate="$LEGACY_STATE_ROOT/$scope/${jid}.${suffix}"
+        if [[ -f "$candidate" ]]; then
+            echo "$candidate"
+            return
+        fi
+    done
+    candidate="$LEGACY_STATE_ROOT/${jid}.${suffix}"
+    if [[ -f "$candidate" ]]; then
+        echo "$candidate"
+        return
+    fi
+    echo "$primary"
 }
 
 read_status()  { cat "$(state_read_file "$1" status)" 2>/dev/null || echo "pending"; }
@@ -351,14 +411,37 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                 COUNT=$(ssh "$HOST" "ls '$REMOTE_SYNC_DIR' 2>/dev/null | wc -l" < /dev/null)
                 mkdir -p "$OUT_DIR_LOCAL"
                 if rsync -az "$HOST:$REMOTE_SYNC_DIR/" "$OUT_DIR_LOCAL/" < /dev/null >> "$LOG" 2>&1; then
-                    if aws --profile "$PROFILE" --endpoint-url "$EP" s3 sync \
-                        "$OUT_DIR_LOCAL/" "s3://$BUCKET/results/$R2_DIR/" < /dev/null >> "$LOG" 2>&1; then
-                        MIRROR_STATUS="r2_mirrored"
-                    else
-                        MIRROR_STATUS="r2_mirror_failed"
+                    expected_output_summary "$OUT_DIR_LOCAL" "$SHORT" "$TP" "$BACKEND" "$MODE" "$CONCS" "$PROFILES"
+                    MIRROR_STATUS="not_mirrored"
+                    if [[ "$EXPECTED_OUTPUT_PRESENT" -gt 0 ]]; then
+                        if aws --profile "$PROFILE" --endpoint-url "$EP" s3 sync \
+                            "$OUT_DIR_LOCAL/" "s3://$BUCKET/results/$R2_DIR/" < /dev/null >> "$LOG" 2>&1; then
+                            MIRROR_STATUS="r2_mirrored"
+                        else
+                            MIRROR_STATUS="r2_mirror_failed"
+                        fi
                     fi
-                    write_status "$JID" done
-                    log "$JID: DONE ($COUNT files copied to $OUT_DIR_LOCAL, warmup=${AGE}s backend=$BACKEND mirror=$MIRROR_STATUS)"
+                    if [[ "$EXPECTED_OUTPUT_PRESENT" -eq "$EXPECTED_OUTPUT_TOTAL" ]]; then
+                        write_status "$JID" done
+                        log "$JID: DONE ($EXPECTED_OUTPUT_PRESENT/$EXPECTED_OUTPUT_TOTAL expected outputs; $COUNT files copied to $OUT_DIR_LOCAL, warmup=${AGE}s backend=$BACKEND mirror=$MIRROR_STATUS)"
+                    elif [[ "$EXPECTED_OUTPUT_PRESENT" -gt 0 ]]; then
+                        write_status "$JID" pending
+                        log "$JID: INCOMPLETE ($EXPECTED_OUTPUT_PRESENT/$EXPECTED_OUTPUT_TOTAL expected outputs; missing=${EXPECTED_OUTPUT_MISSING_SAMPLE:-unknown}; $COUNT files copied to $OUT_DIR_LOCAL, warmup=${AGE}s backend=$BACKEND mirror=$MIRROR_STATUS); leaving pending"
+                    else
+                        OOM=$(ssh "$HOST" "grep -l 'OutOfMemoryError\\|out of memory\\|No available memory for the cache blocks\\|Available KV cache memory: -' /tmp/vllm_${JOB_PORT}.log 2>/dev/null" < /dev/null || true)
+                        ATT=$(read_attempt "$JID")
+                        if [[ -n "$OOM" && "$ATT" -lt 1 ]]; then
+                            bump_attempt "$JID"
+                            write_status "$JID" pending
+                            NEW_MAX=$((MAX_LEN / 2))
+                            [[ "$NEW_MAX" -lt 2048 ]] && NEW_MAX=2048
+                            write_state_value "$JID" max_len_override "$NEW_MAX"
+                            log "$JID: zero expected outputs after copying $COUNT files; OOM detected, retry with max_len=$NEW_MAX"
+                        else
+                            write_status "$JID" skipped
+                            log "$JID: SKIPPED (0/$EXPECTED_OUTPUT_TOTAL expected outputs; copied only stale/non-matching files from $REMOTE_SYNC_DIR; attempt=$ATT, oom_log=$OOM)"
+                        fi
+                    fi
                 else
                     write_status "$JID" pending
                     log "$JID: local rsync failed for $REMOTE_SYNC_DIR -> $OUT_DIR_LOCAL; leaving pending"

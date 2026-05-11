@@ -8,7 +8,7 @@ Type=oneshot
 WorkingDirectory=/root/agentic-serve/inference-benchmark
 Environment=BENCH_STATE_ROOT=/mnt/100g/agent-bench/state
 Environment=BENCH_RESULTS_ROOT=/mnt/100g/agent-bench/results
-Environment=BENCH_JOBS_SCOPE=synthetic
+Environment=BENCH_JOBS_SCOPE=synthetic_distributional
 Environment=BENCH_SYNC_GPU_CODE=1
 Environment=BENCH_SYNC_REQUIRED=0
 Environment=BENCH_REMOTE_ROOT=/tmp/inference-benchmark
