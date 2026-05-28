@@ -70,6 +70,7 @@ class RooflineParams:
     bytes_per_param: float = 2.0
     available_kv_blocks: int = 27_250          # empirical H100 (max free_kv_blocks across 4 vLLM engine traces 2026-05-27; ~1.5% less than spec-derived 27651)
     cache_block_size: int = 16                 # vLLM v1 default
+    scheduler_overhead_ms_per_step: float = 5.7  # per-step Python/dispatcher cost. Calibrated from 99 lowest-work decode steps in swe_c40 trace (mean engine_step_wall=6.61ms minus mean model_submit_wall=0.93ms = 5.68ms). Single-anchor discipline, not a fit.
 
     @property
     def kv_capacity_bytes(self) -> int:

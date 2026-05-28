@@ -8,7 +8,15 @@
   "bytes_per_param": 2.0,
   "available_kv_blocks": 27250,
   "cache_block_size": 16,
+  "scheduler_overhead_ms_per_step": 5.7,
   "_notes": {
+    "scheduler_overhead_anchor": {
+      "source": "vllm_engine_step_trace_swe_c40_t12 — 99 minimal-work decode steps (batch=1, single output token)",
+      "engine_step_wall_ms_mean": 6.61,
+      "model_submit_wall_ms_mean": 0.93,
+      "scheduler_overhead_ms_per_step": "6.61 - 0.93 = 5.68 ≈ 5.7",
+      "principle": "Per-step Python/dispatcher cost is independent of token-level work. Calibrated from one trace's quietest steps — single anchor, no fit."
+    },
     "kv_capacity_derivation": "Empirical, 2026-05-27: 27250 = max(free_kv_blocks) + first-step allocation = 27192 + 58 observed across 4 vLLM engine traces (swe_c40, swe_c80, swe_c320, terminal_c80). The spec-derived value 27651 (=58 GB / 16 tokens / 131072 bytes) is 1.5% too high — vLLM reserves ~400 blocks for sentinels/scratch. Recorded in profiling/docs/q1-kv-blocks-verification-2026-05-27.md.",
     "model": "Llama-3.1-8B-Instruct",
     "gpu": "H100 SXM (3.35 TB/s HBM3, 989 TFLOPS BF16 dense)",

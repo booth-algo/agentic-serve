@@ -34,6 +34,8 @@ interface ServingTurnPrediction {
   tpot_pred?: number; tpot_meas?: number; tpot_err?: number;
   tpot_pred_llm_d?: number;
   tpot_pred_two_roofline?: number;
+  tpot_pred_three_regime?: number;
+  tpot_regime?: string;
   tpot_signed_err_ms?: number; tpot_abs_err_ms?: number;
   base_tpot_signed_err_ms?: number; base_tpot_abs_err_ms?: number;
   e2el_pred?: number; e2el_meas?: number; e2el_err?: number;
@@ -455,8 +457,6 @@ export function ServingPredictionsPage({
         />
       )}
 
-      {showFixedTpotFit && <FixedTpotFitPanel data={fixedTpotFit} pageKind={pageKind} />}
-
       <ServingTable
         rows={tableRows}
         summaryRows={tableSummaryRows}
@@ -470,148 +470,6 @@ export function ServingPredictionsPage({
   );
 }
 
-function FixedTpotFitPanel({
-  data,
-  pageKind,
-}: {
-  data: FixedTpotFitData;
-  pageKind: PredictionPageKind;
-}) {
-  const fit = data.fit_summary;
-  const comparisonRows = data.page_comparisons?.[pageKind] ?? data.dashboard_comparison;
-  const primaryServing = comparisonRows.find(row => row.backend === data.experiment.backend)
-    ?? comparisonRows[0];
-  const secondaryComparisonRows = comparisonRows.filter(row => row.backend !== data.experiment.backend);
-  const worstPhysics = data.worst_rows?.physics_loo ?? [];
-  const comparisonLabel = pageKind === 'simulator' ? 'simulator' : 'serving';
-  const kernelMape = fit.kernel_composed_mape ?? fit.physics_loo_mape;
-  const kernelMedianApe = fit.kernel_composed_median_ape ?? fit.physics_loo_median_ape;
-  const kernelMaxApe = fit.kernel_composed_max_ape ?? fit.physics_loo_max_ape;
-  const traceMape = fit.trace_cross_check_mape ?? fit.interp_loo_mape;
-  const primaryLabel = primaryServing?.label ?? primaryServing?.backend ?? 'kernel-composed';
-  const smallKernelRows = fit.small_kernel_exact_rows !== undefined && fit.small_kernel_missing_rows !== undefined
-    ? `${fit.small_kernel_exact_rows}/${fit.rows}`
-    : fit.small_kernel_component_count !== undefined
-      ? `${fit.small_kernel_component_count} components`
-    : 'partial';
-  const smallKernelSubvalue = fit.small_kernel_component_count !== undefined
-    ? 'source-of-truth component models'
-    : 'exact rows in current profile';
-
-  return (
-    <section className="rounded-md border border-[#21262d] bg-[#161b22]">
-      <div className="flex flex-col gap-3 border-b border-[#21262d] px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6e7681]">Fixed decode-step experiment</div>
-          <div className="mt-1 text-sm font-semibold text-[#e6edf3]">{data.experiment.name}</div>
-          <p className="mt-1 max-w-4xl text-xs text-[#8b949e]">{data.experiment.scope_note}</p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[360px]">
-          <MetricBadge label="Kernel TPOT" value={kernelMape} />
-          <MetricBadge label={fit.trace_cross_check_mape === undefined ? 'Kernel Baseline' : 'Trace Check'} value={traceMape} />
-        </div>
-      </div>
-
-      <div className="grid gap-3 p-4 lg:grid-cols-[1fr_1.2fr]">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <FixedTpotStat
-            label="Validation Rows"
-            value={fit.rows.toLocaleString()}
-            subvalue={data.experiment.target}
-          />
-          <FixedTpotStat
-            label="Kernel Median"
-            value={formatPercent(kernelMedianApe)}
-            subvalue="median APE"
-          />
-          <FixedTpotStat
-            label="TPOT MAPE"
-            value={formatPercent(primaryServing?.tpot_mape)}
-            subvalue={primaryLabel}
-          />
-          <FixedTpotStat
-            label="Small Kernels"
-            value={smallKernelRows}
-            subvalue={smallKernelSubvalue}
-          />
-        </div>
-
-        <div className="overflow-hidden rounded border border-[#21262d] bg-[#0d1117]">
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-[#21262d] text-[#8b949e]">
-                <th className="px-3 py-2 text-left font-medium">Source</th>
-                <th className="px-2 py-2 text-right font-medium">Rows</th>
-                <th className="px-2 py-2 text-right font-medium">TTFT MAPE</th>
-                <th className="px-2 py-2 text-right font-medium">TPOT MAPE</th>
-                <th className="px-2 py-2 text-right font-medium">TPOT Median</th>
-                <th className="px-2 py-2 text-right font-medium">TPOT Worst</th>
-                <th className="px-2 py-2 text-right font-medium">E2EL MAPE</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-[#21262d]/60">
-                <td className="px-3 py-2 text-[#c9d1d9]">{primaryLabel}</td>
-                <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{fit.rows}</td>
-                <td className="px-2 py-2 text-right font-mono text-[#6e7681]">N/A</td>
-                <td className="px-2 py-2 text-right font-mono text-[#3fb950]">{formatPercent(kernelMape)}</td>
-                <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatPercent(kernelMedianApe)}</td>
-                <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatPercent(kernelMaxApe)}</td>
-                <td className="px-2 py-2 text-right font-mono text-[#6e7681]">N/A</td>
-              </tr>
-              {secondaryComparisonRows.map(row => (
-                <tr key={row.backend} className="border-b border-[#21262d]/60 last:border-b-0">
-                  <td className="px-3 py-2 text-[#c9d1d9]">{row.label ?? `webpage ${comparisonLabel} ${row.backend}`}</td>
-                  <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{row.rows}</td>
-                  <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatPercent(row.ttft_mape)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatPercent(row.tpot_mape)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatPercent(row.tpot_median_ape)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatPercent(row.tpot_max_ape)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-[#8b949e]">{formatPercent(row.e2el_mape)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {worstPhysics.length > 0 && (
-        <div className="border-t border-[#21262d] px-4 py-3">
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6e7681]">Worst kernel-composed rows</div>
-          <div className="flex flex-wrap gap-2">
-            {worstPhysics.slice(0, 5).map(row => (
-              <span
-                key={`${row.batch_size}-${row.context_len}`}
-                className={`rounded border px-2 py-1 font-mono text-[10px] ${servingErrorTone(row.physics_loo_pct_error).className}`}
-                title={`actual ${formatLatency(row.actual_ms)}; predicted ${formatLatency(row.physics_loo_pred_ms)}`}
-              >
-                B{row.batch_size} T{row.context_len}: {formatPercent(row.physics_loo_pct_error)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function FixedTpotStat({
-  label,
-  value,
-  subvalue,
-}: {
-  label: string;
-  value: string;
-  subvalue: string;
-}) {
-  return (
-    <div className="rounded border border-[#21262d] bg-[#0d1117] px-3 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6e7681]">{label}</div>
-      <div className="mt-1 font-mono text-lg font-semibold text-[#e6edf3]">{value}</div>
-      <div className="mt-0.5 text-[10px] text-[#8b949e]">{subvalue}</div>
-    </div>
-  );
-}
 
 function applyServingFocus(rows: ServingRow[], focus?: ServingFocus): ServingRow[] {
   if (!focus) return rows;
@@ -1280,6 +1138,10 @@ function ServingPerTurnChart({
         // profiling/docs/two-roofline-tpot-2026-05-28.md.
         const twoRoofline =
           metric.label === 'TPOT' ? turn.tpot_pred_two_roofline : undefined;
+        // Three-regime: classifier-driven step/ramp predictor with no fits.
+        // See simulator/three_regime_tpot.py.
+        const threeRegime =
+          metric.label === 'TPOT' ? turn.tpot_pred_three_regime : undefined;
         return {
           turn: displayTurn(turn),
           meas: typeof meas === 'number' && Number.isFinite(meas) ? meas : null,
@@ -1289,6 +1151,10 @@ function ServingPerTurnChart({
             typeof twoRoofline === 'number' && Number.isFinite(twoRoofline)
               ? twoRoofline
               : null,
+          threeRegime:
+            typeof threeRegime === 'number' && Number.isFinite(threeRegime)
+              ? threeRegime
+              : null,
         };
       }),
     [turns, metric.measKey, metric.predKey, metric.label],
@@ -1296,6 +1162,8 @@ function ServingPerTurnChart({
   const showLlmd = metric.label === 'TPOT' && chartData.some(d => d.llmd !== null);
   const showTwoRoofline =
     metric.label === 'TPOT' && chartData.some(d => d.twoRoofline !== null);
+  const showThreeRegime =
+    metric.label === 'TPOT' && chartData.some(d => d.threeRegime !== null);
   if (chartData.length === 0) return null;
   return (
     <div className="border-b border-[#21262d] px-4 py-3">
@@ -1383,6 +1251,14 @@ function ServingPerTurnChart({
                       <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (two-roofline)</span>
                     </span>
                   )}
+                  {showThreeRegime && (
+                    <span className="flex items-center gap-2">
+                      <svg width="26" height="8" aria-hidden>
+                        <line x1="0" y1="4" x2="26" y2="4" stroke="#a855f7" strokeWidth="2" />
+                      </svg>
+                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (three-regime)</span>
+                    </span>
+                  )}
                 </div>
               )}
             />
@@ -1426,6 +1302,18 @@ function ServingPerTurnChart({
                 dataKey="twoRoofline"
                 name={`${metric.label} predicted (two-roofline)`}
                 stroke="#22c55e"
+                strokeWidth={2}
+                dot={{ r: 2 }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            )}
+            {showThreeRegime && (
+              <Line
+                type="monotone"
+                dataKey="threeRegime"
+                name={`${metric.label} predicted (three-regime)`}
+                stroke="#a855f7"
                 strokeWidth={2}
                 dot={{ r: 2 }}
                 connectNulls={false}
