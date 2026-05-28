@@ -58,6 +58,14 @@ MIN_NREQ="${11:-100}"
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
 DASHBOARD_SCOPE="${DASHBOARD_SCOPE:-archived}"
+BENCH_REMOTE_TMP="${BENCH_REMOTE_TMP:-/tmp}"
+BENCH_REMOTE_ROOT="${BENCH_REMOTE_ROOT:-/tmp/inference-benchmark}"
+SERVER_LOG="$BENCH_REMOTE_TMP/vllm_${PORT}.log"
+
+mkdir -p "$BENCH_REMOTE_TMP"
+export TMPDIR="$BENCH_REMOTE_TMP"
+export TMP="$BENCH_REMOTE_TMP"
+export TEMP="$BENCH_REMOTE_TMP"
 
 result_scope_matches_expected() {
     local file="$1"
@@ -82,7 +90,7 @@ raise SystemExit(0 if success_count > 0 else 1)
 PY
 }
 
-mkdir -p "$OUT_DIR"
+mkdir -p "$OUT_DIR" "$BENCH_REMOTE_TMP"
 echo "[sweep-sglang] MODEL=$MODEL_PATH TP=$TP OUT=$OUT_DIR"
 echo "[sweep-sglang] concurrencies: $CONCS"
 echo "[sweep-sglang] profiles: $PROFILES"
@@ -116,11 +124,28 @@ fi
     --context-length "$MAX_LEN" \
     --trust-remote-code \
     $SGLANG_CUDA_GRAPH_ARGS \
-    > /tmp/vllm_${PORT}.log 2>&1 &
+    > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "[sweep-sglang] sglang PID=$SERVER_PID (port $PORT)"
 
-trap 'kill $SERVER_PID 2>/dev/null; wait $SERVER_PID 2>/dev/null; true' EXIT
+cleanup_server() {
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        return 0
+    fi
+
+    kill "$SERVER_PID" 2>/dev/null || true
+    for _ in $(seq 1 30); do
+        if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "[sweep-sglang] server did not exit after SIGTERM; sending SIGKILL"
+    kill -KILL "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+}
+trap cleanup_server EXIT
 
 # sglang takes a bit longer to warm up than vllm - same 15-min budget.
 for i in $(seq 1 180); do
@@ -130,7 +155,7 @@ for i in $(seq 1 180); do
     fi
     if ! kill -0 $SERVER_PID 2>/dev/null; then
         echo "[sweep-sglang] server died; tail log:"
-        tail -30 /tmp/vllm_${PORT}.log
+        tail -30 "$SERVER_LOG"
         exit 1
     fi
     sleep 5
@@ -144,12 +169,12 @@ if ! curl -sf -m 120 "http://localhost:$PORT/v1/chat/completions" \
     -d "$HEALTH_JSON" > /dev/null 2>&1; then
     echo "[sweep-sglang] API health check failed — server is reachable but chat completions are not functional"
     echo "[sweep-sglang] tail of server log:"
-    tail -30 /tmp/vllm_${PORT}.log
+    tail -30 "$SERVER_LOG"
     exit 1
 fi
 echo "[sweep-sglang] API health check passed"
 
-cd /tmp/inference-benchmark
+cd "$BENCH_REMOTE_ROOT"
 
 # Capture engine version for dashboard attribution.
 SGLANG_VERSION=$("$PY" -c "import sglang; print(sglang.__version__)" 2>/dev/null || echo "unknown")

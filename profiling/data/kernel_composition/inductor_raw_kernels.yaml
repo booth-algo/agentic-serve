@@ -1,0 +1,151 @@
+model: Llama-3.1-8B-Instruct
+gpu: H100
+compilation:
+  backend: inductor
+  fullgraph: true
+  combo_kernels: true
+  benchmark_combo_kernel: true
+prefill_tokens: 4096
+kernels:
+- kernel_name: triton_poi_fused_0
+  kernel_type: pointwise
+  component: other
+  source_nodes: []
+  aten_ops: []
+- kernel_name: triton_red_fused_1
+  kernel_type: reduction
+  component: other
+  source_nodes: []
+  aten_ops: []
+- kernel_name: triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bmm_cat_clone_cos_expand_le_mul_neg_scalar_tensor_sin_slice_transpose_unsqueeze_view_where_3
+  kernel_type: flash_attention
+  component: rope_attention
+  source_nodes:
+  - linear
+  - view
+  - query_states
+  - freqs
+  - emb
+  - cos
+  - cos_1
+  - cos_2
+  - cos_3
+  - mul_4
+  - x2
+  - neg
+  - x1
+  - cat_1
+  - sin
+  - sin_1
+  - sin_2
+  - sin_3
+  - mul_5
+  - q_embed
+  - getitem_10
+  - hidden_states_3
+  - key
+  - linear_2
+  - view_2
+  - value_states
+  - getitem_11
+  - hidden_states_4
+  - value
+  - arange_4
+  - kv_arange
+  - kv_indices
+  - arange_3
+  - q_arange
+  - q_indices
+  - attention_mask
+  - attention_mask_1
+  - attn_output
+  aten_ops:
+  - aten._unsafe_view
+  - aten.view
+  - aten.transpose
+  - aten.bmm
+  - aten.cat
+  - aten.cos
+  - aten.mul
+  - aten._to_copy
+  - aten.unsqueeze
+  - aten.slice
+  - aten.neg
+  - aten.sin
+  - aten.add
+  - aten.expand
+  - aten.clone
+  - aten.arange
+  - aten.le
+  - aten.scalar_tensor
+  - aten.where
+  - aten._scaled_dot_product_efficient_attention
+- kernel_name: triton_red_fused__to_copy__unsafe_view_add_embedding_mean_mul_pow_rsqrt_4
+  kernel_type: reduction
+  component: rmsnorm
+  source_nodes:
+  - inputs_embeds
+  - attn_output_3
+  - hidden_states_5
+  - hidden_states_6
+  - pow_2
+  - variance_1
+  - add_7
+  - rsqrt_1
+  - hidden_states_7
+  - to_6
+  - hidden_states_8
+  aten_ops:
+  - aten.embedding
+  - aten._unsafe_view
+  - aten.add
+  - aten._to_copy
+  - aten.pow
+  - aten.mean
+  - aten.rsqrt
+  - aten.mul
+- kernel_name: triton_poi_fused__unsafe_view_mul_silu_5
+  kernel_type: pointwise
+  component: swiglu
+  source_nodes:
+  - linear_4
+  - silu
+  - linear_5
+  - mul_10
+  aten_ops:
+  - aten._unsafe_view
+  - aten.silu
+  - aten.mul
+- kernel_name: triton_red_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_8
+  kernel_type: reduction
+  component: rmsnorm
+  source_nodes:
+  - down_proj_1
+  - hidden_states_19
+  - hidden_states_20
+  - pow_5
+  - variance_4
+  - add_15
+  - rsqrt_4
+  - hidden_states_21
+  - to_12
+  - hidden_states_22
+  aten_ops:
+  - aten._unsafe_view
+  - aten.add
+  - aten._to_copy
+  - aten.pow
+  - aten.mean
+  - aten.rsqrt
+  - aten.mul
+summary:
+  total_kernels: 6
+  by_type:
+    pointwise: 2
+    reduction: 3
+    flash_attention: 1
+  by_component:
+    other: 2
+    rope_attention: 1
+    rmsnorm: 2
+    swiglu: 1

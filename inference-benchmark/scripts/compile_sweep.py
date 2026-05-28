@@ -1,27 +1,33 @@
 #!/usr/bin/env python3
-"""Compile sweep.yaml → bench_jobs.txt.
+"""Compile sweep.yaml → benchmark launch manifests.
 
 Reads the authoritative sweep matrix in sweep.yaml, applies the feasibility
-rule and known_oom skiplist, and emits bench_jobs.txt rows for every
-runnable cell. The orchestrator (bench_orchestrator.sh) consumes that file.
+rule and known_oom skiplist, and emits runnable cells. JSON is the structured
+manifest format. The legacy pipe-delimited text format is kept for shell tools
+that still consume row streams.
 
 Run:  python scripts/compile_sweep.py
       python scripts/compile_sweep.py --dry-run   # print to stdout, don't write
+      python scripts/compile_sweep.py --format json --scope synthetic_distributional
       python scripts/compile_sweep.py --verbose   # show skip reasons
 """
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import shlex
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 HERE = Path(__file__).resolve().parent
 SWEEP_YAML = HERE / "sweep.yaml"
 BENCH_JOBS_TXT = HERE / "bench_jobs.txt"
+BENCH_JOBS_JSON = HERE / "bench_jobs.json"
 
 PRESET_KEYS = ("max_len", "gpu_mem", "concurrencies", "profiles")
 CELL_REQUIRED = ("host", "model", "tp", "mode", "preset")
@@ -38,9 +44,14 @@ SYNTHETIC_EXTRA_ENV = {
     "DISTRIBUTIONAL_PREFIX_AWARE": "1",
     "DISTRIBUTIONAL_SHARED_PREFIX_TOKENS": "1024",
 }
+SYNTHETIC_TRACE_REPLAY_CONCURRENCIES = {
+    "single": [1, 10, 20, 40, 80, 120, 160, 200, 256, 320, 500],
+    "multi": [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320],
+}
 DERIVED_SCOPE_SOURCE = {
     "latest": "fixed",  # legacy alias; the dashboard now exposes synthetic_distributional.
     "synthetic": "fixed",
+    "synthetic-distributional": "fixed",
     "synthetic_distributional": "fixed",
 }
 
@@ -87,9 +98,23 @@ def resolve(cell: dict, manifest: dict) -> dict:
     return out
 
 
+def matches_known_oom(cell: dict, entry: dict) -> bool:
+    fields = {
+        "host": str(cell["host"]),
+        "model": str(cell["model"]),
+        "tp": str(cell["tp"]),
+        "mode": str(cell["mode"]),
+        "backend": str(cell.get("backend", "vllm")),
+    }
+    for key, actual in fields.items():
+        if key in entry and str(entry[key]) != actual:
+            return False
+    return True
+
+
 def is_known_oom(cell: dict, manifest: dict) -> str | None:
     for entry in manifest.get("known_oom", []):
-        if entry["host"] == cell["host"] and entry["model"] == cell["model"] and entry["tp"] == cell["tp"]:
+        if matches_known_oom(cell, entry):
             return entry["reason"]
     return None
 
@@ -145,11 +170,13 @@ def _matches_rule(cell: dict, resolved: dict, rule: dict, profile: str) -> bool:
     return True
 
 
-def profile_infeasible_reasons(cell: dict, manifest: dict) -> dict[str, str]:
+def profile_infeasible_reasons(cell: dict, manifest: dict, *, ignore_max_len_rules: bool = False) -> dict[str, str]:
     resolved = resolve(cell, manifest)
     reasons: dict[str, str] = {}
     for profile in resolved["profiles"]:
         for rule in manifest.get("profile_infeasible", []):
+            if ignore_max_len_rules and any(str(key).startswith("max_len_") for key in rule):
+                continue
             if _matches_rule(cell, resolved, rule, str(profile)):
                 reasons[str(profile)] = str(rule["reason"])
                 break
@@ -186,7 +213,7 @@ def _set_extra_env(extra_env: str, key: str, value: str) -> str:
 
 
 def dashboard_scope_for(scope: str) -> str:
-    if scope in {"latest", "synthetic", "synthetic_distributional"}:
+    if scope in {"latest", "synthetic", "synthetic-distributional", "synthetic_distributional"}:
         return "synthetic_distributional"
     if scope in {"archive", "trace_replay"}:
         return "trace_replay"
@@ -196,7 +223,7 @@ def dashboard_scope_for(scope: str) -> str:
 
 
 def result_scope_for(scope: str) -> str:
-    if scope in {"latest", "synthetic", "synthetic_distributional"}:
+    if scope in {"latest", "synthetic", "synthetic-distributional", "synthetic_distributional"}:
         return "synthetic_distributional"
     if scope in {"archive", "trace_replay"}:
         return "trace_replay"
@@ -207,32 +234,59 @@ def result_scope_for(scope: str) -> str:
     return scope
 
 
-def render_row(cell: dict, manifest: dict) -> str:
+def job_record(cell: dict, manifest: dict) -> dict[str, Any]:
     host = manifest["hosts"][cell["host"]]
     model = manifest["models"][cell["model"]]
     resolved = resolve(cell, manifest)
     model_path = f"{host['model_root']}/{model['dir']}"
-    concs = " ".join(str(c) for c in resolved["concurrencies"])
-    profiles = " ".join(resolved["profiles"])
     extra_env = resolved.get("extra_env", "")
     source_scope = cell_data_scope(cell)
     extra_env = _set_extra_env(str(extra_env), "DASHBOARD_SCOPE", dashboard_scope_for(source_scope))
     extra_env = _set_extra_env(extra_env, "RESULT_SCOPE", result_scope_for(source_scope))
     backend = str(cell.get("backend", "vllm"))
+    python_key = "python_sglang" if backend == "sglang" else "python"
+    python_bin = str(host.get(python_key) or "")
+    return {
+        "host": str(cell["host"]),
+        "model_path": model_path,
+        "tp": int(cell["tp"]),
+        "short": str(cell["model"]),
+        "mode": str(cell["mode"]),
+        "backend": backend,
+        "max_len": int(resolved["max_len"]),
+        "gpu_mem": resolved["gpu_mem"],
+        "concurrencies": [int(c) for c in resolved["concurrencies"]],
+        "profiles": [str(profile) for profile in resolved["profiles"]],
+        "extra_env": str(extra_env),
+        "data_scope": dashboard_scope_for(source_scope),
+        "result_scope": result_scope_for(source_scope),
+        "hardware_label": str(host.get("hardware_label", cell["host"])),
+        "python_bin": python_bin,
+        "total_gpus": int(host.get("total_gpus", 0) or 0),
+    }
+
+
+def format_job_record(record: dict[str, Any]) -> str:
+    concs = " ".join(str(c) for c in record["concurrencies"])
+    profiles = " ".join(str(profile) for profile in record["profiles"])
     fields = [
-        str(cell["host"]),
-        model_path,
-        str(cell["tp"]),
-        str(cell["model"]),
-        str(cell["mode"]),
-        backend,
-        str(resolved["max_len"]),
-        str(resolved["gpu_mem"]),
+        str(record["host"]),
+        str(record["model_path"]),
+        str(record["tp"]),
+        str(record["short"]),
+        str(record["mode"]),
+        str(record["backend"]),
+        str(record["max_len"]),
+        str(record["gpu_mem"]),
         concs,
         profiles,
-        str(extra_env),
+        str(record["extra_env"]),
     ]
     return "|".join(fields)
+
+
+def render_row(cell: dict, manifest: dict) -> str:
+    return format_job_record(job_record(cell, manifest))
 
 
 def cell_data_scope(cell: dict) -> str:
@@ -270,9 +324,10 @@ def profiles_for_output_scope(profiles, requested_scope: str) -> list[str]:
 
 
 def cell_for_output_scope(cell: dict, requested_scope: str, manifest: dict | None = None) -> dict:
-    if requested_scope not in DERIVED_SCOPE_SOURCE:
-        return cell
     out = dict(cell)
+    synthetic_concurrencies = out.pop("synthetic_concurrencies", None)
+    if requested_scope not in DERIVED_SCOPE_SOURCE:
+        return out
     out["data_scope"] = dashboard_scope_for(requested_scope)
     if dashboard_scope_for(requested_scope) == "synthetic_distributional":
         profiles = out.get("profiles")
@@ -285,6 +340,11 @@ def cell_for_output_scope(cell: dict, requested_scope: str, manifest: dict | Non
         for key, value in SYNTHETIC_EXTRA_ENV.items():
             extra_env = _ensure_extra_env(extra_env, key, value)
         out["extra_env"] = extra_env
+        mode = str(out["mode"])
+        if synthetic_concurrencies is not None:
+            out["concurrencies"] = [int(c) for c in synthetic_concurrencies]
+        elif mode in SYNTHETIC_TRACE_REPLAY_CONCURRENCIES:
+            out["concurrencies"] = list(SYNTHETIC_TRACE_REPLAY_CONCURRENCIES[mode])
     return out
 
 
@@ -303,7 +363,14 @@ def compile_jobs(manifest: dict, scope: str = "all"):
         if reason:
             skipped.append((cell, "infeasible", reason))
             continue
-        profile_reasons = profile_infeasible_reasons(cell, manifest)
+        # Synthetic profiles are generated to fit the requested launch shape,
+        # so they do not inherit real-trace max_len profile filters. Keep
+        # structural filters such as unsupported GPU kernels.
+        profile_reasons = profile_infeasible_reasons(
+            cell,
+            manifest,
+            ignore_max_len_rules=dashboard_scope_for(scope) == "synthetic_distributional",
+        )
         if profile_reasons:
             resolved = resolve(cell, manifest)
             runnable_profiles = [
@@ -356,24 +423,69 @@ def render_file(emitted: list[tuple[dict, str]], scope: str = "all") -> str:
     return "\n".join(lines) + "\n"
 
 
+def skipped_record(cell: dict, status: str, reason: str) -> dict[str, Any]:
+    return {
+        "host": str(cell.get("host", "")),
+        "model": str(cell.get("model", "")),
+        "tp": int(cell.get("tp", 0) or 0),
+        "mode": str(cell.get("mode", "")),
+        "backend": str(cell.get("backend", "vllm")),
+        "preset": str(cell.get("preset", "")),
+        "status": status,
+        "reason": reason,
+    }
+
+
+def render_manifest(
+    emitted: list[tuple[dict, str]],
+    skipped: list[tuple[dict, str, str]],
+    manifest: dict,
+    scope: str = "all",
+    *,
+    source: Path = SWEEP_YAML,
+) -> str:
+    jobs = [job_record(cell, manifest) for cell, _row in emitted]
+    payload = {
+        "schema": "agentic-serve.bench-jobs.v1",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "source": str(source),
+        "scope": scope,
+        "jobs": jobs,
+        "skipped": [skipped_record(cell, status, reason) for cell, status, reason in skipped],
+    }
+    return json.dumps(payload, indent=2, sort_keys=True) + "\n"
+
+
+def scope_choices() -> tuple[str, ...]:
+    return (
+        "all",
+        "trace_replay",
+        "synthetic_distributional",
+        "synthetic-distributional",
+        "archived",
+        "synthetic",
+        "latest",
+        "current",
+        "fixed",
+        "mse",
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--yaml", type=Path, default=SWEEP_YAML)
-    ap.add_argument("--out", type=Path, default=BENCH_JOBS_TXT)
+    ap.add_argument("--out", type=Path)
     ap.add_argument("--dry-run", action="store_true", help="print to stdout, don't write")
     ap.add_argument(
+        "--format",
+        choices=("text", "json"),
+        help="output format; defaults to json for *.json outputs, otherwise text",
+    )
+    ap.add_argument("--list-hosts", action="store_true", help="print runnable hosts for the selected scope")
+    ap.add_argument("--list-host-gpu-counts", action="store_true", help="print host=total_gpus from sweep.yaml")
+    ap.add_argument(
         "--scope",
-        choices=(
-            "all",
-            "trace_replay",
-            "synthetic_distributional",
-            "archived",
-            "synthetic",
-            "latest",
-            "current",
-            "fixed",
-            "mse",
-        ),
+        choices=scope_choices(),
         default="all",
         help="emit only one dashboard scope",
     )
@@ -383,13 +495,31 @@ def main() -> int:
     manifest = load_manifest(args.yaml)
     validate(manifest)
     emitted, skipped = compile_jobs(manifest, args.scope)
-    output = render_file(emitted, args.scope)
+
+    if args.list_host_gpu_counts:
+        for host, config in sorted(manifest["hosts"].items(), key=lambda item: str(item[0])):
+            print(f"{host}={int(config.get('total_gpus', 0) or 0)}")
+        return 0
+
+    if args.list_hosts:
+        hosts = sorted({str(cell["host"]) for cell, _row in emitted})
+        for host in hosts:
+            print(host)
+        return 0
+
+    output_format = args.format or ("json" if args.out and args.out.suffix == ".json" else "text")
+    out_path = args.out or (BENCH_JOBS_JSON if output_format == "json" else BENCH_JOBS_TXT)
+    if output_format == "json":
+        output = render_manifest(emitted, skipped, manifest, args.scope, source=args.yaml)
+    else:
+        output = render_file(emitted, args.scope)
 
     if args.dry_run:
         sys.stdout.write(output)
     else:
-        args.out.write_text(output)
-        print(f"wrote {args.out} ({len(emitted)} rows)", file=sys.stderr)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(output)
+        print(f"wrote {out_path} ({len(emitted)} rows)", file=sys.stderr)
 
     print(f"\nsummary: {len(emitted)} emitted, {len(skipped)} skipped", file=sys.stderr)
     if args.verbose or skipped:

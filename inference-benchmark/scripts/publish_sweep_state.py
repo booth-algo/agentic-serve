@@ -30,7 +30,7 @@ from pathlib import Path
 import yaml
 
 from compile_sweep import cell_data_scope as manifest_cell_data_scope
-from compile_sweep import cell_for_output_scope, dashboard_scope_for, profile_infeasible_reasons, profiles_for_output_scope, resolve, result_scope_for
+from compile_sweep import cell_for_output_scope, dashboard_scope_for, matches_known_oom, profile_infeasible_reasons, profiles_for_output_scope, resolve, result_scope_for
 
 HERE = Path(__file__).resolve().parent
 SWEEP_YAML = HERE / "sweep.yaml"
@@ -43,6 +43,7 @@ R2_BUCKET_DEFAULT = "agent-bench"
 R2_KEY = "json/current/sweep-state.json"
 LEGACY_STATE_FALLBACK = os.environ.get("BENCH_STATE_LEGACY_FALLBACK", "1") != "0"
 DERIVED_STATE_SCOPES = ("synthetic_distributional",)
+ACTIVE_RUN_STATUSES = {"dispatching", "running"}
 
 
 def hw_label(host_cfg: dict, tp: int) -> str:
@@ -90,8 +91,43 @@ def state_file(jid: str, data_scope: str, suffix: str) -> Path:
     return LEGACY_STATE_DIR / f"{jid}.{suffix}"
 
 
+def scoped_state_dir(data_scope: str) -> Path:
+    if STATE_DIR.name == data_scope:
+        return STATE_DIR
+    return STATE_DIR / data_scope
+
+
+def run_record_file(jid: str, data_scope: str, run_id: str) -> Path:
+    return scoped_state_dir(data_scope) / "runs" / f"{run_id}.json"
+
+
+def read_json_file(path: Path) -> dict:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def read_run_record(jid: str, data_scope: str, run_id: str) -> dict:
+    if not run_id:
+        return {}
+    payload = read_json_file(run_record_file(jid, data_scope, run_id))
+    if str(payload.get("job_id") or "") not in {"", jid}:
+        return {}
+    return payload
+
+
 def read_state(jid: str, data_scope: str) -> dict:
-    out: dict = {"status": "pending", "attempt": 0, "max_len_override": None, "reason": None, "updated_at": None}
+    out: dict = {
+        "status": "pending",
+        "attempt": 0,
+        "max_len_override": None,
+        "reason": None,
+        "updated_at": None,
+        "run_id": None,
+        "failure_metadata": None,
+    }
     p = state_file(jid, data_scope, "status")
     if p.exists():
         out["status"] = p.read_text().strip() or "pending"
@@ -113,6 +149,25 @@ def read_state(jid: str, data_scope: str) -> dict:
         txt = rs.read_text().strip()
         if txt:
             out["reason"] = txt
+    rid = state_file(jid, data_scope, "run_id")
+    if rid.exists():
+        run_id = rid.read_text().strip()
+        if run_id:
+            out["run_id"] = run_id
+            run_record = read_run_record(jid, data_scope, run_id)
+            run_status = str(run_record.get("status") or "")
+            if run_status in ACTIVE_RUN_STATUSES:
+                out["status"] = "running"
+                updated_at = run_record.get("updated_at") or run_record.get("started_at")
+                if isinstance(updated_at, str) and updated_at:
+                    out["updated_at"] = updated_at
+            failure = run_record.get("failure")
+            if isinstance(failure, dict) and failure and out["failure_metadata"] is None:
+                out["failure_metadata"] = failure
+    failure_path = state_file(jid, data_scope, "failure.json")
+    failure_metadata = read_json_file(failure_path)
+    if failure_metadata:
+        out["failure_metadata"] = failure_metadata
     return out
 
 
@@ -153,10 +208,10 @@ def build_state(manifest: dict) -> dict:
         jid = job_id(host_name, model, tp, mode, backend)
         rt = read_state(jid, state_scope)
         resolved = resolve(cell, manifest)
-        source_profile_reasons = (
-            {}
-            if data_scope == "synthetic_distributional"
-            else profile_infeasible_reasons(source_cell, manifest)
+        source_profile_reasons = profile_infeasible_reasons(
+            source_cell,
+            manifest,
+            ignore_max_len_rules=data_scope == "synthetic_distributional",
         )
         profile_reasons = {}
         for profile, reason in source_profile_reasons.items():
@@ -208,6 +263,8 @@ def build_state(manifest: dict) -> dict:
             "max_len_override": rt["max_len_override"],
             "reason": rt["reason"],
             "updated_at": rt["updated_at"],
+            "run_id": rt["run_id"],
+            "failure_metadata": rt["failure_metadata"],
         })
 
     # Known-OOM entries override any runtime state for matching cells, and are
@@ -218,9 +275,11 @@ def build_state(manifest: dict) -> dict:
         tp = int(entry["tp"])
         label = hw_label(host_cfg, tp)
         model = str(entry["model"])
+        mode = str(entry.get("mode", "single"))
+        backend = str(entry.get("backend", "vllm"))
         matched = False
         for c in cells:
-            if c["host"] == host_name and c["model"] == model and c["tp"] == tp:
+            if matches_known_oom(c, entry):
                 c["status"] = "known_oom"
                 c["reason"] = entry["reason"]
                 matched = True
@@ -232,8 +291,8 @@ def build_state(manifest: dict) -> dict:
                 "hw_label": label,
                 "model": model,
                 "tp": tp,
-                "mode": "single",
-                "backend": "vllm",
+                "mode": mode,
+                "backend": backend,
                 "status": "known_oom",
                 "attempt": 0,
                 "max_len": None,

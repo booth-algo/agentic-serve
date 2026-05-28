@@ -1,0 +1,248 @@
+# Kernel composition for Llama-3.1-8B prefill on H100.
+# Extracted from torch.compile(backend='inductor', fullgraph=True, combo_kernels=True)
+# via TORCH_COMPILE_DEBUG=1 at N=4096.
+#
+# ATen op counts from inductor FX graph (32-layer decoder, N=4096, bf16):
+#   225x mm  (7 per layer: Q,K,V,O,gate,up,down + 1 lm_head)
+#    32x _scaled_dot_product_efficient_attention
+#    65x rsqrt, 32x sigmoid, 32x neg, 32x cat, 64x clone
+
+model: Llama-3.1-8B-Instruct
+gpu: H100
+compilation:
+  backend: inductor
+  fullgraph: true
+  combo_kernels: true
+  benchmark_combo_kernel: true
+  note: >
+    Even with combo_kernels=True, inductor dispatches matmuls through cuBLAS
+    (not triton mm templates) when compiling the full 32-layer model with
+    fullgraph=True.  vLLM's AOT compilation path may differ.
+
+prefill_tokens: 4096
+
+# Per-layer kernel composition.
+# Each decoder layer executes these kernels in order.
+# Counts are per layer unless noted.
+layer_kernels:
+  # --- Pre-attention RMS norm ---
+  - kernel_name: rmsnorm_pre_attn
+    kernel_type: reduction
+    backend: triton
+    ops_fused:
+      - pow          # x^2
+      - mean         # variance = mean(x^2, dim=-1)
+      - add(1e-5)    # variance + eps
+      - rsqrt        # 1/sqrt(variance + eps)
+      - mul(weight)  # hidden * weight (learned scale)
+    calls_per_layer: 1
+    triton_kernel: triton_red_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt
+
+  # --- QKV projection (cuBLAS) ---
+  - kernel_name: qkv_projection
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - mm           # Q = x @ W_q, K = x @ W_k, V = x @ W_v
+    calls_per_layer: 3  # Q, K, V separately (NOT fused into qkv by inductor)
+    note: >
+      Inductor does NOT fuse QKV into a single matmul when compiling the HF model.
+      vLLM's fused QKV linear layer may produce different results.
+
+  # --- RoPE and QKV assembly ---
+  - kernel_name: rope_qkv_assembly
+    kernel_type: pointwise
+    backend: triton
+    ops_fused:
+      - cos, sin     # RoPE frequency lookup
+      - view         # Reshape Q/K for multi-head
+      - transpose    # Q/K head transpose
+      - bmm          # Batch matmul for RoPE application
+      - cat          # Concatenate Q/K heads
+      - neg          # Negative for half-rotation
+      - mul          # RoPE multiplication
+      - slice        # Head slicing
+      - arange       # Position index generation
+      - where        # Causal mask construction
+      - full         # Mask fill values
+      - expand       # Mask broadcasting
+      - clone        # Memory continuity
+    calls_per_layer: 1
+    triton_kernel: triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bmm_cat_clone_cos_expand_le_mul_neg_scalar_tensor_sin_slice_transpose_unsqueeze_view_where
+
+  # --- Flash Attention ---
+  - kernel_name: flash_attention
+    kernel_type: flash_attention
+    backend: cudnn_fa3
+    ops_fused:
+      - _scaled_dot_product_efficient_attention  # Q @ K^T + softmax + @ V
+    calls_per_layer: 1
+    scale: 0.08838834764831845  # 1/sqrt(128)
+    n_heads: 32
+    n_kv_heads: 8
+    head_dim: 128
+
+  # --- Output projection (cuBLAS) ---
+  - kernel_name: o_projection
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - mm           # O = attn_output @ W_o
+    calls_per_layer: 1
+
+  # --- Residual add after attention ---
+  - kernel_name: residual_add_attn
+    kernel_type: pointwise
+    backend: triton
+    ops_fused:
+      - add          # hidden + attn_output
+    calls_per_layer: 1
+    note: May be fused into o_proj matmul epilogue if combo_kernels triggers
+
+  # --- Pre-FFN RMS norm ---
+  - kernel_name: rmsnorm_pre_ffn
+    kernel_type: reduction
+    backend: triton
+    same_as: rmsnorm_pre_attn
+    calls_per_layer: 1
+
+  # --- Gate/Up projection (cuBLAS) ---
+  - kernel_name: gate_up_projection
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - mm           # gate = x @ W_gate, up = x @ W_up
+    calls_per_layer: 2
+    note: Inductor does NOT fuse gate+up into a single matmul with fullgraph=True
+
+  # --- SwiGLU activation ---
+  - kernel_name: swiglu_activation
+    kernel_type: pointwise
+    backend: triton
+    ops_fused:
+      - silu         # silu(gate)
+      - mul          # silu(gate) * up
+    calls_per_layer: 1
+    triton_kernel: triton_poi_fused__unsafe_view_mul_silu
+
+  # --- Down projection (cuBLAS) ---
+  - kernel_name: down_projection
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - mm           # output = swiglu_result @ W_down
+    calls_per_layer: 1
+
+  # --- Residual add after FFN ---
+  - kernel_name: residual_add_ffn
+    kernel_type: pointwise
+    backend: triton
+    ops_fused:
+      - add          # hidden + ffn_output
+    calls_per_layer: 1
+    note: May be fused into down_proj matmul epilogue if combo_kernels triggers
+
+# Post-decoder (once per prefill)
+output_kernels:
+  - kernel_name: rmsnorm_final
+    kernel_type: reduction
+    backend: triton
+    same_as: rmsnorm_pre_attn
+    calls_per_prefill: 1
+
+  - kernel_name: lm_head
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - mm           # logits = hidden @ W_lm_head
+    calls_per_prefill: 1
+    m: 4096
+    n: 128256
+    k: 4096
+
+# Summary of what inductor fuses vs what it doesn't
+fusion_summary:
+  triton_reduction:
+    - "RMS norm: pow + mean + add(eps) + rsqrt + mul(weight)"
+  triton_pointwise:
+    - "RoPE + QKV assembly: cos, sin, view, transpose, cat, neg, mul, slice, arange, where, expand, clone (20+ ops)"
+    - "SwiGLU: silu + mul"
+  not_fused:
+    - "QKV projections: 3 separate mm calls (dispatch to cuBLAS nvjet)"
+    - "Gate/Up projections: 2 separate mm calls (dispatch to cuBLAS nvjet)"
+    - "Output projection: 1 mm (dispatch to cuBLAS nvjet)"
+    - "Down projection: 1 mm (dispatch to cuBLAS nvjet)"
+
+# Verification sources
+verification:
+  debug_dump_path:
+    enabled: true
+    path: /data48/kevinlau/tmp/compiled_debug2
+    result: >
+      vLLM's AOT compile with debug_dump_path confirms: 3 triton kernels
+      (RMS norm, RoPE assembly, SwiGLU). All matmuls go through cuBLAS,
+      not triton mm templates. The HF model's ColumnParallelLinear layers
+      fuse QKV and gate+up at the PyTorch level before inductor sees them.
+      Inductor receives already-fused linear layers and dispatches each to
+      cuBLAS as a single nvjet_tst kernel.
+    files: 34 (3 kernel.py + 30+ BEFORE_PRE_GRAD + split logs)
+
+  ncu_profiling:
+    result: >
+      NCU --metrics gpu__time_duration.sum succeeds for triton/elementwise
+      kernels but returns -nan for all nvjet_tst (cuBLAS) kernels — a known
+      NCU limitation. The cuBLAS GEMM kernels cannot be directly measured
+      via NCU. Isolated CUDA-event profiling (prefill_gemm_H100.csv) provides
+      the GEMM timing data instead.
+    nvjet_status: FAILED (-nan at N=1024 and N=8192)
+    triton_status: OK
+    elementwise_status: OK
+
+  fa3_prefill_attention:
+    file: profiling/data/fa3_prefill_H100.csv
+    backend: vllm.vllm_flash_attn.flash_attn_varlen_func (FA3, causal, bf16)
+    result: >
+      Measured FA3 attention for full-causal prefill (q=kv=N, batch=1).
+      Per-layer timing × 32 layers. FA3 is 2-8× faster than NCU's HF SDPA data.
+    values_ms:
+      64: 0.73
+      128: 0.73
+      256: 0.75
+      512: 0.76
+      1024: 0.99
+      2048: 2.38
+      4096: 7.17
+      8192: 27.95
+    pct_of_vllm_prefill:
+      64: 8.4
+      256: 6.1
+      1024: 4.2
+      4096: 15.5
+      8192: 44.2
+
+  isolated_gemm:
+    file: profiling/data/prefill_gemm_H100.csv
+    result: >
+      Measures cuBLAS throughput for each fused GEMM shape via torch.matmul
+      + CUDA events at M in {1, 64, 128, 256, 512, 1024, 2048, 4096, 8192}.
+      At N=8192, isolated GEMM = 173ms vs vLLM prefill = 63ms (2.7x ratio).
+
+# Empirical calibration
+# The ratio of vLLM prefill time to isolated GEMM time shows
+# the torch.compile + CUDA graph fusion benefit.
+empirical_fusion_ratio:
+  description: "vLLM_prefill / isolated_GEMM at each N"
+  values:
+    64:    1.67   # 8.67/5.18  — overhead + attn dominate
+    128:   1.56   # 8.86/5.69
+    256:   1.91   # 12.31/6.46
+    512:   1.52   # 16.73/10.98
+    1024:  1.07   # 23.68/22.05 — isolated close to vLLM
+    2048:  0.86   # 37.12/43.35 — isolated exceeds vLLM (fusion helps)
+    4096:  0.54   # 46.24/86.04
+    8192:  0.37   # 63.28/172.56 — 2.7x fusion benefit
+  note: >
+    At N<2048, isolated GEMM < vLLM prefill (attention + overhead fill the gap).
+    At N>=2048, isolated GEMM > vLLM prefill (torch.compile fusion + CUDA graph
+    capture eliminates intermediate HBM traffic and kernel launch overhead).
+    The fusion benefit grows with N because HBM bandwidth savings scale with M.

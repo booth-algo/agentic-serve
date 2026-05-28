@@ -36,7 +36,7 @@ export const DATA_SCOPE_META: Record<DataScope, DataScopeMeta> = {
     label: 'Synthetic distributional',
     shortLabel: 'Synthetic',
     eyebrow: 'APC-aware',
-    description: 'Validated APC-aware synthetic replay grid. Uses synthetic-suffixed profiles on the reduced fixed-scope C=200/320 coverage grid, without coding-singleturn.',
+    description: 'Validated APC-aware synthetic replay grid. Uses synthetic-suffixed profiles derived from the active sweep state, without coding-singleturn.',
     accent: '#3fb950',
     rowsLabel: 'synthetic rows',
   },
@@ -55,14 +55,14 @@ export function isDataScope(value: string | null): value is DataScope {
 }
 
 export function normalizeDataScope(value: string | null): DataScope | null {
-  if (value === 'latest' || value === 'synthetic') return 'synthetic_distributional';
+  if (value === 'latest' || value === 'synthetic' || value === 'synthetic-distributional') return 'synthetic_distributional';
   if (value === 'archive') return 'trace_replay';
   if (value === 'current' || value === 'canonical' || value === 'fixed' || value === 'fixed-grid' || value === 'mse') return 'archived';
   return isDataScope(value) ? value : null;
 }
 
-export function hasServingPredictions(scope: DataScope): boolean {
-  return scope === 'archived';
+export function hasSyntheticRuntime(scope: DataScope): boolean {
+  return scope === 'synthetic_distributional';
 }
 
 export const CURRENT_PROFILES = [

@@ -49,7 +49,7 @@ A targeted D-sweep with a single model on a single GPU would isolate the step ov
 | GPU       | TP | Available? | Notes |
 |-----------|----|-----------|-------|
 | H100      | 1  | Busy with benchmark sweeps | Also need torch installed |
-| A100      | 1  | gpu-4, may be free | Already used for flash/GEMM sweeps |
+| A100      | 1  | a100, may be free | Already used for flash/GEMM sweeps |
 | RTX3090   | 1  | GPUs 5-7 free | 24GB, fits 8B |
 | RTX2080Ti | 1  | Available | 11GB, fits 8B |
 

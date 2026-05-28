@@ -8,8 +8,15 @@ Type=oneshot
 WorkingDirectory=/root/agentic-serve/inference-benchmark
 Environment=BENCH_STATE_ROOT=/mnt/100g/agent-bench/state
 Environment=BENCH_RESULTS_ROOT=/mnt/100g/agent-bench/results
-Environment=BENCH_JOBS_SCOPE=synthetic
+Environment=BENCH_JOBS_SCOPE=synthetic_distributional
 Environment=BENCH_SYNC_GPU_CODE=1
 Environment=BENCH_SYNC_REQUIRED=0
 Environment=BENCH_REMOTE_ROOT=/tmp/inference-benchmark
+Environment=BENCH_H100_REMOTE_TMP=/data48/tmp
+Environment=BENCH_H100_REMOTE_ROOT=/data48/tmp/inference-benchmark
+Environment=BENCH_RECONCILE_COVERAGE_BEFORE_DISPATCH=1
+Environment=BENCH_COVERAGE_RESET_STATUSES=done,skipped,failed,known_oom
+Environment=BENCH_COVERAGE_MAX_REQUEUES=1
+Environment=BENCH_RECLAIM_BEFORE_DISPATCH=1
+Environment=BENCH_RECLAIM_EXECUTE=1
 ExecStart=/usr/bin/env bash /root/agentic-serve/inference-benchmark/scripts/run-bench-orchestrator-service.sh

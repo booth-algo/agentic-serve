@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh Agentic Serve private GPU state JSON
+Wants=network-online.target
+After=network-online.target agentic-serve-dashboard.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/agentic-serve/inference-benchmark
+Environment=BENCH_STATE_ROOT=/mnt/100g/agent-bench/state
+Environment=BENCH_JOBS_SCOPE=synthetic_distributional
+Environment=GPU_STATE_SSH_TIMEOUT=8
+ExecStart=/usr/bin/env bash /root/agentic-serve/inference-benchmark/scripts/refresh-gpu-state.sh

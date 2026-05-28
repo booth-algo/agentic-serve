@@ -1,9 +1,13 @@
 import json
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from src.workloads.dataset import TrajectoryMultiTurnDataset, make_dataset
+from src.benchmark.runner import make_trace_request_id
+from src.workloads.dataset import ShareGPTDataset, TrajectoryMultiTurnDataset, make_dataset
 from src.workloads.profiles import WorkloadProfile
 
 
@@ -12,6 +16,109 @@ def words(n: int) -> str:
 
 
 class RealTraceWorkloadTests(unittest.TestCase):
+    def test_trace_request_id_encodes_benchmark_dimensions(self):
+        request_id = make_trace_request_id(
+            profile_name="swebench-multiturn-synth",
+            concurrency=320,
+            session_id=7,
+            turn_index=2,
+            request_index=647,
+        )
+
+        self.assertEqual(
+            request_id,
+            "agenticbench__p=swebench-multiturn-synth__c=320__t=2__s=7__i=647",
+        )
+
+    def test_sharegpt_dataset_reserves_output_and_safety_margin(self):
+        fake_dataset = [
+            {
+                "conversations": [
+                    {"from": "human", "value": words(100)},
+                    {"from": "gpt", "value": words(40)},
+                ],
+            },
+            {
+                "conversations": [
+                    {"from": "human", "value": words(70)},
+                    {"from": "gpt", "value": words(30)},
+                ],
+            },
+        ]
+        fake_datasets_module = types.SimpleNamespace(
+            load_dataset=lambda *args, **kwargs: fake_dataset
+        )
+
+        with patch.dict(sys.modules, {"datasets": fake_datasets_module}):
+            dataset = ShareGPTDataset(
+                num_prompts=10,
+                system_prompt="",
+                max_isl_tokens=4096,
+                max_osl_tokens=4096,
+                min_osl_tokens=1,
+                max_total_tokens=180,
+                context_safety_margin_tokens=10,
+            )
+
+            request = dataset.get_next_request()
+
+        self.assertEqual(request.max_tokens, int(30 * 1.35))
+        self.assertLessEqual(
+            int(70 * 1.35) + request.max_tokens,
+            180 - 10,
+        )
+
+    def test_sharegpt_dataset_uses_tokenizer_prompt_count_when_available(self):
+        fake_dataset = [
+            {
+                "conversations": [
+                    {"from": "human", "value": words(100)},
+                    {"from": "gpt", "value": words(40)},
+                ],
+            },
+            {
+                "conversations": [
+                    {"from": "human", "value": words(70)},
+                    {"from": "gpt", "value": words(30)},
+                ],
+            },
+        ]
+        fake_datasets_module = types.SimpleNamespace(
+            load_dataset=lambda *args, **kwargs: fake_dataset
+        )
+
+        class FakeTokenizer:
+            def apply_chat_template(self, messages, add_generation_prompt, tokenize):
+                content = " ".join(message["content"] for message in messages)
+                return [0] * (180 if "w99" in content else 100)
+
+        fake_transformers_module = types.SimpleNamespace(
+            AutoTokenizer=types.SimpleNamespace(
+                from_pretrained=lambda *args, **kwargs: FakeTokenizer()
+            )
+        )
+
+        with patch.dict(sys.modules, {
+            "datasets": fake_datasets_module,
+            "transformers": fake_transformers_module,
+        }):
+            dataset = ShareGPTDataset(
+                num_prompts=10,
+                system_prompt="",
+                max_isl_tokens=4096,
+                max_osl_tokens=4096,
+                min_osl_tokens=1,
+                max_total_tokens=210,
+                context_safety_margin_tokens=10,
+                tokenizer_name="fake-tokenizer",
+            )
+            dataset._load()
+
+            self.assertEqual(len(dataset._samples), 1)
+            request = dataset.get_next_request()
+
+        self.assertEqual(request.max_tokens, int(30 * 1.35))
+
     def test_trajectory_dataset_reserves_output_and_safety_margin(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "trace.jsonl"

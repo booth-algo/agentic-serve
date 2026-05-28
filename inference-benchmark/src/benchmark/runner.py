@@ -46,6 +46,24 @@ from ..workloads.arrival import make_arrival_times
 SUPPORTED_BACKENDS = ["openai", "vllm", "sglang", "trtllm"]
 BENCHMARK_SCHEMA_VERSION = 3
 WORKLOAD_SCHEMA_VERSION = "distributional-synthetic-v1"
+TRACE_REQUEST_ID_PREFIX = "agenticbench"
+
+
+def make_trace_request_id(
+    *,
+    profile_name: str,
+    concurrency: int,
+    session_id: int,
+    turn_index: int,
+    request_index: int,
+) -> str:
+    return (
+        f"{TRACE_REQUEST_ID_PREFIX}__p={profile_name}"
+        f"__c={concurrency}"
+        f"__t={turn_index}"
+        f"__s={session_id}"
+        f"__i={request_index}"
+    )
 
 
 async def run_benchmark(
@@ -64,6 +82,7 @@ async def run_benchmark(
     ignore_eos: bool = False,
     max_context_tokens: int | None = None,
     context_safety_margin_tokens: int = 256,
+    trace_request_ids: bool = False,
 ):
     """
     Run a benchmark and return (results, duration).
@@ -121,6 +140,17 @@ async def run_benchmark(
                     max_tokens=request.max_tokens,
                     api_key=api_key,
                     ignore_eos=ignore_eos,
+                    request_id=(
+                        make_trace_request_id(
+                            profile_name=profile_name,
+                            concurrency=concurrency,
+                            session_id=i,
+                            turn_index=0,
+                            request_index=i,
+                        )
+                        if trace_request_ids
+                        else None
+                    ),
                 )
             completed_at_s = time.perf_counter() - benchmark_start
             annotate_request_observability(
@@ -167,6 +197,8 @@ async def run_multi_turn_benchmark(
     cache_block_size: int | None = 16,
     num_sessions: int | None = None,
     source_session_ids: list[str] | None = None,
+    max_turn_index: int | None = None,
+    trace_request_ids: bool = False,
 ):
     """
     Run a multi-turn benchmark with interleaved round-robin scheduling.
@@ -243,6 +275,17 @@ async def run_multi_turn_benchmark(
                     max_tokens=request.max_tokens,
                     api_key=api_key,
                     ignore_eos=ignore_eos,
+                    request_id=(
+                        make_trace_request_id(
+                            profile_name=profile_name,
+                            concurrency=concurrency,
+                            session_id=session_id,
+                            turn_index=t_idx,
+                            request_index=request_index,
+                        )
+                        if trace_request_ids
+                        else None
+                    ),
                 )
             completed_at_s = time.perf_counter() - benchmark_start
             annotate_request_observability(
@@ -265,6 +308,8 @@ async def run_multi_turn_benchmark(
 
         # Interleaved round-robin: process all sessions' turn N before turn N+1
         for turn_idx in range(max_turns):
+            if max_turn_index is not None and turn_idx > max_turn_index:
+                break
             turn_requests = []
             for conv_session in sessions:
                 if turn_idx < len(conv_session.turns):
@@ -463,7 +508,7 @@ def resolve_multi_turn_num_sessions(
 
 
 def normalize_dashboard_scope(scope: str) -> str:
-    if scope in {"latest", "synthetic", "synthetic_distributional"}:
+    if scope in {"latest", "synthetic", "synthetic-distributional", "synthetic_distributional"}:
         return "synthetic_distributional"
     if scope in {"archive", "trace_replay"}:
         return "trace_replay"
@@ -482,6 +527,8 @@ def get_args():
     parser.add_argument("--concurrency", type=int, default=10)
     parser.add_argument("--multi-turn-sessions", type=int, default=None,
                         help="Override number of multi-turn sessions to load/sample. Floored at --concurrency.")
+    parser.add_argument("--max-turn-index", type=int, default=None,
+                        help="For multi-turn runs, stop after this zero-based turn index.")
     parser.add_argument("--source-session-ids-file", default=None,
                         help="Validation mode: source-lock distributional multi-turn sampling to these source_session_id values.")
     parser.add_argument("--num-requests", type=int, default=100)
@@ -527,6 +574,7 @@ def get_args():
         "--scope",
         choices=[
             "synthetic_distributional",
+            "synthetic-distributional",
             "trace_replay",
             "archived",
             "synthetic",
@@ -546,6 +594,8 @@ def get_args():
     parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
     parser.add_argument("--include-inactive", action="store_true",
                         help="With --list-profiles, include legacy/inactive profiles")
+    parser.add_argument("--trace-request-ids", action="store_true",
+                        help="Send stable request_id/X-Request-Id values for vLLM engine tracing.")
     parser.add_argument("--agent-type", type=str, default=None, help="Filter profiles by agent type")
     parser.add_argument("--turn-style", type=str, default=None, help="Filter profiles by turn style")
     parser.add_argument("--serving-style", type=str, default=None, help="Filter profiles by serving style")
@@ -692,6 +742,8 @@ if __name__ == "__main__":
             cache_block_size=args.prefix_cache_block_size,
             num_sessions=effective_num_sessions,
             source_session_ids=source_session_ids,
+            max_turn_index=args.max_turn_index,
+            trace_request_ids=args.trace_request_ids,
         ))
 
         summary = aggregate(
@@ -736,6 +788,7 @@ if __name__ == "__main__":
             ignore_eos=args.ignore_eos,
             max_context_tokens=args.max_context_tokens,
             context_safety_margin_tokens=args.context_safety_margin_tokens,
+            trace_request_ids=args.trace_request_ids,
         ))
 
         summary = aggregate(

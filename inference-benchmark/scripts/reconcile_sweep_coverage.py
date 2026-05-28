@@ -39,10 +39,12 @@ DEFAULT_BENCH_JOBS = HERE / "bench_jobs.txt"
 DEFAULT_STATE_DIR = Path("/tmp/bench_jobs/state")
 DEFAULT_SWEEP_STATE = BENCH_ROOT / "dashboard" / "public" / "sweep-state.json"
 DEFAULT_REPORT = Path("/tmp/sweep-coverage-reconcile.md")
-DEFAULT_MISSING_JOBS = Path("/tmp/bench_jobs/missing_fixed_bench_jobs.txt")
+DEFAULT_MISSING_JOBS = Path("/tmp/bench_jobs/missing_synthetic_distributional_bench_jobs.txt")
 
 BLOCKING_STATUSES = {"done", "skipped", "failed", "known_oom"}
 DEFAULT_RESET_STATUSES = {"done"}
+COVERAGE_REQUEUE_COUNT_SUFFIX = "coverage_requeue_count"
+COVERAGE_BLOCKER_SUFFIX = "coverage_blocker.json"
 
 PointKey = tuple[str, str, str, str, str, int]  # hw, model, backend, data_mode, profile, conc
 ProfileKey = tuple[str, str, str, int, str, str, str]  # scope, host, model, tp, mode, backend, profile
@@ -69,6 +71,8 @@ class JobCoverage:
     backend: str
     status: str
     reason: str | None
+    attempt: int | None = None
+    failure_metadata: dict[str, Any] | None = None
     expected: set[PointKey] = field(default_factory=set)
     present: set[PointKey] = field(default_factory=set)
 
@@ -79,6 +83,12 @@ class JobCoverage:
     @property
     def is_stale_terminal(self) -> bool:
         return bool(self.missing) and self.status in BLOCKING_STATUSES
+
+
+@dataclass
+class ResetOutcome:
+    reset: list[JobCoverage] = field(default_factory=list)
+    exhausted: list[JobCoverage] = field(default_factory=list)
 
 
 def now_iso() -> str:
@@ -210,6 +220,8 @@ def expected_by_job(
                 backend=backend,
                 status=status,
                 reason=str(reason) if reason else None,
+                attempt=int(cell.get("attempt", 0) or 0),
+                failure_metadata=cell.get("failure_metadata") if isinstance(cell.get("failure_metadata"), dict) else None,
             )
             jobs[jid] = cov
 
@@ -299,27 +311,120 @@ def write_local_sweep_state(sweep_yaml: Path, state_dir: Path, out: Path) -> Non
     out.write_text(json.dumps(state, indent=2) + "\n")
 
 
+def target_state_dir_for_cov(state_dir: Path, cov: JobCoverage) -> Path:
+    return state_dir if state_dir.name == cov.data_scope else state_dir / cov.data_scope
+
+
+def read_int_file(path: Path, default: int = 0) -> int:
+    try:
+        return int(path.read_text().strip() or default)
+    except (OSError, ValueError):
+        return default
+
+
+def write_coverage_blocker(
+    target_state_dir: Path,
+    cov: JobCoverage,
+    *,
+    scope: str,
+    status: str,
+    timestamp: str,
+    requeue_count: int,
+    max_requeues: int,
+    reason: str,
+) -> None:
+    payload = {
+        "generated_at": timestamp,
+        "job_id": cov.job_id,
+        "scope": scope,
+        "status": status,
+        "host": cov.host,
+        "hardware": cov.hw_label,
+        "model": cov.model,
+        "tp": cov.tp,
+        "mode": cov.mode,
+        "backend": cov.backend,
+        "present": len(cov.present),
+        "expected": len(cov.expected),
+        "missing": group_missing_for_job(cov.missing),
+        "expected_points": points_payload(cov.expected),
+        "present_points": points_payload(cov.present),
+        "missing_points": points_payload(cov.missing),
+        "missing_count": len(cov.missing),
+        "attempt": cov.attempt,
+        "failure": failure_payload(cov),
+        "requeue_count": requeue_count,
+        "max_requeues": max_requeues,
+        "reason": reason,
+    }
+    (target_state_dir / f"{cov.job_id}.{COVERAGE_BLOCKER_SUFFIX}").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    )
+
+
 def reset_stale_jobs(
     jobs: list[JobCoverage],
     state_dir: Path,
     reset_statuses: set[str],
     scope: str,
     write_reason: bool,
-) -> list[JobCoverage]:
+    max_requeues: int,
+) -> ResetOutcome:
     targets = [cov for cov in jobs if cov.status in reset_statuses and cov.missing]
+    outcome = ResetOutcome()
     timestamp = now_iso()
     for cov in targets:
-        target_state_dir = state_dir if state_dir.name == cov.data_scope else state_dir / cov.data_scope
+        target_state_dir = target_state_dir_for_cov(state_dir, cov)
         target_state_dir.mkdir(parents=True, exist_ok=True)
+        count_path = target_state_dir / f"{cov.job_id}.{COVERAGE_REQUEUE_COUNT_SUFFIX}"
+        current_count = read_int_file(count_path)
+        if max_requeues >= 0 and current_count >= max_requeues:
+            root_cause = failure_summary(cov)
+            reason = (
+                f"coverage incomplete for scope={scope}: "
+                f"missing {len(cov.missing)}/{len(cov.expected)} points; "
+                f"coverage requeue limit reached {current_count}/{max_requeues}"
+            )
+            if root_cause:
+                reason = f"{reason}; last failure: {root_cause}"
+            if write_reason:
+                (target_state_dir / f"{cov.job_id}.reason").write_text(reason + "\n")
+            write_coverage_blocker(
+                target_state_dir,
+                cov,
+                scope=scope,
+                status="requeue_exhausted",
+                timestamp=timestamp,
+                requeue_count=current_count,
+                max_requeues=max_requeues,
+                reason=reason,
+            )
+            outcome.exhausted.append(cov)
+            continue
+
+        next_count = current_count + 1
         (target_state_dir / f"{cov.job_id}.status").write_text("pending\n")
+        count_path.write_text(f"{next_count}\n")
         if write_reason:
             reason = (
                 f"coverage incomplete for scope={scope}: "
                 f"missing {len(cov.missing)}/{len(cov.expected)} points; "
-                f"reset by reconcile_sweep_coverage.py at {timestamp}"
+                f"coverage requeue {next_count}/{max_requeues if max_requeues >= 0 else 'unlimited'} "
+                f"by reconcile_sweep_coverage.py at {timestamp}"
             )
             (target_state_dir / f"{cov.job_id}.reason").write_text(reason + "\n")
-    return targets
+        write_coverage_blocker(
+            target_state_dir,
+            cov,
+            scope=scope,
+            status="requeued",
+            timestamp=timestamp,
+            requeue_count=next_count,
+            max_requeues=max_requeues,
+            reason=reason if write_reason else "coverage incomplete; reset to pending",
+        )
+        outcome.reset.append(cov)
+    return outcome
 
 
 def group_missing_for_job(points: set[PointKey]) -> str:
@@ -331,6 +436,110 @@ def group_missing_for_job(points: set[PointKey]) -> str:
         shown = ",".join(str(c) for c in sorted(concs))
         parts.append(f"{profile}: C={shown}")
     return "; ".join(parts)
+
+
+def point_payload(points: set[PointKey]) -> list[dict[str, Any]]:
+    rows = []
+    for hw, model, backend, mode, profile, conc in sorted(points):
+        rows.append({
+            "hardware": hw,
+            "model": model,
+            "backend": backend,
+            "mode": mode,
+            "profile": profile,
+            "concurrency": conc,
+        })
+    return rows
+
+
+def points_payload(points: set[PointKey]) -> list[dict[str, Any]]:
+    return point_payload(points)
+
+
+def failure_category(reason: str | None) -> str:
+    text = (reason or "").lower()
+    if any(token in text for token in (
+        "xid",
+        "nvml",
+        "driver",
+        "gpu has fallen off",
+        "cuda error",
+        "uncorrectable",
+        "nvidia-smi",
+        "cuda initialization",
+    )):
+        return "driver_failure"
+    if any(token in text for token in (
+        "out of memory",
+        "cuda out of memory",
+        "kv-cache",
+        "kv cache",
+        "cache blocks",
+    )):
+        return "oom_or_kv_cache"
+    if "success rate" in text and "below minimum" in text:
+        return "success_rate_below_min"
+    if "[warn]" in text and "failed" in text:
+        return "benchmark_failed"
+    if "zero results" in text or "zero expected outputs" in text:
+        return "zero_results"
+    if "incomplete" in text or "expected outputs missing" in text:
+        return "incomplete_outputs"
+    return "unknown"
+
+
+def failure_category_label(category: str) -> str:
+    labels = {
+        "driver_failure": "driver failure",
+        "oom_or_kv_cache": "OOM / KV-cache limit",
+        "success_rate_below_min": "success rate below threshold",
+        "benchmark_failed": "benchmark command failed",
+        "zero_results": "zero results",
+        "incomplete_outputs": "incomplete outputs",
+        "unknown": "unknown failure",
+    }
+    return labels.get(category, category.replace("_", " "))
+
+
+def failure_payload(cov: JobCoverage) -> dict[str, Any] | None:
+    metadata = cov.failure_metadata or {}
+    reason = str(metadata.get("reason") or cov.reason or "")
+    if not metadata and not reason:
+        return None
+    category = failure_category(reason)
+    attempt = metadata.get("attempt", cov.attempt)
+    return {
+        "category": category,
+        "label": failure_category_label(category),
+        "kind": metadata.get("kind"),
+        "status": metadata.get("status", cov.status),
+        "reason": reason or None,
+        "attempt": attempt,
+        "max_attempts": metadata.get("max_attempts"),
+        "expected_outputs_present": metadata.get("expected_outputs_present"),
+        "expected_outputs_total": metadata.get("expected_outputs_total"),
+        "missing_outputs": metadata.get("missing_outputs") if isinstance(metadata.get("missing_outputs"), list) else [],
+        "remote_log": metadata.get("remote_log"),
+        "mirror_status": metadata.get("mirror_status"),
+        "updated_at": metadata.get("updated_at"),
+    }
+
+
+def failure_summary(cov: JobCoverage) -> str | None:
+    failure = failure_payload(cov)
+    if not failure:
+        return None
+    attempt = failure.get("attempt")
+    max_attempts = failure.get("max_attempts")
+    attempts = ""
+    if attempt is not None and max_attempts is not None:
+        attempts = f" after {attempt}/{max_attempts} attempts"
+    elif attempt is not None:
+        attempts = f" after {attempt} attempts"
+    reason = str(failure.get("reason") or "").strip()
+    if len(reason) > 240:
+        reason = reason[:237] + "..."
+    return f"{failure.get('label')}{attempts}{(': ' + reason) if reason else ''}"
 
 
 def format_job(cov: JobCoverage) -> str:
@@ -348,11 +557,13 @@ def build_report(
     compiled_scope_rows: dict[str, str],
     compiled_skipped: int,
     reset_statuses: set[str],
-    reset_targets: list[JobCoverage],
+    reset_outcome: ResetOutcome,
+    max_requeues: int,
     limit: int,
     wrote_bench_jobs: bool,
     wrote_missing_jobs: Path | None,
     wrote_sweep_state: Path | None,
+    wrote_blockers_json: Path | None,
 ) -> str:
     all_jobs = sorted(jobs.values(), key=lambda c: (c.host, c.hw_label, c.model, c.tp, c.backend, c.mode))
     missing_jobs = [cov for cov in all_jobs if cov.missing]
@@ -364,8 +575,9 @@ def build_report(
     status_counts = Counter(cov.status for cov in all_jobs)
     missing_by_status = Counter(cov.status for cov in missing_jobs)
 
-    only_current = sorted(set(current_rows) - set(compiled_rows))
-    only_compiled = sorted(set(compiled_rows) - set(current_rows))
+    drift_compiled_rows = compiled_scope_rows if scope != "all" else compiled_rows
+    only_current = sorted(set(current_rows) - set(drift_compiled_rows))
+    only_compiled = sorted(set(drift_compiled_rows) - set(current_rows))
 
     lines = [
         "# Sweep Coverage Reconcile",
@@ -384,13 +596,14 @@ def build_report(
         f"- jobs with missing coverage: {len(missing_jobs)}",
         f"- stale terminal/blocking jobs with missing coverage: {len(stale_jobs)}",
         f"- reset candidates for statuses {sorted(reset_statuses)}: {len(reset_candidates)}",
-        f"- reset performed: {len(reset_targets)} jobs",
+        f"- reset performed: {len(reset_outcome.reset)} jobs",
+        f"- reset exhausted by coverage requeue limit {max_requeues if max_requeues >= 0 else 'unlimited'}: {len(reset_outcome.exhausted)} jobs",
         f"- job status counts: {dict(status_counts)}",
         f"- missing jobs by status: {dict(missing_by_status)}",
         "",
         "## Bench Jobs Drift",
         f"- current bench_jobs rows: {len(current_rows)}",
-        f"- compiled runnable rows from sweep.yaml: {len(compiled_rows)}",
+        f"- compiled runnable rows from sweep.yaml: {len(drift_compiled_rows)}",
         f"- compiled skipped rows: {compiled_skipped}",
         f"- rows in current bench_jobs only: {len(only_current)}",
         f"- rows in compiled sweep only: {len(only_compiled)}",
@@ -422,6 +635,21 @@ def build_report(
     if len(stale_jobs) > limit:
         lines.append(f"| ... | ... | {len(stale_jobs) - limit} more | ... | ... |")
 
+    if reset_outcome.exhausted:
+        lines.extend([
+            "",
+            "## Requeue Exhausted",
+            "| job_id | status | job | present/expected | missing |",
+            "|---|---:|---|---:|---|",
+        ])
+        for cov in reset_outcome.exhausted[:limit]:
+            lines.append(
+                f"| {cov.job_id} | {cov.status} | {format_job(cov)} | "
+                f"{len(cov.present)}/{len(cov.expected)} | {group_missing_for_job(cov.missing)} |"
+            )
+        if len(reset_outcome.exhausted) > limit:
+            lines.append(f"| ... | ... | {len(reset_outcome.exhausted) - limit} more | ... | ... |")
+
     lines.extend([
         "",
         "## Non-terminal Missing Jobs",
@@ -442,6 +670,7 @@ def build_report(
         "## Outputs",
         f"- missing jobs file: {wrote_missing_jobs if wrote_missing_jobs else 'not written'}",
         f"- local sweep-state.json: {wrote_sweep_state if wrote_sweep_state else 'not written'}",
+        f"- blockers json: {wrote_blockers_json if wrote_blockers_json else 'not written'}",
         "",
         "## Stop Condition",
         f"- Complete for scope={scope} means every expected point from sweep.yaml exists in data.json.",
@@ -450,12 +679,114 @@ def build_report(
     return "\n".join(lines) + "\n"
 
 
+def coverage_payload(
+    *,
+    scope: str,
+    data_source: JsonSource,
+    data: list[dict[str, Any]],
+    jobs: dict[str, JobCoverage],
+    reset_statuses: set[str],
+    reset_outcome: ResetOutcome,
+    max_requeues: int,
+) -> dict[str, Any]:
+    all_jobs = sorted(jobs.values(), key=lambda c: (c.host, c.hw_label, c.model, c.tp, c.backend, c.mode))
+    missing_jobs = [cov for cov in all_jobs if cov.missing]
+    stale_jobs = [cov for cov in missing_jobs if cov.status in BLOCKING_STATUSES]
+    expected_points = {point for cov in all_jobs for point in cov.expected}
+    present_points = {point for cov in all_jobs for point in cov.present}
+    status_counts = Counter(cov.status for cov in all_jobs)
+    missing_by_status = Counter(cov.status for cov in missing_jobs)
+
+    def cov_payload(cov: JobCoverage, *, include_missing_points: bool) -> dict[str, Any]:
+        failure = failure_payload(cov)
+        payload = {
+            "job_id": cov.job_id,
+            "status": cov.status,
+            "scope": cov.data_scope,
+            "host": cov.host,
+            "hardware": cov.hw_label,
+            "model": cov.model,
+            "tp": cov.tp,
+            "mode": cov.mode,
+            "backend": cov.backend,
+            "present": len(cov.present),
+            "expected": len(cov.expected),
+            "missing_count": len(cov.missing),
+            "missing": group_missing_for_job(cov.missing),
+            "present_points": points_payload(cov.present),
+            "attempt": cov.attempt,
+            "failure": failure,
+            "reason": cov.reason,
+        }
+        if include_missing_points:
+            payload["missing_points"] = points_payload(cov.missing)
+        return payload
+
+    failure_category_counts = Counter(
+        failure.get("category", "unknown")
+        for cov in stale_jobs
+        if (failure := failure_payload(cov))
+    )
+
+    return {
+        "generated_at": now_iso(),
+        "scope": scope,
+        "data_source": {
+            "ref": data_source.ref,
+            "ok": data_source.ok,
+            "error": data_source.error,
+            "bytes_read": data_source.bytes_read,
+        },
+        "data_rows": len(data),
+        "data_scopes": dict(data_scope_counts(data)),
+        "expected_points": len(expected_points),
+        "present_points": len(present_points),
+        "missing_points": len(expected_points - present_points),
+        "jobs_total": len(all_jobs),
+        "jobs_with_missing_coverage": len(missing_jobs),
+        "stale_terminal_jobs": len(stale_jobs),
+        "job_status_counts": dict(status_counts),
+        "missing_jobs_by_status": dict(missing_by_status),
+        "reset_statuses": sorted(reset_statuses),
+        "max_requeues": max_requeues,
+        "reset_performed": [cov.job_id for cov in reset_outcome.reset],
+        "reset_exhausted": [cov.job_id for cov in reset_outcome.exhausted],
+        "failure_category_counts": dict(failure_category_counts),
+        "jobs": [cov_payload(cov, include_missing_points=False) for cov in all_jobs],
+        "blockers": [cov_payload(cov, include_missing_points=True) for cov in stale_jobs],
+    }
+
+
+def write_blockers_json(
+    path: Path,
+    *,
+    scope: str,
+    data_source: JsonSource,
+    data: list[dict[str, Any]],
+    jobs: dict[str, JobCoverage],
+    reset_statuses: set[str],
+    reset_outcome: ResetOutcome,
+    max_requeues: int,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = coverage_payload(
+        scope=scope,
+        data_source=data_source,
+        data=data,
+        jobs=jobs,
+        reset_statuses=reset_statuses,
+        reset_outcome=reset_outcome,
+        max_requeues=max_requeues,
+    )
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
 def write_missing_bench_jobs(path: Path, missing_jobs: list[JobCoverage], compiled_rows: dict[str, str], scope: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "# Benchmark job subset with missing coverage.",
         "# GENERATED by scripts/reconcile_sweep_coverage.py.",
-        f"# scope: {scope}",
+        f"# SCOPE: {scope}",
         "# Format matches scripts/bench_jobs.txt.",
         "",
     ]
@@ -473,6 +804,7 @@ def main() -> int:
         choices=(
             "trace_replay",
             "synthetic_distributional",
+            "synthetic-distributional",
             "archived",
             "synthetic",
             "latest",
@@ -509,6 +841,18 @@ def main() -> int:
         default=DEFAULT_RESET_STATUSES,
         help="comma-separated terminal statuses to reset; default: done",
     )
+    parser.add_argument(
+        "--max-coverage-requeues",
+        type=int,
+        default=1,
+        help="maximum automatic coverage requeues per job; use -1 for unlimited",
+    )
+    parser.add_argument(
+        "--write-blockers-json",
+        type=Path,
+        default=None,
+        help="write machine-readable coverage blocker/requeue summary JSON",
+    )
     parser.add_argument("--no-reset-reason", action="store_true", help="do not write/reset .reason files")
     parser.add_argument("--fail-on-missing", action="store_true")
     parser.add_argument("--fail-on-stale", action="store_true")
@@ -539,14 +883,15 @@ def main() -> int:
     missing_jobs = [cov for cov in all_jobs if cov.missing]
     stale_jobs = [cov for cov in missing_jobs if cov.status in BLOCKING_STATUSES]
 
-    reset_targets: list[JobCoverage] = []
+    reset_outcome = ResetOutcome()
     if args.reset_stale:
-        reset_targets = reset_stale_jobs(
+        reset_outcome = reset_stale_jobs(
             stale_jobs,
             args.state_dir,
             args.reset_statuses,
             args.scope,
             write_reason=not args.no_reset_reason,
+            max_requeues=args.max_coverage_requeues,
         )
 
     wrote_bench_jobs = False
@@ -557,12 +902,26 @@ def main() -> int:
     wrote_missing_jobs: Path | None = None
     if args.write_missing_jobs:
         wrote_missing_jobs = Path(args.write_missing_jobs)
-        write_missing_bench_jobs(wrote_missing_jobs, missing_jobs, compiled_rows, args.scope)
+        write_missing_bench_jobs(wrote_missing_jobs, missing_jobs, compiled_scope_rows, args.scope)
 
     wrote_sweep_state: Path | None = None
     if args.write_sweep_state:
         write_local_sweep_state(args.sweep_yaml, args.state_dir, args.sweep_state_out)
         wrote_sweep_state = args.sweep_state_out
+
+    wrote_blockers_json: Path | None = None
+    if args.write_blockers_json:
+        write_blockers_json(
+            args.write_blockers_json,
+            scope=args.scope,
+            data_source=data_source,
+            data=data,
+            jobs=jobs,
+            reset_statuses=args.reset_statuses,
+            reset_outcome=reset_outcome,
+            max_requeues=args.max_coverage_requeues,
+        )
+        wrote_blockers_json = args.write_blockers_json
 
     report = build_report(
         scope=args.scope,
@@ -574,11 +933,13 @@ def main() -> int:
         compiled_scope_rows=compiled_scope_rows,
         compiled_skipped=compiled_skipped,
         reset_statuses=args.reset_statuses,
-        reset_targets=reset_targets,
+        reset_outcome=reset_outcome,
+        max_requeues=args.max_coverage_requeues,
         limit=args.limit,
         wrote_bench_jobs=wrote_bench_jobs,
         wrote_missing_jobs=wrote_missing_jobs,
         wrote_sweep_state=wrote_sweep_state,
+        wrote_blockers_json=wrote_blockers_json,
     )
 
     if not args.no_report:

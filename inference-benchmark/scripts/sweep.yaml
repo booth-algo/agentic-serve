@@ -1,25 +1,25 @@
 # Authoritative benchmark sweep matrix.
 #
 # Single source of truth consumed by:
-#   - scripts/compile_sweep.py       → emits scripts/bench_jobs.txt
-#   - scripts/bench_orchestrator.sh  → reads bench_jobs.txt, publishes sweep-state.json to R2
+#   - scripts/compile_sweep.py       → emits structured JSON manifests or legacy row streams
+#   - scripts/bench_orchestrator.sh  → compiles a fresh scoped manifest, dispatches jobs, publishes sweep-state.json to R2
 #   - dashboard/src/components/CoveragePage.tsx → reads sweep-state.json for live cell status
 #
-# DO NOT edit bench_jobs.txt directly — it is generated from this file.
+# DO NOT edit generated bench_jobs artifacts directly — they are generated from this file.
 # To add/remove a sweep row, edit `cells` below and run:
-#     python scripts/compile_sweep.py
+#     python scripts/compile_sweep.py --scope synthetic_distributional --format json --out /tmp/bench_jobs/bench_jobs.synthetic_distributional.json
 #
 # A cell is (host, model, tp, mode). The compiler:
 #   1. Skips cells in `known_oom` (dashboard shows them as OOM).
 #   2. Skips cells where weights_gb > host.vram_gb_per_gpu × tp × feasibility_ratio
 #      (dashboard shows them as infeasible via the same rule).
-#   3. Emits every remaining cell as a bench_jobs.txt row.
+#   3. Emits every remaining cell as a structured job record.
 
 # --------------------------------------------------------------------------
 # Hardware
 # --------------------------------------------------------------------------
 hosts:
-  gpu-4:
+  a100:
     hardware_label: A100-40GB    # base label; dashboard adds x<TP> suffix for TP>1
     model_root: /data/models
     python: /data/kevinlau/miniconda3/bin/python
@@ -132,7 +132,7 @@ presets:
 # Feasibility rule (mirrors CoveragePage.tsx checkFeasibility)
 # --------------------------------------------------------------------------
 # A cell is feasible iff:  weights_gb <= vram_gb_per_gpu × tp × feasibility_ratio
-# Infeasible cells are NOT emitted to bench_jobs.txt. They still show on the
+# Infeasible cells are NOT emitted to generated job manifests. They still show on the
 # dashboard with reason: "needs ≥X GB VRAM (weights Y GB); config has Z GB".
 # 0.90 allows 70B/72B tp4 on A100-40GB (empirically works with our
 # VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 + gpu_mem=0.95 config).
@@ -145,12 +145,15 @@ feasibility_ratio: 0.90
 # with the given reason. Use this for stack-level bugs (e.g. vLLM kernel issues)
 # that won't be fixed by config tuning.
 known_oom:
-  - { host: gpu-4, model: Qwen3.5-27B, tp: 2, reason: "hybrid-attn triton" }
-  - { host: gpu-4, model: Qwen3.5-27B, tp: 4, reason: "hybrid-attn triton" }
+  - { host: a100, model: Qwen3.5-27B, tp: 2, backend: vllm, reason: "hybrid-attn triton" }
+  - { host: a100, model: Qwen3.5-27B, tp: 4, backend: vllm, reason: "hybrid-attn triton" }
   # gpt-oss-* is natively MXFP4-quantized; MXFP4 kernels require sm80+ (Ampere).
   # 2080Ti is Turing (sm75) — no hardware support. Dequantizing to bf16 would
   # make it a different artifact (40 GB vs 12 GB) that wouldn't fit tp1 anyway.
   - { host: 2080ti, model: gpt-oss-20b, tp: 1, reason: "MXFP4 needs sm80+; 2080Ti is sm75 (Turing, no hw support)" }
+  - { host: 2080ti, model: gpt-oss-20b, tp: 2, reason: "MXFP4 needs sm80+; 2080Ti is sm75 (Turing, no hw support)" }
+  - { host: 2080ti, model: gpt-oss-20b, tp: 4, reason: "MXFP4 needs sm80+; 2080Ti is sm75 (Turing, no hw support)" }
+  - { host: 2080ti, model: gpt-oss-120b, tp: 4, reason: "MXFP4 needs sm80+; 2080Ti is sm75 (Turing, no hw support)" }
 
 # --------------------------------------------------------------------------
 # Profile-level infeasible combos
@@ -179,42 +182,59 @@ profile_infeasible:
       - osworld-multiturn
     reason: "sglang 0.5.9 custom ops lack sm75 (Turing) kernels; rebuild from source required"
 
+  # vLLM 0.19 fails H100/gpt-oss-20b/tp1 startup in the MXFP4 MoE Triton
+  # profile run before any request is served:
+  # AttributeError: 'tuple' object has no attribute 'mask_metadata'
+  - host: h100
+    model: gpt-oss-20b
+    tp: 1
+    backend: vllm
+    profiles:
+      - chat-singleturn
+      - chat-multiturn
+      - swebench-multiturn
+      - terminalbench-multiturn
+      - osworld-multiturn
+    reason: "vLLM 0.19 gpt-oss MXFP4 MoE Triton startup crash on H100 tp1"
+
 # --------------------------------------------------------------------------
 # Active sweep cells
 # --------------------------------------------------------------------------
 # Each cell is (host, model, tp, mode). The preset picks default launch
-# params; any key on the cell overrides the preset (max_len, gpu_mem,
-# concurrencies, profiles, extra_env).
+  # params; any key on the cell overrides the preset (max_len, gpu_mem,
+  # concurrencies, profiles, extra_env). synthetic_concurrencies narrows only
+  # synthetic_distributional expected outputs for cells with known high-conc
+  # service instability.
 #
 # Cells that fail the feasibility rule or match known_oom are skipped at
 # compile time. The dashboard's CoveragePage still renders every host×model
 # combo (including skipped ones) so gaps are visible.
 cells:
-  # === A100 (gpu-4) ===
+  # === A100 (a100) ===
   # tp1
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: single, preset: single_small }
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: multi,  preset: multi_small }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 1, mode: single, preset: single_tight, gpu_mem: 0.90, max_len: 4096, profiles: [chat-singleturn] }
-  - { host: gpu-4, model: gpt-oss-20b,    tp: 1, mode: single, preset: single_large, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-8B,   tp: 1, mode: single, preset: single_small }
+  - { host: a100, model: Llama-3.1-8B,   tp: 1, mode: multi,  preset: multi_small }
+  - { host: a100, model: Qwen3.5-9B,     tp: 1, mode: single, preset: single_tight, gpu_mem: 0.90, max_len: 4096, profiles: [chat-singleturn] }
+  - { host: a100, model: gpt-oss-20b,    tp: 1, mode: single, preset: single_large, max_len: 8192 }
   # tp2
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 2, mode: single, preset: single_small }
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 2, mode: multi,  preset: multi_small }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 2, mode: single, preset: single_large, max_len: 8192, gpu_mem: 0.90 }
-  - { host: gpu-4, model: gpt-oss-20b,    tp: 2, mode: single, preset: single_large, max_len: 8192 }
-  - { host: gpu-4, model: gpt-oss-20b,    tp: 2, mode: multi,  preset: multi_medium, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-8B,   tp: 2, mode: single, preset: single_small }
+  - { host: a100, model: Llama-3.1-8B,   tp: 2, mode: multi,  preset: multi_small }
+  - { host: a100, model: Qwen3.5-9B,     tp: 2, mode: single, preset: single_large, max_len: 8192, gpu_mem: 0.90 }
+  - { host: a100, model: gpt-oss-20b,    tp: 2, mode: single, preset: single_large, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b,    tp: 2, mode: multi,  preset: multi_medium, max_len: 8192 }
   # tp4
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 4, mode: single, preset: single_small }
-  - { host: gpu-4, model: Mixtral-8x7B,   tp: 4, mode: single, preset: single_small, max_len: 8192, profiles: [chat-singleturn] }
-  - { host: gpu-4, model: Mixtral-8x7B,   tp: 4, mode: multi,  preset: multi_medium }
-  - { host: gpu-4, model: Llama-3.1-70B,  tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.1-70B,  tp: 4, mode: multi,  preset: multi_medium, gpu_mem: 0.95, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.3-70B,  tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.3-70B,  tp: 4, mode: multi,  preset: multi_medium, gpu_mem: 0.95, max_len: 8192 }
-  - { host: gpu-4, model: Qwen2.5-72B,    tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 4096 }
-  - { host: gpu-4, model: Qwen2.5-72B,    tp: 4, mode: multi,  preset: multi_medium, gpu_mem: 0.95, max_len: 4096 }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 4, mode: single, preset: single_medium }
-  - { host: gpu-4, model: gpt-oss-20b,    tp: 4, mode: single, preset: single_large, max_len: 8192 }
-  - { host: gpu-4, model: gpt-oss-20b,    tp: 4, mode: multi,  preset: multi_medium, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-8B,   tp: 4, mode: single, preset: single_small }
+  - { host: a100, model: Mixtral-8x7B,   tp: 4, mode: single, preset: single_small, max_len: 8192, profiles: [chat-singleturn] }
+  - { host: a100, model: Mixtral-8x7B,   tp: 4, mode: multi,  preset: multi_medium }
+  - { host: a100, model: Llama-3.1-70B,  tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-70B,  tp: 4, mode: multi,  preset: multi_medium, gpu_mem: 0.95, max_len: 8192 }
+  - { host: a100, model: Llama-3.3-70B,  tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 8192 }
+  - { host: a100, model: Llama-3.3-70B,  tp: 4, mode: multi,  preset: multi_medium, gpu_mem: 0.95, max_len: 8192 }
+  - { host: a100, model: Qwen2.5-72B,    tp: 4, mode: single, preset: single_large, gpu_mem: 0.95, max_len: 4096 }
+  - { host: a100, model: Qwen2.5-72B,    tp: 4, mode: multi,  preset: multi_medium, gpu_mem: 0.95, max_len: 4096 }
+  - { host: a100, model: Qwen3.5-9B,     tp: 4, mode: single, preset: single_medium }
+  - { host: a100, model: gpt-oss-20b,    tp: 4, mode: single, preset: single_large, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b,    tp: 4, mode: multi,  preset: multi_medium, max_len: 8192 }
 
   # === RTX 3090 ===
   - { host: 3090,  model: Llama-3.1-8B,   tp: 1, mode: single, preset: single_small }
@@ -276,9 +296,9 @@ cells:
   - { host: h100, model: Qwen3.5-27B,    tp: 1, mode: single, preset: single_small, gpu_mem: 0.90 }
   - { host: h100, model: Qwen3.5-27B,    tp: 1, mode: multi,  preset: multi_small, gpu_mem: 0.90 }
 
-  # === gpu-4 gap fill ===
-  - { host: gpu-4, model: Qwen3.5-27B,   tp: 2, mode: single, preset: single_large, max_len: 8192, gpu_mem: 0.90 }
-  - { host: gpu-4, model: Qwen3.5-27B,   tp: 2, mode: multi,  preset: multi_medium, max_len: 8192, gpu_mem: 0.90 }
+  # === a100 gap fill ===
+  - { host: a100, model: Qwen3.5-27B,   tp: 2, mode: single, preset: single_large, max_len: 8192, gpu_mem: 0.90 }
+  - { host: a100, model: Qwen3.5-27B,   tp: 2, mode: multi,  preset: multi_medium, max_len: 8192, gpu_mem: 0.90 }
 
   # === H100 tp2 ===
   - { host: h100, model: Llama-3.1-8B,   tp: 2, mode: single, preset: single_small, gpu_mem: 0.90 }
@@ -338,13 +358,13 @@ cells:
   - { host: h100, model: Qwen2.5-72B,    tp: 4, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
   - { host: h100, model: Qwen2.5-72B,    tp: 4, mode: multi,  backend: sglang, preset: multi_small, gpu_mem: 0.90 }
 
-  # === sglang cells (initial set for gpu-4 + 3090) ===
+  # === sglang cells (initial set for a100 + 3090) ===
   # Absent `backend:` defaults to vllm. When backend == sglang, orchestrator
   # uses the sglang launcher + python_sglang env.
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: single, backend: sglang, preset: single_small }
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 1, mode: multi,  backend: sglang, preset: multi_small }
-  - { host: gpu-4, model: Llama-3.1-70B,  tp: 4, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.1-70B,  tp: 4, mode: multi,  backend: sglang, preset: multi_medium, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-8B,   tp: 1, mode: single, backend: sglang, preset: single_small }
+  - { host: a100, model: Llama-3.1-8B,   tp: 1, mode: multi,  backend: sglang, preset: multi_small }
+  - { host: a100, model: Llama-3.1-70B,  tp: 4, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-70B,  tp: 4, mode: multi,  backend: sglang, preset: multi_medium, gpu_mem: 0.90, max_len: 8192 }
   - { host: 3090,  model: Llama-3.1-8B,   tp: 1, mode: single, backend: sglang, preset: single_small }
   - { host: 3090,  model: Llama-3.1-8B,   tp: 1, mode: multi,  backend: sglang, preset: multi_small }
   # Pin away from 3090's broken GPU5 (Unknown device handle NVML error);
@@ -354,13 +374,13 @@ cells:
   - { host: 3090,  model: Qwen3.5-9B,     tp: 2, mode: multi,  backend: sglang, preset: multi_medium, max_len: 8192, gpu_mem: 0.85, extra_env: "CUDA_VISIBLE_DEVICES=0,1" }
 
   # === vllm multi-turn fill-in on A100 — 2026-04-24 ===
-  # Dashboard showed most multi-turn cells missing on gpu-4 except
+  # Dashboard showed most multi-turn cells missing on a100 except
   # Llama-3.1-8B tp1 and Mixtral-8x7B tp4. Adding the safe bf16 set.
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 4, mode: multi,  preset: multi_small }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 1, mode: multi,  preset: multi_tight, max_len: 4096 }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 2, mode: multi,  preset: multi_medium }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 4, mode: multi,  preset: multi_medium }
-  - { host: gpu-4, model: gpt-oss-20b,    tp: 1, mode: multi,  preset: multi_medium }
+  - { host: a100, model: Llama-3.1-8B,   tp: 4, mode: multi,  preset: multi_small }
+  - { host: a100, model: Qwen3.5-9B,     tp: 1, mode: multi,  preset: multi_tight, max_len: 4096 }
+  - { host: a100, model: Qwen3.5-9B,     tp: 2, mode: multi,  preset: multi_medium }
+  - { host: a100, model: Qwen3.5-9B,     tp: 4, mode: multi,  preset: multi_medium }
+  - { host: a100, model: gpt-oss-20b,    tp: 1, mode: multi,  preset: multi_medium }
 
   # === vllm fill-in on 2080Ti — 2026-04-24 ===
   # gpt-oss-20b MXFP4 ~12 GB fits single 2080Ti (22 GB budget). Pin to GPU5
@@ -374,19 +394,27 @@ cells:
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 1, mode: multi,  preset: multi_tight, max_len: 4096, gpu_mem: 0.90, extra_env: "CUDA_VISIBLE_DEVICES=1 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 4, mode: single, preset: single_small, max_len: 32768, profiles: [chat-singleturn, coding-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
 
-  # === sglang fill-in on A100 (gpu-4) — 2026-04-24 ===
+  # === sglang fill-in on A100 (a100) — 2026-04-24 ===
   # Mirrors the vllm single-turn coverage to enable backend comparison.
   # Same max_len / gpu_mem as the matching vllm cells where practical.
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 1, mode: single, backend: sglang, preset: single_tight, gpu_mem: 0.90, max_len: 4096 }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 1, mode: multi,  backend: sglang, preset: multi_tight, gpu_mem: 0.90, max_len: 4096 }
-  - { host: gpu-4, model: gpt-oss-20b,    tp: 1, mode: single, backend: sglang, preset: single_large, max_len: 8192 }
-  - { host: gpu-4, model: gpt-oss-20b,    tp: 1, mode: multi,  backend: sglang, preset: multi_medium, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 4, mode: single, backend: sglang, preset: single_small }
-  - { host: gpu-4, model: Llama-3.1-8B,   tp: 4, mode: multi,  backend: sglang, preset: multi_small }
-  - { host: gpu-4, model: Mixtral-8x7B,   tp: 4, mode: single, backend: sglang, preset: single_small, max_len: 8192 }
-  - { host: gpu-4, model: Mixtral-8x7B,   tp: 4, mode: multi,  backend: sglang, preset: multi_medium, max_len: 8192 }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 4, mode: single, backend: sglang, preset: single_medium }
-  - { host: gpu-4, model: Qwen3.5-9B,     tp: 4, mode: multi,  backend: sglang, preset: multi_medium }
+  - { host: a100, model: Qwen3.5-9B,     tp: 1, mode: single, backend: sglang, preset: single_tight, gpu_mem: 0.90, max_len: 4096 }
+  - { host: a100, model: Qwen3.5-9B,     tp: 1, mode: multi,  backend: sglang, preset: multi_tight, gpu_mem: 0.90, max_len: 4096 }
+  - { host: a100, model: gpt-oss-20b,    tp: 1, mode: single, backend: sglang, preset: single_large, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b,    tp: 1, mode: multi,  backend: sglang, preset: multi_medium, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-8B,   tp: 2, mode: single, backend: sglang, preset: single_small }
+  - { host: a100, model: Llama-3.1-8B,   tp: 2, mode: multi,  backend: sglang, preset: multi_small }
+  - { host: a100, model: Qwen3.5-9B,     tp: 2, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Qwen3.5-9B,     tp: 2, mode: multi,  backend: sglang, preset: multi_medium }
+  - { host: a100, model: gpt-oss-20b,    tp: 2, mode: single, backend: sglang, preset: single_large, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b,    tp: 2, mode: multi,  backend: sglang, preset: multi_medium, max_len: 8192 }
+  - { host: a100, model: Qwen3.5-27B,    tp: 2, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Qwen3.5-27B,    tp: 2, mode: multi,  backend: sglang, preset: multi_medium, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-8B,   tp: 4, mode: single, backend: sglang, preset: single_small }
+  - { host: a100, model: Llama-3.1-8B,   tp: 4, mode: multi,  backend: sglang, preset: multi_small }
+  - { host: a100, model: Mixtral-8x7B,   tp: 4, mode: single, backend: sglang, preset: single_small, max_len: 8192 }
+  - { host: a100, model: Mixtral-8x7B,   tp: 4, mode: multi,  backend: sglang, preset: multi_medium, max_len: 8192 }
+  - { host: a100, model: Qwen3.5-9B,     tp: 4, mode: single, backend: sglang, preset: single_medium }
+  - { host: a100, model: Qwen3.5-9B,     tp: 4, mode: multi,  backend: sglang, preset: multi_medium }
 
   # === sglang fill-in on 2080Ti — 2026-04-24 ===
   # Pin to same GPU IDs as vllm counterparts (shared box with other users).
@@ -395,51 +423,142 @@ cells:
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: single, backend: sglang, preset: single_small, max_len: 32768, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
   - { host: 2080ti, model: Qwen3.5-9B,    tp: 2, mode: multi,  backend: sglang, preset: multi_tight, max_len: 8192, extra_env: "CUDA_VISIBLE_DEVICES=5,6 PATH=/home/kevinlau/miniconda3/envs/sglang/bin:$PATH" }
 
+  # === Feasible backend matrix fill-in — 2026-05-12 ===
+  # Adds memory-feasible vLLM/SGLang TP1/TP2/TP4 cells that were missing from
+  # the explicit sweep matrix. 2080Ti SGLang and 2080Ti gpt-oss remain blocked
+  # by the structural rules above.
+  - { host: a100, model: Llama-3.3-70B, tp: 4, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Llama-3.3-70B, tp: 4, mode: multi, backend: sglang, preset: multi_medium, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Qwen2.5-72B, tp: 4, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 4096 }
+  - { host: a100, model: Qwen2.5-72B, tp: 4, mode: multi, backend: sglang, preset: multi_medium, gpu_mem: 0.90, max_len: 4096 }
+  - { host: a100, model: Qwen3.5-27B, tp: 4, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Qwen3.5-27B, tp: 4, mode: multi, backend: sglang, preset: multi_medium, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b, tp: 4, mode: single, backend: sglang, preset: single_large, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b, tp: 4, mode: multi, backend: sglang, preset: multi_medium, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 2, mode: single, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 2, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 2, mode: multi, preset: multi_medium, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 2, mode: multi, backend: sglang, preset: multi_medium, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 4, mode: single, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 4, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 4, mode: multi, preset: multi_medium, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 4, mode: multi, backend: sglang, preset: multi_medium, gpu_mem: 0.90, max_len: 8192 }
+  - { host: 3090, model: Llama-3.1-8B, tp: 2, mode: single, backend: sglang, preset: single_small }
+  - { host: 3090, model: Llama-3.1-8B, tp: 2, mode: multi, backend: sglang, preset: multi_small }
+  - { host: 3090, model: Llama-3.1-8B, tp: 4, mode: single, backend: sglang, preset: single_small }
+  - { host: 3090, model: Llama-3.1-8B, tp: 4, mode: multi, backend: sglang, preset: multi_small }
+  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: single, backend: sglang, preset: single_tight, gpu_mem: 0.85, max_len: 4096 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: multi, backend: sglang, preset: multi_tight, gpu_mem: 0.85, max_len: 4096 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 4, mode: single, backend: sglang, preset: single_large, gpu_mem: 0.85, max_len: 8192 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 4, mode: multi, backend: sglang, preset: multi_medium, gpu_mem: 0.85, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 2, mode: single, backend: sglang, preset: single_large, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 2, mode: multi, backend: sglang, preset: multi_medium, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 4, mode: single, backend: sglang, preset: single_large, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 4, mode: multi, backend: sglang, preset: multi_medium, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, preset: single_large, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, backend: sglang, preset: single_large, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, preset: multi_medium, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, backend: sglang, preset: multi_medium, max_len: 8192 }
+  - { host: h100, model: Llama-3.1-8B, tp: 1, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 1, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 2, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 2, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 4, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 4, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-70B, tp: 2, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-70B, tp: 2, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.3-70B, tp: 2, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.3-70B, tp: 2, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Mixtral-8x7B, tp: 2, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Mixtral-8x7B, tp: 2, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Mixtral-8x7B, tp: 4, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Mixtral-8x7B, tp: 4, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Qwen2.5-72B, tp: 2, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen2.5-72B, tp: 2, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 1, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 1, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 2, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 2, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 4, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 4, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-27B, tp: 1, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-27B, tp: 1, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-27B, tp: 2, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-27B, tp: 2, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-27B, tp: 4, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-27B, tp: 4, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
+  - { host: h100, model: gpt-oss-20b, tp: 1, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 1, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 2, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 2, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 4, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 4, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 1, mode: single, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 1, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 1, mode: multi, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 1, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 2, mode: single, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 2, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 2, mode: multi, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 2, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 4, mode: single, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 4, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 4, mode: multi, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 4, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90, max_len: 8192 }
+
 # === Fixed-scope cells (rerun of all current-scope with corrected num_sessions) ===
   # Same model x host x tp x mode as current-scope, but with fixed concurrencies [200,320].
-  # gpu-4
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single }
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 4096, profiles: [chat-singleturn] }
-  - { host: gpu-4, model: gpt-oss-20b, tp: 1, mode: single, preset: fixed_single, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 2, mode: single, preset: fixed_single }
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 2, mode: multi, preset: fixed_multi }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192 }
-  - { host: gpu-4, model: gpt-oss-20b, tp: 2, mode: single, preset: fixed_single, max_len: 8192 }
-  - { host: gpu-4, model: gpt-oss-20b, tp: 2, mode: multi, preset: fixed_multi, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 4, mode: single, preset: fixed_single }
-  - { host: gpu-4, model: Mixtral-8x7B, tp: 4, mode: single, preset: fixed_single, max_len: 8192, profiles: [chat-singleturn] }
-  - { host: gpu-4, model: Mixtral-8x7B, tp: 4, mode: multi, preset: fixed_multi }
-  - { host: gpu-4, model: Llama-3.1-70B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.95, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.1-70B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.95, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.3-70B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.95, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.3-70B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.95, max_len: 8192 }
-  - { host: gpu-4, model: Qwen2.5-72B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.95, max_len: 4096 }
-  - { host: gpu-4, model: Qwen2.5-72B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.95, max_len: 4096 }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 4, mode: single, preset: fixed_single }
-  - { host: gpu-4, model: gpt-oss-20b, tp: 4, mode: single, preset: fixed_single, max_len: 8192 }
-  - { host: gpu-4, model: gpt-oss-20b, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192 }
-  - { host: gpu-4, model: Qwen3.5-27B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192 }
-  - { host: gpu-4, model: Qwen3.5-27B, tp: 2, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 8192 }
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single, backend: sglang }
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi, backend: sglang }
-  - { host: gpu-4, model: Llama-3.1-70B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192, backend: sglang }
-  - { host: gpu-4, model: Llama-3.1-70B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 8192, backend: sglang }
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 4, mode: multi, preset: fixed_multi }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 1, mode: multi, preset: fixed_multi, max_len: 4096 }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 2, mode: multi, preset: fixed_multi }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 4, mode: multi, preset: fixed_multi }
-  - { host: gpu-4, model: gpt-oss-20b, tp: 1, mode: multi, preset: fixed_multi }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 4096, backend: sglang }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 4096, backend: sglang }
-  - { host: gpu-4, model: gpt-oss-20b, tp: 1, mode: single, preset: fixed_single, max_len: 8192, backend: sglang }
-  - { host: gpu-4, model: gpt-oss-20b, tp: 1, mode: multi, preset: fixed_multi, max_len: 8192, backend: sglang }
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 4, mode: single, preset: fixed_single, backend: sglang }
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 4, mode: multi, preset: fixed_multi, backend: sglang }
-  - { host: gpu-4, model: Mixtral-8x7B, tp: 4, mode: single, preset: fixed_single, max_len: 8192, backend: sglang }
-  - { host: gpu-4, model: Mixtral-8x7B, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192, backend: sglang }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 4, mode: single, preset: fixed_single, backend: sglang }
-  - { host: gpu-4, model: Qwen3.5-9B, tp: 4, mode: multi, preset: fixed_multi, backend: sglang }
+  # a100
+  - { host: a100, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single }
+  - { host: a100, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi }
+  - { host: a100, model: Qwen3.5-9B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 4096, profiles: [chat-singleturn] }
+  - { host: a100, model: gpt-oss-20b, tp: 1, mode: single, preset: fixed_single, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-8B, tp: 2, mode: single, preset: fixed_single }
+  - { host: a100, model: Llama-3.1-8B, tp: 2, mode: multi, preset: fixed_multi }
+  - { host: a100, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b, tp: 2, mode: single, preset: fixed_single, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b, tp: 2, mode: multi, preset: fixed_multi, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-8B, tp: 4, mode: single, preset: fixed_single }
+  - { host: a100, model: Mixtral-8x7B, tp: 4, mode: single, preset: fixed_single, max_len: 8192, profiles: [chat-singleturn] }
+  - { host: a100, model: Mixtral-8x7B, tp: 4, mode: multi, preset: fixed_multi }
+  - { host: a100, model: Llama-3.1-70B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.95, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-70B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.95, max_len: 8192 }
+  - { host: a100, model: Llama-3.3-70B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.95, max_len: 8192 }
+  - { host: a100, model: Llama-3.3-70B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.95, max_len: 8192 }
+  - { host: a100, model: Qwen2.5-72B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.95, max_len: 4096, synthetic_concurrencies: [1, 10, 20, 40, 80, 120, 160, 200] }
+  - { host: a100, model: Qwen2.5-72B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.95, max_len: 4096, synthetic_concurrencies: [1, 5, 10, 20, 40, 80] }
+  - { host: a100, model: Qwen3.5-9B, tp: 4, mode: single, preset: fixed_single }
+  - { host: a100, model: gpt-oss-20b, tp: 4, mode: single, preset: fixed_single, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192 }
+  - { host: a100, model: Qwen3.5-27B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192 }
+  - { host: a100, model: Qwen3.5-27B, tp: 2, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 8192 }
+  - { host: a100, model: Llama-3.1-8B, tp: 1, mode: single, preset: fixed_single, backend: sglang }
+  - { host: a100, model: Llama-3.1-8B, tp: 1, mode: multi, preset: fixed_multi, backend: sglang }
+  - { host: a100, model: Llama-3.1-70B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192, backend: sglang }
+  - { host: a100, model: Llama-3.1-70B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 8192, backend: sglang }
+  - { host: a100, model: Llama-3.1-8B, tp: 4, mode: multi, preset: fixed_multi }
+  - { host: a100, model: Qwen3.5-9B, tp: 1, mode: multi, preset: fixed_multi, max_len: 4096 }
+  - { host: a100, model: Qwen3.5-9B, tp: 2, mode: multi, preset: fixed_multi }
+  - { host: a100, model: Qwen3.5-9B, tp: 4, mode: multi, preset: fixed_multi }
+  - { host: a100, model: gpt-oss-20b, tp: 1, mode: multi, preset: fixed_multi }
+  - { host: a100, model: Qwen3.5-9B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 4096, backend: sglang }
+  - { host: a100, model: Qwen3.5-9B, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 4096, backend: sglang }
+  - { host: a100, model: gpt-oss-20b, tp: 1, mode: single, preset: fixed_single, max_len: 8192, backend: sglang, synthetic_concurrencies: [1, 10, 20, 40, 80, 120, 160, 200, 256] }
+  - { host: a100, model: gpt-oss-20b, tp: 1, mode: multi, preset: fixed_multi, max_len: 8192, backend: sglang, synthetic_concurrencies: [1, 5, 10, 20, 40, 80, 120] }
+  - { host: a100, model: Llama-3.1-8B, tp: 2, mode: single, preset: fixed_single, backend: sglang }
+  - { host: a100, model: Llama-3.1-8B, tp: 2, mode: multi, preset: fixed_multi, backend: sglang }
+  - { host: a100, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192, backend: sglang }
+  - { host: a100, model: Qwen3.5-9B, tp: 2, mode: multi, preset: fixed_multi, backend: sglang }
+  - { host: a100, model: gpt-oss-20b, tp: 2, mode: single, preset: fixed_single, max_len: 8192, backend: sglang }
+  - { host: a100, model: gpt-oss-20b, tp: 2, mode: multi, preset: fixed_multi, max_len: 8192, backend: sglang }
+  - { host: a100, model: Qwen3.5-27B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192, backend: sglang }
+  - { host: a100, model: Qwen3.5-27B, tp: 2, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 8192, backend: sglang }
+  - { host: a100, model: Llama-3.1-8B, tp: 4, mode: single, preset: fixed_single, backend: sglang }
+  - { host: a100, model: Llama-3.1-8B, tp: 4, mode: multi, preset: fixed_multi, backend: sglang }
+  - { host: a100, model: Mixtral-8x7B, tp: 4, mode: single, preset: fixed_single, max_len: 8192, backend: sglang }
+  - { host: a100, model: Mixtral-8x7B, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192, backend: sglang }
+  - { host: a100, model: Qwen3.5-9B, tp: 4, mode: single, preset: fixed_single, backend: sglang }
+  - { host: a100, model: Qwen3.5-9B, tp: 4, mode: multi, preset: fixed_multi, backend: sglang }
   # 2080ti
   - { host: 2080ti, model: Llama-3.1-8B, tp: 2, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1,2 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
   - { host: 2080ti, model: Llama-3.1-8B, tp: 4, mode: single, preset: fixed_single, max_len: 32768, profiles: [chat-singleturn], extra_env: "CUDA_VISIBLE_DEVICES=1,2,3,4 PATH=/home/kevinlau/miniconda3/envs/vllm/bin:$PATH" }
@@ -494,7 +613,7 @@ cells:
   - { host: h100, model: Qwen3.5-9B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9 }
   - { host: h100, model: Qwen3.5-9B, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.9 }
   - { host: h100, model: gpt-oss-20b, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192 }
-  - { host: h100, model: gpt-oss-20b, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 8192, extra_env: "VLLM_ENFORCE_EAGER=1" }
   - { host: h100, model: Mixtral-8x7B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 8192 }
   - { host: h100, model: Mixtral-8x7B, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 8192 }
   - { host: h100, model: Llama-3.1-70B, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.9 }
@@ -527,8 +646,8 @@ cells:
   - { host: 3090, model: gpt-oss-20b, tp: 2, mode: multi, preset: fixed_multi, max_len: 8192 }
   - { host: 3090, model: Llama-3.1-8B, tp: 4, mode: single, preset: fixed_single }
   - { host: 3090, model: Qwen3.5-9B, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 8192 }
-  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.9, max_len: 4096 }
-  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.9, max_len: 4096 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 4096, extra_env: "VLLM_ENFORCE_EAGER=1" }
+  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.85, max_len: 4096, extra_env: "VLLM_ENFORCE_EAGER=1" }
   - { host: 3090, model: gpt-oss-20b, tp: 4, mode: single, preset: fixed_single, max_len: 8192 }
   - { host: 3090, model: gpt-oss-20b, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192 }
   - { host: 3090, model: Llama-3.1-8B, tp: 2, mode: multi, preset: fixed_multi }
@@ -539,10 +658,90 @@ cells:
   - { host: 3090, model: Qwen3.5-9B, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.85, max_len: 8192, backend: sglang, extra_env: "CUDA_VISIBLE_DEVICES=0,1" }
   - { host: 3090, model: Qwen3.5-9B, tp: 2, mode: multi, preset: fixed_multi, gpu_mem: 0.85, max_len: 8192, backend: sglang, extra_env: "CUDA_VISIBLE_DEVICES=0,1" }
 
+  # Feasible backend matrix fill-in for fixed/synthetic_distributional.
+  - { host: a100, model: Llama-3.3-70B, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Llama-3.3-70B, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Qwen2.5-72B, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 4096 }
+  - { host: a100, model: Qwen2.5-72B, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 4096 }
+  - { host: a100, model: Qwen3.5-27B, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: Qwen3.5-27B, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-20b, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 2, mode: multi, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: a100, model: gpt-oss-120b, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: 3090, model: Llama-3.1-8B, tp: 2, mode: single, backend: sglang, preset: fixed_single }
+  - { host: 3090, model: Llama-3.1-8B, tp: 2, mode: multi, backend: sglang, preset: fixed_multi }
+  - { host: 3090, model: Llama-3.1-8B, tp: 4, mode: single, backend: sglang, preset: fixed_single }
+  - { host: 3090, model: Llama-3.1-8B, tp: 4, mode: multi, backend: sglang, preset: fixed_multi }
+  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.85, max_len: 4096 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 1, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.85, max_len: 4096 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.85, max_len: 8192 }
+  - { host: 3090, model: Qwen3.5-9B, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.85, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 2, mode: single, backend: sglang, preset: fixed_single, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 4, mode: single, backend: sglang, preset: fixed_single, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-20b, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, preset: fixed_single, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, backend: sglang, preset: fixed_single, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, max_len: 8192 }
+  - { host: h100, model: Llama-3.1-8B, tp: 1, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 1, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-8B, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-70B, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.1-70B, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.3-70B, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
+  - { host: h100, model: Llama-3.3-70B, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
+  - { host: h100, model: Mixtral-8x7B, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Mixtral-8x7B, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Mixtral-8x7B, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Mixtral-8x7B, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Qwen2.5-72B, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen2.5-72B, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 1, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 1, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-9B, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
+  - { host: h100, model: Qwen3.5-27B, tp: 1, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Qwen3.5-27B, tp: 1, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Qwen3.5-27B, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Qwen3.5-27B, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Qwen3.5-27B, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: Qwen3.5-27B, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 1, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 1, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-20b, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 1, mode: single, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 1, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 1, mode: multi, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 1, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 2, mode: single, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 2, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 2, mode: multi, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 4, mode: single, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 4, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 4, mode: multi, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+  - { host: h100, model: gpt-oss-120b, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90, max_len: 8192 }
+
   # === MSE validation cells (distributional-mse vs legacy-short on same hardware) ===
   # H100
   - { host: h100, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, data_scope: mse }
-  # A100 (gpu-4)
-  - { host: gpu-4, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, data_scope: mse }
+  # A100 (a100)
+  - { host: a100, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, data_scope: mse }
   # RTX3090
   - { host: 3090, model: Llama-3.1-8B, tp: 1, mode: multi, preset: mse_multi, data_scope: mse }

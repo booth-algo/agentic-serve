@@ -11,15 +11,16 @@ import { ComparisonChart } from './components/charts/ComparisonChart';
 import { PerTurnChart } from './components/charts/PerTurnChart';
 import { DataTable } from './components/DataTable';
 import { CoveragePage } from './components/CoveragePage';
-import { GemmPage } from './components/GemmPage';
 import { GpuStatePage } from './components/GpuStatePage';
 import { ServingPredictionsPage } from './components/ServingPredictionsPage';
+import { simulatorPredictionsJsonUrl } from './dataUrls';
 import type { TabId } from './types';
-import { hasServingPredictions, normalizeDataScope, type DataScope } from './profileMeta';
+import { hasSyntheticRuntime, normalizeDataScope, type DataScope } from './profileMeta';
 import './index.css';
 
-type PageId = 'benchmark' | 'coverage' | 'gemm' | 'serving' | 'gpu';
-const PAGE_IDS: PageId[] = ['benchmark', 'coverage', 'gemm', 'serving', 'gpu'];
+type PageId = 'benchmark' | 'coverage' | 'serving' | 'simulator' | 'gpu';
+const PAGE_IDS: PageId[] = ['benchmark', 'coverage', 'serving', 'simulator', 'gpu'];
+const SYNTHETIC_RUNTIME_PAGES = new Set<PageId>(['gpu', 'serving', 'simulator']);
 const DATA_SCOPE_STORAGE_KEY = 'inference-dashboard-data-scope';
 
 function initialDataScope(): DataScope {
@@ -31,9 +32,13 @@ function initialDataScope(): DataScope {
   return normalizeDataScope(storedScope) ?? 'trace_replay';
 }
 
-function initialPage(): PageId {
+function hashPage(): PageId | null {
   const hashPage = window.location.hash.replace(/^#\/?/, '');
-  return PAGE_IDS.includes(hashPage as PageId) ? (hashPage as PageId) : 'benchmark';
+  return PAGE_IDS.includes(hashPage as PageId) ? (hashPage as PageId) : null;
+}
+
+function initialPage(): PageId {
+  return hashPage() ?? 'benchmark';
 }
 
 function pageUrl(page: PageId): string {
@@ -43,7 +48,8 @@ function pageUrl(page: PageId): string {
 }
 
 function pageAvailableInScope(page: PageId, scope: DataScope): boolean {
-  return page !== 'serving' || hasServingPredictions(scope);
+  if (SYNTHETIC_RUNTIME_PAGES.has(page)) return hasSyntheticRuntime(scope);
+  return true;
 }
 
 function App() {
@@ -52,7 +58,10 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>('latency');
   const [scopePending, startScopeTransition] = useTransition();
   const visiblePage = pageAvailableInScope(activePage, dataScope) ? activePage : 'benchmark';
-  const needsBenchmarkData = visiblePage === 'benchmark' || visiblePage === 'coverage';
+  const coverageUsesSummary = visiblePage === 'coverage' && dataScope === 'synthetic_distributional';
+  const coverageNeedsSweepState = visiblePage === 'coverage' && dataScope === 'synthetic_distributional';
+  const needsBenchmarkData = visiblePage === 'benchmark' || (visiblePage === 'coverage' && !coverageUsesSummary);
+  const deriveBenchmarkData = visiblePage === 'benchmark';
   const {
     allData,
     data,
@@ -64,8 +73,12 @@ function App() {
     toggleFilter,
     clearFilters,
     clearWorkloadFilters,
-  } = useData(dataScope, { deriveBenchmarkData: needsBenchmarkData, enabled: needsBenchmarkData });
-  const { sweepState } = useSweepState();
+  } = useData(dataScope, { deriveBenchmarkData, enabled: needsBenchmarkData });
+  const { sweepState, loading: sweepLoading, error: sweepError } = useSweepState();
+  const layoutLoading = visiblePage === 'coverage'
+    ? (loading || (coverageNeedsSweepState && sweepLoading))
+    : (needsBenchmarkData ? loading : false);
+  const layoutTotalRuns = allData.length;
 
   const setActivePage = useCallback((page: PageId) => {
     if (!pageAvailableInScope(page, dataScope)) return;
@@ -74,8 +87,17 @@ function App() {
   }, [dataScope]);
 
   useEffect(() => {
-    const onHashChange = () => setActivePageState(initialPage());
+    const onHashChange = () => {
+      const nextPage = hashPage();
+      if (nextPage) {
+        setActivePageState(nextPage);
+        return;
+      }
+      setActivePageState('benchmark');
+      window.history.replaceState(null, '', pageUrl('benchmark'));
+    };
     window.addEventListener('hashchange', onHashChange);
+    onHashChange();
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
@@ -101,7 +123,7 @@ function App() {
     });
   }, [clearWorkloadFilters]);
 
-  if (error && visiblePage !== 'gpu') {
+  if (error && needsBenchmarkData) {
     return (
       <Layout
         totalRuns={0}
@@ -125,10 +147,31 @@ function App() {
     );
   }
 
+  if (sweepError && coverageNeedsSweepState) {
+    return (
+      <Layout
+        totalRuns={0}
+        loading={false}
+        activePage={visiblePage}
+        onPageChange={setActivePage}
+        dataScope={dataScope}
+        onDataScopeChange={setDataScope}
+        scopePending={scopePending}
+      >
+        <div className="flex h-64 items-center justify-center rounded-lg border border-[#f97583]/30 bg-[#f97583]/10 text-[#f97583]">
+          <div className="text-center">
+            <div className="mb-2 text-lg font-semibold">Failed to load sweep state</div>
+            <div className="text-sm">{sweepError}</div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout
-      totalRuns={allData.length}
-      loading={visiblePage === 'gpu' ? false : loading}
+      totalRuns={layoutTotalRuns}
+      loading={layoutLoading}
       activePage={visiblePage}
       onPageChange={setActivePage}
       dataScope={dataScope}
@@ -137,15 +180,25 @@ function App() {
     >
       {visiblePage === 'gpu' ? (
         <GpuStatePage />
-      ) : visiblePage === 'gemm' ? (
-        <GemmPage />
       ) : visiblePage === 'serving' ? (
         <ServingPredictionsPage dataScope={dataScope} />
+      ) : visiblePage === 'simulator' ? (
+        <ServingPredictionsPage
+          dataScope={dataScope}
+          predictionsUrl={simulatorPredictionsJsonUrl}
+          pageKind="simulator"
+          focus={{
+            gpu: 'H100',
+            model: 'Llama-3.1-8B',
+            title: 'Simulator Target',
+            description: 'Locked to H100 and Llama-3.1-8B prediction rows so simulator development stays focused before expanding to other hardware and models.',
+          }}
+        />
       ) : visiblePage === 'coverage' ? (
         <CoveragePage
           allData={allData}
           sweepState={sweepState}
-          loading={loading}
+          loading={loading || (coverageNeedsSweepState && sweepLoading)}
           dataScope={dataScope}
         />
       ) : loading ? (

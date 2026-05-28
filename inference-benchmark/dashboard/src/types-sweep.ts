@@ -4,7 +4,7 @@
 export type CellStatus = 'pending' | 'running' | 'done' | 'skipped' | 'failed' | 'known_oom';
 
 export interface SweepCell {
-  data_scope?: 'trace_replay' | 'synthetic_distributional' | 'archived' | 'synthetic' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
+  data_scope?: 'trace_replay' | 'synthetic_distributional' | 'archived' | 'synthetic' | 'synthetic-distributional' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
   source_scope?: string;
   host: string;
   hw_label: string;  // e.g. "A100-40GBx4"
@@ -21,6 +21,20 @@ export interface SweepCell {
   max_len_override: number | null;
   reason: string | null;
   updated_at: string | null;  // ISO-8601 UTC
+  run_id?: string | null;
+  failure_metadata?: {
+    kind?: string;
+    status?: string;
+    reason?: string;
+    attempt?: number | null;
+    max_attempts?: number | null;
+    expected_outputs_present?: number | null;
+    expected_outputs_total?: number | null;
+    missing_outputs?: string[];
+    remote_log?: string;
+    mirror_status?: string;
+    updated_at?: string;
+  } | null;
 }
 
 export interface SweepHost {
@@ -34,7 +48,7 @@ export interface SweepModel {
 }
 
 export interface SweepProfileInfeasible {
-  data_scope?: 'trace_replay' | 'synthetic_distributional' | 'archived' | 'synthetic' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
+  data_scope?: 'trace_replay' | 'synthetic_distributional' | 'archived' | 'synthetic' | 'synthetic-distributional' | 'latest' | 'current' | 'fixed' | 'mse' | 'archive';
   source_scope?: string;
   host: string;
   hw_label: string;

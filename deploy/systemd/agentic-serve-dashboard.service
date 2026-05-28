@@ -1,0 +1,18 @@
+[Unit]
+Description=Agentic Serve dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/agentic-serve/inference-benchmark/dashboard
+Environment=HOST=127.0.0.1
+Environment=PORT=4180
+Environment=BENCH_STATE_ROOT=/mnt/100g/agent-bench/state
+Environment=DASHBOARD_BASE_PATH=/agentic-serve
+ExecStart=/usr/bin/env npm run serve:control
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target

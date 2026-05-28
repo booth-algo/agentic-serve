@@ -39,6 +39,14 @@ CONTEXT_SAFETY_MARGIN_TOKENS="${CONTEXT_SAFETY_MARGIN_TOKENS:-256}"
 PORT="${PORT:-8089}"
 API_KEY="${API_KEY:-test}"
 DASHBOARD_SCOPE="${DASHBOARD_SCOPE:-archived}"
+BENCH_REMOTE_TMP="${BENCH_REMOTE_TMP:-/tmp}"
+BENCH_REMOTE_ROOT="${BENCH_REMOTE_ROOT:-/tmp/inference-benchmark}"
+SERVER_LOG="$BENCH_REMOTE_TMP/vllm_${PORT}.log"
+
+mkdir -p "$BENCH_REMOTE_TMP"
+export TMPDIR="$BENCH_REMOTE_TMP"
+export TMP="$BENCH_REMOTE_TMP"
+export TEMP="$BENCH_REMOTE_TMP"
 
 result_scope_matches_expected() {
     local file="$1"
@@ -63,11 +71,18 @@ raise SystemExit(0 if success_count > 0 else 1)
 PY
 }
 
-mkdir -p "$OUT_DIR"
+mkdir -p "$OUT_DIR" "$BENCH_REMOTE_TMP"
 echo "[mt-sweep-sglang] MODEL=$MODEL_PATH TP=$TP OUT=$OUT_DIR"
 echo "[mt-sweep-sglang] concurrencies: $CONCS"
 echo "[mt-sweep-sglang] profiles: $PROFILES"
 echo "[mt-sweep-sglang] dashboard scope: $DASHBOARD_SCOPE"
+
+SGLANG_CUDA_GRAPH_ARGS=""
+GPU_ARCH=$("$PY" -c "import torch; print(torch.cuda.get_device_capability()[0])" 2>/dev/null || echo 0)
+if [[ "$GPU_ARCH" == "7" ]]; then
+    SGLANG_CUDA_GRAPH_ARGS="--disable-cuda-graph"
+    echo "[mt-sweep-sglang] sm75 detected; disabling CUDA graphs"
+fi
 
 "$PY" -m sglang.launch_server \
     --model-path "$MODEL_PATH" \
@@ -79,11 +94,28 @@ echo "[mt-sweep-sglang] dashboard scope: $DASHBOARD_SCOPE"
     --context-length "$MAX_LEN" \
     --trust-remote-code \
     $SGLANG_CUDA_GRAPH_ARGS \
-    > /tmp/vllm_${PORT}.log 2>&1 &
+    > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "[mt-sweep-sglang] sglang PID=$SERVER_PID (port $PORT)"
 
-trap 'kill $SERVER_PID 2>/dev/null; wait $SERVER_PID 2>/dev/null; true' EXIT
+cleanup_server() {
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        return 0
+    fi
+
+    kill "$SERVER_PID" 2>/dev/null || true
+    for _ in $(seq 1 30); do
+        if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "[mt-sweep-sglang] server did not exit after SIGTERM; sending SIGKILL"
+    kill -KILL "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+}
+trap cleanup_server EXIT
 
 for i in $(seq 1 180); do
     if curl -sf "http://localhost:$PORT/v1/models" -H "Authorization: Bearer $API_KEY" > /dev/null 2>&1; then
@@ -92,7 +124,7 @@ for i in $(seq 1 180); do
     fi
     if ! kill -0 $SERVER_PID 2>/dev/null; then
         echo "[mt-sweep-sglang] server died; tail log:"
-        tail -30 /tmp/vllm_${PORT}.log
+        tail -30 "$SERVER_LOG"
         exit 1
     fi
     sleep 5
@@ -106,12 +138,12 @@ if ! curl -sf -m 120 "http://localhost:$PORT/v1/chat/completions" \
     -d "$HEALTH_JSON" > /dev/null 2>&1; then
     echo "[mt-sweep-sglang] API health check failed — server is reachable but chat completions are not functional"
     echo "[mt-sweep-sglang] tail of server log:"
-    tail -30 /tmp/vllm_${PORT}.log
+    tail -30 "$SERVER_LOG"
     exit 1
 fi
 echo "[mt-sweep-sglang] API health check passed"
 
-cd /tmp/inference-benchmark
+cd "$BENCH_REMOTE_ROOT"
 
 SGLANG_VERSION=$("$PY" -c "import sglang; print(sglang.__version__)" 2>/dev/null || echo "unknown")
 echo "backend=sglang version=$SGLANG_VERSION" > "$OUT_DIR/_engine_version.txt"

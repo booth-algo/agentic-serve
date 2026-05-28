@@ -1,0 +1,11 @@
+[Unit]
+Description=Reclaim Agentic Serve orphan GPU cleanup candidates
+After=network-online.target agentic-serve-gpu-state-refresh.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/agentic-serve/inference-benchmark
+Environment=BENCH_STATE_ROOT=/mnt/100g/agent-bench/state
+Environment=BENCH_JOBS_SCOPE=synthetic_distributional
+ExecStart=/usr/bin/env python3 /root/agentic-serve/inference-benchmark/scripts/clean_orphan_gpus.py --config /root/agentic-serve/inference-benchmark/scripts/gpu_cleanup.json --jobs-config /root/agentic-serve/inference-benchmark/scripts/sweep.yaml --scope synthetic_distributional --state-dir /mnt/100g/agent-bench/state --execute

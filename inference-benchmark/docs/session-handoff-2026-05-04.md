@@ -20,7 +20,7 @@ We're only producing 99 fixed-scope data rows despite running ~70 "done" fixed-s
 - **Monitor**: `b8fn5rjiv` — auto-ticking orchestrator every 120s
 - **Orchestrator**: Running fixed-scope only (132 jobs in bench_jobs.txt, all with concs `[5,40,80,200,320]`)
 - **State**: 69 done, 5 running, 28 pending (all on 3090 + H100)
-- **gpu-4**: DONE (28 done, 12 skipped=sglang)
+- **a100**: DONE (28 done, 12 skipped=sglang)
 - **2080ti**: DONE (12 done, 6 skipped=sglang)
 - **3090**: Running (14 done, running multi-slot)
 - **H100**: Running (10 done, 24 pending, zifengding intermittent)
@@ -80,7 +80,7 @@ The sweep scripts SKIP existing result files (`if [ -f "$OUT_FILE" ]; then skip`
 2. Or modify the sweep scripts to force-overwrite when the scope changes
 3. Or have build-data.ts count cells by concurrency level regardless of scope
 
-### sglang on gpu-4/h100
+### sglang on a100/h100
 No sglang conda env installed. Jobs timeout after 10-15 min. ~20+ cells permanently skipped.
 
 ### Qwen3.5-27B on H100
@@ -96,7 +96,7 @@ Intermittent — some models fail to start via `setsid bash -c '...'` on H100. W
 
 | Host | GPUs | vllm | sglang | Notes |
 |------|------|------|--------|-------|
-| gpu-4 | 8x A100-40GB | YES | NO | bobgu uses GPUs 0-1 intermittently |
+| a100 | 8x A100-40GB | YES | NO | bobgu uses GPUs 0-1 intermittently |
 | 3090 | 8x RTX 3090 | YES | YES | Qwen3.5-9B tp1 OOM on 24GB |
 | 2080ti | 8x RTX 2080Ti | YES | YES (sm75 limits) | gpt-oss-20b needs sm80+ |
 | H100 | 8x H100-80GB | YES | NO | zifengding reclaims GPUs, Qwen3.5-27B missing |
@@ -115,7 +115,7 @@ python3 scripts/compile_sweep.py
 # signature detection handle it
 
 # 3. Sync to hosts
-for host in gpu-4 3090 2080ti; do
+for host in a100 3090 2080ti; do
   rsync -az --delete --exclude='dashboard/node_modules' --exclude='dashboard/dist' --exclude='results/' \
     . "$host:/tmp/inference-benchmark/" < /dev/null
 done
@@ -217,7 +217,7 @@ Added and launched a read-only progress reporter:
 - History: `/tmp/sweep-progress-history.md`
 - Interval: 300 seconds
 
-It reads `scripts/bench_jobs.txt` plus `/tmp/bench_jobs/state`, then polls `gpu-4`, `3090`, `2080ti`, and `h100` over SSH with `nvidia-smi`/`ps`. The report includes per-host job counts, per-GPU memory/utilization, active sweep assignments, GPU processes, and non-sweep GPU owners.
+It reads `scripts/bench_jobs.txt` plus `/tmp/bench_jobs/state`, then polls `a100`, `3090`, `2080ti`, and `h100` over SSH with `nvidia-smi`/`ps`. The report includes per-host job counts, per-GPU memory/utilization, active sweep assignments, GPU processes, and non-sweep GPU owners.
 
 Launcher:
 
@@ -235,7 +235,7 @@ pkill -f sweep-progress-reporter.lock
 Latest validated snapshot at 2026-05-04T13:10:57Z:
 
 - 132 jobs: done=74, running=5, pending=20, skipped=31, known_oom=2.
-- `gpu-4`: no active sweep jobs; GPU0 has same-user non-sweep VLLM.
+- `a100`: no active sweep jobs; GPU0 has same-user non-sweep VLLM.
 - `3090`: two active tp4 sweep jobs occupying GPUs 0-7.
 - `2080ti`: idle; sweep rows are terminal done/skipped.
 - `h100`: three local running states; GPUs 4, 6, and 7 are occupied by `zifengd+` VLLM processes.

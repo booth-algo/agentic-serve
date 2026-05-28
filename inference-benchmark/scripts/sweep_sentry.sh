@@ -62,7 +62,7 @@ tail -80 /tmp/bench_orchestrator.log 2>/dev/null > "$TMP_DIR/orchestrator.tail.l
 
 # Host liveness snapshot (best effort; if ssh fails, note and continue).
 {
-    for H in gpu-4 3090 2080ti; do
+    for H in a100 3090 2080ti; do
         echo "## $H"
         ssh -o ConnectTimeout=5 -o BatchMode=yes "$H" '
             port=$(ss -ltn 2>/dev/null | awk "\$4 ~ /:8089\$/ {print \$4; exit}")
@@ -83,7 +83,7 @@ fi
 
 PROMPT=$(cat <<EOF
 You are the sentry for a benchmark sweep running across three GPU hosts
-(gpu-4 = 8x A100-40GB, 3090 = 8x RTX 3090, 2080ti = 8x RTX 2080Ti).
+(a100 = 8x A100-40GB, 3090 = 8x RTX 3090, 2080ti = 8x RTX 2080Ti).
 
 A Linux cron runs \`bench_orchestrator.sh\` every 30 minutes to dispatch
 pending jobs, finalize completed ones, and publish sweep-state.json to
@@ -132,7 +132,7 @@ Use this exact format, keeping the entire entry under 30 lines:
 
 ### Suggested actions
 - concrete, bounded suggestions like "reset state for
-  gpu-4_Qwen2.5-72B_tp4_single (crashed @ max_len=4096; try
+  a100_Qwen2.5-72B_tp4_single (crashed @ max_len=4096; try
   max_len=2048)". Each suggestion MUST name the exact job ID and
   the exact file/line or command to change. Skip if none.
 - If you would normally push a code change, say so but DO NOT apply

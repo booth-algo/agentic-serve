@@ -19,7 +19,9 @@ This is the sweep surface to run now:
 Code now treats `synthetic` as its own scope instead of copying fixed coverage under the label `latest`.
 
 - `scripts/compile_sweep.py`
-  - `--scope synthetic_distributional` derives from the fixed C=200/320 grid.
+  - `--scope synthetic_distributional` derives from fixed-scope launch cells, remaps them to synthetic profiles, and overrides the concurrency grid to match trace replay.
+  - Single-turn synthetic rows use C={1,10,20,40,80,120,160,200,256,320,500}.
+  - Multi-turn synthetic rows use C={1,5,10,20,40,80,120,160,200,256,320}.
   - Fixed profiles are remapped to `*-synth` names.
   - Every emitted row includes:
     - `DISTRIBUTIONAL_SYNTHETIC_STYLE=code`
@@ -35,7 +37,7 @@ Code now treats `synthetic` as its own scope instead of copying fixed coverage u
 - `src/benchmark/runner.py`
   - accepts `--scope synthetic_distributional`.
   - defaults `*-synth` profiles to `dashboard_scope=synthetic_distributional`.
-  - keeps the existing guardrail: multi-turn sessions are floored at concurrency, so `num_sessions=1` profiles do not cap C=200/320 runs.
+  - keeps the existing guardrail: multi-turn sessions are floored at concurrency, so `num_sessions=1` profiles do not cap expanded-grid runs.
 - Dashboard
   - UI scope is now `Synthetic replay`, not `Latest runs`.
   - legacy `scope=latest` URLs/localStorage normalize to `synthetic_distributional`.
@@ -51,7 +53,7 @@ python3 scripts/compile_sweep.py --scope synthetic_distributional --out scripts/
 python3 scripts/publish_sweep_state.py --no-upload
 ```
 
-Observed:
+Observed before the 2026-05-11 trace-replay grid expansion:
 
 - `scripts/bench_jobs.txt`: 132 runnable job rows.
 - `dashboard/public/sweep-state.json`: 415 total state cells, including synthetic cells.
@@ -67,7 +69,7 @@ Observed:
   - Python runner/profile tests pass.
   - Dashboard production build passes.
 
-Note: the user remembered "1114 expected cells" for old `latest`. The currently generated first-class synthetic state is 670 profile-concurrency points after removing `coding-singleturn`, known-OOM cells, and fixed-scope profile infeasible inheritance. If the live dashboard still shows 1114, treat that as stale `latest` state or coverage UI/backend expansion drift, not the authoritative synthetic matrix.
+2026-05-11 update: the synthetic launch rows now keep the same job-cell count but expand each row's concurrency list to the mode-specific trace-replay grid. A fresh dry-run emits 126 job rows and 3,751 synthetic profile-concurrency points in `sweep-state.json`.
 
 ## Launch Instructions for Claude
 

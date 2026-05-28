@@ -11,8 +11,9 @@
     "refresh:data": "bash ../scripts/refresh-dashboard-data.sh",
     "build:local-data": "npm run build:data && npm run validate:data",
     "refresh:local-data": "npm run refresh:data && npm run validate:data",
-    "build:local": "npm run validate:data && VITE_R2_JSON_BASE=/agentic-serve npm run build",
+    "build:local": "npm run validate:data && VITE_R2_JSON_BASE=/agentic-serve npm run build && bash ../scripts/refresh-gpu-state.sh",
     "preview:local": "npm run preview -- --host 0.0.0.0",
+    "serve:control": "node scripts/serve-control.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

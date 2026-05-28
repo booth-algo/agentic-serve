@@ -41,7 +41,7 @@ vim scripts/sweep.yaml
 python3 scripts/compile_sweep.py
 
 # 3. Sync code to all GPU hosts
-for host in gpu-4 3090 2080ti; do
+for host in a100 3090 2080ti; do
   rsync -az --delete --exclude='dashboard/node_modules' --exclude='dashboard/dist' --exclude='results/' \
     . "$host:/tmp/inference-benchmark/" < /dev/null
 done

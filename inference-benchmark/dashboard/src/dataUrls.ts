@@ -14,6 +14,8 @@ function withBuildHash(url: string): string {
 }
 
 const jsonBase = import.meta.env.VITE_R2_JSON_BASE || DEFAULT_R2_JSON_BASE;
+const dashboardApiBase = import.meta.env.VITE_DASHBOARD_API_BASE || (jsonBase.startsWith('http') ? '' : jsonBase);
+const publicAssetBase = import.meta.env.BASE_URL || '/';
 
 export const dataJsonUrl = withBuildHash(
   import.meta.env.VITE_DATA_JSON_URL || joinUrl(jsonBase, 'data.json'),
@@ -41,6 +43,22 @@ export const servingPredictionsJsonUrl = withBuildHash(
   import.meta.env.VITE_SERVING_PREDICTIONS_JSON_URL || joinUrl(jsonBase, 'serving-predictions.json'),
 );
 
+export const llama31H100TpotFitJsonUrl = withBuildHash(
+  import.meta.env.VITE_LLAMA31_H100_TPOT_FIT_JSON_URL || joinUrl(publicAssetBase, 'llama31-8b-h100-tpot-fit.json'),
+);
+
+export const simulatorPredictionsJsonUrl = withBuildHash(
+  import.meta.env.VITE_SIMULATOR_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'simulator-predictions.json'),
+);
+
+export const simulatorV2PredictionsJsonUrl = withBuildHash(
+  import.meta.env.VITE_SIMULATOR_V2_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'simulator-v2-predictions.json'),
+);
+
+export const simulatorV3PredictionsJsonUrl = withBuildHash(
+  import.meta.env.VITE_SIMULATOR_V3_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'simulator-v3-predictions.json'),
+);
+
 export const profilingStateJsonUrl = withBuildHash(
   import.meta.env.VITE_PROFILING_STATE_JSON_URL || joinUrl(jsonBase, 'profiling-state.json'),
 );
@@ -51,4 +69,16 @@ export const predictorCoverageJsonUrl = withBuildHash(
 
 export const gpuStateJsonUrl = withBuildHash(
   import.meta.env.VITE_GPU_STATE_JSON_URL || joinUrl(jsonBase, 'gpu-state.json'),
+);
+
+export const coverageBlockersJsonUrl = withBuildHash(
+  import.meta.env.VITE_COVERAGE_BLOCKERS_JSON_URL || joinUrl(publicAssetBase, 'coverage-blockers.synthetic_distributional.json'),
+);
+
+export const hostDrainApiUrl = import.meta.env.VITE_HOST_DRAIN_API_URL || (
+  dashboardApiBase ? joinUrl(dashboardApiBase, 'api/host-drain') : ''
+);
+
+export const gpuBlockApiUrl = import.meta.env.VITE_GPU_BLOCK_API_URL || (
+  dashboardApiBase ? joinUrl(dashboardApiBase, 'api/gpu-block') : ''
 );

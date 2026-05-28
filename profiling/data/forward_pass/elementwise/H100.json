@@ -1,0 +1,18 @@
+{
+  "rmsnorm": {
+    "floor_us": 1.605,
+    "eff_bw_gb_s": 1245.9
+  },
+  "silu_mul": {
+    "floor_us": 2.049,
+    "eff_bw_gb_s": 3772.4
+  },
+  "rotary_emb": {
+    "floor_us": 2.649,
+    "eff_bw_gb_s": 253.6
+  },
+  "residual_add": {
+    "floor_us": 1.766,
+    "eff_bw_gb_s": 2991.8
+  }
+}

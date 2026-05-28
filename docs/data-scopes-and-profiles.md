@@ -8,6 +8,12 @@ Date: 2026-05-03 | For: HuggingFace dataset setup
 `archived` for retired canonical, fixed-grid, and MSE result surfaces. Older
 sections below use the original names for historical context.
 
+2026-05-11 synthetic grid update: newly compiled `synthetic_distributional`
+jobs derive from fixed launch cells but use the mode-specific trace-replay
+concurrency grid. Single-turn synthetic uses
+{1,10,20,40,80,120,160,200,256,320,500}; multi-turn synthetic uses
+{1,5,10,20,40,80,120,160,200,256,320}.
+
 This document explains the four data scopes (`archive`, `current`, `fixed`, and MSE validation) — what profiles they contain, what's been run, what hasn't, how they're filtered, and how they produce the `data.json` consumed by the dashboard.
 
 ---

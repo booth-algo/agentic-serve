@@ -1,0 +1,29 @@
+{
+  "n_params": 8030000000,
+  "peak_flops_per_s": 989000000000000.0,
+  "peak_bw_bytes_per_s": 3350000000000.0,
+  "kv_bytes_per_token": 131072.0,
+  "util_flops": 0.65,
+  "util_bw": 0.93,
+  "bytes_per_param": 2.0,
+  "available_kv_blocks": 27250,
+  "cache_block_size": 16,
+  "_notes": {
+    "kv_capacity_derivation": "Empirical, 2026-05-27: 27250 = max(free_kv_blocks) + first-step allocation = 27192 + 58 observed across 4 vLLM engine traces (swe_c40, swe_c80, swe_c320, terminal_c80). The spec-derived value 27651 (=58 GB / 16 tokens / 131072 bytes) is 1.5% too high — vLLM reserves ~400 blocks for sentinels/scratch. Recorded in profiling/docs/q1-kv-blocks-verification-2026-05-27.md.",
+    "model": "Llama-3.1-8B-Instruct",
+    "gpu": "H100 SXM (3.35 TB/s HBM3, 989 TFLOPS BF16 dense)",
+    "kv_bytes_per_token_derivation": "2 (K+V) * 32 (layers) * 8 (kv_heads, GQA) * 128 (head_dim) * 2 (bf16) = 131072 bytes",
+    "util_flops_anchor": {
+      "source": "vllm_engine_step_trace_swe_c40_t12 step 1 (pure prefill, N=7189, model_submit_wall_ms = 178)",
+      "theoretical_compute_ms": "2 * 8.03e9 * 7189 / 989e12 = 116.6 ms",
+      "util_flops": "116.6 / 178 = 0.655 ≈ 0.65"
+    },
+    "util_bw_anchor": {
+      "source": "vllm_engine_step_trace_swe_c40_t12 steps 17-22 (decode-only steady state, B=40, T~7200, engine_step_wall_ms ≈ 17 ms)",
+      "bytes_per_step": "weights(2 * 8.03e9) + kv_read(40 * 7200 * 131072) + kv_write(40 * 131072) ≈ 53.81 GB",
+      "theoretical_bandwidth_ms": "53.81e9 / 3.35e12 = 16.06 ms",
+      "util_bw": "16.06 / 17 = 0.945 ≈ 0.93"
+    },
+    "principle": "Both utilization factors are derived from independent anchor measurements (one compute-bound, one bandwidth-bound), NOT fit across the full trace dataset. Per the plan, no per-workload tuning."
+  }
+}

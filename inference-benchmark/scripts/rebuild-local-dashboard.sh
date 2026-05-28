@@ -89,6 +89,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+LOCK_FILE="${DASHBOARD_LOCK_FILE:-/tmp/agentic-serve-dashboard-artifacts.lock}"
+exec 9>"$LOCK_FILE"
+flock 9
+
 if [[ ! -d "$RESULTS_DIR" ]]; then
     echo "missing results dir: $RESULTS_DIR" >&2
     exit 1
@@ -121,6 +125,17 @@ rm -rf "$NEXT_DIST"
     VITE_R2_JSON_BASE="$JSON_BASE" npm run build -- --outDir "$NEXT_DIST" --emptyOutDir
 )
 
+echo "Building coverage-blockers.synthetic_distributional.json from $STATE_ROOT"
+python3 "$SCRIPT_DIR/reconcile_sweep_coverage.py" \
+    --scope synthetic_distributional \
+    --data "$DASHBOARD_DIR/public/data.synthetic_distributional.json" \
+    --sweep-yaml "$SCRIPT_DIR/sweep.yaml" \
+    --bench-jobs "$SCRIPT_DIR/bench_jobs.txt" \
+    --state-dir "$STATE_ROOT" \
+    --write-blockers-json "$NEXT_DIST/coverage-blockers.synthetic_distributional.json" \
+    --no-report \
+    >/dev/null
+
 echo "Building private gpu-state.json from $STATE_ROOT"
 gpu_state_args=(
     --jobs-config "$SCRIPT_DIR/sweep.yaml"
@@ -137,13 +152,10 @@ if [[ -n "$GPU_STATE_HOSTS" ]]; then
 fi
 python3 "$SCRIPT_DIR/sweep_progress_report.py" "${gpu_state_args[@]}"
 
-echo "Promoting rebuilt dashboard bundle to $LIVE_DIST"
-rm -rf "$PREV_DIST"
-if [[ -d "$LIVE_DIST" ]]; then
-    mv "$LIVE_DIST" "$PREV_DIST"
-fi
-mv "$NEXT_DIST" "$LIVE_DIST"
-rm -rf "$PREV_DIST"
+echo "Promoting rebuilt dashboard bundle to $LIVE_DIST without removing the live tree"
+mkdir -p "$LIVE_DIST"
+rsync -a --delay-updates "$NEXT_DIST"/ "$LIVE_DIST"/
+rm -rf "$NEXT_DIST"
 
 if [[ "$MIRROR_R2" == "1" ]]; then
     if command -v aws >/dev/null 2>&1; then

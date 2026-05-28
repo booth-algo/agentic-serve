@@ -25,6 +25,7 @@ async def send_request(
     api_key: str = "test",
     extra_headers: Optional[dict] = None,
     ignore_eos: bool = False,
+    request_id: Optional[str] = None,
 ) -> RequestResult:
     """
     Send a single streaming chat completion request and record metrics.
@@ -38,6 +39,8 @@ async def send_request(
     }
     if extra_headers:
         headers.update(extra_headers)
+    if request_id:
+        headers["X-Request-Id"] = request_id
 
     payload = {
         "model": model,
@@ -49,6 +52,8 @@ async def send_request(
     }
     if ignore_eos:
         payload["ignore_eos"] = True
+    if request_id:
+        payload["request_id"] = request_id
 
     start_time = time.perf_counter()
     ttft = None

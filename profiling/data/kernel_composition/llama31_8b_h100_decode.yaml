@@ -1,0 +1,149 @@
+# Kernel composition for Llama-3.1-8B decode step on H100.
+# Decode processes 1 token per sequence. M values are small (1-256),
+# so torch.compile fusion gains are negligible.
+#
+# This is the composition that achieves 7.4% MAPE when validated against
+# cuda_events/decode_steps.py measurements.
+#
+# Key difference from prefill: QKV is fused into a single matmul (qkv_fused),
+# and gate+up are fused (gate_up_fused).  These are vLLM custom linear layers,
+# not torch.compile fusions.
+
+model: Llama-3.1-8B-Instruct
+gpu: H100
+step_type: decode
+
+# Per-layer kernel composition for one decode step (B concurrent sequences).
+# Each sequence generates 1 new token.
+layer_kernels:
+  - kernel_name: rmsnorm_pre_attn
+    kernel_type: reduction
+    backend: triton
+    ops_fused:
+      - pow + mean + add(1e-5) + rsqrt + mul(weight)
+    calls_per_layer: 1
+    cost_ms_at_B1: ~0.05  # per-layer estimate from bandwidth floor
+
+  - kernel_name: qkv_fused
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - "Q, K, V in one matmul: [B, hidden] @ W_qkv -> [B, hidden + 2*kv_hidden]"
+    calls_per_layer: 1
+    m: "B"
+    n: 6144  # 32*128 + 2*8*128
+    k: 4096
+
+  - kernel_name: rotary_embedding
+    kernel_type: pointwise
+    backend: triton
+    ops_fused:
+      - cos, sin lookup + mul + neg + cat
+    calls_per_layer: 1
+
+  - kernel_name: flash_attention
+    kernel_type: flash_attention
+    backend: cudnn_fa3
+    ops_fused:
+      - "q[B,1,32,128] @ k[B,ctx,8,128].T + softmax @ v[B,ctx,8,128]"
+    calls_per_layer: 1
+    q_len: 1
+    kv_len: "context_len"
+
+  - kernel_name: o_projection
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - "[B, hidden] @ W_o -> [B, hidden]"
+    calls_per_layer: 1
+    m: "B"
+    n: 4096
+    k: 4096
+
+  - kernel_name: residual_add_attn
+    kernel_type: pointwise
+    backend: triton
+    ops_fused:
+      - add(hidden, attn_output)
+    calls_per_layer: 1
+
+  - kernel_name: rmsnorm_pre_ffn
+    kernel_type: reduction
+    backend: triton
+    same_as: rmsnorm_pre_attn
+    calls_per_layer: 1
+
+  - kernel_name: gate_up_fused
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - "gate, up in one matmul: [B, hidden] @ W_gate_up -> [B, 2*intermediate]"
+    calls_per_layer: 1
+    m: "B"
+    n: 28672  # 2 * 14336
+    k: 4096
+
+  - kernel_name: swiglu_activation
+    kernel_type: pointwise
+    backend: triton
+    ops_fused:
+      - silu(gate) * up
+    calls_per_layer: 1
+
+  - kernel_name: down_projection
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - "[B, intermediate] @ W_down -> [B, hidden]"
+    calls_per_layer: 1
+    m: "B"
+    n: 4096
+    k: 14336
+
+  - kernel_name: residual_add_ffn
+    kernel_type: pointwise
+    backend: triton
+    same_as: residual_add_attn
+    calls_per_layer: 1
+
+# k/v cache write (decode-only, not present in prefill)
+output_kernels:
+  - kernel_name: kv_cache_write
+    kernel_type: pointwise
+    backend: triton
+    ops_fused:
+      - "reshape_and_cache: write K,V for new token to KV cache"
+    calls_per_decode_step: 1
+
+  - kernel_name: lm_head
+    kernel_type: matmul
+    backend: cublas
+    ops_fused:
+      - "[B, hidden] @ W_lm_head -> [B, vocab]"
+    calls_per_decode_step: 1
+    m: "B"
+    n: 128256
+    k: 4096
+
+  - kernel_name: sampling
+    kernel_type: pointwise
+    backend: triton
+    ops_fused:
+      - "argmax or top_p sampling"
+    calls_per_decode_step: 1
+
+# Why decode composition works (7.4% MAPE)
+# - M values are 1-256: matmuls are memory-bound, not compute-bound
+# - Kernel launch overhead dominates, not HBM bandwidth
+# - torch.compile fusion saves at most 0.1ms per kernel at small M
+# - Isolated profiling (NCU or CUDA events) accurately captures decode costs
+validation:
+  mape: 7.4
+  data_points: 44
+  b_range: [1, 256]
+  ctx_range: [512, 16384]
+  ground_truth: cuda_events/decode_steps.py
+  components:
+    gemm: forward_pass/gemm/H100.csv (NCU)
+    attention: flash_attention_ncu_summary.csv (NCU XGBoost)
+    elementwise: elementwise/H100.json (NCU bandwidth floors)

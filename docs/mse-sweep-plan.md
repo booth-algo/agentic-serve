@@ -14,7 +14,7 @@ synthetic vs real trace content.
 | Host | GPU | TP | Model |
 |------|-----|----|-------|
 | h100 | H100 | 1 | Llama-3.1-8B |
-| gpu-4 | A100-40GB | 1 | Llama-3.1-8B |
+| a100 | A100-40GB | 1 | Llama-3.1-8B |
 | 3090 | RTX 3090 | 1 | Llama-3.1-8B |
 
 ## Matrix

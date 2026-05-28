@@ -8,19 +8,41 @@ export function useGpuState() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(gpuStateJsonUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
+    let active = true;
+    let controller: AbortController | null = null;
+
+    const load = () => {
+      controller?.abort();
+      controller = new AbortController();
+      const separator = gpuStateJsonUrl.includes('?') ? '&' : '?';
+      fetch(`${gpuStateJsonUrl}${separator}_=${Date.now()}`, {
+        cache: 'no-store',
+        signal: controller.signal,
       })
-      .then((json: GpuState) => {
-        setGpuState(json);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then((json: GpuState) => {
+          if (!active) return;
+          setGpuState(json);
+          setError(null);
+          setLoading(false);
+        })
+        .catch((err) => {
+          if (!active || err.name === 'AbortError') return;
+          setError(err.message);
+          setLoading(false);
+        });
+    };
+
+    load();
+    const interval = window.setInterval(load, 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      controller?.abort();
+    };
   }, []);
 
   return { gpuState, loading, error };
