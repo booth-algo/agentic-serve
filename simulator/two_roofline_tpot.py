@@ -46,9 +46,9 @@ from dataclasses import dataclass
 from simulator.closed_form_tpot import RooflineParams
 
 
-# Confirmed empirically against vLLM engine traces (see
-# profiling/docs/diagnose-hybrid-tpot-2026-05-27.md). All 4 traces hit exactly
-# 8192 as max(total_scheduled_tokens), confirming vLLM v1 default in effect.
+# Confirmed empirically against vLLM engine traces: all 4 available traces hit
+# exactly 8192 as max(total_scheduled_tokens), confirming the vLLM v1 default
+# is in effect (no `--max-num-batched-tokens` override in launch_server.sh).
 MAX_NUM_BATCHED_TOKENS = 8192
 
 
