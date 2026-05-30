@@ -1272,18 +1272,18 @@ function ServingPerTurnChart({
                 <div className="mt-1 flex flex-wrap justify-center gap-4">
                   <span className="flex items-center gap-2">
                     <svg width="26" height="8" aria-hidden>
-                      <line x1="0" y1="4" x2="26" y2="4" stroke={metric.color} strokeWidth="2" />
+                      <line x1="0" y1="4" x2="26" y2="4" stroke={metric.color} strokeWidth="2" strokeDasharray="6 3" />
                     </svg>
                     <span className="text-[11px] text-[#c9d1d9]">{metric.label} actual</span>
                   </span>
                   <span className="flex items-center gap-2">
                     <svg width="26" height="8" aria-hidden>
-                      <line x1="0" y1="4" x2="26" y2="4" stroke={metric.color} strokeWidth="2" strokeDasharray="5 4" />
+                      <line x1="0" y1="4" x2="26" y2="4" stroke={metric.color} strokeWidth="2" />
                     </svg>
                     <span className="text-[11px] text-[#c9d1d9]">
                       {metric.label === 'TPOT'
                         ? `${metric.label} predicted (roofline)`
-                        : `${metric.label} predicted (queue v1)`}
+                        : `${metric.label} predicted (static M0)`}
                     </span>
                   </span>
                   {showKernel && (
@@ -1313,7 +1313,7 @@ function ServingPerTurnChart({
                   {showQsim && (
                     <span className="flex items-center gap-2">
                       <svg width="26" height="8" aria-hidden>
-                        <line x1="0" y1="4" x2="26" y2="4" stroke="#8b5cf6" strokeWidth="2" />
+                        <line x1="0" y1="4" x2="26" y2="4" stroke="#3fb950" strokeWidth="2" />
                       </svg>
                       <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (queue-sim)</span>
                     </span>
@@ -1326,6 +1326,7 @@ function ServingPerTurnChart({
               dataKey="meas"
               name={`${metric.label} actual`}
               stroke={metric.color}
+              strokeDasharray="6 3"
               strokeWidth={2}
               dot={{ r: 2 }}
               connectNulls={false}
@@ -1337,10 +1338,9 @@ function ServingPerTurnChart({
               name={
                 metric.label === 'TPOT'
                   ? `${metric.label} predicted (roofline)`
-                  : `${metric.label} predicted (queue v1)`
+                  : `${metric.label} predicted (static M0)`
               }
               stroke={metric.color}
-              strokeDasharray="5 4"
               strokeWidth={2}
               dot={{ r: 2 }}
               connectNulls={false}
@@ -1387,7 +1387,7 @@ function ServingPerTurnChart({
                 type="monotone"
                 dataKey="qsimPred"
                 name={`${metric.label} predicted (queue-sim)`}
-                stroke="#8b5cf6"
+                stroke="#3fb950"
                 strokeWidth={2}
                 dot={{ r: 2 }}
                 connectNulls={false}
