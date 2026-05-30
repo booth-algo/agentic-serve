@@ -134,6 +134,14 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
         "e2el_pred": 0,
         "ttft_pred_qsim": 0,
         "e2el_pred_qsim": 0,
+        "ttft_err": 0,
+        "e2el_err": 0,
+        "ttft_signed_err_ms": 0,
+        "e2el_signed_err_ms": 0,
+        "ttft_abs_err_ms": 0,
+        "e2el_abs_err_ms": 0,
+        "ttft_err_qsim": 0,
+        "e2el_err_qsim": 0,
         "cells": 0,
     }
     missing_raw: list[str] = []
@@ -207,6 +215,44 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
                     turn["e2el_pred_qsim"] = round(float(e2el_q), 4)
                     counts["e2el_pred_qsim"] += 1
 
+        # ---- per-turn error fields (ADDITIVE; mirror the tpot_* convention) ----
+        # For TTFT/E2EL the per-turn dict carried meas+pred (and qsim pred) but no
+        # per-turn error columns, so the dashboard per-turn UI rendered N/A. These
+        # mirror tpot_err / tpot_signed_err_ms / tpot_abs_err_ms exactly (round 4),
+        # written only when both pred and meas are numeric and meas>0. Never repoint.
+        for pred_key, meas_key, err_key, signed_key, abs_key in (
+            ("ttft_pred", "ttft_meas", "ttft_err", "ttft_signed_err_ms", "ttft_abs_err_ms"),
+            ("e2el_pred", "e2el_meas", "e2el_err", "e2el_signed_err_ms", "e2el_abs_err_ms"),
+        ):
+            for turn in turns:
+                pred = turn.get(pred_key)
+                meas = turn.get(meas_key)
+                if not (isinstance(pred, (int, float)) and isinstance(meas, (int, float))):
+                    continue
+                signed = float(pred) - float(meas)
+                turn[signed_key] = round(signed, 4)
+                counts[signed_key] += 1
+                turn[abs_key] = round(abs(signed), 4)
+                counts[abs_key] += 1
+                if float(meas) > 0:
+                    turn[err_key] = round(abs(signed) / float(meas) * 100.0, 4)
+                    counts[err_key] += 1
+        # per-turn qsim MAPE (additive) — lets the qsim comparison line carry a tone.
+        for qsim_key, meas_key, err_key in (
+            ("ttft_pred_qsim", "ttft_meas", "ttft_err_qsim"),
+            ("e2el_pred_qsim", "e2el_meas", "e2el_err_qsim"),
+        ):
+            for turn in turns:
+                pred = turn.get(qsim_key)
+                meas = turn.get(meas_key)
+                if (
+                    isinstance(pred, (int, float))
+                    and isinstance(meas, (int, float))
+                    and float(meas) > 0
+                ):
+                    turn[err_key] = round(abs(float(pred) - float(meas)) / float(meas) * 100.0, 4)
+                    counts[err_key] += 1
+
         # ---- cell-level summaries (mean of per-turn, matching tpot_meas) ----
         for key in (
             "ttft_meas",
@@ -235,6 +281,19 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
             ]
             if apes:
                 row[err_key] = round(sum(apes) / len(apes), 4)
+        # cell-level signed / abs latency error (mean over per-turn), mirroring how
+        # tpot_signed_err_ms / tpot_abs_err_ms are the cell aggregates. Enables the
+        # ServingMiniMetric tooltip + per-turn breakdown headers to read the explicit
+        # field instead of the (pred-meas) fallback. Additive only.
+        for signed_turn_key, cell_key in (
+            ("ttft_signed_err_ms", "ttft_signed_err_ms"),
+            ("e2el_signed_err_ms", "e2el_signed_err_ms"),
+            ("ttft_abs_err_ms", "ttft_abs_err_ms"),
+            ("e2el_abs_err_ms", "e2el_abs_err_ms"),
+        ):
+            v = _cell_mean(turns, signed_turn_key)
+            if v is not None:
+                row[cell_key] = v
 
     dashboard_json.write_text(json.dumps(payload, indent=2) + "\n")
     if missing_raw:
@@ -256,6 +315,10 @@ def main() -> None:
         "injected ttft_meas={ttft_meas} e2el_meas={e2el_meas} "
         "ttft_pred={ttft_pred} e2el_pred={e2el_pred} "
         "ttft_pred_qsim={ttft_pred_qsim} e2el_pred_qsim={e2el_pred_qsim} "
+        "ttft_err={ttft_err} e2el_err={e2el_err} "
+        "ttft_signed_err_ms={ttft_signed_err_ms} e2el_signed_err_ms={e2el_signed_err_ms} "
+        "ttft_abs_err_ms={ttft_abs_err_ms} e2el_abs_err_ms={e2el_abs_err_ms} "
+        "ttft_err_qsim={ttft_err_qsim} e2el_err_qsim={e2el_err_qsim} "
         "across {cells} cells".format(**counts)
     )
     print(f"wrote {args.dashboard_json}")

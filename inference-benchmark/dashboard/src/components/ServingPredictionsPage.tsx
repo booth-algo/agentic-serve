@@ -31,6 +31,8 @@ interface ServingTurnPrediction {
   backend_cache_work?: BackendCacheWork;
   backend_step_trace?: BackendStepTrace[];
   ttft_pred?: number; ttft_meas?: number; ttft_err?: number;
+  ttft_signed_err_ms?: number; ttft_abs_err_ms?: number;
+  ttft_pred_qsim?: number; ttft_err_qsim?: number;
   tpot_pred?: number; tpot_meas?: number; tpot_err?: number;
   tpot_pred_kernel?: number;
   tpot_pred_kernel_hint?: number;
@@ -39,6 +41,8 @@ interface ServingTurnPrediction {
   tpot_signed_err_ms?: number; tpot_abs_err_ms?: number;
   base_tpot_signed_err_ms?: number; base_tpot_abs_err_ms?: number;
   e2el_pred?: number; e2el_meas?: number; e2el_err?: number;
+  e2el_signed_err_ms?: number; e2el_abs_err_ms?: number;
+  e2el_pred_qsim?: number; e2el_err_qsim?: number;
   scheduled_requests?: number;
   base_tpot_pred?: number;
   decode_waves?: number;
@@ -136,9 +140,13 @@ interface ServingRow {
   kernel_source_summary?: Record<string, number>;
   multiturn_turn_predictions?: ServingTurnPrediction[];
   ttft_pred?: number; ttft_meas?: number; ttft_err?: number;
+  ttft_signed_err_ms?: number; ttft_abs_err_ms?: number;
+  ttft_pred_qsim?: number; ttft_err_qsim?: number;
   tpot_pred?: number; tpot_meas?: number; tpot_err?: number;
   tpot_signed_err_ms?: number; tpot_abs_err_ms?: number; tpot_max_abs_err_ms?: number;
   e2el_pred?: number; e2el_meas?: number; e2el_err?: number;
+  e2el_signed_err_ms?: number; e2el_abs_err_ms?: number;
+  e2el_pred_qsim?: number; e2el_err_qsim?: number;
 }
 
 type ServingPerTurnRow = ServingRow & { multiturn_turn_predictions: ServingTurnPrediction[] };
@@ -312,8 +320,11 @@ const SERVING_PROFILE_ORDER = [
 
 type ServingMetricKey =
   | 'ttft_pred' | 'ttft_meas' | 'ttft_err'
+  | 'ttft_signed_err_ms' | 'ttft_abs_err_ms'
   | 'tpot_pred' | 'tpot_meas' | 'tpot_err'
-  | 'e2el_pred' | 'e2el_meas' | 'e2el_err';
+  | 'tpot_signed_err_ms' | 'tpot_abs_err_ms'
+  | 'e2el_pred' | 'e2el_meas' | 'e2el_err'
+  | 'e2el_signed_err_ms' | 'e2el_abs_err_ms';
 
 interface ServingMetric {
   label: string;
@@ -322,6 +333,11 @@ interface ServingMetric {
   predKey: ServingMetricKey;
   measKey: ServingMetricKey;
   errKey: ServingMetricKey;
+  // Explicit per-turn / cell signed + abs latency-error fields written by the
+  // augmenter (ttft_signed_err_ms, tpot_abs_err_ms, …). When present they are
+  // read directly; otherwise the (pred - meas) fallback applies.
+  signedKey: ServingMetricKey;
+  absKey: ServingMetricKey;
   isTotal?: boolean;
 }
 
@@ -333,6 +349,8 @@ const SERVING_METRICS: ServingMetric[] = [
     predKey: 'ttft_pred',
     measKey: 'ttft_meas',
     errKey: 'ttft_err',
+    signedKey: 'ttft_signed_err_ms',
+    absKey: 'ttft_abs_err_ms',
   },
   {
     label: 'TPOT',
@@ -341,6 +359,8 @@ const SERVING_METRICS: ServingMetric[] = [
     predKey: 'tpot_pred',
     measKey: 'tpot_meas',
     errKey: 'tpot_err',
+    signedKey: 'tpot_signed_err_ms',
+    absKey: 'tpot_abs_err_ms',
   },
   {
     label: 'E2EL',
@@ -349,6 +369,8 @@ const SERVING_METRICS: ServingMetric[] = [
     predKey: 'e2el_pred',
     measKey: 'e2el_meas',
     errKey: 'e2el_err',
+    signedKey: 'e2el_signed_err_ms',
+    absKey: 'e2el_abs_err_ms',
     isTotal: true,
   },
 ];
@@ -1147,6 +1169,16 @@ function ServingPerTurnChart({
         // saturation from the eviction-watermark crossing. See simulator/ramp_tpot.py.
         const rampPred =
           metric.label === 'TPOT' ? turn.tpot_pred_ramp : undefined;
+        // Forward closed-loop queue-sim prediction (comparison line for TTFT/E2EL).
+        // The emergent per-turn latency from the event-driven multi-turn queue sim;
+        // additive, never repoints the static M0 (dashed pred line). TPOT has no
+        // qsim variant. See simulator/ttft_queue_sim.py.
+        const qsimPred =
+          metric.label === 'TTFT'
+            ? turn.ttft_pred_qsim
+            : metric.label === 'E2EL'
+              ? turn.e2el_pred_qsim
+              : undefined;
         return {
           turn: displayTurn(turn),
           meas: typeof meas === 'number' && Number.isFinite(meas) ? meas : null,
@@ -1163,6 +1195,10 @@ function ServingPerTurnChart({
             typeof rampPred === 'number' && Number.isFinite(rampPred)
               ? rampPred
               : null,
+          qsimPred:
+            typeof qsimPred === 'number' && Number.isFinite(qsimPred)
+              ? qsimPred
+              : null,
         };
       }),
     [turns, metric.measKey, metric.predKey, metric.label],
@@ -1173,6 +1209,8 @@ function ServingPerTurnChart({
     metric.label === 'TPOT' && chartData.some(d => d.kernelHint !== null);
   const showRamp =
     metric.label === 'TPOT' && chartData.some(d => d.rampPred !== null);
+  const showQsim =
+    metric.label !== 'TPOT' && chartData.some(d => d.qsimPred !== null);
   if (chartData.length === 0) return null;
   return (
     <div className="border-b border-[#21262d] px-4 py-3">
@@ -1272,6 +1310,14 @@ function ServingPerTurnChart({
                       <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (fwd-ramp)</span>
                     </span>
                   )}
+                  {showQsim && (
+                    <span className="flex items-center gap-2">
+                      <svg width="26" height="8" aria-hidden>
+                        <line x1="0" y1="4" x2="26" y2="4" stroke="#8b5cf6" strokeWidth="2" />
+                      </svg>
+                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (queue-sim)</span>
+                    </span>
+                  )}
                 </div>
               )}
             />
@@ -1336,6 +1382,18 @@ function ServingPerTurnChart({
                 isAnimationActive={false}
               />
             )}
+            {showQsim && (
+              <Line
+                type="monotone"
+                dataKey="qsimPred"
+                name={`${metric.label} predicted (queue-sim)`}
+                stroke="#8b5cf6"
+                strokeWidth={2}
+                dot={{ r: 2 }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -1361,16 +1419,24 @@ function ServingPerTurnBreakdown({
     : 0;
   if (!row) return null;
 
-  const meanSignedTpotErr = row.tpot_signed_err_ms ?? (
-    turns.length
-      ? turns.reduce((total, turn) => total + (turnSignedErrorMs(turn, SERVING_TPOT_METRIC) ?? 0), 0) / turns.length
-      : undefined
-  );
-  const meanAbsTpotErr = row.tpot_abs_err_ms ?? (
-    turns.length
-      ? turns.reduce((total, turn) => total + Math.abs(turnSignedErrorMs(turn, SERVING_TPOT_METRIC) ?? 0), 0) / turns.length
-      : undefined
-  );
+  // Per-metric signed-err / MAE headers. Prefer the explicit cell-level field
+  // (tpot/ttft/e2el_signed_err_ms, *_abs_err_ms) the augmenter now writes; fall
+  // back to the per-turn average (turnSignedErrorMs is exact now too).
+  const metricErrSummaries = SERVING_METRICS.map(metric => {
+    const cellSigned = numericMetric(row, metric.signedKey);
+    const cellAbs = numericMetric(row, metric.absKey);
+    const signedErr = cellSigned ?? (
+      turns.length
+        ? turns.reduce((total, turn) => total + (turnSignedErrorMs(turn, metric) ?? 0), 0) / turns.length
+        : undefined
+    );
+    const absErr = cellAbs ?? (
+      turns.length
+        ? turns.reduce((total, turn) => total + Math.abs(turnSignedErrorMs(turn, metric) ?? 0), 0) / turns.length
+        : undefined
+    );
+    return { metric, signedErr, absErr };
+  });
 
   return (
     <div className="rounded-md border border-[#21262d] bg-[#161b22]">
@@ -1394,8 +1460,12 @@ function ServingPerTurnBreakdown({
             <span>mean cache hit {(meanHit * 100).toFixed(0)}%</span>
             <span>mean TTFT {formatLatency(row.mean_predicted_turn_ttft_ms)}</span>
             <span>mean TPOT {formatLatency(row.mean_predicted_turn_tpot_ms)}</span>
-            <span>TPOT signed err {formatSignedLatency(meanSignedTpotErr)}</span>
-            <span>TPOT MAE {formatLatency(meanAbsTpotErr)}</span>
+            {metricErrSummaries.map(({ metric, signedErr, absErr }) => (
+              <Fragment key={metric.label}>
+                <span>{metric.label} signed err {formatSignedLatency(signedErr)}</span>
+                <span>{metric.label} MAE {formatLatency(absErr)}</span>
+              </Fragment>
+            ))}
           </div>
         </div>
         <div className="rounded border border-[#30363d] bg-[#0d1117] px-2 py-1 font-mono text-[10px] text-[#79c0ff]">
@@ -1777,18 +1847,19 @@ function numericTurnMetric(turn: ServingTurnPrediction, key: ServingMetricKey): 
 }
 
 function rowSignedErrorMs(row: ServingRow, metric: ServingMetric): number | undefined {
-  if (metric.label === 'TPOT' && typeof row.tpot_signed_err_ms === 'number' && Number.isFinite(row.tpot_signed_err_ms)) {
-    return row.tpot_signed_err_ms;
-  }
+  // Prefer the explicit metric-keyed signed field (tpot/ttft/e2el_signed_err_ms)
+  // now that the augmenter writes it for every metric; fall back to (pred - meas).
+  const explicit = numericMetric(row, metric.signedKey);
+  if (explicit !== undefined) return explicit;
   const pred = numericMetric(row, metric.predKey);
   const meas = numericMetric(row, metric.measKey);
   return pred !== undefined && meas !== undefined ? pred - meas : undefined;
 }
 
 function turnSignedErrorMs(turn: ServingTurnPrediction, metric: ServingMetric): number | undefined {
-  if (metric.label === 'TPOT' && typeof turn.tpot_signed_err_ms === 'number' && Number.isFinite(turn.tpot_signed_err_ms)) {
-    return turn.tpot_signed_err_ms;
-  }
+  // Prefer the explicit per-turn signed field; fall back to (pred - meas).
+  const explicit = numericTurnMetric(turn, metric.signedKey);
+  if (explicit !== undefined) return explicit;
   const pred = numericTurnMetric(turn, metric.predKey);
   const meas = numericTurnMetric(turn, metric.measKey);
   return pred !== undefined && meas !== undefined ? pred - meas : undefined;
