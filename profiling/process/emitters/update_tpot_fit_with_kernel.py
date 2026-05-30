@@ -1,20 +1,13 @@
-"""Update ``llama31-8b-h100-tpot-fit.json`` aggregates from three-regime
-predictions in ``simulator-predictions.json``.
+"""Update ``llama31-8b-h100-tpot-fit.json`` aggregates from kernel-composition
+predictions (``tpot_pred_kernel``) in ``simulator-predictions.json``.
 
-The dashboard's "Fixed decode-step experiment" panel displays:
-- Kernel TPOT (= `fit_summary.kernel_composed_mape`)
-- TPOT MAPE (= `dashboard_comparison[0].tpot_mape`)
-- Kernel Median (= `fit_summary.kernel_composed_median_ape`)
-- TPOT Worst (= `dashboard_comparison[0].tpot_max_ape`)
-
-These come from a separate JSON file, not the per-cell `tpot_err` we already
-overwrote. This emitter recomputes those aggregates from the three-regime
-`tpot_pred_three_regime` field already injected into the per-turn records,
-then patches them into the fit file so the dashboard panel reflects the
-three-regime predictor accuracy.
+This repoints the dashboard's "TPOT MAPE" KPI badge + comparison rows to the
+kernel predictor (see ``simulator/kernel_tpot.py``), replacing the previous
+three-regime aggregates. The per-turn prediction lines for every predictor are
+left untouched — only the headline summary numbers change.
 
 Usage:
-    python3 -m profiling.process.emitters.update_tpot_fit_with_three_regime
+    python3 -m profiling.process.emitters.update_tpot_fit_with_kernel
 """
 
 from __future__ import annotations
@@ -38,8 +31,8 @@ DEFAULT_TPOT_FIT = Path(
 )
 
 
-def collect_three_regime_errors(sim_predictions: Path) -> dict[str, float | int]:
-    """Aggregate three-regime APE / signed / abs error across all turns."""
+def collect_kernel_errors(sim_predictions: Path) -> dict[str, float | int]:
+    """Aggregate kernel APE / signed / abs error across all turns."""
     payload = json.loads(sim_predictions.read_text())
     rows = payload.get("H100") or []
     apes: list[float] = []
@@ -47,7 +40,7 @@ def collect_three_regime_errors(sim_predictions: Path) -> dict[str, float | int]
     abs_errs: list[float] = []
     for row in rows:
         for turn in row.get("multiturn_turn_predictions") or []:
-            pred = turn.get("tpot_pred_three_regime")
+            pred = turn.get("tpot_pred_kernel")
             meas = turn.get("tpot_meas")
             if not isinstance(pred, (int, float)) or pred <= 0:
                 continue
@@ -59,7 +52,7 @@ def collect_three_regime_errors(sim_predictions: Path) -> dict[str, float | int]
             signed_errs.append(pred - meas_f)
             abs_errs.append(err_abs)
     if not apes:
-        raise SystemExit("no three-regime predictions found in simulator-predictions.json")
+        raise SystemExit("no kernel predictions found in simulator-predictions.json")
     return {
         "rows": len(apes),
         "mape": sum(apes) / len(apes),
@@ -81,21 +74,19 @@ def patch_fit_json(fit_json: Path, agg: dict[str, float | int]) -> None:
     fit["kernel_composed_mean_signed_error_ms"] = round(agg["mean_signed_error_ms"], 4)
     fit["kernel_composed_mean_abs_error_ms"] = round(agg["mean_abs_error_ms"], 4)
     fit["kernel_composed_max_abs_error_ms"] = round(agg["max_abs_error_ms"], 4)
-    # Mirror to physics_loo_* fields the panel falls back to.
     fit["physics_loo_mape"] = fit["kernel_composed_mape"]
     fit["physics_loo_median_ape"] = fit["kernel_composed_median_ape"]
     fit["physics_loo_max_ape"] = fit["kernel_composed_max_ape"]
-    fit["engine_step_model"] = "three_regime"
-    fit["wave_policy"] = "n/a (three-regime)"
+    fit["engine_step_model"] = "kernel_composition"
+    fit["wave_policy"] = "pressure-amplifier (kernel)"
 
-    # Update the dashboard_comparison + page_comparisons rows.
     for comp_list in (payload.get("dashboard_comparison") or [], *(
         payload.get("page_comparisons", {}).get(k, []) for k in ("serving", "simulator")
     )):
         for comp in comp_list:
             if comp.get("backend") and comp.get("tpot_mape") is not None:
-                comp["backend"] = "three-regime"
-                comp["label"] = "three-regime predictor"
+                comp["backend"] = "kernel"
+                comp["label"] = "kernel-composition predictor"
                 comp["rows"] = agg["rows"]
                 comp["tpot_mape"] = fit["kernel_composed_mape"]
                 comp["tpot_median_ape"] = fit["kernel_composed_median_ape"]
@@ -113,10 +104,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    agg = collect_three_regime_errors(args.simulator_predictions_json)
+    agg = collect_kernel_errors(args.simulator_predictions_json)
     patch_fit_json(args.tpot_fit_json, agg)
     print(
-        f"updated {args.tpot_fit_json} with three-regime aggregates: "
+        f"updated {args.tpot_fit_json} with kernel aggregates: "
         f"MAPE={agg['mape']:.2f}% median={agg['median_ape']:.2f}% max={agg['max_ape']:.2f}% "
         f"(n={agg['rows']})"
     )

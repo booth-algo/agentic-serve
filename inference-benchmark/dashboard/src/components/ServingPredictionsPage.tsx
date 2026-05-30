@@ -32,9 +32,9 @@ interface ServingTurnPrediction {
   backend_step_trace?: BackendStepTrace[];
   ttft_pred?: number; ttft_meas?: number; ttft_err?: number;
   tpot_pred?: number; tpot_meas?: number; tpot_err?: number;
-  tpot_pred_llm_d?: number;
-  tpot_pred_two_roofline?: number;
-  tpot_pred_three_regime?: number;
+  tpot_pred_kernel?: number;
+  tpot_pred_kernel_hint?: number;
+  tpot_pred_ramp?: number;
   tpot_regime?: string;
   tpot_signed_err_ms?: number; tpot_abs_err_ms?: number;
   base_tpot_signed_err_ms?: number; base_tpot_abs_err_ms?: number;
@@ -1129,41 +1129,49 @@ function ServingPerTurnChart({
       turns.map(turn => {
         const meas = turn[metric.measKey];
         const pred = turn[metric.predKey];
-        // llm-d-inference-sim only models TPOT (no per-token TTFT or E2EL).
-        // Constant across turns within a (profile, c) cell by design — the
-        // line will appear flat, illustrating that the model is turn-blind.
-        const llmd = metric.label === 'TPOT' ? turn.tpot_pred_llm_d : undefined;
-        // Two-roofline: physical TPOT (no fits). See
-        // simulator/two_roofline_tpot.py and
-        // profiling/docs/two-roofline-tpot-2026-05-28.md.
-        const twoRoofline =
-          metric.label === 'TPOT' ? turn.tpot_pred_two_roofline : undefined;
-        // Three-regime: classifier-driven step/ramp predictor with no fits.
-        // See simulator/three_regime_tpot.py.
-        const threeRegime =
-          metric.label === 'TPOT' ? turn.tpot_pred_three_regime : undefined;
+        // Kernel-composition: measured decode-kernel step + pressure-driven
+        // amplifier to an output-amortized saturation ceiling. Workload-only,
+        // no engine telemetry. See simulator/kernel_tpot.py.
+        const kernel =
+          metric.label === 'TPOT' ? turn.tpot_pred_kernel : undefined;
+        // Kernel + classifier stepping-ramp soft hint. The standalone regime
+        // classifier predicts WHEN saturation steps (KV-eviction crossing) and over
+        // how many turns it ramps; this pulls the kernel up over that window (one-
+        // sided, never lowers). Beats the headline kernel on every profile but is
+        // shown as a comparison line. See simulator/kernel_tpot_hint.py.
+        const kernelHint =
+          metric.label === 'TPOT' ? turn.tpot_pred_kernel_hint : undefined;
+        // Forward 3D-roofline eviction-deficit ramp predictor (comparison line).
+        // Forecasts the cohort drain from the profile survival curve and ramps the
+        // saturation from the eviction-watermark crossing. See simulator/ramp_tpot.py.
+        const rampPred =
+          metric.label === 'TPOT' ? turn.tpot_pred_ramp : undefined;
         return {
           turn: displayTurn(turn),
           meas: typeof meas === 'number' && Number.isFinite(meas) ? meas : null,
           pred: typeof pred === 'number' && Number.isFinite(pred) ? pred : null,
-          llmd: typeof llmd === 'number' && Number.isFinite(llmd) ? llmd : null,
-          twoRoofline:
-            typeof twoRoofline === 'number' && Number.isFinite(twoRoofline)
-              ? twoRoofline
+          kernel:
+            typeof kernel === 'number' && Number.isFinite(kernel)
+              ? kernel
               : null,
-          threeRegime:
-            typeof threeRegime === 'number' && Number.isFinite(threeRegime)
-              ? threeRegime
+          kernelHint:
+            typeof kernelHint === 'number' && Number.isFinite(kernelHint)
+              ? kernelHint
+              : null,
+          rampPred:
+            typeof rampPred === 'number' && Number.isFinite(rampPred)
+              ? rampPred
               : null,
         };
       }),
     [turns, metric.measKey, metric.predKey, metric.label],
   );
-  const showLlmd = metric.label === 'TPOT' && chartData.some(d => d.llmd !== null);
-  const showTwoRoofline =
-    metric.label === 'TPOT' && chartData.some(d => d.twoRoofline !== null);
-  const showThreeRegime =
-    metric.label === 'TPOT' && chartData.some(d => d.threeRegime !== null);
+  const showKernel =
+    metric.label === 'TPOT' && chartData.some(d => d.kernel !== null);
+  const showKernelHint =
+    metric.label === 'TPOT' && chartData.some(d => d.kernelHint !== null);
+  const showRamp =
+    metric.label === 'TPOT' && chartData.some(d => d.rampPred !== null);
   if (chartData.length === 0) return null;
   return (
     <div className="border-b border-[#21262d] px-4 py-3">
@@ -1233,30 +1241,34 @@ function ServingPerTurnChart({
                     <svg width="26" height="8" aria-hidden>
                       <line x1="0" y1="4" x2="26" y2="4" stroke={metric.color} strokeWidth="2" strokeDasharray="5 4" />
                     </svg>
-                    <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (roofline)</span>
+                    <span className="text-[11px] text-[#c9d1d9]">
+                      {metric.label === 'TPOT'
+                        ? `${metric.label} predicted (roofline)`
+                        : `${metric.label} predicted (queue v1)`}
+                    </span>
                   </span>
-                  {showLlmd && (
+                  {showKernel && (
                     <span className="flex items-center gap-2">
                       <svg width="26" height="8" aria-hidden>
-                        <line x1="0" y1="4" x2="26" y2="4" stroke="#f59e0b" strokeWidth="2" strokeDasharray="2 3" />
+                        <line x1="0" y1="4" x2="26" y2="4" stroke="#facc15" strokeWidth="2" />
                       </svg>
-                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (llm-d)</span>
+                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (kernel)</span>
                     </span>
                   )}
-                  {showTwoRoofline && (
+                  {showKernelHint && (
                     <span className="flex items-center gap-2">
                       <svg width="26" height="8" aria-hidden>
-                        <line x1="0" y1="4" x2="26" y2="4" stroke="#22c55e" strokeWidth="2" />
+                        <line x1="0" y1="4" x2="26" y2="4" stroke="#fb7185" strokeWidth="2" />
                       </svg>
-                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (two-roofline)</span>
+                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (kernel+hint)</span>
                     </span>
                   )}
-                  {showThreeRegime && (
+                  {showRamp && (
                     <span className="flex items-center gap-2">
                       <svg width="26" height="8" aria-hidden>
-                        <line x1="0" y1="4" x2="26" y2="4" stroke="#a855f7" strokeWidth="2" />
+                        <line x1="0" y1="4" x2="26" y2="4" stroke="#2dd4bf" strokeWidth="2" />
                       </svg>
-                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (three-regime)</span>
+                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (fwd-ramp)</span>
                     </span>
                   )}
                 </div>
@@ -1275,7 +1287,11 @@ function ServingPerTurnChart({
             <Line
               type="monotone"
               dataKey="pred"
-              name={`${metric.label} predicted (roofline)`}
+              name={
+                metric.label === 'TPOT'
+                  ? `${metric.label} predicted (roofline)`
+                  : `${metric.label} predicted (queue v1)`
+              }
               stroke={metric.color}
               strokeDasharray="5 4"
               strokeWidth={2}
@@ -1283,37 +1299,36 @@ function ServingPerTurnChart({
               connectNulls={false}
               isAnimationActive={false}
             />
-            {showLlmd && (
+            {showKernel && (
               <Line
                 type="monotone"
-                dataKey="llmd"
-                name={`${metric.label} predicted (llm-d)`}
-                stroke="#f59e0b"
-                strokeDasharray="2 3"
-                strokeWidth={2}
-                dot={false}
-                connectNulls
-                isAnimationActive={false}
-              />
-            )}
-            {showTwoRoofline && (
-              <Line
-                type="monotone"
-                dataKey="twoRoofline"
-                name={`${metric.label} predicted (two-roofline)`}
-                stroke="#22c55e"
+                dataKey="kernel"
+                name={`${metric.label} predicted (kernel)`}
+                stroke="#facc15"
                 strokeWidth={2}
                 dot={{ r: 2 }}
                 connectNulls={false}
                 isAnimationActive={false}
               />
             )}
-            {showThreeRegime && (
+            {showKernelHint && (
               <Line
                 type="monotone"
-                dataKey="threeRegime"
-                name={`${metric.label} predicted (three-regime)`}
-                stroke="#a855f7"
+                dataKey="kernelHint"
+                name={`${metric.label} predicted (kernel+hint)`}
+                stroke="#fb7185"
+                strokeWidth={2}
+                dot={{ r: 2 }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            )}
+            {showRamp && (
+              <Line
+                type="monotone"
+                dataKey="rampPred"
+                name={`${metric.label} predicted (fwd-ramp)`}
+                stroke="#2dd4bf"
                 strokeWidth={2}
                 dot={{ r: 2 }}
                 connectNulls={false}
