@@ -33,10 +33,13 @@ DEFAULT_SIM_PREDICTIONS = Path(
 )
 HIGH_TTFT_MS = 200.0  # queue-dominated slice (TTFT analog of the TPOT plateau)
 
-# (pred_key, meas_key, label) per metric.
+# (pred_key, meas_key, label) per metric. The _qsim rows are the forward
+# closed-loop queue-sim predictions (additive; never repointed over M0).
 METRICS = [
     ("ttft_pred", "ttft_meas", "ttft"),
     ("e2el_pred", "e2el_meas", "e2el"),
+    ("ttft_pred_qsim", "ttft_meas", "ttft_qsim"),
+    ("e2el_pred_qsim", "e2el_meas", "e2el_qsim"),
 ]
 
 
@@ -130,6 +133,14 @@ def main() -> None:
     ttft_ov = _summary(rows, "ttft_pred", "ttft_meas")["__overall__"]["mape"]
     e2el_ov = _summary(rows, "e2el_pred", "e2el_meas")["__overall__"]["mape"]
     print(f"\nGATE  overall TTFT MAPE = {ttft_ov:.2f}%   overall E2EL MAPE = {e2el_ov:.2f}%")
+
+    qsim_t = _summary(rows, "ttft_pred_qsim", "ttft_meas")["__overall__"]
+    qsim_e = _summary(rows, "e2el_pred_qsim", "e2el_meas")["__overall__"]
+    if qsim_t["n"]:
+        print(
+            f"QSIM  overall TTFT MAPE = {qsim_t['mape']:.2f}% (n={qsim_t['n']})   "
+            f"overall E2EL MAPE = {qsim_e['mape']:.2f}% (n={qsim_e['n']})"
+        )
 
 
 if __name__ == "__main__":

@@ -886,6 +886,7 @@ function ServingTable({
             metric={metric}
             rows={metricSummaryRows}
             rowCount={summaryRowCount}
+            fallbackRows={rows}
           />
         ))}
       </div>
@@ -1480,19 +1481,29 @@ function ServingMetricSummary({
   metric,
   rows,
   rowCount,
+  fallbackRows,
 }: {
   metric: ServingMetric;
   rows: ServingRow[];
   rowCount?: number;
+  fallbackRows?: ServingRow[];
 }) {
-  const absoluteErrors = rows
+  const errorsFrom = (rs: ServingRow[]) => rs
     .map(row => numericMetric(row, metric.errKey))
     .filter((value): value is number => value !== undefined)
     .map(value => Math.abs(value));
+  // Primary rows (e.g. the fixed TPOT fit set) only carry tpot_err; for TTFT/E2EL
+  // fall back to the real per-cell rows, which carry ttft_err / e2el_err.
+  let absoluteErrors = errorsFrom(rows);
+  let usedFallback = false;
+  if (!absoluteErrors.length && fallbackRows && fallbackRows !== rows) {
+    absoluteErrors = errorsFrom(fallbackRows);
+    usedFallback = absoluteErrors.length > 0;
+  }
   const mape = absoluteErrors.length ? mean(absoluteErrors) : undefined;
   const best = absoluteErrors.length ? Math.min(...absoluteErrors) : undefined;
   const worst = absoluteErrors.length ? Math.max(...absoluteErrors) : undefined;
-  const displayedRowCount = mape !== undefined && rowCount !== undefined
+  const displayedRowCount = mape !== undefined && rowCount !== undefined && !usedFallback
     ? rowCount
     : absoluteErrors.length;
 

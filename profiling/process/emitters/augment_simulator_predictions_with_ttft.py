@@ -113,7 +113,29 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
         predict_cell_ttft = None  # type: ignore[assignment]
         have_predictor = False
 
-    counts = {"ttft_meas": 0, "e2el_meas": 0, "ttft_pred": 0, "e2el_pred": 0, "cells": 0}
+    # The forward closed-loop queue sim (ttft_pred_qsim) is additive and optional —
+    # it never repoints ttft_pred / tpot_* (M0 + kernel headline stay byte-identical).
+    try:
+        from simulator.ttft_queue_sim import (  # noqa: E402
+            predict_cell_e2el_qsim,
+            predict_cell_ttft_qsim,
+        )
+
+        have_qsim = True
+    except Exception:  # pragma: no cover - sim is the headline addition here
+        predict_cell_ttft_qsim = None  # type: ignore[assignment]
+        predict_cell_e2el_qsim = None  # type: ignore[assignment]
+        have_qsim = False
+
+    counts = {
+        "ttft_meas": 0,
+        "e2el_meas": 0,
+        "ttft_pred": 0,
+        "e2el_pred": 0,
+        "ttft_pred_qsim": 0,
+        "e2el_pred_qsim": 0,
+        "cells": 0,
+    }
     missing_raw: list[str] = []
     for row in rows:
         c = row.get("concurrency")
@@ -155,8 +177,45 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
                     )
                     counts["e2el_pred"] += 1
 
+        # ---- forward closed-loop queue-sim TTFT (ADDITIVE; never repoints) ----
+        # ttft_pred_qsim is the emergent per-turn TTFT from the event-driven multi-turn
+        # queue simulation. e2el_pred_qsim composes it with the EXISTING kernel TPOT
+        # column (tpot_pred_kernel) — byte-identical composition, no re-fit. The static
+        # M0 (ttft_pred) and the kernel headline (tpot_pred_kernel) are untouched.
+        if have_qsim and profile in PROFILE_DIST:
+            ttft_qsim = predict_cell_ttft_qsim(turns, str(profile), float(c))
+            tpot_kernels = [turn.get("tpot_pred_kernel") for turn in turns]
+            e2el_qsim = predict_cell_e2el_qsim(
+                turns,
+                str(profile),
+                float(c),
+                ttft_qsim,
+                tpot_preds=[
+                    float(tk) if isinstance(tk, (int, float)) else 0.0
+                    for tk in tpot_kernels
+                ],
+            )
+            for turn, ttft_q, e2el_q, tpot_k in zip(
+                turns, ttft_qsim, e2el_qsim, tpot_kernels
+            ):
+                if ttft_q is None:
+                    continue
+                turn["ttft_pred_qsim"] = round(float(ttft_q), 4)
+                counts["ttft_pred_qsim"] += 1
+                # Only emit e2el_qsim when the kernel TPOT it composes on is present.
+                if isinstance(tpot_k, (int, float)):
+                    turn["e2el_pred_qsim"] = round(float(e2el_q), 4)
+                    counts["e2el_pred_qsim"] += 1
+
         # ---- cell-level summaries (mean of per-turn, matching tpot_meas) ----
-        for key in ("ttft_meas", "e2el_meas", "ttft_pred", "e2el_pred"):
+        for key in (
+            "ttft_meas",
+            "e2el_meas",
+            "ttft_pred",
+            "e2el_pred",
+            "ttft_pred_qsim",
+            "e2el_pred_qsim",
+        ):
             v = _cell_mean(turns, key)
             if v is not None:
                 row[key] = v
@@ -164,6 +223,8 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
         for pred_key, meas_key, err_key in (
             ("ttft_pred", "ttft_meas", "ttft_err"),
             ("e2el_pred", "e2el_meas", "e2el_err"),
+            ("ttft_pred_qsim", "ttft_meas", "ttft_err_qsim"),
+            ("e2el_pred_qsim", "e2el_meas", "e2el_err_qsim"),
         ):
             apes = [
                 abs(float(t[pred_key]) - float(t[meas_key])) / float(t[meas_key]) * 100.0
@@ -193,7 +254,9 @@ def main() -> None:
     counts = augment(args.dashboard_json, args.bench_root)
     print(
         "injected ttft_meas={ttft_meas} e2el_meas={e2el_meas} "
-        "ttft_pred={ttft_pred} e2el_pred={e2el_pred} across {cells} cells".format(**counts)
+        "ttft_pred={ttft_pred} e2el_pred={e2el_pred} "
+        "ttft_pred_qsim={ttft_pred_qsim} e2el_pred_qsim={e2el_pred_qsim} "
+        "across {cells} cells".format(**counts)
     )
     print(f"wrote {args.dashboard_json}")
 
