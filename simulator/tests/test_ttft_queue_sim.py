@@ -93,28 +93,33 @@ def test_single_session_low_concurrency_ttft_floor():
 
 
 def test_ttft_monotone_in_concurrency_at_saturation():
-    # Turn-3 median TTFT grows with cohort under fixed KV (backlog grows).
+    # Once the cohort KV firmly exceeds the pool, median TTFT grows with cohort (backlog
+    # grows). Compare at turn 5 — by then c200's cumulative KV (200x(800+1600)=480k tokens)
+    # firmly exceeds the 436k-token pool, while c40 stays at the queue-free floor. (Earlier
+    # turns sit right at the saturation knee where the chunked-budget de-serialization can
+    # put hi ~= lo at the floor; turn 5 is unambiguously in the oversubscribed regime.)
     turns = _mk_turns(8, new=1600.0, output=40.0)
     lo = predict_cell_ttft_qsim(turns, SWE, 40)
     hi = predict_cell_ttft_qsim(turns, SWE, 200)
-    assert hi[3] > lo[3]
+    assert hi[5] > lo[5]
 
 
-def test_closed_loop_arrival_equals_prior_completion():
-    # Instrument the raw sim: turn t+1 arrival == turn t completion for a session.
+def test_barrier_round_robin_synchronizes_turns():
+    # The harness dispatches all sessions' turn-N requests together and asyncio.gather()s
+    # before turn N+1. So (a) every session's turn-(t+1) request arrives at the SAME epoch
+    # (a synchronized herd), and (b) that epoch equals the LAST turn-t completion (barrier).
     turns = _mk_turns(6, new=512.0, output=20.0)
-    sessions = _build_cohort(turns, SWE, 4)
-    # Re-run with result epochs exposed by patching: use the internal _run_sim plus a
-    # fresh state walk. Easiest: rebuild and read the results dict via a thin re-impl.
-    from simulator.ttft_queue_sim import _ServerState, _on_arrival, _on_step, _on_first_token, _on_depart, _ARRIVAL, _STEP, _FIRST_TOKEN, _DEPART
-    from simulator._legacy.vllm_block_pool import BlockPool
+    sessions = _build_cohort(turns, SWE, 8)
+    from simulator.ttft_queue_sim import (
+        _ServerState, PrefixLRUCache, _release_herd, _on_arrival, _on_step,
+        _on_first_token, _on_depart, _ARRIVAL, _STEP, _FIRST_TOKEN, _DEPART,
+    )
     import heapq
 
     p = RooflineParams()
-    pool = BlockPool(p.available_kv_blocks, p.cache_block_size)
-    state = _ServerState(params=p, pool=pool, sessions=sessions)
-    for s in sessions:
-        state.push(0.0, _ARRIVAL, (s.session_id, 0))
+    cache = PrefixLRUCache(p.available_kv_blocks, p.cache_block_size)
+    state = _ServerState(params=p, cache=cache, sessions=sessions)
+    _release_herd(state, 0)
     events = 0
     while state.heap and events < 1_000_000:
         epoch, _seq, kind, payload = heapq.heappop(state.heap)
@@ -129,25 +134,39 @@ def test_closed_loop_arrival_equals_prior_completion():
         elif kind == _DEPART:
             _on_depart(state, payload[0], payload[1])
 
-    # For session 0, check arrival[t+1] == completion[t] (think-time == 0).
+    max_turns = max(s.turn_count for s in sessions)
     checked = 0
-    for sid in range(len(sessions)):
-        tc = sessions[sid].turn_count
-        for t in range(tc - 1):
-            cur = state.results.get((sid, t))
-            nxt = state.results.get((sid, t + 1))
-            if cur and nxt and "completion_epoch" in cur and "arrival_epoch" in nxt:
-                assert nxt["arrival_epoch"] == pytest.approx(cur["completion_epoch"])
-                checked += 1
+    for t in range(max_turns - 1):
+        arrivals = [
+            state.results[(sid, t + 1)]["arrival_epoch"]
+            for sid in range(len(sessions))
+            if sessions[sid].turn_count > t + 1 and (sid, t + 1) in state.results
+        ]
+        completions = [
+            state.results[(sid, t)]["completion_epoch"]
+            for sid in range(len(sessions))
+            if sessions[sid].turn_count > t and (sid, t) in state.results
+            and "completion_epoch" in state.results[(sid, t)]
+        ]
+        if len(arrivals) < 2 or not completions:
+            continue
+        # (a) all turn-(t+1) arrivals are simultaneous (the herd)
+        assert max(arrivals) == pytest.approx(min(arrivals))
+        # (b) the herd releases at the barrier = last turn-t completion
+        assert arrivals[0] == pytest.approx(max(completions))
+        checked += 1
     assert checked > 0
 
 
 def test_kv_gate_blocks_admission():
     # Shrink KV so capacity < concurrency: some reqs MUST wait (queue_wait > 0) and
-    # the FIFO head blocks. We assert that mid-turn TTFT under the tiny pool is much
+    # the FIFO head blocks. We assert that turn-0 TTFT under the tiny pool is much
     # larger than the single-session floor (head-of-line blocking realized).
+    # new=1000 < long_prefill_token_threshold (1310) so the single-session floor is ONE
+    # un-chunked prefill pass — isolating the blocking signal from the chunk-cap (a
+    # >threshold prefill would itself span 2 chunks and inflate the floor).
     tiny = RooflineParams(available_kv_blocks=400)  # ~4 sessions fit at ~90 blocks each
-    turns = _mk_turns(5, new=1400.0, output=30.0)
+    turns = _mk_turns(5, new=1000.0, output=30.0)
     out = predict_cell_ttft_qsim(turns, SWE, 60, tiny)
     floor = predict_cell_ttft_qsim(turns, SWE, 1, tiny)
     # With 60 sessions and room for ~4, the backlog wait dominates.
@@ -253,17 +272,22 @@ def test_draw_turn_count_inverse_survival():
 
 
 def test_no_fitted_constants():
-    # The ONLY new module-level numeric constants are the two vLLM serving defaults.
+    # Every module-level numeric constant is a vLLM serving default or config-derived —
+    # NONE is fitted to the TTFT target.
     import simulator.ttft_queue_sim as mod
 
-    assert mod.MAX_NUM_SEQS == 512
+    # vLLM EngineArgs H100 + OPENAI_API_SERVER resolved defaults (arg_utils._set_default_args).
+    assert mod.MAX_NUM_SEQS == 1024
     assert mod.MAX_NUM_BATCHED_TOKENS == 8192
-    # Module-level numeric globals (uppercase) must be exactly these two + the grid
-    # edge (1024, reused from ttft_predict, not a fit) + event-kind enum ints.
-    # Public (non-underscore) uppercase numeric module globals: exactly the two vLLM
-    # serving defaults. Private (underscore-prefixed) names — the event-kind enum ints
-    # and _GRID_U_MAX=1024 (the cached-prefill grid edge, reused from ttft_predict, NOT
-    # a fit) — are physics/structure, not headline knobs, and are excluded.
+    # Per-step prefill chunk cap: SchedulerConfig sets long_prefill_token_threshold to
+    # int(max_model_len * 0.04) when chunked prefill is on and the flag is unset. The
+    # benchmark ran max_model_len=32768 (server metadata) -> 1310. Config-derived, NOT a fit.
+    assert mod.MAX_MODEL_LEN == 32768
+    assert mod.LONG_PREFILL_TOKEN_THRESHOLD == int(32768 * 0.04) == 1310
+    # Public uppercase numeric module globals: exactly the four config-derived vLLM values.
+    # Private (underscore-prefixed) names — the event-kind enum ints and _GRID_U_MAX=1024
+    # (the cached-prefill grid edge, reused from ttft_predict, NOT a fit) — are
+    # physics/structure, not headline knobs, and are excluded.
     public_numeric = {
         k: v
         for k, v in vars(mod).items()
@@ -272,7 +296,12 @@ def test_no_fitted_constants():
         and isinstance(v, (int, float))
         and not isinstance(v, bool)
     }
-    assert set(public_numeric) == {"MAX_NUM_SEQS", "MAX_NUM_BATCHED_TOKENS"}
+    assert set(public_numeric) == {
+        "MAX_NUM_SEQS",
+        "MAX_NUM_BATCHED_TOKENS",
+        "MAX_MODEL_LEN",
+        "LONG_PREFILL_TOKEN_THRESHOLD",
+    }
     # And the private numeric constants are only the grid edge + the 4 event-kind ints.
     private_numeric = {
         k

@@ -32,7 +32,7 @@ interface ServingTurnPrediction {
   backend_step_trace?: BackendStepTrace[];
   ttft_pred?: number; ttft_meas?: number; ttft_err?: number;
   ttft_signed_err_ms?: number; ttft_abs_err_ms?: number;
-  ttft_pred_qsim?: number; ttft_err_qsim?: number;
+  ttft_pred_static?: number; ttft_err_static?: number;
   tpot_pred?: number; tpot_meas?: number; tpot_err?: number;
   tpot_pred_kernel?: number;
   tpot_pred_kernel_hint?: number;
@@ -42,7 +42,7 @@ interface ServingTurnPrediction {
   base_tpot_signed_err_ms?: number; base_tpot_abs_err_ms?: number;
   e2el_pred?: number; e2el_meas?: number; e2el_err?: number;
   e2el_signed_err_ms?: number; e2el_abs_err_ms?: number;
-  e2el_pred_qsim?: number; e2el_err_qsim?: number;
+  e2el_pred_static?: number; e2el_err_static?: number;
   scheduled_requests?: number;
   base_tpot_pred?: number;
   decode_waves?: number;
@@ -141,12 +141,12 @@ interface ServingRow {
   multiturn_turn_predictions?: ServingTurnPrediction[];
   ttft_pred?: number; ttft_meas?: number; ttft_err?: number;
   ttft_signed_err_ms?: number; ttft_abs_err_ms?: number;
-  ttft_pred_qsim?: number; ttft_err_qsim?: number;
+  ttft_pred_static?: number; ttft_err_static?: number;
   tpot_pred?: number; tpot_meas?: number; tpot_err?: number;
   tpot_signed_err_ms?: number; tpot_abs_err_ms?: number; tpot_max_abs_err_ms?: number;
   e2el_pred?: number; e2el_meas?: number; e2el_err?: number;
   e2el_signed_err_ms?: number; e2el_abs_err_ms?: number;
-  e2el_pred_qsim?: number; e2el_err_qsim?: number;
+  e2el_pred_static?: number; e2el_err_static?: number;
 }
 
 type ServingPerTurnRow = ServingRow & { multiturn_turn_predictions: ServingTurnPrediction[] };
@@ -1169,15 +1169,15 @@ function ServingPerTurnChart({
         // saturation from the eviction-watermark crossing. See simulator/ramp_tpot.py.
         const rampPred =
           metric.label === 'TPOT' ? turn.tpot_pred_ramp : undefined;
-        // Forward closed-loop queue-sim prediction (comparison line for TTFT/E2EL).
-        // The emergent per-turn latency from the event-driven multi-turn queue sim;
-        // additive, never repoints the static M0 (dashed pred line). TPOT has no
-        // qsim variant. See simulator/ttft_queue_sim.py.
-        const qsimPred =
+        // Static-M0 prediction (comparison line for TTFT/E2EL). The headline pred line is
+        // now the queue sim (metric.predKey = ttft_pred/e2el_pred); this static comparison
+        // (prefill baseline × Little's-law amplifier) is the line the queue sim beat. TPOT
+        // has no static variant. See simulator/ttft_predict.py.
+        const staticPred =
           metric.label === 'TTFT'
-            ? turn.ttft_pred_qsim
+            ? turn.ttft_pred_static
             : metric.label === 'E2EL'
-              ? turn.e2el_pred_qsim
+              ? turn.e2el_pred_static
               : undefined;
         return {
           turn: displayTurn(turn),
@@ -1195,9 +1195,9 @@ function ServingPerTurnChart({
             typeof rampPred === 'number' && Number.isFinite(rampPred)
               ? rampPred
               : null,
-          qsimPred:
-            typeof qsimPred === 'number' && Number.isFinite(qsimPred)
-              ? qsimPred
+          staticPred:
+            typeof staticPred === 'number' && Number.isFinite(staticPred)
+              ? staticPred
               : null,
         };
       }),
@@ -1209,8 +1209,8 @@ function ServingPerTurnChart({
     metric.label === 'TPOT' && chartData.some(d => d.kernelHint !== null);
   const showRamp =
     metric.label === 'TPOT' && chartData.some(d => d.rampPred !== null);
-  const showQsim =
-    metric.label !== 'TPOT' && chartData.some(d => d.qsimPred !== null);
+  const showStatic =
+    metric.label !== 'TPOT' && chartData.some(d => d.staticPred !== null);
   if (chartData.length === 0) return null;
   return (
     <div className="border-b border-[#21262d] px-4 py-3">
@@ -1283,7 +1283,7 @@ function ServingPerTurnChart({
                     <span className="text-[11px] text-[#c9d1d9]">
                       {metric.label === 'TPOT'
                         ? `${metric.label} predicted (roofline)`
-                        : `${metric.label} predicted (static M0)`}
+                        : `${metric.label} predicted (queue sim)`}
                     </span>
                   </span>
                   {showKernel && (
@@ -1310,12 +1310,12 @@ function ServingPerTurnChart({
                       <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (fwd-ramp)</span>
                     </span>
                   )}
-                  {showQsim && (
+                  {showStatic && (
                     <span className="flex items-center gap-2">
                       <svg width="26" height="8" aria-hidden>
                         <line x1="0" y1="4" x2="26" y2="4" stroke="#3fb950" strokeWidth="2" />
                       </svg>
-                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (queue-sim)</span>
+                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (static M0)</span>
                     </span>
                   )}
                 </div>
@@ -1338,7 +1338,7 @@ function ServingPerTurnChart({
               name={
                 metric.label === 'TPOT'
                   ? `${metric.label} predicted (roofline)`
-                  : `${metric.label} predicted (static M0)`
+                  : `${metric.label} predicted (queue sim)`
               }
               stroke={metric.color}
               strokeWidth={2}
@@ -1382,11 +1382,11 @@ function ServingPerTurnChart({
                 isAnimationActive={false}
               />
             )}
-            {showQsim && (
+            {showStatic && (
               <Line
                 type="monotone"
-                dataKey="qsimPred"
-                name={`${metric.label} predicted (queue-sim)`}
+                dataKey="staticPred"
+                name={`${metric.label} predicted (static M0)`}
                 stroke="#3fb950"
                 strokeWidth={2}
                 dot={{ r: 2 }}

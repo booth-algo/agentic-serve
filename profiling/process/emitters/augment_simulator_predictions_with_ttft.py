@@ -11,12 +11,15 @@ rule the base JSON uses for ``tpot_meas`` (verified: JSON matches the median, no
 the mean).
 
 It also injects forward (workload-only) predictions when available:
-  * ``ttft_pred``  — forward prefill-baseline × Little's-law queue amplifier
-    (``simulator/ttft_predict.py``).
-  * ``e2el_pred``  — composition ``ttft_pred + output·tpot_pred_kernel`` (uses the
-    headline kernel TPOT, *not* the stale roofline ``tpot_pred``).
+  * ``ttft_pred`` / ``e2el_pred``  — **HEADLINE = the forward closed-loop queue sim**
+    (``simulator/ttft_queue_sim.py``: barrier round-robin + chunked-prefill budget +
+    block-level prefix-cache w/ herd-protected rotation). Beats the static M0 (60.78%
+    vs 61.95% TTFT; 29.71% vs 30.01% E2EL), so it is now the primary prediction.
+  * ``ttft_pred_static`` / ``e2el_pred_static``  — the static M0 comparison (prefill
+    baseline × Little's-law queue amplifier, ``simulator/ttft_predict.py``).
+  * ``e2el_*`` compose on the headline kernel TPOT (``tpot_pred_kernel``), no re-fit.
 
-This augmenter is **additive only** — it never repoints any existing TPOT field.
+This augmenter never repoints any TPOT field (kernel headline stays byte-identical).
 
 Usage:
     python3 -m profiling.process.emitters.augment_simulator_predictions_with_ttft
@@ -130,18 +133,18 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
     counts = {
         "ttft_meas": 0,
         "e2el_meas": 0,
-        "ttft_pred": 0,
+        "ttft_pred": 0,          # HEADLINE = queue sim
         "e2el_pred": 0,
-        "ttft_pred_qsim": 0,
-        "e2el_pred_qsim": 0,
+        "ttft_pred_static": 0,   # comparison = static M0
+        "e2el_pred_static": 0,
         "ttft_err": 0,
         "e2el_err": 0,
         "ttft_signed_err_ms": 0,
         "e2el_signed_err_ms": 0,
         "ttft_abs_err_ms": 0,
         "e2el_abs_err_ms": 0,
-        "ttft_err_qsim": 0,
-        "e2el_err_qsim": 0,
+        "ttft_err_static": 0,
+        "e2el_err_static": 0,
         "cells": 0,
     }
     missing_raw: list[str] = []
@@ -168,28 +171,32 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
                 turn["e2el_meas"] = rec["e2el_meas"]
                 counts["e2el_meas"] += 1
 
-        # ---- predicted (forward, workload-only) ----
+        # ---- static M0 prediction (forward, workload-only) — COMPARISON column ----
+        # The prefill-baseline × Little's-law queue amplifier. Once the headline; now the
+        # static comparison line (ttft_pred_static), since the queue sim beats it.
         if have_predictor and profile in PROFILE_DIST:
             ttft_preds = predict_cell_ttft(turns, str(profile), float(c))
             for turn, ttft_pred in zip(turns, ttft_preds):
                 if ttft_pred is None:
                     continue
-                turn["ttft_pred"] = round(float(ttft_pred), 4)
-                counts["ttft_pred"] += 1
+                turn["ttft_pred_static"] = round(float(ttft_pred), 4)
+                counts["ttft_pred_static"] += 1
                 # E2EL composition: ttft + output·tpot_pred_kernel (headline TPOT).
                 tpot_k = turn.get("tpot_pred_kernel")
                 out = turn.get("output_tokens")
                 if isinstance(tpot_k, (int, float)) and isinstance(out, (int, float)):
-                    turn["e2el_pred"] = round(
+                    turn["e2el_pred_static"] = round(
                         float(ttft_pred) + float(out) * float(tpot_k), 4
                     )
-                    counts["e2el_pred"] += 1
+                    counts["e2el_pred_static"] += 1
 
-        # ---- forward closed-loop queue-sim TTFT (ADDITIVE; never repoints) ----
-        # ttft_pred_qsim is the emergent per-turn TTFT from the event-driven multi-turn
-        # queue simulation. e2el_pred_qsim composes it with the EXISTING kernel TPOT
-        # column (tpot_pred_kernel) — byte-identical composition, no re-fit. The static
-        # M0 (ttft_pred) and the kernel headline (tpot_pred_kernel) are untouched.
+        # ---- forward closed-loop queue-sim TTFT — HEADLINE (ttft_pred / e2el_pred) ----
+        # The emergent per-turn TTFT from the event-driven multi-turn queue sim (barrier
+        # round-robin + chunked-prefill budget + block-level prefix-cache w/ herd-protected
+        # rotation). Beats the static M0 on TTFT (60.78% vs 61.95%) and E2EL (29.71% vs
+        # 30.01%) so it is now the headline ttft_pred / e2el_pred. e2el composes it with the
+        # EXISTING kernel TPOT column (tpot_pred_kernel) — byte-identical composition, no
+        # re-fit. The kernel headline (tpot_pred_kernel) is untouched.
         if have_qsim and profile in PROFILE_DIST:
             ttft_qsim = predict_cell_ttft_qsim(turns, str(profile), float(c))
             tpot_kernels = [turn.get("tpot_pred_kernel") for turn in turns]
@@ -208,12 +215,12 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
             ):
                 if ttft_q is None:
                     continue
-                turn["ttft_pred_qsim"] = round(float(ttft_q), 4)
-                counts["ttft_pred_qsim"] += 1
-                # Only emit e2el_qsim when the kernel TPOT it composes on is present.
+                turn["ttft_pred"] = round(float(ttft_q), 4)
+                counts["ttft_pred"] += 1
+                # Only emit e2el_pred when the kernel TPOT it composes on is present.
                 if isinstance(tpot_k, (int, float)):
-                    turn["e2el_pred_qsim"] = round(float(e2el_q), 4)
-                    counts["e2el_pred_qsim"] += 1
+                    turn["e2el_pred"] = round(float(e2el_q), 4)
+                    counts["e2el_pred"] += 1
 
         # ---- per-turn error fields (ADDITIVE; mirror the tpot_* convention) ----
         # For TTFT/E2EL the per-turn dict carried meas+pred (and qsim pred) but no
@@ -237,10 +244,10 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
                 if float(meas) > 0:
                     turn[err_key] = round(abs(signed) / float(meas) * 100.0, 4)
                     counts[err_key] += 1
-        # per-turn qsim MAPE (additive) — lets the qsim comparison line carry a tone.
+        # per-turn static-M0 MAPE (additive) — lets the static comparison line carry a tone.
         for qsim_key, meas_key, err_key in (
-            ("ttft_pred_qsim", "ttft_meas", "ttft_err_qsim"),
-            ("e2el_pred_qsim", "e2el_meas", "e2el_err_qsim"),
+            ("ttft_pred_static", "ttft_meas", "ttft_err_static"),
+            ("e2el_pred_static", "e2el_meas", "e2el_err_static"),
         ):
             for turn in turns:
                 pred = turn.get(qsim_key)
@@ -259,8 +266,8 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
             "e2el_meas",
             "ttft_pred",
             "e2el_pred",
-            "ttft_pred_qsim",
-            "e2el_pred_qsim",
+            "ttft_pred_static",
+            "e2el_pred_static",
         ):
             v = _cell_mean(turns, key)
             if v is not None:
@@ -269,8 +276,8 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
         for pred_key, meas_key, err_key in (
             ("ttft_pred", "ttft_meas", "ttft_err"),
             ("e2el_pred", "e2el_meas", "e2el_err"),
-            ("ttft_pred_qsim", "ttft_meas", "ttft_err_qsim"),
-            ("e2el_pred_qsim", "e2el_meas", "e2el_err_qsim"),
+            ("ttft_pred_static", "ttft_meas", "ttft_err_static"),
+            ("e2el_pred_static", "e2el_meas", "e2el_err_static"),
         ):
             apes = [
                 abs(float(t[pred_key]) - float(t[meas_key])) / float(t[meas_key]) * 100.0
@@ -313,12 +320,12 @@ def main() -> None:
     counts = augment(args.dashboard_json, args.bench_root)
     print(
         "injected ttft_meas={ttft_meas} e2el_meas={e2el_meas} "
-        "ttft_pred={ttft_pred} e2el_pred={e2el_pred} "
-        "ttft_pred_qsim={ttft_pred_qsim} e2el_pred_qsim={e2el_pred_qsim} "
+        "ttft_pred(qsim)={ttft_pred} e2el_pred(qsim)={e2el_pred} "
+        "ttft_pred_static={ttft_pred_static} e2el_pred_static={e2el_pred_static} "
         "ttft_err={ttft_err} e2el_err={e2el_err} "
         "ttft_signed_err_ms={ttft_signed_err_ms} e2el_signed_err_ms={e2el_signed_err_ms} "
         "ttft_abs_err_ms={ttft_abs_err_ms} e2el_abs_err_ms={e2el_abs_err_ms} "
-        "ttft_err_qsim={ttft_err_qsim} e2el_err_qsim={e2el_err_qsim} "
+        "ttft_err_static={ttft_err_static} e2el_err_static={e2el_err_static} "
         "across {cells} cells".format(**counts)
     )
     print(f"wrote {args.dashboard_json}")
