@@ -137,6 +137,26 @@ class BlockPool:
         self._free_blocks += owned
         return owned
 
+    def free_partial(self, request_id: int, num_blocks: int) -> int:
+        """Return ``num_blocks`` of the request's blocks to the free pool (the TAIL of its
+        KV under LRU — recent blocks evict before the shared prefix). Caps at what's owned;
+        drops the request when fully freed. Returns the number actually freed.
+
+        Mirrors vLLM's block-granular LRU eviction: a partially-evicted request keeps its
+        surviving (prefix) blocks cache-resident, so its next prefill is a partial hit.
+        """
+        owned = self._owned_by_request.get(request_id, 0)
+        n = min(owned, max(0, int(num_blocks)))
+        if n <= 0:
+            return 0
+        remaining = owned - n
+        if remaining > 0:
+            self._owned_by_request[request_id] = remaining
+        else:
+            self._owned_by_request.pop(request_id, None)
+        self._free_blocks += n
+        return n
+
     def tokens_to_blocks(self, num_tokens: int) -> int:
         """Helper: how many blocks does ``num_tokens`` require?"""
         return _ceil_div(num_tokens, self._block_size)

@@ -1,54 +1,44 @@
-"""Forward, closed-loop, event-driven multi-turn TTFT **queue** simulator.
+"""Forward, closed-loop, event-driven multi-turn TTFT **queue** simulator with
+**session-persistent KV + RECOMPUTE eviction** (vLLM v1 model).
 
-TTFT is not a quasi-static per-turn quantity like TPOT — it is the wall-clock
-**queue wait** a request sees before its first token (client_queue_wait ~= 0, so all
-server-side queueing is folded into the measured ``ttft_ms``). A static per-turn
-formula provably can't capture it (the production static M0 sits at ~62% MAPE): the
-per-turn TTFT is a *saturate-ramp-RECOVER* curve that emerges from the cohort's
-trajectory — backlog builds while the cohort oversubscribes KV and drains as
-sessions finish.
+TTFT is not a quasi-static per-turn quantity like TPOT — it is the wall-clock **queue
+wait** a request sees before its first token (client_queue_wait ~= 0, so all server-side
+queueing is folded into the measured ``ttft_ms``). The per-turn TTFT is a
+*saturate-ramp-RECOVER* curve that emerges from the cohort's trajectory.
 
-This module borrows **llm-d-inference-sim's EVENT STRUCTURE** (a freeWorkers pool of
-size ``max_num_seqs`` + a FIFO ``waitingQueue`` whose entries carry an ``enqueueTime``;
-``queue_wait = dequeue_epoch - enqueueTime`` — its ``reqQueueTime`` metric), NOT its
-snapshot TTFT formula. The per-turn TTFT here is *emergent* from a forward, closed-loop
-discrete-event simulation of continuous-batching steps.
+THE CLIMB MECHANISM (measured + traced against /root/vllm v1 scheduler): a multi-turn
+session's KV **persists across its turns** (prefix reuse), growing each turn. Under load
+the cohort's cumulative KV vastly exceeds the pool, so the scheduler **evicts** whole
+sessions (RECOMPUTE — frees their blocks); an evicted session's next turn is a cache
+**MISS** and must **re-prefill its entire context** (cached+new), not just the new tokens.
+That full re-prefill congests the chunked-prefill token budget and head-of-line-blocks new
+arrivals' first token. Because cached context grows every turn, the re-prefill cost
+compounds — TTFT climbs unboundedly for full-staying cohorts (swebench/terminal, flat
+survival) and saturates/recovers as the cohort drains (osworld). A turn whose session KV
+is still **resident** is a cache HIT and prefills only its new tokens (cheap) — so the
+hit/miss fraction self-adjusts to KV pressure and sets the magnitude.
 
-PHYSICAL MODEL (fit-free — NO new fitted constants):
+MODEL (fit-free — NO new fitted constants):
 
-* Cohort: ``C = round(concurrency)`` sessions. Each session's turn-count is drawn
-  FORWARD from the profile's turn-count survival histogram
-  (``ramp_tpot.forward_survival`` / ``PROFILE_DIST`` — the same source ``sched_hat``
-  uses) DETERMINISTICALLY by survival quantile ``q_k = (k+0.5)/C`` (reproducible; no
-  stochastic draws, no wall-clock reads).
-* Shared GPU server runs continuous-batching steps; admission is gated by KV blocks
-  (``BlockPool(available_kv_blocks=27250, cache_block_size=16)``) + ``max_num_seqs``
-  + ``MAX_NUM_BATCHED_TOKENS=8192`` (vLLM serving defaults, documented runtime config,
-  NOT MAPE-tuned knobs — same discipline as ``available_kv_blocks``).
-* Closed loop: a session's turn ``t+1`` ARRIVES at its turn ``t`` COMPLETION epoch
-  (think-time == 0, client_queue_wait == 0 — the bench contract). On arrival the
-  request joins the waiting FIFO; it is admitted when capacity frees; prefill is
-  chunked across steps, intruding into the decode-priority token budget; the first
-  token is emitted at prefill completion.
-* Per-step wall-time from MEASURED kernels ONLY: a decode step costs
-  ``kernel_step_cost.decode_step_ms(batch, ctx)``; a prefill chunk costs
-  ``cached_prefill_lookup.cached_prefill_step_ms(new_tokens, prefix_tokens)``. Both are
-  measured H100 / Llama-3.1-8B grids (decode 7.4% MAPE).
-* ``TTFT[turn] = first_token_epoch - arrival_epoch`` (= queue_wait + prefill_service +
-  one decode step). Aggregate per (profile, concurrency, turn_index) -> MEDIAN, the
-  byte-identical grouping the measured ``ttft_meas`` uses.
+* Cohort: ``C = round(concurrency)`` sessions; each session's turn-count drawn FORWARD from
+  the profile turn-count survival histogram (``ramp_tpot.forward_survival`` / ``PROFILE_DIST``)
+  DETERMINISTICALLY by quantile ``q_k=(k+0.5)/C`` (reproducible; no RNG, no wall-clock reads).
+* Shared GPU continuous-batching steps; admission gated by KV blocks
+  (``BlockPool(available_kv_blocks=27250, 16)``) + ``max_num_seqs`` + ``MAX_NUM_BATCHED_TOKENS``
+  (vLLM serving defaults, documented config — not MAPE knobs).
+* **KV blocks are owned per SESSION and persist across turns**; the session keeps its KV
+  after a turn departs (resident) until it ENDS or is EVICTED. Eviction (LRU over resident,
+  non-in-flight sessions) frees a session's blocks when the pool can't fit a needed
+  allocation; the evicted session's next turn is a MISS (full re-prefill).
+* Closed loop: turn ``t+1`` ARRIVES at turn ``t`` COMPLETION (think-time == 0). HIT (session
+  resident, KV covers cached) → prefill only ``new``; MISS → prefill ``cached+new``.
+* Per-step wall-time from MEASURED kernels: decode = ``decode_step_ms(batch, ctx)``; one fused
+  prefill pass = ``cached_prefill_step_ms`` (roofline above the grid edge). ``TTFT[turn] =
+  first_token_epoch - arrival_epoch``; aggregate per (profile, concurrency, turn_index) -> MEDIAN.
 
-The wave factor ``_decode_residency_wave_factor`` is intentionally NOT multiplied onto
-the decode step: admission already caps the running set at the KV capacity batch, so on
-the admitted batch it is ~= 1 by construction and applying it would double-count the KV
-pressure the queue itself models (see DESIGN risks: WAVE-FACTOR DOUBLE-COUNTING). The
-backlog — hence the TTFT ramp — must be carried by FIFO head-of-line blocking, not a
-hidden amplifier.
-
-Output is the ADDITIVE column ``ttft_pred_qsim`` (+ ``e2el_pred_qsim = ttft_pred_qsim +
-output * tpot_pred_kernel``). The existing ``ttft_pred`` / ``tpot_pred`` / ``tpot_err``
-/ ``tpot_pred_kernel`` columns are never repointed (M0 and the kernel headline stay
-byte-identical).
+Output is the ADDITIVE column ``ttft_pred_qsim`` (+ ``e2el_pred_qsim``). The ``ttft_pred`` /
+``tpot_pred`` / ``tpot_err`` / ``tpot_pred_kernel`` columns are never repointed (M0 + kernel
+headline stay byte-identical).
 """
 
 from __future__ import annotations
@@ -70,32 +60,24 @@ from simulator.ttft_predict import _prefill_per_token_ms, predict_turn_ttft
 __all__ = ["predict_cell_ttft_qsim", "predict_cell_e2el_qsim", "PROFILE_DIST"]
 
 # --- vLLM serving defaults (documented runtime config, NOT fitted) ------------
-# These are the only two module-level numeric constants beyond what RooflineParams
-# already documents. They are vLLM's stock serving defaults, same discipline as
-# RooflineParams.available_kv_blocks — NOT MAPE-tuned knobs.
 MAX_NUM_SEQS = 512          # vLLM --max-num-seqs default (freeWorkers pool size)
 MAX_NUM_BATCHED_TOKENS = 8192  # vLLM --max-num-batched-tokens default (per-step token budget)
 
-# Event kinds (monotone ints; ordering is (epoch, seq_counter, kind) — no wall-clock,
-# no RNG, fully deterministic FIFO at equal epochs).
+# Event kinds; ordering is (epoch, seq, kind) — deterministic FIFO at equal epochs.
 _ARRIVAL = 0
 _STEP = 1
 _FIRST_TOKEN = 2
 _DEPART = 3
 
-# Largest new-prefill the measured cached-prefill grid covers; above it the grid
-# clamps and under-counts, so a fused multi-session prefill pass beyond it is priced by
-# the prefill-compute roofline (the same edge ttft_predict._baseline_prefill_ms uses).
+# Largest new-prefill the measured cached-prefill grid covers; above it the prefill-compute
+# roofline (continuous with the grid edge) prices a fused multi-session pass. No new constant.
 _GRID_U_MAX = 1024.0
 
 
 def _prefill_pass_ms(total_chunk_tokens: float, mean_prefix: float, params: RooflineParams) -> float:
-    """Wall-time of ONE fused prefill forward pass over ``total_chunk_tokens`` tokens
-    (summed across the step's prefilling reqs) at ``mean_prefix`` cached prefix.
-
-    Measured cached-prefill grid up to the grid's U edge; the prefill-compute roofline
-    (2·N·U/(peak_flops·util) + scheduler overhead) above it — continuous with the grid
-    at the edge, and the physically-correct large-batch extrapolant. No new constant."""
+    """Wall-time of ONE fused prefill forward pass over ``total_chunk_tokens`` tokens at
+    ``mean_prefix`` cached prefix — measured cached-prefill grid up to its U edge, the
+    prefill-compute roofline above it (continuous, the large-batch extrapolant)."""
     u = max(1.0, float(total_chunk_tokens))
     if u <= _GRID_U_MAX:
         return cached_prefill_step_ms(u, max(1.0, float(mean_prefix)))
@@ -119,6 +101,11 @@ class Session:
     turn_count: int
     turns: list[TurnSpec]
     next_turn_idx: int = 0
+    # --- session-persistent KV residency state ---
+    resident: bool = False    # currently holds its KV blocks in the pool (keyed by session_id)
+    inflight: bool = False     # has a turn currently prefilling or running (protected from eviction)
+    held_tokens: float = 0.0   # resident KV length (cumulative context), 0 if evicted/never-run
+    last_seq: int = -1         # last-activity order; LRU eviction evicts the lowest
 
 
 # ------------------------------------------------------------------ in-flight reqs
@@ -135,11 +122,10 @@ class _Req:
     cached: float
     new_prefill: float
     output: float
-    blocks: int
     remaining_prefill: float
     output_left: int
-    # context (cached+new) used as the resident KV length for decode pricing.
-    ctx: float
+    kv_tokens: float           # resident KV after this turn's prefill (cached+new), grows with decode
+    is_miss: bool = False      # cache miss (session was evicted) -> re-prefilled full context
 
 
 @dataclass
@@ -148,14 +134,14 @@ class _ServerState:
     pool: BlockPool
     sessions: list[Session]
     clock: float = 0.0
-    seq: int = 0  # monotone tiebreak counter
+    seq: int = 0  # monotone tiebreak + LRU counter
     heap: list[tuple[float, int, int, Any]] = field(default_factory=list)
     waiting: list[_Req] = field(default_factory=list)        # FIFO
     prefilling: dict[int, _Req] = field(default_factory=dict)
     running: dict[int, _Req] = field(default_factory=dict)
-    # (session_id, turn_index) -> {arrival_epoch, first_token_epoch, completion_epoch}
     results: dict[tuple[int, int], dict[str, float]] = field(default_factory=dict)
     step_scheduled: bool = False
+    evictions: int = 0  # diagnostic
 
     def push(self, epoch: float, kind: int, payload: Any) -> None:
         heapq.heappush(self.heap, (epoch, self.seq, kind, payload))
@@ -171,17 +157,9 @@ def _encode_rid(session_id: int, turn_index: int) -> int:
 
 
 def _draw_turn_count(survival: list[float], quantile: float) -> int:
-    """Inverse-survival, deterministic. Returns the turn_count (>=1) for a session at
-    survival quantile ``quantile``.
-
-    ``survival[t] = S(t)`` = fraction of sessions still alive AT turn ``t`` (S(0)==1).
-    A session reaches turns ``0..T-1`` (T turns total) where T is the largest index
-    with ``S(T-1) >= quantile`` ... in practice: count how many turns have survival
-    >= quantile, that many turns are reached, +1 for the always-present turn 0 floor.
-    """
+    """Inverse-survival, deterministic. ``survival[t]=S(t)`` = fraction alive AT turn t."""
     if not survival:
         return 1
-    # Number of turn indices t whose survival S(t) >= quantile. S(0)==1 always counts.
     reached = 0
     for s in survival:
         if s >= quantile:
@@ -194,15 +172,10 @@ def _draw_turn_count(survival: list[float], quantile: float) -> int:
 def _build_cohort(
     turns: list[dict[str, Any]], profile: str, concurrency: float
 ) -> list[Session]:
-    """Deterministic survival-quantile cohort. Each of ``C = round(concurrency)``
-    sessions gets a turn_count from the inverse survival at quantile ``(k+0.5)/C`` and
-    pulls each turn's TurnSpec from the cell's per-turn dicts (keyed by turn_index),
-    reusing exactly the inputs M0 / kernel TPOT consume.
-    """
+    """Deterministic survival-quantile cohort (forward; same source ``sched_hat`` uses)."""
     c = max(1, int(round(float(concurrency))))
     survival = forward_survival(PROFILE_DIST[profile]) if profile in PROFILE_DIST else None
 
-    # Per-turn-index workload lookup (cached/new/output aggregates).
     spec_by_idx: dict[int, TurnSpec] = {}
     max_turn_idx = 0
     for t in turns:
@@ -219,8 +192,6 @@ def _build_cohort(
     def spec_for(idx: int) -> TurnSpec:
         if idx in spec_by_idx:
             return spec_by_idx[idx]
-        # Fall back to the nearest available lower turn_index (then any) so a session
-        # that the survival curve carries past the measured turns still has a workload.
         lower = [i for i in spec_by_idx if i <= idx]
         if lower:
             return spec_by_idx[max(lower)]
@@ -230,49 +201,63 @@ def _build_cohort(
     for k in range(c):
         q = (k + 0.5) / c
         if survival:
-            tc = _draw_turn_count(survival, q)
-            # Cap at the number of turn slots actually present in this cell so we never
-            # invent turns past the measured workload.
-            tc = min(tc, n_turn_slots) if n_turn_slots > 0 else tc
+            tc = min(_draw_turn_count(survival, q), n_turn_slots) if n_turn_slots > 0 else _draw_turn_count(survival, q)
         else:
-            # Unknown profile: no survival drain — every session runs all turn slots.
             tc = n_turn_slots if n_turn_slots > 0 else 1
         tc = max(1, tc)
-        session_turns = [spec_for(i) for i in range(tc)]
-        sessions.append(Session(session_id=k, turn_count=tc, turns=session_turns))
+        sessions.append(Session(session_id=k, turn_count=tc, turns=[spec_for(i) for i in range(tc)]))
     return sessions
 
 
 # ------------------------------------------------------------------- the sim core
 
 
-def _blocks_for(state: _ServerState, ctx_plus_output: float) -> int:
-    return max(1, state.pool.tokens_to_blocks(int(math.ceil(ctx_plus_output))))
-
-
 def _running_ctx_mean(state: _ServerState) -> float:
-    """Mean resident context of the running (decoding) batch — the single ctx the
-    decode kernel grid is priced at (kernel_tpot's ctx_mid convention)."""
     if not state.running:
         return 1.0
-    return statistics.fmean(r.ctx for r in state.running.values())
+    return statistics.fmean(r.kv_tokens for r in state.running.values())
+
+
+def _ensure_free(state: _ServerState, need_blocks: int, protect_sid: int) -> bool:
+    """Make ``need_blocks`` free by evicting KV **block-granularly** (vLLM LRU): trim the
+    TAIL blocks of least-recently-active resident, non-in-flight sessions, keeping their
+    shared PREFIX resident. A partially-trimmed session stays resident with a shorter
+    ``held_tokens`` → its next turn is a partial cache hit (re-prefill only the evicted
+    tail), not a full miss. Returns True once enough is free, False if no victims remain."""
+    if need_blocks <= 0:
+        return True
+    bsz = state.pool.block_size
+    while state.pool.get_num_free_blocks() < need_blocks:
+        victim: Session | None = None
+        for s in state.sessions:
+            if s.resident and not s.inflight and s.session_id != protect_sid:
+                if state.pool.num_blocks_owned(s.session_id) <= 0:
+                    continue
+                if victim is None or s.last_seq < victim.last_seq:
+                    victim = s
+        if victim is None:
+            return state.pool.get_num_free_blocks() >= need_blocks
+        deficit = need_blocks - state.pool.get_num_free_blocks()
+        owned = state.pool.num_blocks_owned(victim.session_id)
+        freed = state.pool.free_partial(victim.session_id, min(owned, deficit))
+        remaining = owned - freed
+        if remaining > 0:
+            victim.held_tokens = float(remaining * bsz)  # surviving prefix stays resident
+        else:
+            victim.resident = False
+            victim.held_tokens = 0.0
+        state.evictions += 1
+    return True
 
 
 def _schedule(state: _ServerState) -> None:
-    """FIFO admission: greedily admit head-of-queue waiting reqs while capacity allows.
-
-    Gates (all physical / runtime config):
-      (a) |running| + |prefilling| < MAX_NUM_SEQS          (freeWorkers pool)
-      (b) pool.allocate(rid, blocks) succeeds              (KV admission, 27250 blocks)
-      (c) the step prefill token budget has room           (8192 - decode-slot tokens)
-
-    On the first gate failure (FIFO head-of-line blocking) we stop — that is where the
-    queue backlog, hence the TTFT ramp, emerges.
-    """
-    # Token budget left for prefill this step: 8192 minus 1 token per decode slot.
+    """FIFO admission. The hit/miss decision is made HERE (residency at admission time): a
+    session still holding its KV is a HIT (prefill new only); an evicted session is a MISS
+    (re-prefill its full cached+new context). Allocate the per-session block delta, evicting
+    LRU resident sessions if the pool is full; stop on the first unservable head (HOL block —
+    where the backlog, hence the TTFT climb, emerges)."""
     decode_slots = len(state.running)
     budget = MAX_NUM_BATCHED_TOKENS - decode_slots
-    # Already-committed prefill chunks (this scheduling pass) consume the budget too.
     for r in state.prefilling.values():
         budget -= min(r.remaining_prefill, MAX_NUM_BATCHED_TOKENS)
     while state.waiting:
@@ -281,32 +266,50 @@ def _schedule(state: _ServerState) -> None:
         if budget <= 0:
             return
         head = state.waiting[0]
-        if not state.pool.allocate(head.rid, head.blocks):
-            return  # KV head-of-line block
+        sid = head.session_id
+        sess = state.sessions[sid]
+        # Partial-prefix hit (block-granular): the session's resident KV covers
+        # ``held_tokens`` of this turn's cached prefix; only the EVICTED tail
+        # (cached - held_tokens) must be re-prefilled, plus the new tokens. Full hit when
+        # held_tokens >= cached (re-prefill new only); full miss when fully evicted.
+        resident_prefix = min(head.cached, sess.held_tokens if sess.resident else 0.0)
+        reprefill_cached = max(0.0, head.cached - resident_prefix)
+        head.is_miss = reprefill_cached > 0.0
+        head.remaining_prefill = reprefill_cached + head.new_prefill
+        # The turn occupies blocks for its full resident context (cached+new == kv_tokens).
+        target_blocks = state.pool.tokens_to_blocks(int(math.ceil(head.kv_tokens)))
+        delta = target_blocks - state.pool.num_blocks_owned(sid)
+        if delta > 0:
+            if not _ensure_free(state, delta, protect_sid=sid):
+                return  # can't free enough KV -> head-of-line block
+            if not state.pool.allocate(sid, delta):
+                return
         state.waiting.pop(0)
-        head.remaining_prefill = head.new_prefill
+        sess.resident = True
+        sess.inflight = True
+        sess.held_tokens = head.kv_tokens
+        sess.last_seq = state.seq
+        state.seq += 1
         state.prefilling[head.rid] = head
-        budget -= min(head.new_prefill, MAX_NUM_BATCHED_TOKENS)
+        budget -= min(head.remaining_prefill, MAX_NUM_BATCHED_TOKENS)
 
 
 def _on_arrival(state: _ServerState, session_id: int, turn_index: int) -> None:
     sess = state.sessions[session_id]
     spec = sess.turns[turn_index]
-    rid = _encode_rid(session_id, turn_index)
-    ctx = spec.cached_context_tokens + spec.new_prefill_tokens
-    blocks = _blocks_for(state, ctx + spec.output_tokens)
+    cached = spec.cached_context_tokens
+    new = spec.new_prefill_tokens
     req = _Req(
-        rid=rid,
+        rid=_encode_rid(session_id, turn_index),
         session_id=session_id,
         turn_index=turn_index,
         arrival_epoch=state.clock,
-        cached=spec.cached_context_tokens,
-        new_prefill=spec.new_prefill_tokens,
+        cached=cached,
+        new_prefill=new,
         output=spec.output_tokens,
-        blocks=blocks,
-        remaining_prefill=spec.new_prefill_tokens,
+        remaining_prefill=new,  # provisional; _schedule sets hit/miss at admission
         output_left=max(1, int(round(spec.output_tokens))),
-        ctx=ctx,
+        kv_tokens=cached + new,
     )
     state.waiting.append(req)
     state.results[(session_id, turn_index)] = {"arrival_epoch": state.clock}
@@ -315,8 +318,6 @@ def _on_arrival(state: _ServerState, session_id: int, turn_index: int) -> None:
 
 
 def _ensure_step(state: _ServerState) -> None:
-    """Schedule the next engine STEP at the current clock if engine work exists and no
-    step is already pending."""
     if state.step_scheduled:
         return
     if state.running or state.prefilling:
@@ -325,32 +326,13 @@ def _ensure_step(state: _ServerState) -> None:
 
 
 def _price_step(state: _ServerState) -> float:
-    """Wall-time of one mixed prefill+decode step from measured kernels.
-
-    The prefilling reqs share ONE fused prefill forward pass per step (vLLM batches all
-    scheduled prefill chunks into a single kernel launch over up to the per-step token
-    budget — it is NOT one kernel call per request). So the step's prefill cost is the
-    measured ``cached_prefill_step_ms`` priced ONCE at the total scheduled prefill
-    tokens this step (capped at the leftover budget) against the cohort-mean prefix:
-
-        decode_ms  = decode_step_ms(|running|, mean_running_ctx)        (measured grid)
-        prefill_ms = cached_prefill_step_ms(total_chunk_tokens, mean_prefix)
-        step_ms    = max(decode_ms, prefill_ms) + scheduler_overhead_ms_per_step
-
-    Prefill intrudes into the same step as decode (continuous batching), so the step is
-    the max of the two services plus one scheduler-overhead anchor (5.7 ms, single
-    anchor from RooflineParams — not a fit). Each prefilling req's per-step chunk is its
-    fair share of the leftover budget; the chunks are stashed on the reqs for the
-    bookkeeping pass.
-    """
+    """One mixed prefill+decode step from measured kernels: ``max(decode_ms, prefill_ms) +
+    scheduler_overhead``. Prefilling reqs share ONE fused pass over the per-step token budget."""
     p = state.params
     decode_batch = len(state.running)
-    decode_ms = 0.0
-    if decode_batch > 0:
-        decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p)
+    decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p) if decode_batch > 0 else 0.0
 
     prefill_ms = 0.0
-    # Per-step prefill token budget left after decode slots claim 1 token each.
     budget = max(0, MAX_NUM_BATCHED_TOKENS - decode_batch)
     n_pref = len(state.prefilling)
     if n_pref > 0 and budget > 0:
@@ -358,13 +340,10 @@ def _price_step(state: _ServerState) -> float:
         total_chunk = 0.0
         prefixes: list[float] = []
         for r in state.prefilling.values():
-            chunk = min(r.remaining_prefill, float(share))
-            chunk = max(1.0, chunk)
+            chunk = max(1.0, min(r.remaining_prefill, float(share)))
             r._chunk = chunk  # type: ignore[attr-defined]
             total_chunk += chunk
             prefixes.append(max(1.0, r.cached))
-        # One fused prefill pass over the total scheduled chunk tokens (capped at the
-        # budget), priced at the cohort-mean cached prefix.
         total_chunk = min(total_chunk, float(MAX_NUM_BATCHED_TOKENS))
         mean_prefix = statistics.fmean(prefixes) if prefixes else 1.0
         prefill_ms = _prefill_pass_ms(total_chunk, mean_prefix, p)
@@ -386,27 +365,36 @@ def _on_step(state: _ServerState) -> None:
     # --- prefill bookkeeping: decrement chunks, emit FIRST_TOKEN on completion ---
     finished_prefill: list[int] = []
     for rid, r in state.prefilling.items():
-        chunk = getattr(r, "_chunk", 0.0)
-        r.remaining_prefill -= chunk
+        r.remaining_prefill -= getattr(r, "_chunk", 0.0)
         if r.remaining_prefill <= 0:
             finished_prefill.append(rid)
     for rid in finished_prefill:
         state.push(state.clock, _FIRST_TOKEN, rid)
 
-    # --- decode bookkeeping: one token per running req per step ---
+    # --- decode bookkeeping: one token per running req; the SESSION's KV grows by one token,
+    #     allocating a fresh block at block boundaries (evicting LRU resident sessions if the
+    #     pool is full). ---
     finished_decode: list[int] = []
-    for rid, r in state.running.items():
+    for rid in list(state.running.keys()):
+        r = state.running.get(rid)
+        if r is None:
+            continue
+        r.kv_tokens += 1.0
+        sess = state.sessions[r.session_id]
+        sess.held_tokens = r.kv_tokens
+        need = state.pool.tokens_to_blocks(int(math.ceil(r.kv_tokens)))
+        grow = need - state.pool.num_blocks_owned(r.session_id)
+        if grow > 0 and _ensure_free(state, grow, protect_sid=r.session_id):
+            state.pool.allocate(r.session_id, grow)
         r.output_left -= 1
         if r.output_left <= 0:
             finished_decode.append(rid)
     for rid in finished_decode:
-        r = state.running[rid]
-        state.push(state.clock, _DEPART, (r.session_id, r.turn_index))
+        r = state.running.get(rid)
+        if r is not None:
+            state.push(state.clock, _DEPART, (r.session_id, r.turn_index))
 
-    # Newly-freed token budget / slots may admit waiting FIFO head.
     _schedule(state)
-
-    # Self-reschedule while engine has work.
     if state.running or state.prefilling:
         state.push(state.clock, _STEP, None)
         state.step_scheduled = True
@@ -416,9 +404,10 @@ def _on_first_token(state: _ServerState, rid: int) -> None:
     r = state.prefilling.pop(rid, None)
     if r is None:
         return
-    key = (r.session_id, r.turn_index)
-    state.results[key]["first_token_epoch"] = state.clock
-    # Move to running (holds a decode slot for output_left steps).
+    # Every turn records its first token on prefill completion. For a MISS turn this is
+    # AFTER re-prefilling the full context, so its (higher) TTFT correctly reflects the
+    # recompute cost — that is the climb.
+    state.results[(r.session_id, r.turn_index)]["first_token_epoch"] = state.clock
     state.running[rid] = r
     _ensure_step(state)
 
@@ -426,33 +415,37 @@ def _on_first_token(state: _ServerState, rid: int) -> None:
 def _on_depart(state: _ServerState, session_id: int, turn_index: int) -> None:
     rid = _encode_rid(session_id, turn_index)
     r = state.running.pop(rid, None)
+    sess = state.sessions[session_id]
+    sess.inflight = False
+    sess.last_seq = state.seq  # recently active -> last to be evicted (LRU)
+    state.seq += 1
     if r is not None:
-        state.pool.free_request(rid)
-        # Edge case: a 1-token output can DEPART the same step it FIRST_TOKENs; if it
-        # never got a first_token_epoch (still prefilling), close it out here.
-    key = (session_id, turn_index)
-    rec = state.results.get(key)
+        sess.held_tokens = r.kv_tokens  # session KEEPS its grown KV (resident) for the next turn
+
+    rec = state.results.get((session_id, turn_index))
     if rec is not None:
         rec["completion_epoch"] = state.clock
         rec.setdefault("first_token_epoch", state.clock)
 
-    # Closed loop: next turn arrives at this completion epoch (think-time == 0).
-    sess = state.sessions[session_id]
     sess.next_turn_idx = max(sess.next_turn_idx, turn_index + 1)
     if sess.next_turn_idx < sess.turn_count:
-        nxt = sess.next_turn_idx
-        state.push(state.clock, _ARRIVAL, (session_id, nxt))
+        # Closed loop: next turn arrives now (think-time == 0). Session stays resident (holds
+        # KV) but is now evictable until that turn is admitted.
+        state.push(state.clock, _ARRIVAL, (session_id, sess.next_turn_idx))
+    else:
+        # Session finished -> free its KV.
+        state.pool.free_request(session_id)
+        sess.resident = False
+        sess.held_tokens = 0.0
     _ensure_step(state)
 
 
 def _run_sim(
     sessions: list[Session], params: RooflineParams, max_events: int
 ) -> dict[tuple[int, int], float]:
-    """Run the forward closed loop. Returns {(session_id, turn_index): TTFT_ms}."""
     pool = BlockPool(params.available_kv_blocks, params.cache_block_size)
     state = _ServerState(params=params, pool=pool, sessions=sessions)
 
-    # Seed: all sessions' turn 0 arrive at epoch 0 (cohort dispatch t0).
     for s in sessions:
         state.push(0.0, _ARRIVAL, (s.session_id, 0))
 
@@ -484,32 +477,22 @@ def _aggregate(
     concurrency: float,
     params: RooflineParams,
 ) -> list[float]:
-    """Group emergent (session, turn) TTFTs by turn_index -> MEDIAN, aligned to the
-    input ``turns`` order. A turn_index reached by no simulated session falls back to
-    the forward static predictor (predict_turn_ttft) so the list always matches
-    ``turns`` length."""
     by_idx: dict[int, list[float]] = {}
     for (_sid, ti), v in ttfts.items():
         if v > 0:
             by_idx.setdefault(ti, []).append(v)
-
-    # Forward fallback inputs (kernel TPOT for the oversubscription backlog term).
     out: list[float] = []
     for t in turns:
         ti = int(t.get("turn_index", 0))
         vals = by_idx.get(ti)
-        if vals:
-            out.append(statistics.median(vals))
-        else:
-            out.append(_fallback_ttft(t, profile, concurrency, params))
+        out.append(statistics.median(vals) if vals else _fallback_ttft(t, profile, concurrency, params))
     return out
 
 
 def _fallback_ttft(
     turn: dict[str, Any], profile: str, concurrency: float, params: RooflineParams
 ) -> float:
-    """Forward static-formula fallback for a turn no session reached (keeps the list
-    length aligned). Uses the kernel-TPOT amplifier for its backlog term."""
+    """Forward static-formula fallback for a turn no session reached (keeps list length)."""
     from simulator.ramp_tpot import sched_hat
 
     ti = int(turn.get("turn_index", 0))
@@ -517,9 +500,7 @@ def _fallback_ttft(
     new = float(turn.get("new_prefill_tokens") or 0.0)
     out = float(turn.get("output_tokens") or 1.0)
     sched = sched_hat(profile, float(concurrency), ti) if profile in PROFILE_DIST else float(concurrency)
-    tpot = predict_cell_tpot(
-        [KernelTurnInput(cached, new, out, sched)], params
-    )[0]
+    tpot = predict_cell_tpot([KernelTurnInput(cached, new, out, sched)], params)[0]
     return predict_turn_ttft(cached, new, out, sched, tpot, params)
 
 
@@ -529,10 +510,8 @@ def _fallback_ttft(
 def _build_cohort_oracle(
     turns: list[dict[str, Any]], profile: str, concurrency: float
 ) -> list[Session] | None:
-    """Validation-only: overlay measured session_timelines (arrival/completion offsets)
-    to build the cohort from the measured per-session turn lists rather than the
-    survival quantile. Off the forward path — used only when oracle=True. Returns None
-    if the measured timelines are unavailable (sim falls back to the forward cohort)."""
+    """Validation-only: build the cohort from measured session_timelines (per-session turn
+    lists) instead of the survival quantile. Off the forward path; None if unavailable."""
     try:
         from pathlib import Path
 
@@ -550,8 +529,7 @@ def _build_cohort_oracle(
         timelines = collect_session_timelines(bench_root)
     except Exception:
         return None
-    slug = f"{profile}__{int(round(float(concurrency)))}"
-    cell = timelines.get(slug)
+    cell = timelines.get(f"{profile}__{int(round(float(concurrency)))}")
     if not cell or not cell.get("sessions"):
         return None
     sessions: list[Session] = []
@@ -565,11 +543,8 @@ def _build_cohort_oracle(
             )
             for tt in sess_turns
         ]
-        if not specs:
-            continue
-        sessions.append(
-            Session(session_id=sid, turn_count=len(specs), turns=specs)
-        )
+        if specs:
+            sessions.append(Session(session_id=sid, turn_count=len(specs), turns=specs))
     return sessions or None
 
 
@@ -583,21 +558,15 @@ def predict_cell_ttft_qsim(
     params: RooflineParams | None = None,
     *,
     oracle: bool = False,
-    max_events: int = 2_000_000,
+    max_events: int = 4_000_000,
 ) -> list[float]:
     """Per-turn TTFT (ms) for a (profile, concurrency) cell, emergent from a forward
-    closed-loop event-driven queue sim.
+    closed-loop event-driven queue sim with session-persistent KV + RECOMPUTE eviction.
 
-    Returns one TTFT per input turn, aligned to ``turns`` order by turn_index (median
-    over all sessions reaching that turn_index), mirroring
-    ``simulator/ttft_predict.py::predict_cell_ttft``. Returns ``[]`` for empty turns;
-    a turn_index reached by no simulated session yields a forward fallback
-    (``predict_turn_ttft``) so the list length always matches ``turns``.
-
-    Forward by default (cohort + turn-counts from ``forward_survival``; the resident
-    cohort is EMERGENT, never the measured ``scheduled_requests``). ``oracle=True``
-    overlays measured ``session_timelines`` for validation only (off the forward path).
-    """
+    Returns one TTFT per input turn (median over sessions reaching that turn_index), aligned
+    to ``turns`` order; ``[]`` for empty; a turn_index reached by no session falls back to the
+    forward static predictor. Forward by default (cohort from ``forward_survival``);
+    ``oracle=True`` overlays measured ``session_timelines`` (validation only)."""
     if not turns:
         return []
     p = params or RooflineParams()
@@ -620,11 +589,8 @@ def predict_cell_e2el_qsim(
     tpot_preds: list[float] | None = None,
     params: RooflineParams | None = None,
 ) -> list[float]:
-    """E2EL composition: ``e2el_qsim[t] = ttft_qsim[t] + output_tokens[t] * tpot[t]``.
-
-    ``tpot`` defaults to the kernel TPOT (``tpot_pred_kernel``) the emitter passes — no
-    re-fit, byte-identical composition with the existing ``e2el_pred`` line.
-    """
+    """E2EL composition: ``e2el_qsim[t] = ttft_qsim[t] + output_tokens[t] * tpot[t]`` (tpot
+    defaults to the kernel TPOT the emitter passes — byte-identical to the ``e2el_pred`` line)."""
     if not turns:
         return []
     p = params or RooflineParams()
@@ -641,6 +607,5 @@ def predict_cell_e2el_qsim(
         tpot_preds = predict_cell_tpot(inputs, p)
     out: list[float] = []
     for t, ttft, tpot in zip(turns, ttft_qsim, tpot_preds):
-        output = float(t.get("output_tokens") or 0.0)
-        out.append(float(ttft) + output * float(tpot))
+        out.append(float(ttft) + float(t.get("output_tokens") or 0.0) * float(tpot))
     return out
