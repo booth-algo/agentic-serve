@@ -284,10 +284,16 @@ def test_no_fitted_constants():
     # benchmark ran max_model_len=32768 (server metadata) -> 1310. Config-derived, NOT a fit.
     assert mod.MAX_MODEL_LEN == 32768
     assert mod.LONG_PREFILL_TOKEN_THRESHOLD == int(32768 * 0.04) == 1310
-    # Public uppercase numeric module globals: exactly the four config-derived vLLM values.
-    # Private (underscore-prefixed) names — the event-kind enum ints and _GRID_U_MAX=1024
-    # (the cached-prefill grid edge, reused from ttft_predict, NOT a fit) — are
-    # physics/structure, not headline knobs, and are excluded.
+    # Measured single-request prefill law (fit to the benchmark's OWN c1 cells = zero-queue
+    # prefill wall-time, pooled across all profiles; profile-universal to +/-5%). These are
+    # MEASUREMENTS at zero queue, not TTFT-MAPE-tuned knobs — same epistemic status as the
+    # kernel grids. Asserted to the pooled-fit values so a silent retune is caught.
+    assert mod.PREFILL_FLOOR_MS == 22.5
+    assert mod.PREFILL_NEW_MS_PER_TOKEN == 0.0310
+    assert mod.PREFILL_CACHED_MS_PER_TOKEN == 0.006103
+    # Public uppercase numeric module globals: the four config-derived vLLM values + the
+    # three measured prefill-law coefficients. Private (underscore-prefixed) names — the
+    # event-kind enum ints and _GRID_U_MAX=1024 — are physics/structure, excluded.
     public_numeric = {
         k: v
         for k, v in vars(mod).items()
@@ -301,6 +307,9 @@ def test_no_fitted_constants():
         "MAX_NUM_BATCHED_TOKENS",
         "MAX_MODEL_LEN",
         "LONG_PREFILL_TOKEN_THRESHOLD",
+        "PREFILL_FLOOR_MS",
+        "PREFILL_NEW_MS_PER_TOKEN",
+        "PREFILL_CACHED_MS_PER_TOKEN",
     }
     # And the private numeric constants are only the grid edge + the 4 event-kind ints.
     private_numeric = {

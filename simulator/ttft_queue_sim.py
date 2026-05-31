@@ -83,6 +83,24 @@ MAX_NUM_BATCHED_TOKENS = 8192  # vLLM H100 OPENAI_API_SERVER resolved default (p
 MAX_MODEL_LEN = 32768
 LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
 
+# --- MEASURED single-request prefill law (NOT a MAPE knob) -------------------
+# Fit to the benchmark's OWN c1 cells (concurrency=1 → zero queue → TTFT *is* the
+# single-request prefill wall-time), pooled across all four profiles:
+#   prefill_ms(new, cached) ≈ FLOOR + NEW·new + CACHED·cached
+# = 22.5 + 0.0310·new + 0.006103·cached   (MAPE 7.9% pooled; per-profile signed
+# bias swe +0.5% / term +2.7% / osworld +5.3% / chat −3.9% → ONE law fits all,
+# the signature of a physical per-token cost, not an overfit). Replaces the
+# cached-prefill GRID (which clamped cached P at 8192 and under-measured the
+# per-cached-token cost ~30-100×). FLOOR = per-request fixed overhead; NEW =
+# new-token GEMM (0.031 ms/tok); CACHED = per-cached-token cost (deep-research +
+# the decode grid show this is HOST work — tokenize + prefix-hash the re-sent
+# context, ~15× slower than the GPU KV-read — which OVERLAPS GPU at high
+# concurrency, so the per-request SUM below slightly over-counts the batched
+# regime; the exact partial-overlap needs a multi-request cached-prefill profile).
+PREFILL_FLOOR_MS = 22.5
+PREFILL_NEW_MS_PER_TOKEN = 0.0310
+PREFILL_CACHED_MS_PER_TOKEN = 0.006103
+
 # Event kinds; ordering is (epoch, seq, kind) — deterministic FIFO at equal epochs.
 _ARRIVAL = 0
 _STEP = 1
@@ -227,6 +245,8 @@ class _Req:
     output_left: int
     kv_tokens: float           # resident KV after this turn's prefill (cached+new), grows with decode
     is_miss: bool = False      # cache miss (session was evicted) -> re-prefilled full context
+    resident_prefix: float = 0.0  # cached tokens that are a HIT (attended, not re-prefilled); set at admission
+    prefill_total: float = 0.0    # total tokens to (re-)prefill this turn; set at admission (for chunk fraction)
 
 
 @dataclass
@@ -352,6 +372,8 @@ def _schedule(state: _ServerState) -> None:
         reprefill_cached = max(0.0, head.cached - resident_prefix)
         head.is_miss = reprefill_cached > 0.0
         head.remaining_prefill = reprefill_cached + head.new_prefill
+        head.resident_prefix = resident_prefix          # HIT prefix attended each prefill step
+        head.prefill_total = max(1.0, head.remaining_prefill)  # to spread the cached-attn cost across chunks
         target_blocks = cache.tokens_to_blocks(head.kv_tokens)
         # Reserve the full context, reclaiming the surviving prefix; evict only NON-herd cache
         # (``herd_pending`` is protected). If the delta can't be freed yet, DEFER this head and
@@ -396,21 +418,25 @@ def _ensure_step(state: _ServerState) -> None:
 
 
 def _price_step(state: _ServerState) -> float:
-    """One mixed prefill+decode step from measured kernels: ``max(decode_ms, prefill_ms) +
-    scheduler_overhead``. Prefilling reqs share ONE fused pass over the per-step token budget."""
+    """One mixed prefill+decode step. Decode = measured kernel. Prefill = the MEASURED
+    single-request prefill law (FLOOR + NEW·chunk + CACHED·resident_prefix), summed PER
+    REQUEST over the concurrently-prefilling reqs — each prefilling request independently
+    re-reads/attends its OWN resident KV, so the prefix-attention term is per-request, not a
+    mean-prefix collapse. This replaces the cached-prefill GRID (which clamped cached P at
+    8192 and under-measured the per-cached-token cost ~30-100x), and is what scales the
+    high-concurrency queue wait correctly for long contexts.
+
+    The CACHED·resident_prefix cost is charged ONCE per request, spread across its chunked
+    steps by the chunk fraction (chunk/prefill_total), so a multi-chunk re-prefill does not
+    pay it per chunk. The vLLM v1 chunked budget (decode-first, <= long_prefill_token_threshold
+    per req) still governs which reqs advance each step."""
     p = state.params
     decode_batch = len(state.running)
     decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p) if decode_batch > 0 else 0.0
 
-    # vLLM v1 consumes the per-step token budget GREEDILY in FIFO order (running/admission
-    # order), each prefill taking up to ``long_prefill_token_threshold`` tokens, until the
-    # budget is exhausted; later prefills stall this step (chunk 0). Decodes (1 token each)
-    # consume budget first. So several prefills advance concurrently by a bounded chunk —
-    # NOT one big re-prefill monopolizing the pass (which over-serialized and over-charged).
-    prefill_ms = 0.0
     budget = max(0, MAX_NUM_BATCHED_TOKENS - decode_batch)
-    total_chunk = 0.0
-    prefixes: list[float] = []
+    work_ms = 0.0
+    any_prefill = False
     for r in state.prefilling.values():  # dict insertion order == FIFO admission order
         chunk = min(r.remaining_prefill, float(LONG_PREFILL_TOKEN_THRESHOLD), float(budget))
         if chunk <= 0:
@@ -418,13 +444,14 @@ def _price_step(state: _ServerState) -> float:
             continue
         r._chunk = chunk  # type: ignore[attr-defined]
         budget -= chunk
-        total_chunk += chunk
-        prefixes.append(max(1.0, r.cached))
-    if total_chunk > 0:
-        mean_prefix = statistics.fmean(prefixes)
-        prefill_ms = _prefill_pass_ms(total_chunk, mean_prefix, p)
-
-    return max(decode_ms, prefill_ms) + p.scheduler_overhead_ms_per_step
+        any_prefill = True
+        frac = chunk / r.prefill_total if r.prefill_total > 0 else 1.0
+        work_ms += (
+            PREFILL_NEW_MS_PER_TOKEN * chunk
+            + PREFILL_CACHED_MS_PER_TOKEN * r.resident_prefix * frac
+        )
+    prefill_ms = (PREFILL_FLOOR_MS + work_ms) if any_prefill else 0.0
+    return max(decode_ms + p.scheduler_overhead_ms_per_step, prefill_ms)
 
 
 def _on_step(state: _ServerState) -> None:
