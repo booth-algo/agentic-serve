@@ -83,23 +83,27 @@ MAX_NUM_BATCHED_TOKENS = 8192  # vLLM H100 OPENAI_API_SERVER resolved default (p
 MAX_MODEL_LEN = 32768
 LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
 
-# --- MEASURED single-request prefill law (NOT a MAPE knob) -------------------
-# Fit to the benchmark's OWN c1 cells (concurrency=1 → zero queue → TTFT *is* the
-# single-request prefill wall-time), pooled across all four profiles:
-#   prefill_ms(new, cached) ≈ FLOOR + NEW·new + CACHED·cached
-# = 22.5 + 0.0310·new + 0.006103·cached   (MAPE 7.9% pooled; per-profile signed
-# bias swe +0.5% / term +2.7% / osworld +5.3% / chat −3.9% → ONE law fits all,
-# the signature of a physical per-token cost, not an overfit). Replaces the
-# cached-prefill GRID (which clamped cached P at 8192 and under-measured the
-# per-cached-token cost ~30-100×). FLOOR = per-request fixed overhead; NEW =
-# new-token GEMM (0.031 ms/tok); CACHED = per-cached-token cost (deep-research +
-# the decode grid show this is HOST work — tokenize + prefix-hash the re-sent
-# context, ~15× slower than the GPU KV-read — which OVERLAPS GPU at high
-# concurrency, so the per-request SUM below slightly over-counts the batched
-# regime; the exact partial-overlap needs a multi-request cached-prefill profile).
+# --- MEASURED prefill law (NOT a MAPE knob) ----------------------------------
+# Single-request rate, fit to the benchmark's OWN c1 cells (concurrency=1 → zero
+# queue → TTFT *is* the single-request prefill wall-time), pooled across all four
+# profiles:  prefill_ms(new, cached) ≈ 22.5 + 0.0310·new + 0.006103·cached
+# (MAPE 7.9% pooled; per-profile bias ±5% → ONE law fits all = physical, not an
+# overfit). Replaces the cached-prefill GRID (clamped cached P at 8192).
+#
+# BATCH SPLIT of the cached rate, measured by a multi-request cached-prefill
+# profile on this H100 (profiling/results/cached_prefill_batch_ttft_H100.csv:
+# serving TTFT of B concurrent cache-HIT prefills at context P, no eviction):
+# TTFT(16,P)/TTFT(1,P) ≈ 6.6-7.5 (NOT 16 = sum, NOT 1 = overlap). A B·P fit splits
+# the 6.103 ms/1k cached cost into a per-STEP SHARED part (~57%, launch/host
+# overhead amortized across the batch — paid once on the mean prefix) and a
+# per-REQUEST part (~43%, each request gathers its own KV — summed). The two
+# sum to the c1 single-request rate, so single-request accuracy is preserved AND
+# the batched regime is no longer over-counted.
 PREFILL_FLOOR_MS = 22.5
 PREFILL_NEW_MS_PER_TOKEN = 0.0310
-PREFILL_CACHED_MS_PER_TOKEN = 0.006103
+PREFILL_CACHED_MS_PER_TOKEN = 0.006103          # c1 single-request total (= SHARED + PERREQ)
+PREFILL_CACHED_SHARED_MS_PER_TOKEN = 0.003485   # 0.571 × total — once per step (mean prefix)
+PREFILL_CACHED_PERREQ_MS_PER_TOKEN = 0.002618   # 0.429 × total — per prefilling request (summed)
 
 # Event kinds; ordering is (epoch, seq, kind) — deterministic FIFO at equal epochs.
 _ARRIVAL = 0
@@ -435,7 +439,9 @@ def _price_step(state: _ServerState) -> float:
     decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p) if decode_batch > 0 else 0.0
 
     budget = max(0, MAX_NUM_BATCHED_TOKENS - decode_batch)
-    work_ms = 0.0
+    work_ms = 0.0           # NEW-token GEMM + PER-REQUEST cached (summed over concurrent prefills)
+    prefix_w_sum = 0.0      # frac-weighted resident prefix, for the per-step SHARED cached term
+    prefix_w_n = 0
     any_prefill = False
     for r in state.prefilling.values():  # dict insertion order == FIFO admission order
         chunk = min(r.remaining_prefill, float(LONG_PREFILL_TOKEN_THRESHOLD), float(budget))
@@ -448,9 +454,17 @@ def _price_step(state: _ServerState) -> float:
         frac = chunk / r.prefill_total if r.prefill_total > 0 else 1.0
         work_ms += (
             PREFILL_NEW_MS_PER_TOKEN * chunk
-            + PREFILL_CACHED_MS_PER_TOKEN * r.resident_prefix * frac
+            + PREFILL_CACHED_PERREQ_MS_PER_TOKEN * r.resident_prefix * frac
         )
-    prefill_ms = (PREFILL_FLOOR_MS + work_ms) if any_prefill else 0.0
+        prefix_w_sum += r.resident_prefix * frac
+        prefix_w_n += 1
+    if any_prefill:
+        # SHARED cached cost: paid ONCE per step (amortized across the batch), on the mean
+        # resident prefix — the measured batch-amortization (per-req SUM alone over-counts ~2x).
+        mean_prefix = prefix_w_sum / prefix_w_n if prefix_w_n else 0.0
+        prefill_ms = PREFILL_FLOOR_MS + PREFILL_CACHED_SHARED_MS_PER_TOKEN * mean_prefix + work_ms
+    else:
+        prefill_ms = 0.0
     return max(decode_ms + p.scheduler_overhead_ms_per_step, prefill_ms)
 
 

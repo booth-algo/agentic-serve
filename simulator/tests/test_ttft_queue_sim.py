@@ -291,6 +291,11 @@ def test_no_fitted_constants():
     assert mod.PREFILL_FLOOR_MS == 22.5
     assert mod.PREFILL_NEW_MS_PER_TOKEN == 0.0310
     assert mod.PREFILL_CACHED_MS_PER_TOKEN == 0.006103
+    # Batch split of the cached rate (measured: cached_prefill_batch_ttft_H100.csv); sums to total.
+    assert mod.PREFILL_CACHED_SHARED_MS_PER_TOKEN == 0.003485
+    assert mod.PREFILL_CACHED_PERREQ_MS_PER_TOKEN == 0.002618
+    assert abs((mod.PREFILL_CACHED_SHARED_MS_PER_TOKEN + mod.PREFILL_CACHED_PERREQ_MS_PER_TOKEN)
+               - mod.PREFILL_CACHED_MS_PER_TOKEN) < 1e-9
     # Public uppercase numeric module globals: the four config-derived vLLM values + the
     # three measured prefill-law coefficients. Private (underscore-prefixed) names — the
     # event-kind enum ints and _GRID_U_MAX=1024 — are physics/structure, excluded.
@@ -310,6 +315,8 @@ def test_no_fitted_constants():
         "PREFILL_FLOOR_MS",
         "PREFILL_NEW_MS_PER_TOKEN",
         "PREFILL_CACHED_MS_PER_TOKEN",
+        "PREFILL_CACHED_SHARED_MS_PER_TOKEN",
+        "PREFILL_CACHED_PERREQ_MS_PER_TOKEN",
     }
     # And the private numeric constants are only the grid edge + the 4 event-kind ints.
     private_numeric = {
