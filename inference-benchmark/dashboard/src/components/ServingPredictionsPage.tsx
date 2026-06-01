@@ -392,6 +392,7 @@ export function ServingPredictionsPage({
   const [servingIndex, setServingIndex] = useState<ServingIndex | null>(null);
   const [fixedTpotFit, setFixedTpotFit] = useState<FixedTpotFitData | null>(null);
   const [gpu, setGpu] = useState('H100');
+  const [model, setModel] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -418,8 +419,29 @@ export function ServingPredictionsPage({
   }, []);
 
   const scopeIndex = servingIndex?.[dataScope];
-  const gpuOptions = scopeIndex?.gpuOptions ?? EMPTY_GPU_OPTIONS;
-  const selectedGpu = focus?.gpu ?? gpu;
+  // The simulator page self-selects model + GPU via dropdowns (no fixed focus prop).
+  const selectorMode = pageKind === 'simulator' && !focus;
+
+  // Model options = distinct models across every GPU config in the scope.
+  const modelOptions = useMemo(() => {
+    if (!scopeIndex) return EMPTY_GPU_OPTIONS;
+    const models = new Set<string>();
+    for (const gpuRows of Object.values(scopeIndex.rowsByGpu)) {
+      for (const row of gpuRows) if (row.model) models.add(row.model);
+    }
+    return Array.from(models).sort();
+  }, [scopeIndex]);
+  const selectedModel = focus?.model ?? (modelOptions.includes(model) ? model : (modelOptions[0] ?? ''));
+
+  // GPU options — restricted to those that actually have rows for the selected model
+  // (the "GPU given model" dropdown); otherwise every GPU config in the scope.
+  const gpuOptions = useMemo(() => {
+    if (!scopeIndex) return EMPTY_GPU_OPTIONS;
+    if (!selectorMode) return scopeIndex.gpuOptions;
+    return scopeIndex.gpuOptions.filter(g =>
+      (scopeIndex.rowsByGpu[g] ?? []).some(row => row.model === selectedModel));
+  }, [scopeIndex, selectorMode, selectedModel]);
+  const selectedGpu = focus?.gpu ?? (gpuOptions.includes(gpu) ? gpu : (gpuOptions[0] ?? gpu));
 
   useEffect(() => {
     if (focus?.gpu) return;
@@ -427,14 +449,22 @@ export function ServingPredictionsPage({
     setGpu(current => gpuOptions.includes(current) ? current : gpuOptions[0]);
   }, [focus?.gpu, gpuOptions]);
 
-  const rows = useMemo(
-    () => applyServingFocus(scopeIndex?.rowsByGpu[selectedGpu] ?? [], focus),
-    [scopeIndex, selectedGpu, focus],
-  );
+  const rows = useMemo(() => {
+    const base = scopeIndex?.rowsByGpu[selectedGpu] ?? [];
+    if (focus) return applyServingFocus(base, focus);
+    if (selectorMode) return base.filter(row => row.model === selectedModel);
+    return base;
+  }, [scopeIndex, selectedGpu, focus, selectorMode, selectedModel]);
+  // In selector mode, keep the table's focused single-config view via a synthesized focus.
+  const tableFocus: ServingFocus | undefined = selectorMode && selectedModel
+    ? { gpu: selectedGpu, model: selectedModel, title: 'Simulator', description: '' }
+    : focus;
   const showFixedTpotFit = fixedTpotFit
     && fixedTpotFit.experiment.gpu === selectedGpu
     && fixedTpotFit.experiment.dashboard_scope === dataScope
-    && (!focus || focus.model === fixedTpotFit.experiment.model);
+    && (focus
+      ? focus.model === fixedTpotFit.experiment.model
+      : (!selectorMode || selectedModel === fixedTpotFit.experiment.model));
   const fixedTpotOnly = Boolean(showFixedTpotFit && pageKind === 'simulator');
   const tableSourceRows = useMemo(
     () => fixedTpotOnly ? rows.filter(row => !isSingleTurnServingRow(row)) : rows,
@@ -453,30 +483,46 @@ export function ServingPredictionsPage({
 
   return (
     <div className="space-y-4">
-      <div className="border-b border-[#21262d] pb-4">
-        <div>
-          <h2 className="text-lg font-semibold text-[#e6edf3]">{focus?.title ?? 'Predictions'}</h2>
-          <p className="mt-1 max-w-3xl text-xs text-[#8b949e]">
-            {focus?.description ?? `High-concurrency predictions vs measured benchmark results from ${DATA_SCOPE_META[dataScope].label.toLowerCase()}.`}
-            Multi-turn TTFT reflects cache-aware serving behavior, not cumulative full-prefill latency.
-          </p>
-        </div>
-      </div>
-
-      {focus ? (
-        <ServingFocusSummary
-          rows={rows}
-          focus={focus}
-          dataScope={dataScope}
-          fixedTpotFit={fixedTpotOnly && fixedTpotFit ? fixedTpotFit : undefined}
-          pageKind={pageKind}
+      {selectorMode ? (
+        <SimulatorTargetBar
+          modelOptions={modelOptions}
+          selectedModel={selectedModel}
+          onModel={setModel}
+          gpuOptions={gpuOptions}
+          selectedGpu={selectedGpu}
+          onGpu={setGpu}
+          ttftMape={meanMetricError(rows, 'ttft_err')}
+          tpotMape={meanMetricError(rows, 'tpot_err')}
+          e2elMape={meanMetricError(rows, 'e2el_err')}
         />
       ) : (
-        <GpuConfigSelector
-          scopeIndex={scopeIndex}
-          selectedGpu={gpu}
-          onSelect={setGpu}
-        />
+        <>
+          <div className="border-b border-[#21262d] pb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-[#e6edf3]">{focus?.title ?? 'Predictions'}</h2>
+              <p className="mt-1 max-w-3xl text-xs text-[#8b949e]">
+                {focus?.description ?? `High-concurrency predictions vs measured benchmark results from ${DATA_SCOPE_META[dataScope].label.toLowerCase()}.`}
+                Multi-turn TTFT reflects cache-aware serving behavior, not cumulative full-prefill latency.
+              </p>
+            </div>
+          </div>
+
+          {focus ? (
+            <ServingFocusSummary
+              rows={rows}
+              focus={focus}
+              dataScope={dataScope}
+              fixedTpotFit={fixedTpotOnly && fixedTpotFit ? fixedTpotFit : undefined}
+              pageKind={pageKind}
+            />
+          ) : (
+            <GpuConfigSelector
+              scopeIndex={scopeIndex}
+              selectedGpu={gpu}
+              onSelect={setGpu}
+            />
+          )}
+        </>
       )}
 
       <ServingTable
@@ -484,7 +530,7 @@ export function ServingPredictionsPage({
         summaryRows={tableSummaryRows}
         summaryRowCount={tableSummaryRowCount}
         dataScope={dataScope}
-        focus={focus}
+        focus={tableFocus}
         tpotOnly={fixedTpotOnly}
         validationRows={useFixedTpotRows}
       />
@@ -625,6 +671,73 @@ function FocusStat({ label, value }: { label: string; value: string }) {
       <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6e7681]">{label}</div>
       <div className="mt-0.5 font-mono text-[#c9d1d9]">{value}</div>
     </div>
+  );
+}
+
+function LabeledSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-[#6e7681]">{label}</span>
+      <select
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        disabled={options.length <= 1}
+        className="min-w-[150px] rounded border border-[#30363d] bg-[#0d1117] px-2 py-1 font-mono text-sm text-[#e6edf3] outline-none focus:border-[#58a6ff] disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {options.length === 0 && <option value="">—</option>}
+        {options.map(option => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function SimulatorTargetBar({
+  modelOptions,
+  selectedModel,
+  onModel,
+  gpuOptions,
+  selectedGpu,
+  onGpu,
+  ttftMape,
+  tpotMape,
+  e2elMape,
+}: {
+  modelOptions: string[];
+  selectedModel: string;
+  onModel: (model: string) => void;
+  gpuOptions: string[];
+  selectedGpu: string;
+  onGpu: (gpu: string) => void;
+  ttftMape: OptionalMetric;
+  tpotMape: OptionalMetric;
+  e2elMape: OptionalMetric;
+}) {
+  return (
+    <section className="rounded-md border border-[#21262d] bg-[#161b22] px-4 py-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-wrap items-end gap-3">
+          <LabeledSelect label="Model" value={selectedModel} options={modelOptions} onChange={onModel} />
+          <LabeledSelect label="GPU" value={selectedGpu} options={gpuOptions} onChange={onGpu} />
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <MetricBadge label="TTFT MAPE" value={ttftMape} />
+          <MetricBadge label="TPOT MAPE" value={tpotMape} />
+          <MetricBadge label="E2EL MAPE" value={e2elMape} />
+        </div>
+      </div>
+    </section>
   );
 }
 

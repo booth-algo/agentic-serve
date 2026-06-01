@@ -187,12 +187,6 @@ function App() {
           dataScope={dataScope}
           predictionsUrl={simulatorPredictionsJsonUrl}
           pageKind="simulator"
-          focus={{
-            gpu: 'H100',
-            model: 'Llama-3.1-8B',
-            title: 'Simulator Target',
-            description: 'Locked to H100 and Llama-3.1-8B prediction rows so simulator development stays focused before expanding to other hardware and models.',
-          }}
         />
       ) : visiblePage === 'coverage' ? (
         <CoveragePage
