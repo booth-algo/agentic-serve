@@ -16,28 +16,28 @@ from typing import Iterable, Sequence
 
 
 DEFAULT_DECODE_PROFILE = Path(
-    "profiling/results/decode_profile_H100_large_2026-05-17.csv"
+    "profile_data/results/decode_profile_H100_large_2026-05-17.csv"
 )
 DEFAULT_ATTENTION_PROFILE = Path(
-    "profiling/results/ncu_flash_attention_H100_full_2026-05-18/"
+    "profile_data/results/ncu_flash_attention_H100_full_2026-05-18/"
     "flash_attention_ncu_summary.csv"
 )
 DEFAULT_GEMM_SUMMARY = Path(
-    "profiling/results/ncu_decode_kernels_H100_gemm_full_2026-05-18/"
+    "profile_data/results/ncu_decode_kernels_H100_gemm_full_2026-05-18/"
     "decode_gemm_ncu_summary.csv"
 )
 DEFAULT_SMALL_KERNEL_SUMMARY = Path(
-    "profiling/results/ncu_decode_kernels_H100_fused_full_2026-05-18/"
+    "profile_data/results/ncu_decode_kernels_H100_fused_full_2026-05-18/"
     "decode_fused_kernels_ncu_summary.csv"
 )
 DEFAULT_TRACE_SUMMARY = Path(
-    "profiling/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv"
+    "profile_data/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv"
 )
 DEFAULT_OUTPUT = Path(
-    "profiling/results/llama31_8b_h100_kernel_composed_tpot_predictions.csv"
+    "profile_data/results/llama31_8b_h100_kernel_composed_tpot_predictions.csv"
 )
 DEFAULT_REPORT = Path(
-    "profiling/results/llama31_8b_h100_kernel_composed_tpot_report.md"
+    "profile_data/results/llama31_8b_h100_kernel_composed_tpot_report.md"
 )
 
 

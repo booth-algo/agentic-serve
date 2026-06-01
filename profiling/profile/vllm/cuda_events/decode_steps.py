@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True)
     parser.add_argument("--output", type=Path, required=True,
-                        help="Output CSV path, e.g. profiling/results/decode_profile_H100_YYYY-MM-DD.csv")
+                        help="Output CSV path, e.g. profile_data/results/decode_profile_H100_YYYY-MM-DD.csv")
     parser.add_argument("--gpu-label", default="H100")
     parser.add_argument("--batch-sizes", nargs="*", type=int, default=DEFAULT_BATCH_SIZES)
     parser.add_argument(

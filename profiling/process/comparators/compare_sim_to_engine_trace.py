@@ -1,9 +1,9 @@
 """Compare simulator step counts vs real vLLM engine traces.
 
-Reads ``profiling/results/vllm_engine_step_trace_*_summary.csv`` ground-truth
+Reads ``profile_data/results/vllm_engine_step_trace_*_summary.csv`` ground-truth
 rows (one per (profile, concurrency, turn_index) triple) and joins them
 against the simulator's per-row predictions in
-``profiling/results/llama31_8b_h100_engine_step_tpot_predictions.csv``.
+``profile_data/results/llama31_8b_h100_engine_step_tpot_predictions.csv``.
 
 Emits a per-row diff CSV with absolute and percent deltas, plus a markdown
 summary of the worst gaps.  This is the load-bearing yardstick for the
@@ -21,12 +21,12 @@ import statistics
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_TRACE_GLOB = "profiling/results/vllm_engine_step_trace_*_summary.csv"
+DEFAULT_TRACE_GLOB = "profile_data/results/vllm_engine_step_trace_*_summary.csv"
 DEFAULT_PREDICTIONS = Path(
-    "profiling/results/llama31_8b_h100_engine_step_tpot_predictions.csv"
+    "profile_data/results/llama31_8b_h100_engine_step_tpot_predictions.csv"
 )
-DEFAULT_OUTPUT = Path("profiling/results/sim_vs_engine_trace_diff.csv")
-DEFAULT_REPORT = Path("profiling/results/sim_vs_engine_trace_diff_report.md")
+DEFAULT_OUTPUT = Path("profile_data/results/sim_vs_engine_trace_diff.csv")
+DEFAULT_REPORT = Path("profile_data/results/sim_vs_engine_trace_diff_report.md")
 
 # (trace column, sim column) — the metrics we compare.
 _METRIC_PAIRS: tuple[tuple[str, str], ...] = (

@@ -33,13 +33,13 @@ from profiling.process.predictors.predict_llama31_8b_h100_tpot_from_kernels impo
 
 
 DEFAULT_BENCHMARK_TURNS = Path(
-    "profiling/results/benchmark_turns_llama31_8b_h100_vllm.csv"
+    "profile_data/results/benchmark_turns_llama31_8b_h100_vllm.csv"
 )
 DEFAULT_OUTPUT = Path(
-    "profiling/results/llama31_8b_h100_interpolated_kernel_tpot_predictions.csv"
+    "profile_data/results/llama31_8b_h100_interpolated_kernel_tpot_predictions.csv"
 )
 DEFAULT_REPORT = Path(
-    "profiling/results/llama31_8b_h100_interpolated_kernel_tpot_report.md"
+    "profile_data/results/llama31_8b_h100_interpolated_kernel_tpot_report.md"
 )
 
 

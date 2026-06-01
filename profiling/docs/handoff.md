@@ -102,7 +102,7 @@ recover (osworld ~120 then drains). Both a two-roofline-amortized ceiling and a
 KV-read ceiling were measured to **collapse to the floor** — the plateau is not an
 amortizable roofline term — so the fitted output-keyed ceiling magnitude is kept.
 
-`RooflineParams` (`simulator/closed_form_tpot.py`, `profiling/data/roofline_params_H100_llama31_8b.json`):
+`RooflineParams` (`simulator/closed_form_tpot.py`, `profile_data/kernels/roofline_params_H100_llama31_8b.json`):
 
 | constant | value | basis |
 |---|--|--|

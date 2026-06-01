@@ -3,7 +3,7 @@
 Replaces the per-step scheduler-shape replay (block pool admission, partial
 prefill caps, cohort-aware multi-turn loop) with a single closed-form
 expression per (profile, concurrency, turn_index) row, built on the existing
-analytical roofline params at ``profiling/data/roofline_params_*.json``.
+analytical roofline params at ``profile_data/kernels/roofline_params_*.json``.
 
 Motivating bet: the trace-aligned aggregate inputs (mean cached/prefill/output
 tokens per turn) carry most of the signal; per-step replay was overfitting to
@@ -54,7 +54,7 @@ from typing import Iterable, Mapping
 class RooflineParams:
     """Hardware + model constants + two utilization scalars + KV capacity.
 
-    Field names match the existing ``profiling/data/roofline_params_*.json``
+    Field names match the existing ``profile_data/kernels/roofline_params_*.json``
     schema so we can reuse the calibrated H100 / Llama-3.1-8B file unchanged.
     ``available_kv_blocks`` and ``cache_block_size`` are hardware/runtime
     specs (not fit knobs) — they bound how many concurrent decode requests

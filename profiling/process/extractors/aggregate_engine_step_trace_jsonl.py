@@ -1,7 +1,7 @@
 """Aggregate a per-step vLLM engine-trace JSONL into a turn-level summary CSV.
 
 The summary CSV matches the schema of existing
-``profiling/results/vllm_engine_step_trace_*_summary.csv`` files so the
+``profile_data/results/vllm_engine_step_trace_*_summary.csv`` files so the
 ``compare_sim_to_engine_trace`` comparator can consume it without changes.
 
 Each input JSONL record is one scheduler step.  Records are grouped by

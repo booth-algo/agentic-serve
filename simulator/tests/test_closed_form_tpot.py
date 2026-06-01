@@ -24,7 +24,7 @@ from simulator.closed_form_tpot import (
 )
 
 
-H100_PARAMS_PATH = Path("profiling/data/roofline_params_H100_llama31_8b.json")
+H100_PARAMS_PATH = Path("profile_data/kernels/roofline_params_H100_llama31_8b.json")
 
 
 def _predictor(kv_pressure_enabled: bool = False) -> ClosedFormTpotPredictor:

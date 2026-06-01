@@ -54,7 +54,7 @@ CONCURRENCIES = [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320]
 TP2_AVAILABLE_KV_BLOCKS = 62_416
 # MEASURED tp2 decode-step grid (decode_steps.py --tensor-parallel-size 2 on 2xH100, ~0.70x tp1
 # across all shapes). Loaded into the decode kernel so TPOT/E2EL use tp2 timings, not tp1.
-TP2_DECODE_GRID = Path("profiling/results/decode_profile_H100x2_2026-06-01.csv")
+TP2_DECODE_GRID = Path("profile_data/results/decode_profile_H100x2_2026-06-01.csv")
 
 
 def _ape(pred: float | None, meas: float | None) -> float | None:

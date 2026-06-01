@@ -42,7 +42,7 @@ NCU_REPEATS="${NCU_REPEATS:-1}"
 NCU_INNER_ITERS="${NCU_INNER_ITERS:-1}"
 RUNNER="${REPO_ROOT}/profiling/profile/scripts/run_vllm_profile.py"
 
-DEFAULT_OUT_DIR="${REPO_ROOT}/profiling/results"
+DEFAULT_OUT_DIR="${REPO_ROOT}/profile_data/results"
 DEFAULT_OUT_DIR="${DEFAULT_OUT_DIR}/ncu_flash_attention_${GPU_LABEL}_${MODE}_${DATE_TAG}"
 OUT_DIR="${OUT_DIR:-$DEFAULT_OUT_DIR}"
 NCU_DIR="${OUT_DIR}/ncu"

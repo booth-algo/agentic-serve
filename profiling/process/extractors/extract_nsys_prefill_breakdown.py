@@ -20,7 +20,7 @@ scale from ground truth" path:
   elementwise(N)          = non_attention_budget × share_elementwise(N)
   kv_write(N)             = non_attention_budget × share_kv_write(N)
   other(N)                = non_attention_budget × share_other(N)
-  FA3(N)                  = from profiling/data/fa3_prefill_H100.csv (independent)
+  FA3(N)                  = from profile_data/kernels/fa3_prefill_H100.csv (independent)
 
 The shares are computed within the non-attention bucket sums from the trace
 and are dimensionless — they're invariant to how many iterations the trace
@@ -39,9 +39,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_NSYS_DIR = Path("/mnt/100g/nsys_h100/prefill")
-DEFAULT_VLLM_PREFILL = Path("profiling/data/prefill_profile_H100_dense.csv")
-DEFAULT_FA3_PREFILL = Path("profiling/data/fa3_prefill_H100.csv")
-DEFAULT_OUTPUT = Path("profiling/data/prefill_compiled_breakdown_H100.csv")
+DEFAULT_VLLM_PREFILL = Path("profile_data/kernels/prefill_profile_H100_dense.csv")
+DEFAULT_FA3_PREFILL = Path("profile_data/kernels/fa3_prefill_H100.csv")
+DEFAULT_OUTPUT = Path("profile_data/kernels/prefill_compiled_breakdown_H100.csv")
 
 # Kernel classification.  shortName carries cuBLAS/Triton kernels directly,
 # but FA3 reports as "device_kernel" shortName — disambiguate via demangledName.

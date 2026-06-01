@@ -14,7 +14,7 @@ predict:
       runs for full independence.
 
     ground_truth:
-      file: profiling/data/prefill_profile_H100_dense.csv
+      file: profile_data/kernels/prefill_profile_H100_dense.csv
       script: profiling/profile/vllm/sweep/prefill_steps.py
       points: 15
 
@@ -24,7 +24,7 @@ predict:
         source: nsys nvjet kernel time, 10 N values [64..8192]
         data: /data48/kevinlau/tmp/nsys/prefill_N*.nsys-rep
       FA3:
-        source: profiling/data/fa3_prefill_H100.csv, 8 N values
+        source: profile_data/kernels/fa3_prefill_H100.csv, 8 N values
       elementwise:
         source: nsys triton kernel proportion, 7.6-8.0% of non-attention
       KV_write:
@@ -44,7 +44,7 @@ predict:
       P=8192 uses larger chunks [64..512] due to bucket policy.
 
     ground_truth:
-      file: profiling/results/cached_prefill_v3_H100.csv
+      file: profile_data/results/cached_prefill_v3_H100.csv
       script: profiling/profile/vllm/cuda_events/cached_prefill_steps_v3.py
       method: delta method (t32-t1)/31, decode_ref=6.5ms
       points: 25
@@ -55,7 +55,7 @@ predict:
         source: shared with full_prefill — same nsys nvjet curve, evaluated at chunk=U
         note: V1 CUDA graph at chunk=16 ≈ 2 ms; V0 nsys N=16 ≈ 6.8 ms (graph eliminates launch overhead)
       FA3_cached:
-        source: profiling/results/fa3_cached_prefill_H100.csv
+        source: profile_data/results/fa3_cached_prefill_H100.csv
         points: 25
         formula: "FA3 with Q=U, KV=P+U (causal mask over the U new tokens against P cached + U new keys)"
       elementwise:
@@ -68,7 +68,7 @@ predict:
     status: validated
     mape: "7.4% (median 3.8%) across 44 rows"
     ground_truth:
-      file: profiling/results/decode_profile_H100_large_2026-05-17.csv
+      file: profile_data/results/decode_profile_H100_large_2026-05-17.csv
       script: profiling/profile/vllm/cuda_events/decode_steps.py
     predictor:
       formula: "NCU_GEMM(B) + XGBoost_attention(B,T) + NCU_small_kernels(B)"
@@ -86,14 +86,14 @@ predict:
       directly to TPOT via learned per-profile relationship.
     predictor:
       script: profiling/process/predictors/predict_tpot_from_kernel_features.py
-      ground_truth: profiling/results/benchmark_turns_llama31_8b_h100_vllm.csv
+      ground_truth: profile_data/results/benchmark_turns_llama31_8b_h100_vllm.csv
 
 how_to_correct:
 
   full_prefill:
     - "Done. 8.2% MAPE. Could collect nsys at N=1,128 to bracket small-N regime."
     - "Engine-step predictor default is now --dense-source=nsys_compiled, which
-       reads profiling/data/prefill_compiled_breakdown_H100.csv produced by
+       reads profile_data/kernels/prefill_compiled_breakdown_H100.csv produced by
        profiling/process/extractors/extract_nsys_prefill_breakdown.py.  That
        extractor pulls per-bucket SHARES from nsys nvjet/triton kernel times
        (independent) and applies them to the prefill_profile_H100_dense.csv

@@ -26,7 +26,7 @@ The ``util_flops`` / ``util_bw`` factors are calibrated from TWO independent
 anchor measurements (one compute-bound, one bandwidth-bound) — NOT fit across
 trace data.  They model effective GPU throughput after launch overhead,
 splitK reductions, occupancy losses, and HBM channel inefficiency.  See
-``profiling/data/roofline_params_H100_llama31_8b.json`` for the derivations.
+``profile_data/kernels/roofline_params_H100_llama31_8b.json`` for the derivations.
 """
 
 from __future__ import annotations

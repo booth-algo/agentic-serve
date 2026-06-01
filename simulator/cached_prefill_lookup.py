@@ -1,6 +1,6 @@
 """Per-step wall-time lookup for cached-prefill steps on H100 / Llama-3.1-8B.
 
-Reads ``profiling/results/cached_prefill_v3_H100.csv`` — a 25-point measured
+Reads ``profile_data/results/cached_prefill_v3_H100.csv`` — a 25-point measured
 grid produced by ``profiling/profile/vllm/cuda_events/cached_prefill_steps_v3.py``
 — and exposes ``cached_prefill_step_ms(U, P)`` via bilinear interpolation in
 log space.
@@ -30,7 +30,7 @@ from functools import cache
 from pathlib import Path
 
 
-DEFAULT_CSV = Path("profiling/results/cached_prefill_v3_H100.csv")
+DEFAULT_CSV = Path("profile_data/results/cached_prefill_v3_H100.csv")
 
 
 @dataclass(frozen=True)

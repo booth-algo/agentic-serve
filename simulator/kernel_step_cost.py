@@ -1,6 +1,6 @@
 """Per-step decode wall-time from the measured H100 / Llama-3.1-8B kernel grid.
 
-Reads ``profiling/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv``
+Reads ``profile_data/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv``
 — a measured (batch_size, context_len) → ``decode_step_ms`` grid (validated at
 7.4% MAPE; see ``profiling/docs/prediction_pipeline.yaml`` ``decode`` block) —
 and exposes ``decode_step_ms(B, T)`` via bilinear interpolation in log space.
@@ -37,7 +37,7 @@ from simulator.closed_form_tpot import RooflineParams
 
 
 DEFAULT_CSV = Path(
-    "profiling/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv"
+    "profile_data/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv"
 )
 
 

@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--P-values", nargs="*", type=int, default=[512, 1024, 2048, 4096, 8192])
     p.add_argument("--measure-runs", type=int, default=3)
     p.add_argument("--output", type=Path,
-                   default=Path("profiling/results/cached_prefill_v3_H100.csv"))
+                   default=Path("profile_data/results/cached_prefill_v3_H100.csv"))
     return p.parse_args()
 
 

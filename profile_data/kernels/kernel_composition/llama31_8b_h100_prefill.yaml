@@ -199,7 +199,7 @@ verification:
     elementwise_status: OK
 
   fa3_prefill_attention:
-    file: profiling/data/fa3_prefill_H100.csv
+    file: profile_data/kernels/fa3_prefill_H100.csv
     backend: vllm.vllm_flash_attn.flash_attn_varlen_func (FA3, causal, bf16)
     result: >
       Measured FA3 attention for full-causal prefill (q=kv=N, batch=1).
@@ -221,7 +221,7 @@ verification:
       8192: 44.2
 
   isolated_gemm:
-    file: profiling/data/prefill_gemm_H100.csv
+    file: profile_data/kernels/prefill_gemm_H100.csv
     result: >
       Measures cuBLAS throughput for each fused GEMM shape via torch.matmul
       + CUDA events at M in {1, 64, 128, 256, 512, 1024, 2048, 4096, 8192}.

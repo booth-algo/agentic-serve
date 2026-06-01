@@ -43,7 +43,7 @@ XDG_CACHE_HOME=/data48/kevinlau/tmp/.cache \
 ~/miniconda3/envs/vllm/bin/python \
   profiling/profile/vllm/cuda_events/prefill_decomposition.py \
   --model /data48/kevinlau/models/Llama-3.1-8B-Instruct \
-  --output profiling/results/prefill_decomposition_H100.csv
+  --output profile_data/results/prefill_decomposition_H100.csv
 ```
 
 Output columns:

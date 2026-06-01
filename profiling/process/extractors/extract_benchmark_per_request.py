@@ -265,7 +265,7 @@ def parse_args() -> argparse.Namespace:
             "Directory of raw bench JSONs to scan.  Repeat to merge "
             "multiple sources; later --bench-root entries win on collision. "
             "Default scans the May-11 distributional set then overlays the "
-            "May-21 same-run paired bench JSONs from profiling/results."
+            "May-21 same-run paired bench JSONs from profile_data/results."
         ),
     )
     p.add_argument(
@@ -283,7 +283,7 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         default=Path(
-            "profiling/results/benchmark_per_request_llama31_8b_h100_vllm.json"
+            "profile_data/results/benchmark_per_request_llama31_8b_h100_vllm.json"
         ),
         help="Destination JSON sidecar.",
     )
@@ -311,7 +311,7 @@ def main() -> None:
         ),
         # Same-run paired bench JSONs captured alongside the engine traces —
         # these win on key collision because they're the ground-truth match.
-        Path("profiling/results"),
+        Path("profile_data/results"),
     ]
     # If no aliases supplied, default to mapping the capture-time profile names
     # (without the ``-synth`` suffix) to the predictor's canonical names.

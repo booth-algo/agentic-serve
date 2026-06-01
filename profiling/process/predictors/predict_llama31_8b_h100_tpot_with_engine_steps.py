@@ -76,33 +76,33 @@ from simulator._legacy.vllm_prefix_cache_residency import (  # noqa: E402
 
 
 DEFAULT_BASE_PREDICTIONS = Path(
-    "profiling/results/llama31_8b_h100_interpolated_kernel_tpot_predictions.csv"
+    "profile_data/results/llama31_8b_h100_interpolated_kernel_tpot_predictions.csv"
 )
 DEFAULT_BENCHMARK_TURNS = Path(
-    "profiling/results/benchmark_turns_llama31_8b_h100_vllm.csv"
+    "profile_data/results/benchmark_turns_llama31_8b_h100_vllm.csv"
 )
 DEFAULT_BENCHMARK_PER_REQUEST = Path(
-    "profiling/results/benchmark_per_request_llama31_8b_h100_vllm.json"
+    "profile_data/results/benchmark_per_request_llama31_8b_h100_vllm.json"
 )
-DEFAULT_FORWARD_GEMM = Path("profiling/data/forward_pass/gemm/H100.csv")
-DEFAULT_FORWARD_ATTENTION = Path("profiling/data/forward_pass/flash_attn/H100.csv")
-DEFAULT_SERVING_ATTENTION = Path("profiling/data/llama31_8b_attention.csv")
-DEFAULT_FA3_PREFILL = Path("profiling/data/fa3_prefill_H100.csv")
-DEFAULT_VLLM_PREFILL_MEASURED = Path("profiling/data/prefill_profile_H100.csv")
-DEFAULT_NSYS_COMPILED = Path("profiling/data/prefill_compiled_breakdown_H100.csv")
-DEFAULT_FULL_PREFILL_CSV = Path("profiling/data/prefill_profile_H100_dense.csv")
-DEFAULT_CACHED_PREFILL_CSV = Path("profiling/results/cached_prefill_v3_H100.csv")
+DEFAULT_FORWARD_GEMM = Path("profile_data/kernels/forward_pass/gemm/H100.csv")
+DEFAULT_FORWARD_ATTENTION = Path("profile_data/kernels/forward_pass/flash_attn/H100.csv")
+DEFAULT_SERVING_ATTENTION = Path("profile_data/kernels/llama31_8b_attention.csv")
+DEFAULT_FA3_PREFILL = Path("profile_data/kernels/fa3_prefill_H100.csv")
+DEFAULT_VLLM_PREFILL_MEASURED = Path("profile_data/kernels/prefill_profile_H100.csv")
+DEFAULT_NSYS_COMPILED = Path("profile_data/kernels/prefill_compiled_breakdown_H100.csv")
+DEFAULT_FULL_PREFILL_CSV = Path("profile_data/kernels/prefill_profile_H100_dense.csv")
+DEFAULT_CACHED_PREFILL_CSV = Path("profile_data/results/cached_prefill_v3_H100.csv")
 DEFAULT_DECODE_PROFILE_CSV = Path(
-    "profiling/results/decode_profile_H100_large_2026-05-17.csv"
+    "profile_data/results/decode_profile_H100_large_2026-05-17.csv"
 )
 DEFAULT_ROOFLINE_PARAMS = Path(
-    "profiling/data/roofline_params_H100_llama31_8b.json"
+    "profile_data/kernels/roofline_params_H100_llama31_8b.json"
 )
 DEFAULT_OUTPUT = Path(
-    "profiling/results/llama31_8b_h100_engine_step_tpot_predictions.csv"
+    "profile_data/results/llama31_8b_h100_engine_step_tpot_predictions.csv"
 )
 DEFAULT_REPORT = Path(
-    "profiling/results/llama31_8b_h100_engine_step_tpot_report.md"
+    "profile_data/results/llama31_8b_h100_engine_step_tpot_report.md"
 )
 DEFAULT_DASHBOARD_OUTPUT = Path(
     "inference-benchmark/dashboard/public/llama31-8b-h100-tpot-fit.json"
@@ -241,7 +241,7 @@ class FluidTpotEstimate:
 class NsysCompiledPrefillModel:
     """Prefill non-attention cost from nsys-derived compiled breakdown.
 
-    Reads ``profiling/data/prefill_compiled_breakdown_H100.csv`` (one row per N
+    Reads ``profile_data/kernels/prefill_compiled_breakdown_H100.csv`` (one row per N
     with ``gemm_compiled_ms``, ``elementwise_ms``, ``kv_write_ms``, ``other_ms``).
     Returns the sum (= entire non-attention prefill cost).  FA3 attention is
     handled by the existing ``forward_attention_model`` path — do not add

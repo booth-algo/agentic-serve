@@ -71,8 +71,8 @@ CUDA_VISIBLE_DEVICES=6 \
   --source cuda-events \
   --target flash-attn \
   -- \
-  --decode-profile profiling/results/decode_profile_H100_large_2026-05-17.csv \
-  --output profiling/results/flash_attention_sweep_H100.csv
+  --decode-profile profile_data/results/decode_profile_H100_large_2026-05-17.csv \
+  --output profile_data/results/flash_attention_sweep_H100.csv
 ```
 
 On H100, the direct vLLM call should use `--fa-version 3`. `--fa-version 2`
@@ -103,8 +103,8 @@ CUDA_VISIBLE_DEVICES=6 \
   -- \
   --model /data/kevinlau/models/Llama-3.1-8B-Instruct \
   --shapes 1:512 8:4096 32:8192 128:2048 \
-  --flash-sweep profiling/results/flash_attention_sweep_H100_2026-05-17.csv \
-  --output-prefix profiling/results/decode_kernel_trace_H100_small_2026-05-17
+  --flash-sweep profile_data/results/flash_attention_sweep_H100_2026-05-17.csv \
+  --output-prefix profile_data/results/decode_kernel_trace_H100_small_2026-05-17
 ```
 
 Outputs:
@@ -144,9 +144,9 @@ TMP_ROOT=/data48/kevinlau/tmp \
 ~/miniconda3/envs/vllm/bin/python profiling/profile/scripts/run_vllm_profile.py \
   --source ncu \
   --target decode-gemm \
-  --ncu-output profiling/results/manual_ncu/gemm_qkv_B1 \
+  --ncu-output profile_data/results/manual_ncu/gemm_qkv_B1 \
   -- \
-  --output profiling/results/manual_ncu/gemm_qkv_B1_cuda_events.csv \
+  --output profile_data/results/manual_ncu/gemm_qkv_B1_cuda_events.csv \
   --batch-sizes 1 \
   --ops qkv_fused \
   --warmups 1 \

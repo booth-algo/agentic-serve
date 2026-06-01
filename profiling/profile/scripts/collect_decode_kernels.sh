@@ -38,7 +38,7 @@ DATE_TAG="${DATE_TAG:-$(date +%Y-%m-%d)}"
 MAX_TOTAL_KV_TOKENS="${MAX_TOTAL_KV_TOKENS:-500000}"
 RUNNER="${REPO_ROOT}/profiling/profile/scripts/run_vllm_profile.py"
 
-DEFAULT_OUT_DIR="${REPO_ROOT}/profiling/results"
+DEFAULT_OUT_DIR="${REPO_ROOT}/profile_data/results"
 DEFAULT_OUT_DIR="${DEFAULT_OUT_DIR}/ncu_decode_kernels_${GPU_LABEL}_${MODE}_${DATE_TAG}"
 OUT_DIR="${OUT_DIR:-$DEFAULT_OUT_DIR}"
 NCU_DIR="${OUT_DIR}/ncu"
