@@ -26,6 +26,8 @@ export interface CoverageFailure {
 export interface CoverageBlocker {
   attempt?: number | null;
   backend: string;
+  coverage_disposition?: 'failed' | 'na' | null;
+  coverage_explanation?: string | null;
   expected: number;
   expected_points?: CoveragePoint[];
   failure?: CoverageFailure | null;
@@ -47,10 +49,16 @@ export interface CoverageBlocker {
 
 export interface CoverageBlockersState {
   blockers: CoverageBlocker[];
+  coverage_failed_points?: number;
+  coverage_missing_required_points?: number;
+  coverage_na_points?: number;
+  coverage_required_points?: number;
   data_rows: number;
   data_scopes: Record<string, number>;
   expected_points: number;
   failure_category_counts?: Record<string, number>;
+  failure_disposition_counts?: Record<string, number>;
+  failure_disposition_point_counts?: Record<string, number>;
   generated_at: string;
   job_status_counts: Record<string, number>;
   jobs?: CoverageBlocker[];
@@ -59,6 +67,9 @@ export interface CoverageBlockersState {
   max_requeues: number;
   missing_jobs_by_status: Record<string, number>;
   missing_points: number;
+  observed_present_points?: number;
+  optional_present_points?: CoveragePoint[];
+  optional_present_points_count?: number;
   present_points: number;
   reset_exhausted: string[];
   reset_performed: string[];

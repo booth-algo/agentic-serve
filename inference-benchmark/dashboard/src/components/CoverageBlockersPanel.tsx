@@ -49,7 +49,13 @@ function attemptText(attempt?: number | null, maxAttempts?: number | null): stri
   return `${attempt} attempts`;
 }
 
-function statusTone(status: string): { bg: string; border: string; text: string } {
+function statusTone(status: string, disposition?: string | null): { bg: string; border: string; text: string } {
+  if (disposition === 'na') {
+    return { bg: 'rgba(100,181,246,0.12)', border: 'rgba(100,181,246,0.38)', text: '#64b5f6' };
+  }
+  if (disposition === 'failed') {
+    return { bg: 'rgba(248,81,73,0.14)', border: 'rgba(248,81,73,0.42)', text: '#f85149' };
+  }
   if (status === 'running') {
     return { bg: 'rgba(88,166,255,0.12)', border: 'rgba(88,166,255,0.35)', text: '#58a6ff' };
   }
@@ -89,21 +95,31 @@ export function CoverageBlockersPanel({
 
   if (!blockersState) return null;
 
-  const coverage = pct(blockersState.present_points, blockersState.expected_points);
+  const observedPresent = blockersState.observed_present_points ?? blockersState.present_points;
+  const optionalPresent = blockersState.optional_present_points_count ?? 0;
+  const requiredPoints = blockersState.coverage_required_points ?? blockersState.expected_points;
+  const missingRequired = blockersState.coverage_missing_required_points ?? blockersState.missing_points;
+  const naPoints = blockersState.coverage_na_points ?? 0;
+  const failedPoints = blockersState.coverage_failed_points ?? 0;
+  const coverage = pct(observedPresent, requiredPoints);
   const exhausted = blockersState.reset_exhausted.length;
   const reset = blockersState.reset_performed.length;
   const visibleBlockers = blockersState.blockers
     .slice()
     .sort((a, b) => b.missing_count - a.missing_count || a.job_id.localeCompare(b.job_id))
     .slice(0, compact ? 4 : 8);
-  const borderColor = exhausted > 0
+  const borderColor = failedPoints > 0
     ? 'border-[#f85149]/45'
-    : blockersState.stale_terminal_jobs > 0
+    : naPoints > 0
+      ? 'border-[#64b5f6]/40'
+      : blockersState.stale_terminal_jobs > 0
       ? 'border-[#d29922]/45'
       : 'border-[#30363d]';
-  const bgColor = exhausted > 0
+  const bgColor = failedPoints > 0
     ? 'bg-[#f85149]/10'
-    : blockersState.stale_terminal_jobs > 0
+    : naPoints > 0
+      ? 'bg-[#64b5f6]/10'
+      : blockersState.stale_terminal_jobs > 0
       ? 'bg-[#d29922]/10'
       : 'bg-[#161b22]';
 
@@ -116,9 +132,19 @@ export function CoverageBlockersPanel({
             <span className="rounded border border-[#30363d] bg-[#0d1117] px-2 py-0.5 font-mono text-[11px] text-[#8b949e]">
               {coverage}
             </span>
-            {exhausted > 0 && (
+            {naPoints > 0 && (
+              <span className="rounded border border-[#64b5f6]/40 bg-[#64b5f6]/10 px-2 py-0.5 text-[11px] font-medium text-[#64b5f6]">
+                {naPoints.toLocaleString()} N/A attempted
+              </span>
+            )}
+            {failedPoints > 0 && (
               <span className="rounded border border-[#f85149]/40 bg-[#f85149]/12 px-2 py-0.5 text-[11px] font-medium text-[#f85149]">
-                {exhausted} requeue exhausted
+                {failedPoints.toLocaleString()} failed cells
+              </span>
+            )}
+            {exhausted > 0 && (
+              <span className="rounded border border-[#30363d] bg-[#0d1117] px-2 py-0.5 text-[11px] font-medium text-[#8b949e]">
+                {exhausted} requeue capped
               </span>
             )}
             {reset > 0 && (
@@ -128,7 +154,7 @@ export function CoverageBlockersPanel({
             )}
           </div>
           <div className="mt-1 text-xs text-[#8b949e]">
-            Generated {formatTime(blockersState.generated_at)} · {blockersState.present_points.toLocaleString()}/{blockersState.expected_points.toLocaleString()} expected points · {blockersState.missing_points.toLocaleString()} missing
+            Generated {formatTime(blockersState.generated_at)} · {observedPresent.toLocaleString()}/{requiredPoints.toLocaleString()} fillable observed{optionalPresent > 0 ? ` · ${optionalPresent.toLocaleString()} optional` : ''} · {missingRequired.toLocaleString()} missing fillable · {blockersState.expected_points.toLocaleString()} grid points
           </div>
         </div>
         <div className="grid gap-2 text-xs text-[#8b949e] sm:grid-cols-3 lg:min-w-[34rem]">
@@ -158,8 +184,13 @@ export function CoverageBlockersPanel({
       {visibleBlockers.length > 0 ? (
         <div className="mt-3 grid gap-2">
           {visibleBlockers.map((blocker) => {
-            const tone = statusTone(blocker.status);
+            const tone = statusTone(blocker.status, blocker.coverage_disposition);
             const attempts = attemptText(blocker.failure?.attempt ?? blocker.attempt, blocker.failure?.max_attempts);
+            const dispositionLabel = blocker.coverage_disposition === 'na'
+              ? 'N/A attempted'
+              : blocker.coverage_disposition === 'failed'
+                ? 'failed coverage'
+                : null;
             return (
               <div key={blocker.job_id} className="rounded-md border border-[#30363d] bg-[#0d1117] p-3">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
@@ -174,6 +205,14 @@ export function CoverageBlockersPanel({
                       >
                         {blocker.status}
                       </span>
+                      {dispositionLabel && (
+                        <span
+                          className="rounded border px-2 py-0.5 text-[11px] font-medium"
+                          style={{ backgroundColor: tone.bg, borderColor: tone.border, color: tone.text }}
+                        >
+                          {dispositionLabel}
+                        </span>
+                      )}
                       {blocker.failure && (
                         <span className="rounded border border-[#64b5f6]/35 bg-[#64b5f6]/10 px-2 py-0.5 text-[11px] font-medium text-[#64b5f6]">
                           {blocker.failure.label}{attempts ? ` · ${attempts}` : ''}
@@ -189,9 +228,9 @@ export function CoverageBlockersPanel({
                   </div>
                 </div>
                 <div className="mt-2 break-words text-xs text-[#c9d1d9]">{blocker.missing}</div>
-                {(blocker.failure?.reason || blocker.reason) && (
-                  <div className="mt-1 line-clamp-2 break-words text-[11px] leading-4 text-[#6e7681]" title={blocker.failure?.reason ?? blocker.reason ?? undefined}>
-                    {blocker.failure?.reason ?? blocker.reason}
+                {(blocker.coverage_explanation || blocker.failure?.reason || blocker.reason) && (
+                  <div className="mt-1 line-clamp-2 break-words text-[11px] leading-4 text-[#6e7681]" title={blocker.coverage_explanation ?? blocker.failure?.reason ?? blocker.reason ?? undefined}>
+                    {blocker.coverage_explanation ?? blocker.failure?.reason ?? blocker.reason}
                   </div>
                 )}
               </div>

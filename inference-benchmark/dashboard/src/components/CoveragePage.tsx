@@ -281,9 +281,30 @@ function failureCategory(failure?: CoverageFailure | null, fallback?: string | n
   return failure?.category ?? failureCategoryFromReason(failure?.reason ?? fallback);
 }
 
-function shouldCountFailureAsMissing(failure?: CoverageFailure | null, fallback?: string | null): boolean {
+const N_A_FAILURE_CATEGORIES = new Set([
+  'oom_or_kv_cache',
+  'success_rate_below_min',
+  'zero_results',
+  'incomplete_outputs',
+]);
+
+function failureCoverageDisposition(
+  failure?: CoverageFailure | null,
+  fallback?: string | null,
+  explicit?: CoverageBlocker['coverage_disposition'],
+): 'failed' | 'na' | undefined {
+  if (explicit === 'failed' || explicit === 'na') return explicit;
   const category = failureCategory(failure, fallback);
-  return Boolean(category && category !== 'oom_or_kv_cache');
+  if (!category) return undefined;
+  return N_A_FAILURE_CATEGORIES.has(category) ? 'na' : 'failed';
+}
+
+function shouldCountFailureAsMissing(
+  failure?: CoverageFailure | null,
+  fallback?: string | null,
+  explicit?: CoverageBlocker['coverage_disposition'],
+): boolean {
+  return failureCoverageDisposition(failure, fallback, explicit) === 'failed';
 }
 
 const TERMINAL_BLOCKER_STATUSES = new Set(['skipped', 'failed', 'known_oom']);
@@ -566,10 +587,11 @@ export function CoveragePage({
     for (const blocker of blockersState?.blockers ?? []) {
       blockerByJobId.set(blocker.job_id, blocker);
       if (!shouldRenderBlockedPoints(blocker, exhaustedJobIds)) continue;
-      const reason = blocker.reason
+      const reason = blocker.coverage_explanation
+        ?? blocker.reason
         ?? failureReason(blocker.failure, blocker.reason)
         ?? `coverage requeue exhausted after ${blocker.attempt ?? 'unknown'} attempts`;
-      if (shouldCountFailureAsMissing(blocker.failure, blocker.reason)) {
+      if (shouldCountFailureAsMissing(blocker.failure, blocker.reason, blocker.coverage_disposition)) {
         for (const point of blocker.missing_points ?? []) {
           failedPointReasons.set(pointKeyFromSummary(point), reason);
         }
@@ -666,7 +688,7 @@ export function CoveragePage({
             const cellJobId = cell ? jobIdForCell(cell) : null;
             const compactJob = cellJobId ? compactJobById.get(cellJobId) : undefined;
             const blocker = cellJobId ? blockerByJobId.get(cellJobId) : undefined;
-            const stateReason = blocker?.reason ?? compactJob?.reason ?? cell?.reason;
+            const stateReason = blocker?.coverage_explanation ?? compactJob?.coverage_explanation ?? blocker?.reason ?? compactJob?.reason ?? cell?.reason;
             const expectedForModel = canonicalCoverage
               ? expectedCountFor(hw, model, backend)
               : expectedCellsPerModel;
@@ -764,7 +786,8 @@ export function CoveragePage({
               continue;
             }
             if (cell.status === 'skipped') {
-              if (shouldCountFailureAsMissing(failure, statusReason)) {
+              const disposition = blocker?.coverage_disposition ?? compactJob?.coverage_disposition;
+              if (shouldCountFailureAsMissing(failure, statusReason, disposition)) {
                 const profiles = buildStatusProfiles(hw, model, backend, 'failed', statusReason);
                 const failureReasons = Array.from(new Set(
                   profiles.flatMap((profile) => Array.from(profile.failed?.values() ?? [])),
@@ -885,12 +908,27 @@ export function CoveragePage({
     },
     { complete: 0, partial: 0, running: 0, pending: 0, failed: 0, skipped: 0, oom: 0, infeasible: 0, untested: 0, totalHave: 0, totalNeed: 0, failedCells: 0 },
   );
-  const pct = grand.totalNeed > 0
-    ? ((grand.totalHave / grand.totalNeed) * 100).toFixed(1)
+  const optionalPresentCount = dataScope === 'synthetic_distributional'
+    ? blockersState?.optional_present_points_count ?? 0
+    : 0;
+  const displayedHave = dataScope === 'synthetic_distributional'
+    ? blockersState?.observed_present_points ?? grand.totalHave
+    : grand.totalHave;
+  const requiredTotal = dataScope === 'synthetic_distributional'
+    ? blockersState?.coverage_required_points ?? grand.totalNeed
+    : grand.totalNeed;
+  const failedCells = dataScope === 'synthetic_distributional'
+    ? blockersState?.coverage_failed_points ?? grand.failedCells
+    : grand.failedCells;
+  const naAttemptedCells = dataScope === 'synthetic_distributional'
+    ? blockersState?.coverage_na_points ?? 0
+    : 0;
+  const pct = requiredTotal > 0
+    ? ((displayedHave / requiredTotal) * 100).toFixed(1)
     : '0.0';
   const cellSummary = !canonicalCoverage
     ? `${grand.totalHave} cells filled`
-    : `${grand.totalHave}/${grand.totalNeed} filled${grand.failedCells > 0 ? ` · ${grand.failedCells} failed` : ''}`;
+    : `${displayedHave}/${requiredTotal} fillable filled${optionalPresentCount > 0 ? ` · ${optionalPresentCount} optional` : ''}${naAttemptedCells > 0 ? ` · ${naAttemptedCells} N/A attempted` : ''}${failedCells > 0 ? ` · ${failedCells} failed` : ''}`;
   const primarySummary = !canonicalCoverage ? `${grand.totalHave} cells filled` : `${pct}%`;
   const scopeSummary = dataScope === 'synthetic_distributional'
     ? 'APC-aware synthetic profiles on the active sweep-state grid'
@@ -1128,7 +1166,7 @@ function ModelRows({ hwName, model, showFamily, open, onToggle, allConcs, expect
           {allConcs.map((c) => {
             const s = concStats.get(c);
             if (!s) return <td key={c} className="px-1 py-1.5 text-center"><Cell state="na" title={model.reason} /></td>;
-            if (s.expected === 0) return <td key={c} className="px-1 py-1.5 text-center"><Cell state="na" title={s.reason ?? model.reason} /></td>;
+            if (s.expected === 0) return <td key={c} className="px-1 py-1.5 text-center"><Cell state="excluded" title={s.reason ?? model.reason} /></td>;
             return <td key={c} className="px-1 py-1.5 text-center"><PartialCell present={s.present} expected={s.expected} failed={s.failed} title={s.failedReason} /></td>;
           })}
           <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono">
@@ -1161,18 +1199,23 @@ function ModelRows({ hwName, model, showFamily, open, onToggle, allConcs, expect
   const rowPct = model.totalNeed > 0 ? Math.round((model.totalHave / model.totalNeed) * 100) : 0;
   // Per-concurrency fill fraction across all profiles. A conc is "full" only
   // when every profile that expects it actually has a run at that conc.
-  const concStats = new Map<number, { present: number; expected: number; failed: number; failedReason?: string }>();
+  const concStats = new Map<number, { present: number; expected: number; failed: number; na: number; reason?: string; failedReason?: string }>();
   for (const p of model.profiles) {
     if (p.infeasibleReason) continue;
     for (const c of p.expected) {
-      if (p.blocked?.has(c)) continue;
-      const s = concStats.get(c) ?? { present: 0, expected: 0, failed: 0 };
-      s.expected += 1;
-      if (p.present.has(c)) s.present += 1;
-      const failedReason = p.failed?.get(c);
-      if (failedReason && !p.present.has(c)) {
-        s.failed += 1;
-        s.failedReason = s.failedReason ?? failedReason;
+      const s = concStats.get(c) ?? { present: 0, expected: 0, failed: 0, na: 0 };
+      const blockedReason = p.blocked?.get(c);
+      if (blockedReason) {
+        s.na += 1;
+        s.reason = s.reason ?? blockedReason;
+      } else {
+        s.expected += 1;
+        if (p.present.has(c)) s.present += 1;
+        const failedReason = p.failed?.get(c);
+        if (failedReason && !p.present.has(c)) {
+          s.failed += 1;
+          s.failedReason = s.failedReason ?? failedReason;
+        }
       }
       concStats.set(c, s);
     }
@@ -1198,6 +1241,7 @@ function ModelRows({ hwName, model, showFamily, open, onToggle, allConcs, expect
         {allConcs.map((c) => {
           const s = concStats.get(c);
           if (!s) return <td key={c} className="px-1 py-1.5 text-center"><Cell state="na" /></td>;
+          if (s.expected === 0 && s.na > 0) return <td key={c} className="px-1 py-1.5 text-center"><Cell state="excluded" title={s.reason} /></td>;
           return <td key={c} className="px-1 py-1.5 text-center"><PartialCell present={s.present} expected={s.expected} failed={s.failed} title={s.failedReason} /></td>;
         })}
         <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono">
@@ -1283,8 +1327,8 @@ function ProfileDetailRows({
               const present = p.present.has(c);
               const blockedReason = p.blocked?.get(c);
               const failedReason = p.failed?.get(c);
-              const state: 'present' | 'missing' | 'na' =
-                p.infeasibleReason || blockedReason || !expected ? 'na' : present ? 'present' : 'missing';
+              const state: 'present' | 'missing' | 'na' | 'excluded' =
+                p.infeasibleReason || blockedReason ? 'excluded' : !expected ? 'na' : present ? 'present' : 'missing';
               const finalState = failedReason && !present && expected && !p.infeasibleReason && !blockedReason ? 'fail' : state;
               return <td key={c} className="px-1 py-1.5 text-center"><Cell state={finalState} title={failedReason ?? blockedReason ?? p.infeasibleReason} /></td>;
             })}
@@ -1380,23 +1424,27 @@ function CoverageLegend({ dataScope }: { dataScope: DataScope }) {
           {canonicalCoverage && (
             <span className="flex items-center gap-1.5"><Cell state="fail" />failed after retry</span>
           )}
+          {canonicalCoverage && (
+            <span className="flex items-center gap-1.5"><Cell state="excluded" />N/A after retry / blocked</span>
+          )}
             <span className="flex items-center gap-1.5">
               <Cell state="na" />
-              {canonicalCoverage ? 'not applicable, blocked, or not expected' : 'not observed'}
+              {canonicalCoverage ? 'not expected in this row' : 'not observed'}
             </span>
           </div>
         <div className="space-y-1 leading-relaxed">
-          <p>{scopeNote}</p>
+          <p>{scopeNote}{canonicalCoverage ? ' Exhausted OOM, success-rate, zero-output, and incomplete-output limits are excluded as N/A; benchmark, driver, and unknown failures stay red.' : ''}</p>
         </div>
       </div>
     </div>
   );
 }
 
-function Cell({ state, title }: { state: 'present' | 'missing' | 'fail' | 'na'; title?: string }) {
+function Cell({ state, title }: { state: 'present' | 'missing' | 'fail' | 'na' | 'excluded'; title?: string }) {
   const cls =
     state === 'present' ? 'bg-[#3fb950] border-[#3fb950]' :
     state === 'fail' ? 'bg-[#f85149]/30 border-[#f85149]' :
+    state === 'excluded' ? 'bg-[#64b5f6]/35 border-[#64b5f6]/70' :
     state === 'missing' ? 'bg-transparent border-[#30363d]' :
     'bg-[#21262d]/50 border-transparent';
   return <span className={`inline-block h-3 w-3 rounded-sm border ${cls}`} title={title} />;

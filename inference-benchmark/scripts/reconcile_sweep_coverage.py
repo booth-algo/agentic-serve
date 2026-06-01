@@ -45,6 +45,12 @@ BLOCKING_STATUSES = {"done", "skipped", "failed", "known_oom"}
 DEFAULT_RESET_STATUSES = {"done"}
 COVERAGE_REQUEUE_COUNT_SUFFIX = "coverage_requeue_count"
 COVERAGE_BLOCKER_SUFFIX = "coverage_blocker.json"
+N_A_FAILURE_CATEGORIES = {
+    "oom_or_kv_cache",
+    "success_rate_below_min",
+    "zero_results",
+    "incomplete_outputs",
+}
 
 PointKey = tuple[str, str, str, str, str, int]  # hw, model, backend, data_mode, profile, conc
 ProfileKey = tuple[str, str, str, int, str, str, str]  # scope, host, model, tp, mode, backend, profile
@@ -456,6 +462,23 @@ def points_payload(points: set[PointKey]) -> list[dict[str, Any]]:
     return point_payload(points)
 
 
+def optional_present_points(data: list[dict[str, Any]], scope: str, expected_points: set[PointKey]) -> set[PointKey]:
+    """Return accepted synthetic points that are outside the required grid.
+
+    Some synthetic runs intentionally exceed the current required sweep grid
+    because a previously-waived high-concurrency or workaround cell completed.
+    Keep those visible as optional coverage without letting them expand the
+    required denominator or missing-work set.
+    """
+    if compile_sweep.dashboard_scope_for(scope) != "synthetic_distributional":
+        return set()
+    return {
+        point
+        for point in data_points(data, scope) - expected_points
+        if point[4].endswith("-synth")
+    }
+
+
 def failure_category(reason: str | None) -> str:
     text = (reason or "").lower()
     if any(token in text for token in (
@@ -542,6 +565,36 @@ def failure_summary(cov: JobCoverage) -> str | None:
     return f"{failure.get('label')}{attempts}{(': ' + reason) if reason else ''}"
 
 
+def coverage_disposition(cov: JobCoverage) -> str | None:
+    """Classify terminal missing coverage as either fillable failure or N/A.
+
+    Red failures are cases where another run could plausibly fix repo/infra
+    behavior. Blue N/A means the job reached a terminal, explainable limit
+    after the configured retry path, so the missing points should not keep
+    counting against fillable synthetic coverage.
+    """
+    if not cov.missing or cov.status not in BLOCKING_STATUSES:
+        return None
+    if cov.status == "known_oom":
+        return "na"
+    failure = failure_payload(cov)
+    category = str((failure or {}).get("category") or "unknown")
+    if category in N_A_FAILURE_CATEGORIES:
+        return "na"
+    return "failed"
+
+
+def coverage_explanation(cov: JobCoverage, disposition: str | None) -> str | None:
+    summary = failure_summary(cov) or cov.reason
+    if not summary:
+        return None
+    if disposition == "na":
+        return f"N/A after retry exhaustion: {summary}"
+    if disposition == "failed":
+        return f"failed after retry; needs inspection: {summary}"
+    return summary
+
+
 def format_job(cov: JobCoverage) -> str:
     return f"{cov.host}/{cov.hw_label}/{cov.model}/tp{cov.tp}/{cov.backend}/{cov.mode}"
 
@@ -571,7 +624,21 @@ def build_report(
     reset_candidates = [cov for cov in stale_jobs if cov.status in reset_statuses]
     expected_points = {point for cov in all_jobs for point in cov.expected}
     present_points = {point for cov in all_jobs for point in cov.present}
+    optional_points = optional_present_points(data, scope, expected_points)
     missing_points = expected_points - present_points
+    coverage_na_points = {
+        point
+        for cov in stale_jobs
+        if coverage_disposition(cov) == "na"
+        for point in cov.missing
+    }
+    coverage_failed_points = {
+        point
+        for cov in stale_jobs
+        if coverage_disposition(cov) == "failed"
+        for point in cov.missing
+    }
+    required_points = expected_points - coverage_na_points
     status_counts = Counter(cov.status for cov in all_jobs)
     missing_by_status = Counter(cov.status for cov in missing_jobs)
 
@@ -590,7 +657,11 @@ def build_report(
         f"- data rows: {len(data)} total, scopes={dict(data_scope_counts(data))}",
         f"- expected coverage points: {len(expected_points)}",
         f"- present expected points: {len(present_points)} / {len(expected_points)}",
+        f"- optional present synthetic points outside required grid: {len(optional_points)}",
+        f"- observed synthetic points: {len(present_points | optional_points)} / {len(required_points)} fillable ({len(expected_points)} grid points)",
         f"- missing expected points: {len(missing_points)}",
+        f"- N/A attempted points: {len(coverage_na_points)}",
+        f"- failed points needing inspection: {len(coverage_failed_points)}",
         f"- expected jobs: {len(all_jobs)}",
         f"- compiled runnable jobs for scope: {len(compiled_scope_rows)}",
         f"- jobs with missing coverage: {len(missing_jobs)}",
@@ -694,11 +765,27 @@ def coverage_payload(
     stale_jobs = [cov for cov in missing_jobs if cov.status in BLOCKING_STATUSES]
     expected_points = {point for cov in all_jobs for point in cov.expected}
     present_points = {point for cov in all_jobs for point in cov.present}
+    optional_points = optional_present_points(data, scope, expected_points)
+    coverage_na_points = {
+        point
+        for cov in stale_jobs
+        if coverage_disposition(cov) == "na"
+        for point in cov.missing
+    }
+    coverage_failed_points = {
+        point
+        for cov in stale_jobs
+        if coverage_disposition(cov) == "failed"
+        for point in cov.missing
+    }
+    coverage_required_points = expected_points - coverage_na_points
     status_counts = Counter(cov.status for cov in all_jobs)
     missing_by_status = Counter(cov.status for cov in missing_jobs)
 
     def cov_payload(cov: JobCoverage, *, include_missing_points: bool) -> dict[str, Any]:
         failure = failure_payload(cov)
+        disposition = coverage_disposition(cov)
+        explanation = coverage_explanation(cov, disposition)
         payload = {
             "job_id": cov.job_id,
             "status": cov.status,
@@ -717,6 +804,8 @@ def coverage_payload(
             "attempt": cov.attempt,
             "failure": failure,
             "reason": cov.reason,
+            "coverage_disposition": disposition,
+            "coverage_explanation": explanation,
         }
         if include_missing_points:
             payload["missing_points"] = points_payload(cov.missing)
@@ -727,6 +816,16 @@ def coverage_payload(
         for cov in stale_jobs
         if (failure := failure_payload(cov))
     )
+    disposition_counts = Counter(
+        disposition
+        for cov in stale_jobs
+        if (disposition := coverage_disposition(cov))
+    )
+    disposition_point_counts = Counter()
+    for cov in stale_jobs:
+        disposition = coverage_disposition(cov)
+        if disposition:
+            disposition_point_counts[disposition] += len(cov.missing)
 
     return {
         "generated_at": now_iso(),
@@ -740,7 +839,14 @@ def coverage_payload(
         "data_rows": len(data),
         "data_scopes": dict(data_scope_counts(data)),
         "expected_points": len(expected_points),
+        "coverage_required_points": len(coverage_required_points),
+        "coverage_missing_required_points": len((expected_points - present_points) - coverage_na_points),
+        "coverage_na_points": len(coverage_na_points),
+        "coverage_failed_points": len(coverage_failed_points),
         "present_points": len(present_points),
+        "observed_present_points": len(present_points | optional_points),
+        "optional_present_points_count": len(optional_points),
+        "optional_present_points": points_payload(optional_points),
         "missing_points": len(expected_points - present_points),
         "jobs_total": len(all_jobs),
         "jobs_with_missing_coverage": len(missing_jobs),
@@ -752,6 +858,8 @@ def coverage_payload(
         "reset_performed": [cov.job_id for cov in reset_outcome.reset],
         "reset_exhausted": [cov.job_id for cov in reset_outcome.exhausted],
         "failure_category_counts": dict(failure_category_counts),
+        "failure_disposition_counts": dict(disposition_counts),
+        "failure_disposition_point_counts": dict(disposition_point_counts),
         "jobs": [cov_payload(cov, include_missing_points=False) for cov in all_jobs],
         "blockers": [cov_payload(cov, include_missing_points=True) for cov in stale_jobs],
     }
