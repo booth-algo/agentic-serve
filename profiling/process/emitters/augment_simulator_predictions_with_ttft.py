@@ -13,8 +13,9 @@ the mean).
 It also injects forward (workload-only) predictions when available:
   * ``ttft_pred`` / ``e2el_pred``  — **HEADLINE = the forward closed-loop queue sim**
     (``simulator/ttft_queue_sim.py``: barrier round-robin + chunked-prefill budget +
-    block-level prefix-cache w/ herd-protected rotation). Beats the static M0 (60.78%
-    vs 61.95% TTFT; 29.71% vs 30.01% E2EL), so it is now the primary prediction.
+    block-level prefix-cache w/ two-tier RECOMPUTE preemption + measured per-session
+    context-scale cohort). Beats the static M0 (33.12% vs 61.93% TTFT; 19.67% vs 29.87%
+    E2EL), so it is the primary prediction.
   * ``ttft_pred_static`` / ``e2el_pred_static``  — the static M0 comparison (prefill
     baseline × Little's-law queue amplifier, ``simulator/ttft_predict.py``).
   * ``e2el_*`` compose on the headline kernel TPOT (``tpot_pred_kernel``), no re-fit.
@@ -192,9 +193,10 @@ def augment(dashboard_json: Path, bench_root: Path) -> dict[str, int]:
 
         # ---- forward closed-loop queue-sim TTFT — HEADLINE (ttft_pred / e2el_pred) ----
         # The emergent per-turn TTFT from the event-driven multi-turn queue sim (barrier
-        # round-robin + chunked-prefill budget + block-level prefix-cache w/ herd-protected
-        # rotation). Beats the static M0 on TTFT (60.78% vs 61.95%) and E2EL (29.71% vs
-        # 30.01%) so it is now the headline ttft_pred / e2el_pred. e2el composes it with the
+        # round-robin + chunked-prefill budget + block-level prefix-cache w/ two-tier RECOMPUTE
+        # preemption + measured per-session context-scale cohort). Beats the static M0 on TTFT
+        # (33.12% vs 61.93%) and E2EL (19.67% vs 29.87%) so it is the headline ttft_pred /
+        # e2el_pred. e2el composes it with the
         # EXISTING kernel TPOT column (tpot_pred_kernel) — byte-identical composition, no
         # re-fit. The kernel headline (tpot_pred_kernel) is untouched.
         if have_qsim and profile in PROFILE_DIST:

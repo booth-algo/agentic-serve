@@ -201,6 +201,37 @@ def test_recover_on_draining_cell():
     assert body[-1] < body[peak_idx]      # recovers below the peak
 
 
+def test_high_conc_does_not_silently_fall_back():
+    # REGRESSION: at high concurrency the cohort's persistent KV fills the pool; before the
+    # two-tier preemption fix every next-turn head was eviction-protected -> nothing admitted
+    # -> no step scheduled -> the sim drained after turn 0 and _aggregate SILENTLY filled the
+    # rest with the static fallback. The real sim MUST simulate deep into the climb.
+    turns = _real_cell(SWE, 200)
+    if turns is None:
+        turns = _mk_turns(30, new=1500.0, output=28.0)
+    sessions = _build_cohort(turns, SWE, 200)
+    deep = max(s.turn_count for s in sessions) - 1  # deepest turn the cohort reaches
+    if deep < 10:
+        pytest.skip("cohort too short to exercise the deadlock regime")
+    ttfts = _run_sim(sessions, RooflineParams(), 4_000_000)
+    sim_turns = {ti for (_sid, ti) in ttfts}  # turns with a REAL first-token (not fallback)
+    assert max(sim_turns) >= min(deep, 20)  # sim ran past the turn-0 herd, no silent fallback
+
+
+def test_context_scale_spread_applied():
+    # The cohort applies a measured per-session context SCALE so sessions do NOT all carry the
+    # identical median trajectory (the spread is what keeps the median session a hit near the
+    # cliff). Skips cleanly if the realized scale artifact is unavailable.
+    from simulator.ramp_tpot import context_scale_quantiles
+
+    if not context_scale_quantiles(SWE):
+        pytest.skip("context-scale quantiles unavailable")
+    turns = _real_cell(SWE, 200) or _mk_turns(20, new=1500.0, output=28.0)
+    sessions = _build_cohort(turns, SWE, 200)
+    ctx5 = {round(s.turns[5].cached_context_tokens, 1) for s in sessions if s.turn_count > 5}
+    assert len(ctx5) > 1  # per-session scale spread, not median-for-all
+
+
 def test_forward_path_never_reads_scheduled_requests():
     turns = _mk_turns(10, new=1200.0, output=30.0)
     bogus = [dict(t, scheduled_requests=99999) for t in turns]

@@ -92,10 +92,10 @@ DIST_DIR = _REPO_ROOT / "inference-benchmark" / "data" / "distributions"
 # inference-benchmark/src/workloads/profiles.py). survival(t) is read from each
 # file's histograms['turn_count']; this is the forward cohort-drain source.
 PROFILE_DIST = {
-    "swebench-multiturn-synth": "swebench_multiturn_short_tracereplay_filtered-mse.json",
-    "terminalbench-multiturn-synth": "terminalbench_multiturn_short_tracereplay_filtered-mse.json",
-    "osworld-multiturn-synth": "osworld_multiturn.json",
-    "chat-multiturn-synth": "chat_multiturn.json",
+    "swebench-multiturn-synth": "swebench_multiturn_short_tracereplay_filtered-mse_realized.json",
+    "terminalbench-multiturn-synth": "terminalbench_multiturn_short_tracereplay_filtered-mse_realized.json",
+    "osworld-multiturn-synth": "osworld_multiturn_realized.json",
+    "chat-multiturn-synth": "chat_multiturn_realized.json",
 }
 
 _SURVIVAL_CACHE: dict[str, list[float]] = {}
@@ -123,6 +123,31 @@ def _survival(profile: str) -> list[float] | None:
     if profile not in _SURVIVAL_CACHE:
         _SURVIVAL_CACHE[profile] = forward_survival(PROFILE_DIST[profile])
     return _SURVIVAL_CACHE[profile]
+
+
+_SCALE_CACHE: dict[str, list[float]] = {}
+
+
+def context_scale_quantiles(profile: str) -> list[float] | None:
+    """Per-session context-size SCALE quantiles (p0..p100) for a profile, or None.
+
+    Each session in a cohort runs systematically larger/smaller contexts than the
+    per-turn median (a measured workload property: ``context_scale_quantiles`` in the
+    realized dist file = per-session median of context/per-(conc,turn)-median, pooled).
+    The cohort applies a session's quantile scale to the median trajectory so the KV
+    working set has the measured SPREAD — small sessions stay cache-resident (hits)
+    while the large minority is evicted, keeping the MEDIAN session a hit near the pool
+    cliff (the osworld saturate-RECOVER). Pure workload distribution — no TTFT fit."""
+    if profile not in PROFILE_DIST:
+        return None
+    if profile not in _SCALE_CACHE:
+        try:
+            d = json.loads((DIST_DIR / PROFILE_DIST[profile]).read_text())
+            q = d.get("context_scale_quantiles")
+            _SCALE_CACHE[profile] = [float(x) for x in q] if q else []
+        except Exception:
+            _SCALE_CACHE[profile] = []
+    return _SCALE_CACHE[profile] or None
 
 
 def sched_hat(profile: str, concurrency: float, turn_index: int) -> float:

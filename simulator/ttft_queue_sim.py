@@ -1,5 +1,5 @@
 """Forward, closed-loop, event-driven multi-turn TTFT **queue** simulator with
-**session-persistent KV + RECOMPUTE eviction** (vLLM v1 model).
+**session-persistent KV + RECOMPUTE preemption** (vLLM v1 model).
 
 TTFT is not a quasi-static per-turn quantity like TPOT — it is the wall-clock **queue
 wait** a request sees before its first token (client_queue_wait ~= 0, so all server-side
@@ -21,19 +21,29 @@ hit/miss fraction self-adjusts to KV pressure and sets the magnitude.
 MODEL (fit-free — NO new fitted constants):
 
 * Cohort: ``C = round(concurrency)`` sessions; each session's turn-count drawn FORWARD from
-  the profile turn-count survival histogram (``ramp_tpot.forward_survival`` / ``PROFILE_DIST``)
-  DETERMINISTICALLY by quantile ``q_k=(k+0.5)/C`` (reproducible; no RNG, no wall-clock reads).
+  the profile turn-count survival histogram (``ramp_tpot.forward_survival`` / ``PROFILE_DIST``,
+  the REALIZED success-filtered distribution) DETERMINISTICALLY by quantile ``q_k=(k+0.5)/C``
+  (reproducible; no RNG, no wall-clock reads). Each session ALSO gets a measured per-session
+  context-size SCALE (``ramp_tpot.context_scale_quantiles``) applied to the median trajectory,
+  so the cohort's KV working set has the real SPREAD — small sessions stay cache-resident
+  (hits) while the large minority is evicted, keeping the MEDIAN session a hit near the pool
+  cliff (the osworld saturate-RECOVER). Survival + scale are measured WORKLOAD properties.
 * Shared GPU continuous-batching steps; admission gated by KV blocks
   (``PrefixLRUCache(available_kv_blocks=27250, 16)``) + ``max_num_seqs`` + ``MAX_NUM_BATCHED_TOKENS``
   (vLLM serving defaults, documented config — not MAPE knobs).
-* **Block-level prefix cache (``PrefixLRUCache``): a session's cached PREFIX persists across
-  turns AND across eviction.** Making room reuses the globally-LRU-oldest cached blocks,
-  trimming a victim's prefix from its TAIL; the victim reclaims whatever survived on its next
-  turn (HIT) and re-prefills only the trimmed tail — NOT its whole context unless every block
-  was reused. A dead session is never freed; its blocks are LRU-oldest so they evict first
-  (the buffer that shields active sessions). This retention is what makes a draining cohort's
-  re-prefills cheap → the measured TTFT RECOVERY; heavy over-subscription churns all blocks →
-  full re-prefills → the PEAK.
+* **Block-level prefix cache (``PrefixLRUCache``) with two-tier eviction.** A session's cached
+  PREFIX persists across turns AND across eviction. Tier 1 reclaims FREE residents (departed/dead
+  sessions' blocks — the LRU buffer that shields active sessions). Tier 2, only under GENUINE
+  over-subscription (the cohort KV exceeds the pool so tier 1 can't satisfy admission), PREEMPTS
+  idle herd residents by ``preempt_policy`` (``'tail'`` = most-recently-used first, vLLM v1
+  RECOMPUTE tail-preempt ≫ ``'lru'``), evicting WHOLE sessions so the overflow concentrates on a
+  full-miss minority (median stays a hit). In-flight KV (a req prefilling/decoding THIS step) is
+  never evicted. Without tier 2 the sim DEADLOCKS at high concurrency (whole herd protected → no
+  admission → silent fallback to the static formula); without whole-session eviction the trim
+  spreads thin and every session becomes a partial miss (osworld 2× over-count). A turn's hit/miss
+  is FROZEN at barrier release (``resident_at_barrier``) so a peer's in-pass eviction can't cascade
+  it into a spurious miss. Light over-subscription → cheap hits → TTFT RECOVERS; heavy → full
+  re-prefills → the PEAK.
 * Barrier round-robin (matches the harness ``run_multi_turn_benchmark``: all sessions' turn-N
   requests dispatched together, ``asyncio.gather`` between turns): turn ``t``'s ENTIRE herd of
   surviving sessions arrives at the SAME epoch; turn ``t+1`` is released only after EVERY
@@ -60,7 +70,7 @@ from simulator.cached_prefill_lookup import cached_prefill_step_ms
 from simulator.closed_form_tpot import RooflineParams
 from simulator.kernel_step_cost import decode_step_ms
 from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot
-from simulator.ramp_tpot import PROFILE_DIST, forward_survival
+from simulator.ramp_tpot import PROFILE_DIST, context_scale_quantiles, forward_survival
 from simulator.ttft_predict import _prefill_per_token_ms, predict_turn_ttft
 
 __all__ = ["predict_cell_ttft_qsim", "predict_cell_e2el_qsim", "PROFILE_DIST"]
@@ -177,37 +187,77 @@ class PrefixLRUCache:
         self.recency[sid] = self._tick
         self._tick += 1
 
-    def _evict(self, need: int, protect: set[int]) -> bool:
-        """Free ``need`` physical blocks by trimming the TAIL blocks of LRU-oldest sessions
-        (skipping ``protect`` = in-flight, whose blocks are in active use). Returns True once
-        enough is free, False if no evictable blocks remain (-> head-of-line block)."""
-        if need <= self.free():
-            return True
-        victims = sorted(
-            (s for s in self.cached if s not in protect and self.cached[s] > 0),
-            key=lambda s: (self.recency.get(s, -1), s),  # oldest first; sid tiebreak (determinism)
-        )
-        for v in victims:
+    def _trim_tail(self, sids: list[int], need: int, whole: bool = False) -> None:
+        """Free blocks by evicting ``sids`` (in the given order) until ``need`` blocks are free.
+        ``whole=True`` evicts each victim's ENTIRE resident prefix (concentrating the overflow
+        onto a minority of full-miss sessions, so the MEDIAN session stays a full hit — the
+        measured osworld saturate-recover); ``whole=False`` trims only the marginal tail."""
+        for v in sids:
             if self.free() >= need:
                 break
-            trim = min(self.cached[v], need - self.free())
+            trim = self.cached[v] if whole else min(self.cached[v], need - self.free())
             self.cached[v] -= trim
             self.evictions += 1
             if self.cached[v] <= 0:
                 del self.cached[v]
+
+    def _evict(
+        self, need: int, hard_protect: set[int], soft_protect: set[int], policy: str = "tail"
+    ) -> bool:
+        """Free ``need`` physical blocks in two tiers:
+
+        1. **Reclaim free residents** — sessions in NEITHER protect set (departed/dead
+           sessions' residual prefix), trimmed LRU-oldest-first. This is the rotation buffer.
+        2. **Preempt under genuine over-subscription** — if the cohort's persistent KV fills
+           the pool so tier 1 can't satisfy ``need``, evict ``soft_protect`` (herd members not
+           in-flight = idle resident hits-to-be) by ``policy``: ``'tail'`` = most-recently-used
+           first (vLLM v1 RECOMPUTE tail-preempt), ``'lru'`` = oldest-first (prefix-cache LRU).
+           A preempted session re-prefills its trimmed tail on its turn (a MISS) — the climb.
+
+        ``hard_protect`` (a req in-flight THIS step, KV pinned) is never evicted. Returns True
+        once ``need`` is free, False only if even preempting every idle resident is not enough
+        (a single over-large head behind pinned in-flight KV — deferred, retried on completion)."""
+        if need <= self.free():
+            return True
+        free_residents = sorted(
+            (s for s in self.cached
+             if s not in hard_protect and s not in soft_protect and self.cached[s] > 0),
+            key=lambda s: (self.recency.get(s, -1), s),  # oldest first; sid tiebreak (determinism)
+        )
+        self._trim_tail(free_residents, need)
+        if self.free() >= need:
+            return True
+        # tier 2: genuine over-subscription -> preempt idle herd residents (vLLM RECOMPUTE),
+        # evicting WHOLE sessions (concentrate the overflow on a full-miss minority) so the
+        # median session stays a hit — without this the trim spreads thin and every session
+        # becomes a partial miss (osworld ~2x over-count).
+        soft = [
+            s for s in self.cached
+            if s in soft_protect and s not in hard_protect and self.cached[s] > 0
+        ]
+        soft.sort(key=lambda s: (self.recency.get(s, -1), s), reverse=(policy == "tail"))
+        self._trim_tail(soft, need, whole=True)
         return self.free() >= need
 
-    def grow_to(self, sid: int, target_blocks: int, protect: set[int]) -> bool:
+    def grow_to(
+        self,
+        sid: int,
+        target_blocks: int,
+        hard_protect: set[int],
+        soft_protect: set[int],
+        policy: str = "tail",
+    ) -> bool:
         """Make ``sid`` resident up to ``target_blocks``, RECLAIMING its surviving prefix and
-        allocating only the delta (evicting LRU others if needed). Touches ``sid`` (MRU).
-        Returns False (HOL block) if the delta cannot be freed. Context only grows, so a
-        target below the current residency just keeps the larger residency."""
+        allocating only the delta (reclaiming free residents, then preempting idle herd
+        residents under over-subscription — see ``_evict``). Touches ``sid`` (MRU). Returns
+        False (HOL block) only if the delta cannot be freed even after preemption. Context only
+        grows, so a target below the current residency just keeps the larger residency."""
         cur = self.cached.get(sid, 0)
         if target_blocks <= cur:
             self.touch(sid)
             return True
         delta = target_blocks - cur
-        if not self._evict(delta, protect | {sid}):
+        if not self._evict(delta, hard_protect | {sid}, soft_protect - {sid}, policy):
             return False
         self.cached[sid] = target_blocks
         self.touch(sid)
@@ -274,6 +324,8 @@ class _ServerState:
     # --- barrier round-robin state (matches the benchmark harness, see _release_herd) ---
     current_turn: int = 0       # turn_index of the herd currently in flight
     herd_remaining: int = 0     # requests of the current herd not yet departed; 0 -> barrier
+    preempt_policy: str = "tail"  # over-subscription victim: 'tail' (vLLM RECOMPUTE) or 'lru'
+    resident_at_barrier: dict[int, int] = field(default_factory=dict)  # sid -> resident blocks at herd release (hit/miss frozen here)
 
     def push(self, epoch: float, kind: int, payload: Any) -> None:
         heapq.heappush(self.heap, (epoch, self.seq, kind, payload))
@@ -329,6 +381,30 @@ def _build_cohort(
             return spec_by_idx[max(lower)]
         return spec_by_idx[min(spec_by_idx)] if spec_by_idx else TurnSpec(idx, 0.0, 1.0, 1.0)
 
+    # Per-session context-size SCALE (measured workload spread): each cohort session runs
+    # systematically larger/smaller contexts than the median, so the KV working set has the
+    # real spread — small sessions stay resident (hits) while the large minority is evicted,
+    # keeping the MEDIAN session a hit near the pool cliff (the osworld saturate-RECOVER). The
+    # per-(conc,turn) MEDIAN trajectory is preserved; only the per-session spread is added.
+    scale_q = context_scale_quantiles(profile)
+
+    def session_scale(qk: float) -> float:
+        if not scale_q:
+            return 1.0
+        nq = len(scale_q)
+        return scale_q[min(nq - 1, max(0, int(round(qk * (nq - 1)))))]
+
+    def scaled_spec(idx: int, f: float) -> TurnSpec:
+        s = spec_for(idx)
+        if f == 1.0:
+            return s
+        return TurnSpec(
+            turn_index=s.turn_index,
+            cached_context_tokens=s.cached_context_tokens * f,
+            new_prefill_tokens=s.new_prefill_tokens * f,
+            output_tokens=s.output_tokens,
+        )
+
     sessions: list[Session] = []
     for k in range(c):
         q = (k + 0.5) / c
@@ -337,7 +413,8 @@ def _build_cohort(
         else:
             tc = n_turn_slots if n_turn_slots > 0 else 1
         tc = max(1, tc)
-        sessions.append(Session(session_id=k, turn_count=tc, turns=[spec_for(i) for i in range(tc)]))
+        f = session_scale(q)
+        sessions.append(Session(session_id=k, turn_count=tc, turns=[scaled_spec(i, f) for i in range(tc)]))
     return sessions
 
 
@@ -367,6 +444,10 @@ def _schedule(state: _ServerState) -> None:
     for r in state.prefilling.values():
         budget -= min(r.remaining_prefill, LONG_PREFILL_TOKEN_THRESHOLD)
     cache = state.cache
+    # Hard-protect = sessions with a req in-flight THIS step (KV pinned). Grows as we admit, so
+    # a head admitted earlier in this pass is never preempted to make room for a later one.
+    in_flight = {r.session_id for r in state.prefilling.values()}
+    in_flight |= {r.session_id for r in state.running.values()}
     deferred: list[_Req] = []
     for head in state.waiting:
         if budget <= 0 or len(state.running) + len(state.prefilling) >= MAX_NUM_SEQS:
@@ -375,21 +456,28 @@ def _schedule(state: _ServerState) -> None:
         sid = head.session_id
         # Block-level prefix-cache hit: the surviving resident prefix covers up to
         # ``cached_blocks * block_size`` tokens of this turn's cached context; only the
-        # EVICTED tail of that prefix plus the new tokens must be (re-)prefilled.
-        resident_prefix = min(head.cached, cache.cached_blocks(sid) * cache.block_size)
+        # EVICTED tail of that prefix plus the new tokens must be (re-)prefilled. Resident
+        # blocks are read from the BARRIER SNAPSHOT (frozen at herd release), not live, so a
+        # peer's in-pass eviction can't cascade this session into a spurious MISS.
+        snap_blocks = state.resident_at_barrier.get(sid, cache.cached_blocks(sid))
+        resident_prefix = min(head.cached, snap_blocks * cache.block_size)
         reprefill_cached = max(0.0, head.cached - resident_prefix)
         head.is_miss = reprefill_cached > 0.0
         head.remaining_prefill = reprefill_cached + head.new_prefill
         head.resident_prefix = resident_prefix          # HIT prefix attended each prefill step
         head.prefill_total = max(1.0, head.remaining_prefill)  # to spread the cached-attn cost across chunks
         target_blocks = cache.tokens_to_blocks(head.kv_tokens)
-        # Reserve the full context, reclaiming the surviving prefix; evict only NON-herd cache
-        # (``herd_pending`` is protected). If the delta can't be freed yet, DEFER this head and
-        # retry once a completion frees blocks (rotation) — do NOT block the whole queue.
-        if not cache.grow_to(sid, target_blocks, state.herd_pending):
+        # Reserve the full context: reclaim the surviving prefix, then free residents, then (only
+        # under genuine over-subscription) PREEMPT an idle herd resident (``herd_pending`` minus
+        # in-flight) per ``preempt_policy`` — vLLM RECOMPUTE. The preempted session re-prefills
+        # its trimmed tail on its turn (a MISS). In-flight KV is never evicted. If even that can't
+        # free the delta (one over-large head behind pinned in-flight KV), DEFER and retry on a
+        # completion — never a hard stall.
+        if not cache.grow_to(sid, target_blocks, in_flight, state.herd_pending, state.preempt_policy):
             deferred.append(head)
             continue
         state.prefilling[head.rid] = head
+        in_flight.add(sid)
         budget -= min(head.remaining_prefill, LONG_PREFILL_TOKEN_THRESHOLD)
     state.waiting = deferred
 
@@ -494,7 +582,10 @@ def _on_step(state: _ServerState) -> None:
         state.push(state.clock, _FIRST_TOKEN, rid)
 
     # --- decode bookkeeping: one token per running req; the SESSION's KV grows by one token,
-    #     reserving a fresh block at block boundaries (evicting only non-herd cache). ---
+    #     reserving a fresh block at block boundaries (reclaiming free residents, then
+    #     preempting idle herd residents under over-subscription — in-flight KV pinned). ---
+    decode_in_flight = {r.session_id for r in state.prefilling.values()}
+    decode_in_flight |= {r.session_id for r in state.running.values()}
     finished_decode: list[int] = []
     for rid in list(state.running.keys()):
         r = state.running.get(rid)
@@ -503,7 +594,9 @@ def _on_step(state: _ServerState) -> None:
         r.kv_tokens += 1.0
         need = state.cache.tokens_to_blocks(r.kv_tokens)
         if need > state.cache.cached_blocks(r.session_id):
-            state.cache.grow_to(r.session_id, need, state.herd_pending)  # best-effort
+            state.cache.grow_to(
+                r.session_id, need, decode_in_flight, state.herd_pending, state.preempt_policy
+            )  # best-effort
         r.output_left -= 1
         if r.output_left <= 0:
             finished_decode.append(rid)
@@ -563,6 +656,11 @@ def _release_herd(state: _ServerState, turn_idx: int) -> None:
     herd = [s for s in state.sessions if s.turn_count > turn_idx]
     state.current_turn = turn_idx
     state.herd_remaining = len(herd)
+    # Freeze each herd member's resident prefix AT release: this turn's hit/miss is decided
+    # against what was cache-resident when the herd was scheduled, so admitting one member can
+    # NOT retroactively turn a peer's resident hit into a MISS (the cascade that over-counted
+    # osworld ~2x the physical working-set overflow). Physical eviction still runs live below.
+    state.resident_at_barrier = {s.session_id: state.cache.cached_blocks(s.session_id) for s in herd}
     # Every herd member is evict-PROTECTED until it departs: a re-prefilling miss must not
     # trim a herd member still awaiting its turn (that member is a hit-to-be). Only dead /
     # already-completed-this-round sessions are evictable.
@@ -587,10 +685,11 @@ def _advance_herd(state: _ServerState) -> None:
 
 
 def _run_sim(
-    sessions: list[Session], params: RooflineParams, max_events: int
+    sessions: list[Session], params: RooflineParams, max_events: int,
+    preempt_policy: str = "tail",
 ) -> dict[tuple[int, int], float]:
     cache = PrefixLRUCache(params.available_kv_blocks, params.cache_block_size)
-    state = _ServerState(params=params, cache=cache, sessions=sessions)
+    state = _ServerState(params=params, cache=cache, sessions=sessions, preempt_policy=preempt_policy)
 
     _release_herd(state, 0)  # turn-0 herd: all sessions arrive at epoch 0
 
@@ -704,14 +803,16 @@ def predict_cell_ttft_qsim(
     *,
     oracle: bool = False,
     max_events: int = 4_000_000,
+    preempt_policy: str = "tail",
 ) -> list[float]:
     """Per-turn TTFT (ms) for a (profile, concurrency) cell, emergent from a forward
-    closed-loop event-driven queue sim with session-persistent KV + RECOMPUTE eviction.
+    closed-loop event-driven queue sim with session-persistent KV + RECOMPUTE preemption.
 
     Returns one TTFT per input turn (median over sessions reaching that turn_index), aligned
     to ``turns`` order; ``[]`` for empty; a turn_index reached by no session falls back to the
     forward static predictor. Forward by default (cohort from ``forward_survival``);
-    ``oracle=True`` overlays measured ``session_timelines`` (validation only)."""
+    ``oracle=True`` overlays measured ``session_timelines`` (validation only). ``preempt_policy``
+    selects the over-subscription victim: ``'tail'`` (vLLM RECOMPUTE, MRU-first) or ``'lru'``."""
     if not turns:
         return []
     p = params or RooflineParams()
@@ -722,7 +823,7 @@ def predict_cell_ttft_qsim(
     if sessions is None:
         sessions = _build_cohort(turns, profile, float(concurrency))
 
-    ttfts = _run_sim(sessions, p, max_events)
+    ttfts = _run_sim(sessions, p, max_events, preempt_policy=preempt_policy)
     return _aggregate(ttfts, turns, profile, float(concurrency), p)
 
 
