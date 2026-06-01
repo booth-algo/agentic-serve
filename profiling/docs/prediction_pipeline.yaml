@@ -1,116 +1,111 @@
-# Prediction pipeline — ground truth sources and predictor components.
+# Prediction pipeline — how the dashboard's per-turn TTFT / TPOT / E2EL predictions are produced.
+#
+# End-to-end view: which scripts build inference-benchmark/dashboard/public/simulator-predictions.json,
+# in what order, what data they read, and how each metric is validated. The low-level kernel
+# composition (full/cached prefill + decode grids -> per-step cost) lives in kernel_composition_method.yaml.
+
+output:
+  dashboard_json: inference-benchmark/dashboard/public/simulator-predictions.json   # gitignored, served by the dashboard from /
+  consumed_by: "dashboard simulator page (ServingPredictionsPage, pageKind=simulator) — model + GPU dropdowns + TTFT/TPOT/E2EL MAPE badges"
+  shape: >
+    { <GPU_KEY>: [ row, ... ] }.  Each row = one (model, profile, concurrency) cell with
+    multiturn_turn_predictions[]; each turn carries {ttft,tpot,e2el}_meas (ground truth),
+    {ttft,tpot,e2el}_pred (headline), comparison lines, and *_err / *_signed_err_ms / *_abs_err_ms.
+    Cell-level {ttft,tpot,e2el}_err (mean APE) drive the dashboard MAPE badges.
+  gpu_keys:
+    H100:   "tp1 Llama-3.1-8B — the primary, fully-calibrated config"
+    H100x2: "tp2 (2xH100) — measured decode grid + KV pool; prefill still tp1 (first cut)"
+
+pipeline:   # run IN ORDER; each stage reads the JSON from the previous stage and augments it in place
+  1_base_tpot:
+    script: profiling/process/predictors/predict_llama31_8b_h100_tpot_with_engine_steps.py
+    writes: "the base rows + per-turn multiturn_turn_predictions, and tpot_pred (engine-step roofline) via --dashboard-output"
+    reads:
+      - profile_data/kernels/forward_pass/gemm/H100.csv          # GEMM
+      - profile_data/kernels/forward_pass/flash_attn/H100.csv    # attention
+      - profile_data/kernels/fa3_prefill_H100.csv                # FA3 prefill
+      - profile_data/results/cached_prefill_v3_H100.csv          # cached-prefill grid
+      - profile_data/results/decode_profile_H100_large_2026-05-17.csv
+      - profile_data/kernels/roofline_params_H100_llama31_8b.json
+      - profile_data/results/benchmark_turns_llama31_8b_h100_vllm.csv   # per-turn structure source
+    kv_pool: "--available-gpu-kv-blocks 27651 (H100 tp1)"
+  2_kernel_tpot:
+    script: profiling/process/emitters/augment_simulator_predictions_with_kernel.py
+    writes: "tpot_pred_kernel (HEADLINE TPOT), tpot_pred_kernel_hint (classifier stepping-ramp), tpot_pred_ramp — per turn; leaves tpot_pred (roofline) untouched"
+    uses: "simulator/kernel_tpot.py::predict_cell_tpot (+ kernel_tpot_hint, ramp_tpot.predict_cell_tpot_ramp)"
+  3_ttft_e2el:
+    script: profiling/process/emitters/augment_simulator_predictions_with_ttft.py
+    writes:
+      - "ttft_meas / e2el_meas  (GROUND TRUTH, median over successful requests per turn_index)"
+      - "ttft_pred / e2el_pred  (HEADLINE = forward queue sim; e2el composes on kernel TPOT)"
+      - "ttft_pred_static / e2el_pred_static  (static M0 comparison)"
+      - "ttft_err / e2el_err (+ signed/abs) and the _static error twins"
+    uses: "simulator/ttft_queue_sim.py::predict_cell_ttft_qsim (headline) + simulator/ttft_predict.py::predict_cell_ttft (M0)"
+  4_tp2_rows:
+    script: profiling/process/emitters/build_tp2_simulator_rows.py
+    writes: "the H100x2 GPU key (tp2 first-cut rows) — measured tp2 decode grid + KV pool 62416; prefill law still tp1"
 
 predict:
 
-  full_prefill:
-    description: "Q=S, KV=S. Full prompt, no prefix cache."
-    status: validated
-    mape: "8.2% across 10 N values (N>=192: 5.0%). Leave-one-out cross-validation."
-    independence: >
-      FA3: fully independent (standalone CUDA events).  GEMM/elementwise/KV_write:
-      nsys GPU time proportions are independent, but absolute wall-clock scale
-      uses ground truth.  Leave-one-out validates curve smoothness, not absolute
-      accuracy.  Partially circular — needs cross-validation across measurement
-      runs for full independence.
-
-    ground_truth:
-      file: profile_data/kernels/prefill_profile_H100_dense.csv
-      script: profiling/profile/vllm/sweep/prefill_steps.py
-      points: 15
-
-    predictor:
-      formula: "GEMM_compiled(N) + FA3(N) + elementwise(N) + KV_write(N) + other(N)"
-      GEMM_compiled:
-        source: nsys nvjet kernel time, 10 N values [64..8192]
-        data: /data48/kevinlau/tmp/nsys/prefill_N*.nsys-rep
-      FA3:
-        source: profile_data/kernels/fa3_prefill_H100.csv, 8 N values
-      elementwise:
-        source: nsys triton kernel proportion, 7.6-8.0% of non-attention
-      KV_write:
-        source: nsys reshape_and_cache proportion, 1.3% constant
-      other:
-        source: nsys fill/copy/sampling/embed, 2.8-4.2%
-
-  cached_prefill:
-    description: "Q=U, KV=P+U. P cached, U new."
-    status: validated
-    mape: "9.8% across 20 points (P<=4096). GEMM(16)+elem=13.4ms fitted from data (circular — scale not independently measured). FA3 independent."
-    finding: >
-      Prefix caching CONFIRMED working. 25/25 cache hits. EngineCore per-step
-      wall time. Prefill = GEMM(chunk) + FA3(U,P+U) + elementwise.
-      GEMM at chunk=16 is ~2ms (2.5x faster than nsys N=64 at 5.1ms —
-      CUDA graph eliminates kernel launch overhead at tiny batch).
-      P=8192 uses larger chunks [64..512] due to bucket policy.
-
-    ground_truth:
-      file: profile_data/results/cached_prefill_v3_H100.csv
-      script: profiling/profile/vllm/cuda_events/cached_prefill_steps_v3.py
-      method: delta method (t32-t1)/31, decode_ref=6.5ms
-      points: 25
-
-    predictor:
-      formula: "GEMM_compiled(chunk=U) + FA3_cached(U, P+U) + elementwise(U) + KV_write(U)"
-      GEMM_compiled:
-        source: shared with full_prefill — same nsys nvjet curve, evaluated at chunk=U
-        note: V1 CUDA graph at chunk=16 ≈ 2 ms; V0 nsys N=16 ≈ 6.8 ms (graph eliminates launch overhead)
-      FA3_cached:
-        source: profile_data/results/fa3_cached_prefill_H100.csv
-        points: 25
-        formula: "FA3 with Q=U, KV=P+U (causal mask over the U new tokens against P cached + U new keys)"
-      elementwise:
-        source: shared with full_prefill — same nsys triton proportion (7.6–8.0%), evaluated at chunk=U
-      KV_write:
-        source: shared with full_prefill — reshape_and_cache, 1.3% constant proportion, evaluated at chunk=U
-
-  decode:
-    description: "Q=1 per request, KV=T. B requests batched."
-    status: validated
-    mape: "7.4% (median 3.8%) across 44 rows"
-    ground_truth:
-      file: profile_data/results/decode_profile_H100_large_2026-05-17.csv
-      script: profiling/profile/vllm/cuda_events/decode_steps.py
-    predictor:
-      formula: "NCU_GEMM(B) + XGBoost_attention(B,T) + NCU_small_kernels(B)"
-      note: bandwidth-scaling fallback for T beyond per-B training max
-
   tpot:
-    description: "End-to-end TPOT prediction from kernel features + XGBoost"
+    description: "Per-turn inter-token latency (ITL). Kernel-composed cost mapped to TPOT, regime-aware."
     status: validated
-    mape: "29.0% primary rows, 45.0% all rows (median 9.0%)"
-    method: >
-      Per-profile leave-one-out XGBoost.  Features: GEMM_compiled(B),
-      bandwidth-aware decode attention(B,T), prefill GEMM+FA3,
-      elementwise, KV pressure, concurrency, turn_index, output_tokens,
-      cache_hit_rate.  No scheduler simulation — kernel costs mapped
-      directly to TPOT via learned per-profile relationship.
+    headline_field: tpot_pred_kernel
+    gate: "overall 16.48% MAPE; swebench-plateau 9.20% (validate_kernel_tpot.py)"
     predictor:
-      script: profiling/process/predictors/predict_tpot_from_kernel_features.py
-      ground_truth: profile_data/results/benchmark_turns_llama31_8b_h100_vllm.csv
+      module: simulator/kernel_tpot.py  (predict_cell_tpot)
+      step_cost: "simulator/kernel_step_cost.py — measured decode grid, bilinear-interp in log space + roofline beyond the grid"
+      formula: "kernel_step = decode_step_ms(B_eff, ctx); B_eff capped by KV pool; pressure-aware amplifier toward a saturated ITL ceiling"
+      comparison_lines: "tpot_pred (engine-step roofline), tpot_pred_kernel_hint, tpot_pred_ramp"
+    data:
+      decode_grid: profile_data/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv  (kernel_step_cost DEFAULT_CSV)
+      roofline_params: profile_data/kernels/roofline_params_H100_llama31_8b.json  (available_kv_blocks=27250, kv_bytes/token, bandwidth)
 
-how_to_correct:
+  ttft:
+    description: "Per-turn time-to-first-token. Wall-clock queue wait of a synchronized herd of C sessions."
+    status: validated
+    headline_field: ttft_pred
+    gate: "overall 33.12% MAPE (validate_ttft.py). Static M0 comparison = 61.93%."
+    predictor:
+      module: simulator/ttft_queue_sim.py  (predict_cell_ttft_qsim)
+      mechanism: >
+        Forward closed-loop event-driven queue sim: barrier round-robin arrivals (matches the harness
+        asyncio.gather between turns) + vLLM v1 chunked-prefill budget + block-level prefix cache with
+        two-tier RECOMPUTE preemption (evict idle herd residents under genuine over-subscription -> MISS
+        re-prefill = the climb). Cohort = C sessions drawn from the profile's REALIZED survival, each scaled
+        by a measured per-session context-size factor (small sessions stay resident=hits, large minority
+        preempted -> median stays a hit near the sharp KV cliff = the osworld saturate-recover).
+      cohort_source: "simulator/ramp_tpot.py PROFILE_DIST -> inference-benchmark/data/distributions/<profile>_realized.json"
+      shared_kernels: "decode_step_ms (same grid as tpot) for the per-step decode cost; KV pool 27250"
+      comparison: "simulator/ttft_predict.py::predict_cell_ttft (static M0 = c1 prefill baseline x Little's-law queue amplifier) -> ttft_pred_static"
+    data:
+      survival_and_scale: inference-benchmark/data/distributions/*_realized.json  (turn_count histogram + context_scale_quantiles; built by profiling/process/extractors/build_realized_session_distributions.py)
+      prefill_law: "c1-anchored serving constants in ttft_queue_sim.py (FLOOR 22.5 + NEW 0.031/tok + HOST 6.103/1k split 57/43 + FA3 8.31e-7/tok^2)"
 
-  full_prefill:
-    - "Done. 8.2% MAPE. Could collect nsys at N=1,128 to bracket small-N regime."
-    - "Engine-step predictor default is now --dense-source=nsys_compiled, which
-       reads profile_data/kernels/prefill_compiled_breakdown_H100.csv produced by
-       profiling/process/extractors/extract_nsys_prefill_breakdown.py.  That
-       extractor pulls per-bucket SHARES from nsys nvjet/triton kernel times
-       (independent) and applies them to the prefill_profile_H100_dense.csv
-       SCALE — partially circular for absolute scale, but bucket decomposition
-       and curve shape come from independent measurement.  Default switch was
-       made after engine-step MAPE went 50.92% (forward_pass / isolated cuBLAS)
-       → 49.00% (nsys_compiled).  Removed --dense-source=compiled_prefill was
-       fully circular (vLLM_prefill_total - FA3); deleted."
+  e2el:
+    description: "Per-turn end-to-end latency. Composed, not separately modeled."
+    status: validated
+    headline_field: e2el_pred
+    gate: "overall 19.67% MAPE (validate_ttft.py). Static M0 comparison = 29.87%."
+    formula: "e2el_pred[t] = ttft_pred[t] + output_tokens[t] * tpot[t]   (tpot = the kernel TPOT headline)"
+    note: "E2EL is decode-dominated so it tracks far better than TTFT once TPOT + TTFT are in place."
 
-  cached_prefill:
-    - "9.8% MAPE. GEMM(16)+elem=13.4ms across all chunks."
-    - "Nsys at N=16 (V0 mode) gives GEMM=6.8ms — V0 vs V1 CUDA graph bucket difference confirmed."
-    - "P=8192: chunk = max(64, U//2) vs P<=4096: chunk=16. Likely KV pressure changing capture sizes."
+ground_truth:
+  source: /mnt/100g/agent-bench/results/synthetic_distributional/h100_Llama-3.1-8B_tp{1,2}_vllm/<profile>_conc<C>.json
+  field: "per_request[] -> ttft_ms / tpot_ms / e2el_ms, success-filtered, MEDIAN per turn_index (matches how tpot_meas is built)"
+  profiles: [chat-multiturn-synth, osworld-multiturn-synth, swebench-multiturn-synth, terminalbench-multiturn-synth]
+  concurrencies: [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320]
 
-  decode:
-    - "Done at 7.4%.  Could extend NCU flash attention sweep to T=16384 for B>=32."
+validate:   # console-only gates, read the JSON, change nothing
+  tpot: "python3 -m profiling.process.predictors.validate_kernel_tpot   -> kernel 16.48% / swe-plateau 9.20%"
+  ttft_e2el: "python3 -m profiling.process.predictors.validate_ttft     -> TTFT 33.12% / E2EL 19.67% (+ STATIC M0 line)"
+  metric_note: "MAPE = mean per-turn APE (the dashboard badge number). Judge the TTFT climb by WAPE + signed bias, not MAPE (turn-0 noise dominates MAPE)."
 
-  tpot:
-    - "Add more kernel features: prefill-per-token ratio, context/output ratio, total KV bytes."
-    - "Try gradient-boosted regression instead of per-profile LOO for better generalization."
+how_to_improve:
+  ttft:
+    - "TTFT WAPE is still ~20% (irreducible c5-c40 stochastic perturbation band + osworld). Deprioritized."
+  tp2:
+    - "Re-anchor the serving prefill law (FLOOR/NEW/HOST) on tp2 c1 cells -> fixes the tp2 TTFT prefill over-prediction (offline, no GPU)."
+    - "Lower the tp2 TPOT-plateau amplifier ceiling (T_upper ~237ms is tp1-measured) -> too high for tp2's faster decode."
+  general:
+    - "New (model, GPU) config: profile its decode/prefill grids + KV pool (see kernel_composition_method.yaml + profile_data/README.md), add a GPU key here, no dashboard change needed."
