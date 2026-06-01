@@ -311,6 +311,10 @@ const TERMINAL_BLOCKER_STATUSES = new Set(['skipped', 'failed', 'known_oom']);
 
 function shouldRenderBlockedPoints(blocker: CoverageBlocker, exhaustedJobIds: Set<string>): boolean {
   if ((blocker.missing_points ?? []).length === 0) return false;
+  // Demoted to TODO (attempted but no captured OOM): render as outstanding work,
+  // not as a blocked N/A cell. Must precede the exhausted check because these
+  // jobs are also in reset_exhausted.
+  if (blocker.coverage_disposition === 'todo') return false;
   if (exhaustedJobIds.has(blocker.job_id)) return true;
   if (blocker.status === 'known_oom') return true;
   return Boolean(blocker.failure) && TERMINAL_BLOCKER_STATUSES.has(blocker.status);
@@ -787,6 +791,15 @@ export function CoveragePage({
             }
             if (cell.status === 'skipped') {
               const disposition = blocker?.coverage_disposition ?? compactJob?.coverage_disposition;
+              if (disposition === 'todo') {
+                // Attempted but produced nothing and no OOM was captured: not
+                // proven infeasible, so surface as outstanding TODO work.
+                const profiles = buildStatusProfiles(hw, model, backend, 'untested', statusReason);
+                models.push({ kind: 'status', hardware: hw, model, backend, status: 'untested', reason: statusReason, attempt: attempt ?? undefined, maxAttempts, failure, totalNeed: expectedForModel, profiles });
+                summary.untested += 1;
+                summary.totalNeed += expectedForModel;
+                continue;
+              }
               if (shouldCountFailureAsMissing(failure, statusReason, disposition)) {
                 const profiles = buildStatusProfiles(hw, model, backend, 'failed', statusReason);
                 const failureReasons = Array.from(new Set(

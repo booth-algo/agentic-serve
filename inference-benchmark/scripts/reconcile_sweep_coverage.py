@@ -45,9 +45,18 @@ BLOCKING_STATUSES = {"done", "skipped", "failed", "known_oom"}
 DEFAULT_RESET_STATUSES = {"done"}
 COVERAGE_REQUEUE_COUNT_SUFFIX = "coverage_requeue_count"
 COVERAGE_BLOCKER_SUFFIX = "coverage_blocker.json"
+# Captured-OOM evidence: a run that actually hit an OOM / KV-cache limit.
+CAPTURED_OOM_CATEGORIES = {"oom_or_kv_cache"}
+# Explainable terminal limits that stay N/A (model ran; result rejected on its
+# merits, not because we failed to capture what happened).
 N_A_FAILURE_CATEGORIES = {
     "oom_or_kv_cache",
     "success_rate_below_min",
+}
+# Attempted but produced nothing AND no OOM was captured -> not proven
+# infeasible. Demote back to TODO so the cell is re-queued / investigated
+# rather than silently hidden as N/A.
+TODO_FAILURE_CATEGORIES = {
     "zero_results",
     "incomplete_outputs",
 }
@@ -566,22 +575,41 @@ def failure_summary(cov: JobCoverage) -> str | None:
 
 
 def coverage_disposition(cov: JobCoverage) -> str | None:
-    """Classify terminal missing coverage as either fillable failure or N/A.
+    """Classify terminal missing coverage.
 
-    Red failures are cases where another run could plausibly fix repo/infra
-    behavior. Blue N/A means the job reached a terminal, explainable limit
-    after the configured retry path, so the missing points should not keep
-    counting against fillable synthetic coverage.
+    - "na":     reached a terminal, explainable limit -- a captured OOM or a
+                low-success rejection after the retry path. Excluded from the
+                fillable denominator.
+    - "todo":   attempted but produced nothing AND no OOM was captured, so the
+                cell is not proven infeasible. Kept as fillable TODO work so it
+                gets re-queued / investigated instead of hidden as N/A.
+    - "failed": a real failure (benchmark / driver / unknown) needing
+                inspection. Stays red.
     """
     if not cov.missing or cov.status not in BLOCKING_STATUSES:
         return None
     if cov.status == "known_oom":
         return "na"
-    failure = failure_payload(cov)
-    category = str((failure or {}).get("category") or "unknown")
+    category = str((failure_payload(cov) or {}).get("category") or "unknown")
     if category in N_A_FAILURE_CATEGORIES:
         return "na"
+    if category in TODO_FAILURE_CATEGORIES:
+        return "todo"
     return "failed"
+
+
+def coverage_disposition_label(cov: JobCoverage, disposition: str | None) -> str:
+    """Human label for the disposition; distinguishes captured-OOM N/A."""
+    if disposition == "na":
+        category = str((failure_payload(cov) or {}).get("category") or "")
+        if cov.status == "known_oom" or category in CAPTURED_OOM_CATEGORIES:
+            return "N/A OOM"
+        return "N/A low-success"
+    if disposition == "todo":
+        return "TODO (no captured OOM)"
+    if disposition == "failed":
+        return "failed"
+    return ""
 
 
 def coverage_explanation(cov: JobCoverage, disposition: str | None) -> str | None:
@@ -589,7 +617,9 @@ def coverage_explanation(cov: JobCoverage, disposition: str | None) -> str | Non
     if not summary:
         return None
     if disposition == "na":
-        return f"N/A after retry exhaustion: {summary}"
+        return f"{coverage_disposition_label(cov, disposition)} after retry exhaustion: {summary}"
+    if disposition == "todo":
+        return f"attempted, no captured OOM — re-queue as TODO: {summary}"
     if disposition == "failed":
         return f"failed after retry; needs inspection: {summary}"
     return summary
@@ -638,6 +668,12 @@ def build_report(
         if coverage_disposition(cov) == "failed"
         for point in cov.missing
     }
+    coverage_todo_points = {
+        point
+        for cov in stale_jobs
+        if coverage_disposition(cov) == "todo"
+        for point in cov.missing
+    }
     required_points = expected_points - coverage_na_points
     status_counts = Counter(cov.status for cov in all_jobs)
     missing_by_status = Counter(cov.status for cov in missing_jobs)
@@ -660,7 +696,8 @@ def build_report(
         f"- optional present synthetic points outside required grid: {len(optional_points)}",
         f"- observed synthetic points: {len(present_points | optional_points)} / {len(required_points)} fillable ({len(expected_points)} grid points)",
         f"- missing expected points: {len(missing_points)}",
-        f"- N/A attempted points: {len(coverage_na_points)}",
+        f"- N/A attempted points (captured OOM + low-success): {len(coverage_na_points)}",
+        f"- TODO demoted points (attempted, no captured OOM): {len(coverage_todo_points)}",
         f"- failed points needing inspection: {len(coverage_failed_points)}",
         f"- expected jobs: {len(all_jobs)}",
         f"- compiled runnable jobs for scope: {len(compiled_scope_rows)}",
@@ -778,6 +815,12 @@ def coverage_payload(
         if coverage_disposition(cov) == "failed"
         for point in cov.missing
     }
+    coverage_todo_points = {
+        point
+        for cov in stale_jobs
+        if coverage_disposition(cov) == "todo"
+        for point in cov.missing
+    }
     coverage_required_points = expected_points - coverage_na_points
     status_counts = Counter(cov.status for cov in all_jobs)
     missing_by_status = Counter(cov.status for cov in missing_jobs)
@@ -842,6 +885,7 @@ def coverage_payload(
         "coverage_required_points": len(coverage_required_points),
         "coverage_missing_required_points": len((expected_points - present_points) - coverage_na_points),
         "coverage_na_points": len(coverage_na_points),
+        "coverage_todo_points": len(coverage_todo_points),
         "coverage_failed_points": len(coverage_failed_points),
         "present_points": len(present_points),
         "observed_present_points": len(present_points | optional_points),
