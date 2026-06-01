@@ -1272,7 +1272,7 @@ function ServingPerTurnChart({
                 <div className="mt-1 flex flex-wrap justify-center gap-4">
                   <span className="flex items-center gap-2">
                     <svg width="26" height="8" aria-hidden>
-                      <line x1="0" y1="4" x2="26" y2="4" stroke={metric.color} strokeWidth="2" strokeDasharray="6 3" />
+                      <line x1="0" y1="4" x2="26" y2="4" stroke="#c9d1d9" strokeWidth="2" strokeDasharray="6 3" />
                     </svg>
                     <span className="text-[11px] text-[#c9d1d9]">{metric.label} actual</span>
                   </span>
@@ -1325,7 +1325,7 @@ function ServingPerTurnChart({
               type="monotone"
               dataKey="meas"
               name={`${metric.label} actual`}
-              stroke={metric.color}
+              stroke="#c9d1d9"
               strokeDasharray="6 3"
               strokeWidth={2}
               dot={{ r: 2 }}
