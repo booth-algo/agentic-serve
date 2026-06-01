@@ -1324,6 +1324,11 @@ function ServingPerTurnChart({
     metric.label === 'TPOT' && chartData.some(d => d.rampPred !== null);
   const showStatic =
     metric.label !== 'TPOT' && chartData.some(d => d.staticPred !== null);
+  // Which plotted line the prediction TABLE + MAPE badge actually use. The table reads <metric>_err,
+  // and for TPOT that error is repointed to the kernel composition: it is the 'kernel' line on H100
+  // (where tpot_pred is the roofline) but plain tpot_pred on tp2 (no separate kernel line) — i.e. the
+  // kernel-composed line either way. TTFT/E2EL err is always against the headline 'pred' (queue sim).
+  const tableKey = metric.label === 'TPOT' ? (showKernel ? 'kernel' : 'pred') : 'pred';
   if (chartData.length === 0) return null;
   return (
     <div className="border-b border-[#21262d] px-4 py-3">
@@ -1382,7 +1387,8 @@ function ServingPerTurnChart({
             <Legend
               wrapperStyle={{ fontSize: 11, color: '#c9d1d9' }}
               content={() => (
-                <div className="mt-1 flex flex-wrap justify-center gap-4">
+                <div className="mt-1">
+                  <div className="flex flex-wrap justify-center gap-4">
                   <span className="flex items-center gap-2">
                     <svg width="26" height="8" aria-hidden>
                       <line x1="0" y1="4" x2="26" y2="4" stroke="#c9d1d9" strokeWidth="2" strokeDasharray="6 3" />
@@ -1391,20 +1397,21 @@ function ServingPerTurnChart({
                   </span>
                   <span className="flex items-center gap-2">
                     <svg width="26" height="8" aria-hidden>
-                      <line x1="0" y1="4" x2="26" y2="4" stroke={metric.color} strokeWidth="2" />
+                      <line x1="0" y1="4" x2="26" y2="4" stroke={metric.color} strokeWidth={tableKey === 'pred' ? 3.5 : 2} />
                     </svg>
                     <span className="text-[11px] text-[#c9d1d9]">
-                      {metric.label === 'TPOT'
+                      {(metric.label === 'TPOT'
                         ? `${metric.label} predicted (roofline)`
-                        : `${metric.label} predicted (queue sim)`}
+                        : `${metric.label} predicted (queue sim)`)
+                        + (tableKey === 'pred' ? ' ★ table' : '')}
                     </span>
                   </span>
                   {showKernel && (
                     <span className="flex items-center gap-2">
                       <svg width="26" height="8" aria-hidden>
-                        <line x1="0" y1="4" x2="26" y2="4" stroke="#facc15" strokeWidth="2" />
+                        <line x1="0" y1="4" x2="26" y2="4" stroke="#facc15" strokeWidth={tableKey === 'kernel' ? 3.5 : 2} />
                       </svg>
-                      <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (kernel)</span>
+                      <span className="text-[11px] text-[#c9d1d9]">{`${metric.label} predicted (kernel)` + (tableKey === 'kernel' ? ' ★ table' : '')}</span>
                     </span>
                   )}
                   {showKernelHint && (
@@ -1431,6 +1438,10 @@ function ServingPerTurnChart({
                       <span className="text-[11px] text-[#c9d1d9]">{metric.label} predicted (static M0)</span>
                     </span>
                   )}
+                  </div>
+                  <div className="mt-1 text-center text-[10px] text-[#6e7681]">
+                    ★ = the line the prediction table &amp; MAPE badge use · other predicted lines are comparison-only
+                  </div>
                 </div>
               )}
             />
@@ -1449,13 +1460,15 @@ function ServingPerTurnChart({
               type="monotone"
               dataKey="pred"
               name={
-                metric.label === 'TPOT'
+                (metric.label === 'TPOT'
                   ? `${metric.label} predicted (roofline)`
-                  : `${metric.label} predicted (queue sim)`
+                  : `${metric.label} predicted (queue sim)`)
+                + (tableKey === 'pred' ? ' ★ table' : '')
               }
               stroke={metric.color}
-              strokeWidth={2}
+              strokeWidth={tableKey === 'pred' ? 3.5 : 2}
               dot={{ r: 2 }}
+              activeDot={tableKey === 'pred' ? { r: 5 } : undefined}
               connectNulls={false}
               isAnimationActive={false}
             />
@@ -1463,10 +1476,11 @@ function ServingPerTurnChart({
               <Line
                 type="monotone"
                 dataKey="kernel"
-                name={`${metric.label} predicted (kernel)`}
+                name={`${metric.label} predicted (kernel)` + (tableKey === 'kernel' ? ' ★ table' : '')}
                 stroke="#facc15"
-                strokeWidth={2}
+                strokeWidth={tableKey === 'kernel' ? 3.5 : 2}
                 dot={{ r: 2 }}
+                activeDot={tableKey === 'kernel' ? { r: 5 } : undefined}
                 connectNulls={false}
                 isAnimationActive={false}
               />
