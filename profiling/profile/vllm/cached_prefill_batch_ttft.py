@@ -34,16 +34,25 @@ _VOCAB = ("the of and to in a is that for it as was with on be at by this had no
           "man me even most made after also did many before must through back years where much").split()
 
 
-def build_prompt(n_tokens: int, seed: int) -> str:
-    # Distinct random sequence of 1-token common words → distinct context per seed (no shared
-    # prefix across requests), ~1 token/word. Under-provision slightly (BOS/template overhead);
-    # the server reports the true prompt_tokens, which we record.
-    rng = random.Random(seed)
+# A FIXED shared run of 1-token words (seed 0), sliced to length to form a common cross-request
+# prefix when --shared > 0 (models sessions that share a system prompt / boilerplate context).
+_SHARED_RNG = random.Random(0)
+_SHARED_WORDS = [_SHARED_RNG.choice(_VOCAB) for _ in range(20000)]
+
+
+def build_prompt(n_tokens: int, seed: int, shared: int = 0) -> str:
+    # Distinct random sequence of 1-token common words → distinct context per seed, ~1 token/word.
+    # When ``shared`` > 0, the first ``shared`` tokens are a FIXED common prefix across all requests
+    # (cross-session prefix sharing), and only the remaining tail is unique to ``seed``.
+    # Under-provision slightly (BOS/template overhead); the server reports the true prompt_tokens.
     n_words = max(1, int(n_tokens * 0.96))
-    return " ".join(rng.choice(_VOCAB) for _ in range(n_words))
+    n_shared = min(n_words, int(shared * 0.96))
+    rng = random.Random(seed)
+    tail = [rng.choice(_VOCAB) for _ in range(n_words - n_shared)]
+    return " ".join(_SHARED_WORDS[:n_shared] + tail)
 
 
-async def stream_ttft(session, url, model, prompt, api_key, max_tokens):
+async def _stream_once(session, url, model, prompt, api_key, max_tokens):
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     body = {"model": model, "prompt": prompt, "max_tokens": max_tokens,
             "temperature": 0.0, "stream": True, "stream_options": {"include_usage": True}}
@@ -72,13 +81,28 @@ async def stream_ttft(session, url, model, prompt, api_key, max_tokens):
     return ttft, prompt_tokens
 
 
+async def stream_ttft(session, url, model, prompt, api_key, max_tokens, retries=2):
+    """One streamed completion -> (ttft_ms, prompt_tokens). Retries transient disconnects so a
+    single dropped connection at high batch can't abort the whole sweep; returns (None, None)
+    only after exhausting retries."""
+    for attempt in range(retries + 1):
+        try:
+            return await _stream_once(session, url, model, prompt, api_key, max_tokens)
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            if attempt >= retries:
+                print(f"    [warn] request failed after {retries} retries: {type(e).__name__}", flush=True)
+                return None, None
+            await asyncio.sleep(0.5 * (attempt + 1))
+    return None, None
+
+
 async def warm(session, url, model, prompt, api_key):
     # send the bare prefix once (max_tokens=1) so its blocks are prefix-cached
     await stream_ttft(session, url, model, prompt, api_key, max_tokens=1)
 
 
-async def run_cell(session, url, model, api_key, B, P, trials):
-    base = [build_prompt(P, seed=1000 * P + i) for i in range(B)]
+async def run_cell(session, url, model, api_key, B, P, trials, shared=0):
+    base = [build_prompt(P, seed=1000 * P + i, shared=shared) for i in range(B)]
     # warm all prefixes (sequential to avoid first-time contention)
     for pr in base:
         await warm(session, url, model, pr, api_key)
@@ -89,8 +113,11 @@ async def run_cell(session, url, model, api_key, B, P, trials):
         reqs = [f"{base[i]} q{t}_{i} answer:" for i in range(B)]
         results = await asyncio.gather(*[
             stream_ttft(session, url, model, r, api_key, max_tokens=4) for r in reqs
-        ])
-        for ttft, pt in results:
+        ], return_exceptions=True)
+        for res in results:
+            if not isinstance(res, tuple):
+                continue  # an exception slipped through -> skip this request, keep the cell
+            ttft, pt = res
             if ttft is not None:
                 ttfts.append(ttft)
                 if pt:
@@ -100,7 +127,7 @@ async def run_cell(session, url, model, api_key, B, P, trials):
     p50 = ttfts[n // 2] if n else float("nan")
     mean = sum(ttfts) / n if n else float("nan")
     medptok = sorted(ptoks)[len(ptoks) // 2] if ptoks else P
-    return dict(B=B, P=medptok, n_ok=n, p50=p50, mean=mean,
+    return dict(B=B, P=medptok, shared=shared, n_ok=n, p50=p50, mean=mean,
                 tmin=(ttfts[0] if n else float("nan")), tmax=(ttfts[-1] if n else float("nan")))
 
 
@@ -118,22 +145,26 @@ def wait_health(port, timeout=420):
     return False
 
 
-async def sweep(port, model, api_key, Bs, Ps, trials, out):
+async def sweep(port, model, api_key, Bs, Ps, trials, out, shareds=(0,)):
     url = f"http://127.0.0.1:{port}/v1/completions"
     rows = []
     timeout = aiohttp.ClientTimeout(total=600)
     conn = aiohttp.TCPConnector(limit=max(Bs) + 8)
     async with aiohttp.ClientSession(timeout=timeout, connector=conn) as s:
-        for P in Ps:
-            for B in Bs:
-                r = await run_cell(s, url, model, api_key, B, P, trials)
-                rows.append(r)
-                print(f"  B={B:>3} P={r['P']:>6}  ttft_p50={r['p50']:8.1f}ms  mean={r['mean']:8.1f}  "
-                      f"n={r['n_ok']}  (per-req-vs-B1: see analysis)", flush=True)
+        for shared in shareds:
+            for P in Ps:
+                for B in Bs:
+                    if shared >= P:
+                        continue  # shared prefix must leave a unique tail
+                    r = await run_cell(s, url, model, api_key, B, P, trials, shared=shared)
+                    rows.append(r)
+                    print(f"  B={B:>3} P={r['P']:>6} shared={shared:>6}  ttft_p50={r['p50']:8.1f}ms  "
+                          f"mean={r['mean']:8.1f}  n={r['n_ok']}", flush=True)
     with open(out, "w") as f:
-        f.write("B,P_tokens,n_ok,ttft_p50_ms,ttft_mean_ms,ttft_min_ms,ttft_max_ms\n")
+        f.write("B,P_tokens,shared_tokens,n_ok,ttft_p50_ms,ttft_mean_ms,ttft_min_ms,ttft_max_ms\n")
         for r in rows:
-            f.write(f"{r['B']},{r['P']},{r['n_ok']},{r['p50']:.3f},{r['mean']:.3f},{r['tmin']:.3f},{r['tmax']:.3f}\n")
+            f.write(f"{r['B']},{r['P']},{r['shared']},{r['n_ok']},{r['p50']:.3f},{r['mean']:.3f},"
+                    f"{r['tmin']:.3f},{r['tmax']:.3f}\n")
     print(f"\nwrote {out}")
 
 
@@ -147,11 +178,13 @@ def main():
     ap.add_argument("--out", default="cached_prefill_batch_ttft_H100.csv")
     ap.add_argument("--bs", default="1,2,4,8,16")
     ap.add_argument("--ps", default="2048,8192,16384")
+    ap.add_argument("--shared", default="0", help="comma list of shared-prefix token counts (0=distinct)")
     ap.add_argument("--trials", type=int, default=5)
     ap.add_argument("--no-launch", action="store_true", help="server already running")
     a = ap.parse_args()
     Bs = [int(x) for x in a.bs.split(",")]
     Ps = [int(x) for x in a.ps.split(",")]
+    shareds = [int(x) for x in a.shared.split(",")]
 
     proc = None
     if not a.no_launch:
@@ -169,7 +202,7 @@ def main():
             print("SERVER DID NOT BECOME HEALTHY — see vllm_server.log", flush=True)
             sys.exit(1)
         print("server healthy; starting sweep", flush=True)
-        asyncio.run(sweep(a.port, a.model, a.api_key, Bs, Ps, a.trials, a.out))
+        asyncio.run(sweep(a.port, a.model, a.api_key, Bs, Ps, a.trials, a.out, shareds=shareds))
     finally:
         if proc is not None:
             proc.terminate()
