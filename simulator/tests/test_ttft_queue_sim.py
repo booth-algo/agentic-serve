@@ -284,18 +284,14 @@ def test_no_fitted_constants():
     # benchmark ran max_model_len=32768 (server metadata) -> 1310. Config-derived, NOT a fit.
     assert mod.MAX_MODEL_LEN == 32768
     assert mod.LONG_PREFILL_TOKEN_THRESHOLD == int(32768 * 0.04) == 1310
-    # Measured single-request prefill law (fit to the benchmark's OWN c1 cells = zero-queue
-    # prefill wall-time, pooled across all profiles; profile-universal to +/-5%). These are
-    # MEASUREMENTS at zero queue, not TTFT-MAPE-tuned knobs — same epistemic status as the
-    # kernel grids. Asserted to the pooled-fit values so a silent retune is caught.
+    # Prefill cost = measured-serving anchors + pipeline FA3 kernel (all held out from the
+    # multi-turn data we report). Asserted to value so a silent retune is caught.
     assert mod.PREFILL_FLOOR_MS == 22.5
-    assert mod.PREFILL_NEW_MS_PER_TOKEN == 0.0310
-    assert mod.PREFILL_CACHED_MS_PER_TOKEN == 0.006103
-    # Batch split of the cached rate (measured: cached_prefill_batch_ttft_H100.csv); sums to total.
-    assert mod.PREFILL_CACHED_SHARED_MS_PER_TOKEN == 0.003485
-    assert mod.PREFILL_CACHED_PERREQ_MS_PER_TOKEN == 0.002618
-    assert abs((mod.PREFILL_CACHED_SHARED_MS_PER_TOKEN + mod.PREFILL_CACHED_PERREQ_MS_PER_TOKEN)
-               - mod.PREFILL_CACHED_MS_PER_TOKEN) < 1e-9
+    assert mod.PREFILL_NEW_MS_PER_TOKEN == 0.0310          # serving per-(re)prefilled-token (c1)
+    assert mod.PREFILL_FA3_MS_PER_TOKEN2 == 8.31e-7        # pipeline FA3 kernel (fa3_prefill grid)
+    # Host re-tokenize batch split (measured: cached_prefill_batch_ttft_H100.csv).
+    assert mod.PREFILL_HOST_SHARED_MS_PER_TOKEN == 0.003485
+    assert mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN == 0.002618
     # Public uppercase numeric module globals: the four config-derived vLLM values + the
     # three measured prefill-law coefficients. Private (underscore-prefixed) names — the
     # event-kind enum ints and _GRID_U_MAX=1024 — are physics/structure, excluded.
@@ -314,9 +310,9 @@ def test_no_fitted_constants():
         "LONG_PREFILL_TOKEN_THRESHOLD",
         "PREFILL_FLOOR_MS",
         "PREFILL_NEW_MS_PER_TOKEN",
-        "PREFILL_CACHED_MS_PER_TOKEN",
-        "PREFILL_CACHED_SHARED_MS_PER_TOKEN",
-        "PREFILL_CACHED_PERREQ_MS_PER_TOKEN",
+        "PREFILL_FA3_MS_PER_TOKEN2",
+        "PREFILL_HOST_SHARED_MS_PER_TOKEN",
+        "PREFILL_HOST_PERREQ_MS_PER_TOKEN",
     }
     # And the private numeric constants are only the grid edge + the 4 event-kind ints.
     private_numeric = {

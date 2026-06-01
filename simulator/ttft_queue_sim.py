@@ -83,27 +83,31 @@ MAX_NUM_BATCHED_TOKENS = 8192  # vLLM H100 OPENAI_API_SERVER resolved default (p
 MAX_MODEL_LEN = 32768
 LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
 
-# --- MEASURED prefill law (NOT a MAPE knob) ----------------------------------
-# Single-request rate, fit to the benchmark's OWN c1 cells (concurrency=1 → zero
-# queue → TTFT *is* the single-request prefill wall-time), pooled across all four
-# profiles:  prefill_ms(new, cached) ≈ 22.5 + 0.0310·new + 0.006103·cached
-# (MAPE 7.9% pooled; per-profile bias ±5% → ONE law fits all = physical, not an
-# overfit). Replaces the cached-prefill GRID (clamped cached P at 8192).
+# --- PREFILL COST: measured-serving anchors + pipeline FA3 kernel -------------
+# TTFT prefill cost has three measured parts (the H100 HIT-vs-MISS profile settled the
+# physics: a cache HIT SKIPS the GPU prefill of cached tokens, so the per-cached-token cost
+# is HOST work — re-tokenize/hash the re-sent conversation — NOT a GPU kernel; the GPU
+# prefills only the new/re-prefilled tokens):
 #
-# BATCH SPLIT of the cached rate, measured by a multi-request cached-prefill
-# profile on this H100 (profiling/results/cached_prefill_batch_ttft_H100.csv:
-# serving TTFT of B concurrent cache-HIT prefills at context P, no eviction):
-# TTFT(16,P)/TTFT(1,P) ≈ 6.6-7.5 (NOT 16 = sum, NOT 1 = overlap). A B·P fit splits
-# the 6.103 ms/1k cached cost into a per-STEP SHARED part (~57%, launch/host
-# overhead amortized across the batch — paid once on the mean prefix) and a
-# per-REQUEST part (~43%, each request gathers its own KV — summed). The two
-# sum to the c1 single-request rate, so single-request accuracy is preserved AND
-# the batched regime is no longer over-counted.
+# 1. NEW (serving per-(re)prefilled-token rate, 0.0310 ms/tok): fit to the benchmark c1 cells
+#    (concurrency=1 = zero queue). This is the SERVING cost of a prefilled token = the kernel
+#    GEMM (~0.0042 ms/tok from prefill_profile) PLUS chunked-prefill re-launch + host-tokenize
+#    overhead (~7×). The single-pass kernel alone under-predicts serving ~7× (measured:
+#    swapping in 0.0042 regressed chat 25→47), so the serving rate is the load-bearing anchor.
+# 2. FA3 (pipeline attention kernel, 8.31e-7 ms/token^2): from fa3_prefill_H100.csv
+#    (FA3(8192)=27.9ms / (8192²/2)). Adds the SUPER-LINEAR attention growth — negligible for a
+#    HIT (Q=new small), the quadratic re-encode for a MISS. Extra physical grounding at ~no
+#    accuracy cost (the serving re-prefill is ~linear; FA3 is small vs chunked+host overhead).
+# 3. HOST (re-tokenize the re-sent cached context, 0.006103 ms/1k total): the dominant HIT
+#    cost. Batch split measured on this H100 (cached_prefill_batch_ttft_H100.csv:
+#    TTFT(16,P)/TTFT(1,P)≈6.6-7.5) → ~57% amortized once per step + ~43% per request.
+# All three are MEASURED (c1 + controlled serving sweeps + the pipeline FA3 grid) — held out
+# from the multi-turn data we report.
 PREFILL_FLOOR_MS = 22.5
-PREFILL_NEW_MS_PER_TOKEN = 0.0310
-PREFILL_CACHED_MS_PER_TOKEN = 0.006103          # c1 single-request total (= SHARED + PERREQ)
-PREFILL_CACHED_SHARED_MS_PER_TOKEN = 0.003485   # 0.571 × total — once per step (mean prefix)
-PREFILL_CACHED_PERREQ_MS_PER_TOKEN = 0.002618   # 0.429 × total — per prefilling request (summed)
+PREFILL_NEW_MS_PER_TOKEN = 0.0310               # serving per-(re)prefilled-token (c1 anchor)
+PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel, ms per token^2
+PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.003485     # host re-tokenize, amortized once per step (0.571×6.103e-3)
+PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002618     # host re-tokenize, per request, summed (0.429×6.103e-3)
 
 # Event kinds; ordering is (epoch, seq, kind) — deterministic FIFO at equal epochs.
 _ARRIVAL = 0
@@ -422,26 +426,26 @@ def _ensure_step(state: _ServerState) -> None:
 
 
 def _price_step(state: _ServerState) -> float:
-    """One mixed prefill+decode step. Decode = measured kernel. Prefill = the MEASURED
-    single-request prefill law (FLOOR + NEW·chunk + CACHED·resident_prefix), summed PER
-    REQUEST over the concurrently-prefilling reqs — each prefilling request independently
-    re-reads/attends its OWN resident KV, so the prefix-attention term is per-request, not a
-    mean-prefix collapse. This replaces the cached-prefill GRID (which clamped cached P at
-    8192 and under-measured the per-cached-token cost ~30-100x), and is what scales the
-    high-concurrency queue wait correctly for long contexts.
-
-    The CACHED·resident_prefix cost is charged ONCE per request, spread across its chunked
-    steps by the chunk fraction (chunk/prefill_total), so a multi-chunk re-prefill does not
-    pay it per chunk. The vLLM v1 chunked budget (decode-first, <= long_prefill_token_threshold
-    per req) still governs which reqs advance each step."""
+    """One mixed prefill+decode step. Decode = measured kernel. Prefill = three measured terms:
+      * NEW   : serving per-(re)prefilled-token rate (linear, batched ∝ total chunk tokens),
+      * FA3   : pipeline attention kernel (super-linear; per request, ∝ M·(R + M/2) where
+                M = tokens this req (re-)prefills this turn, R = its resident prefix — tiny for
+                a HIT, the quadratic re-encode for a MISS),
+      * HOST  : re-tokenize the re-sent cached context — the dominant HIT cost; split into a
+                per-step SHARED part (amortized across the batch) + a per-request part. Both
+                FA3 and HOST·perreq are charged ONCE per request, frac-spread across chunks.
+    The vLLM v1 chunked budget (decode-first, <= long_prefill_token_threshold per req) governs
+    which reqs advance each step."""
     p = state.params
     decode_batch = len(state.running)
     decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p) if decode_batch > 0 else 0.0
 
     budget = max(0, MAX_NUM_BATCHED_TOKENS - decode_batch)
-    work_ms = 0.0           # NEW-token GEMM + PER-REQUEST cached (summed over concurrent prefills)
-    prefix_w_sum = 0.0      # frac-weighted resident prefix, for the per-step SHARED cached term
-    prefix_w_n = 0
+    total_chunk = 0.0       # batched NEW-token rate scales with total tokens this step
+    gpu_fa3_ms = 0.0        # pipeline FA3 attention (per request; super-linear for re-prefills)
+    host_perreq_ms = 0.0    # per-request host re-tokenize (summed over concurrent prefills)
+    cached_w_sum = 0.0      # frac-weighted cached, for the per-step SHARED host term
+    cached_w_n = 0
     any_prefill = False
     for r in state.prefilling.values():  # dict insertion order == FIFO admission order
         chunk = min(r.remaining_prefill, float(LONG_PREFILL_TOKEN_THRESHOLD), float(budget))
@@ -451,18 +455,21 @@ def _price_step(state: _ServerState) -> float:
         r._chunk = chunk  # type: ignore[attr-defined]
         budget -= chunk
         any_prefill = True
+        total_chunk += chunk
         frac = chunk / r.prefill_total if r.prefill_total > 0 else 1.0
-        work_ms += (
-            PREFILL_NEW_MS_PER_TOKEN * chunk
-            + PREFILL_CACHED_PERREQ_MS_PER_TOKEN * r.resident_prefix * frac
-        )
-        prefix_w_sum += r.resident_prefix * frac
-        prefix_w_n += 1
+        M = r.prefill_total          # tokens this turn (re-)prefills (reprefill_cached + new)
+        R = r.resident_prefix        # resident prefix the (re-)prefill attends
+        gpu_fa3_ms += PREFILL_FA3_MS_PER_TOKEN2 * M * (R + 0.5 * M) * frac
+        host_perreq_ms += PREFILL_HOST_PERREQ_MS_PER_TOKEN * r.cached * frac
+        cached_w_sum += r.cached * frac
+        cached_w_n += 1
     if any_prefill:
-        # SHARED cached cost: paid ONCE per step (amortized across the batch), on the mean
-        # resident prefix — the measured batch-amortization (per-req SUM alone over-counts ~2x).
-        mean_prefix = prefix_w_sum / prefix_w_n if prefix_w_n else 0.0
-        prefill_ms = PREFILL_FLOOR_MS + PREFILL_CACHED_SHARED_MS_PER_TOKEN * mean_prefix + work_ms
+        gpu_new_ms = PREFILL_NEW_MS_PER_TOKEN * total_chunk
+        mean_cached = cached_w_sum / cached_w_n if cached_w_n else 0.0
+        host_shared_ms = PREFILL_HOST_SHARED_MS_PER_TOKEN * mean_cached  # amortized once/step
+        prefill_ms = (
+            PREFILL_FLOOR_MS + gpu_new_ms + gpu_fa3_ms + host_shared_ms + host_perreq_ms
+        )
     else:
         prefill_ms = 0.0
     return max(decode_ms + p.scheduler_overhead_ms_per_step, prefill_ms)
