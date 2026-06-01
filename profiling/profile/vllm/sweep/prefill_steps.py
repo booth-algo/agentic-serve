@@ -34,6 +34,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output", type=Path, default=Path("prefill_profile_H100.csv"))
     p.add_argument("--max-model-len", type=int, default=32768)
     p.add_argument("--prefill-tokens", nargs="*", type=int, default=PREFILL_TOKENS)
+    p.add_argument("--tensor-parallel-size", type=int, default=1)
+    p.add_argument("--gpu-memory-utilization", type=float, default=0.70)
+    p.add_argument("--gpu-label", default="H100")
     return p.parse_args()
 
 
@@ -71,9 +74,10 @@ def main() -> None:
     llm = LLM(
         model=args.model,
         max_model_len=args.max_model_len,
-        gpu_memory_utilization=0.70,
+        gpu_memory_utilization=args.gpu_memory_utilization,
         max_num_seqs=256,
         max_num_batched_tokens=8192,
+        tensor_parallel_size=args.tensor_parallel_size,
     )
 
     # Warmup

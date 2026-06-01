@@ -36,6 +36,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-num-seqs", type=int, default=256)
     parser.add_argument("--max-num-batched-tokens", type=int, default=8192)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.70)
+    parser.add_argument("--tensor-parallel-size", type=int, default=1,
+                        help="TP degree (set 2 for 2xH100; requires CUDA_VISIBLE_DEVICES with that many GPUs).")
     parser.add_argument(
         "--max-total-kv-tokens",
         type=int,
@@ -88,7 +90,24 @@ def main() -> None:
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_num_seqs=args.max_num_seqs,
         max_num_batched_tokens=args.max_num_batched_tokens,
+        tensor_parallel_size=args.tensor_parallel_size,
     )
+    # Capture the actual allocated GPU KV-block pool (the available_kv_blocks the predictor
+    # needs for this hardware/TP config). Path differs across vLLM versions; best-effort.
+    num_gpu_blocks = None
+    for path in ("llm_engine.cache_config", "llm_engine.model_config"):
+        try:
+            obj = llm
+            for attr in path.split("."):
+                obj = getattr(obj, attr)
+            nb = getattr(obj, "num_gpu_blocks", None)
+            if nb:
+                num_gpu_blocks = nb
+                break
+        except Exception:
+            pass
+    print(f"KV_POOL tensor_parallel_size={args.tensor_parallel_size} "
+          f"gpu_mem={args.gpu_memory_utilization} num_gpu_blocks={num_gpu_blocks}", flush=True)
     tokenizer = llm.get_tokenizer()
     sampling_params = SamplingParams(
         temperature=0.0,

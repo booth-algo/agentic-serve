@@ -2,14 +2,14 @@
 """Inject a FIRST-CUT tp2 (2xH100 tensor-parallel) prediction config into the dashboard
 ``simulator-predictions.json`` under the ``H100x2`` GPU key.
 
-INFRA-FIRST / PHYSICS-NEXT (deliberate, labelled): the prediction reuses the tp1-calibrated
-kernels (decode/prefill grids) with only the KV pool resized for tp2 (config-derived: weights
-split across 2 ranks frees HBM, and the KV per token is split across ranks, so the pooled token
-capacity is ~2.35x tp1). The decode/prefill STEP TIMES are therefore still tp1-magnitude (tp2 is
-~1.6x faster in reality) — so expect the tp2 MAPEs to be poor until tp2 kernels are profiled.
-The GROUND TRUTH (ttft_meas / tpot_meas / e2el_meas) is the real h100_..._tp2_vllm benchmark, so
-the dashboard shows measured-vs-(first-cut)-prediction honestly. Replace the kernels (profile tp2)
-to upgrade the prediction without touching the dashboard.
+PHYSICS (2026-06-01, profiled on 2xH100 GPU 4,5): the prediction now uses the MEASURED tp2
+**decode grid** (decode_steps.py --tensor-parallel-size 2, ~0.70x tp1) and the MEASURED tp2 **KV
+pool** (62416 blocks, "GPU KV cache size: 998,656 tokens") — so TPOT and E2EL (decode-dominated)
+use tp2 timings, and the eviction/preemption cliff sits at the real tp2 pool. STILL tp1: the
+serving **prefill** law (FLOOR/NEW/HOST in ttft_queue_sim, anchored on tp1 c1) — tp2 prefill is
+~0.4-0.8x tp1 (compute splits), so per-turn TTFT prefill stays over-predicted until the prefill
+law is re-anchored on tp2 c1 (offline follow-up). GROUND TRUTH (ttft/tpot/e2el_meas) is the real
+h100_..._tp2_vllm benchmark. tp1 modules are untouched — the decode-grid swap is local here.
 
 Usage:
     python3 -m profiling.process.emitters.build_tp2_simulator_rows
@@ -28,7 +28,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import simulator.kernel_step_cost as kernel_step_cost  # noqa: E402
 from simulator.closed_form_tpot import RooflineParams  # noqa: E402
+from simulator.kernel_step_cost import load_grid  # noqa: E402
 from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot  # noqa: E402
 from simulator.ttft_queue_sim import predict_cell_ttft_qsim  # noqa: E402
 
@@ -46,12 +48,13 @@ PROFILES = [
 ]
 CONCURRENCIES = [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320]
 
-# Config-derived tp2 KV pool (FIRST CUT). tp1 = 27250 blocks ~= 54.5 GiB KV (72 GiB - 16 GiB
-# bf16 weights - overhead, KV = 128 KiB/token). tp2: each rank holds half the weights (8 GiB) and
-# half the KV heads (64 KiB/token), so per-GPU KV budget ~= 72 - 8 - 1.5 ~= 62.5 GiB -> 62.5 GiB /
-# 64 KiB ~= 1.02M tokens of pooled capacity -> ~64000 blocks (~2.35x tp1). Measured tp2 engine
-# trace would refine this; it is the dominant TTFT lever and the one thing we resize for tp2.
-TP2_AVAILABLE_KV_BLOCKS = 64_000
+# MEASURED tp2 KV pool (2026-06-01, GPU 4,5 engine trace: "GPU KV cache size: 998,656 tokens"
+# -> 998656/16 = 62416 blocks; reconfirmed 999,184 on a second launch). ~2.29x tp1's 27250. The
+# config-derived first cut (64000) was within 2.5%. This is the dominant TTFT/preemption lever.
+TP2_AVAILABLE_KV_BLOCKS = 62_416
+# MEASURED tp2 decode-step grid (decode_steps.py --tensor-parallel-size 2 on 2xH100, ~0.70x tp1
+# across all shapes). Loaded into the decode kernel so TPOT/E2EL use tp2 timings, not tp1.
+TP2_DECODE_GRID = Path("profiling/results/decode_profile_H100x2_2026-06-01.csv")
 
 
 def _ape(pred: float | None, meas: float | None) -> float | None:
@@ -126,14 +129,14 @@ def build_row(profile: str, conc: int, params: RooflineParams) -> dict[str, Any]
     outs = [t["output_tokens"] for t in turns]
     return {
         "model": MODEL,
-        "backend": "kernel-tp1-first-cut-tp2-kv",  # labelled: tp1 kernels + tp2 KV pool
+        "backend": "kernel-tp2-decode-measured-kv",  # tp2 decode grid + measured KV; prefill still tp1
         "profile": profile,
         "data_scope": "synthetic_distributional",
         "mode": "multi-turn",
         "concurrency": conc,
         "isl": round(st.median(ctxs)) if ctxs else 0,
         "osl": round(st.median(outs)) if outs else 1,
-        "calibration_status": "tp2_first_cut_tp1_kernels_config_kv",
+        "calibration_status": "tp2_decode_grid_measured_kv_tp1_prefill",
         "tensor_parallel_size": 2,
         "available_kv_blocks": params.available_kv_blocks,
         "predicted_turn_count": len(turns),
@@ -154,6 +157,15 @@ def build_row(profile: str, conc: int, params: RooflineParams) -> dict[str, Any]
 def main() -> None:
     if not TP2_BENCH_ROOT.exists():
         raise SystemExit(f"tp2 bench root not found: {TP2_BENCH_ROOT}")
+    # Swap the decode kernel grid to the MEASURED tp2 grid (decode_step_ms reads the module-global
+    # _default_grid()). This makes predict_cell_tpot (TPOT) and the qsim's decode step use tp2
+    # timings. tp1 modules are untouched — the swap is local to this generator process.
+    if TP2_DECODE_GRID.exists():
+        _tp2_grid = load_grid(TP2_DECODE_GRID)
+        kernel_step_cost._default_grid = lambda: _tp2_grid
+        print(f"using MEASURED tp2 decode grid: {TP2_DECODE_GRID.name} ({len(_tp2_grid.cells)} cells)")
+    else:
+        print(f"WARNING: tp2 decode grid {TP2_DECODE_GRID} missing -> tp1 decode kernel (worse TPOT)")
     params = RooflineParams(available_kv_blocks=TP2_AVAILABLE_KV_BLOCKS)
     rows: list[dict[str, Any]] = []
     for profile in PROFILES:
