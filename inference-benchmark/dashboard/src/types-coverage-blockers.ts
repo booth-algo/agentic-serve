@@ -5,6 +5,11 @@ export interface CoveragePoint {
   mode: string;
   profile: string;
   concurrency: number;
+  // Per-cell annotation (RFC §4.5): a job's missing cells can carry their own
+  // disposition (e.g. low-success at high concurrency) distinct from the job.
+  disposition?: 'failed' | 'na' | 'todo' | null;
+  failure_class?: string | null;
+  label?: string | null;
 }
 
 // Structured failure classes (see docs/coverage-classification-rfc.md). Captured

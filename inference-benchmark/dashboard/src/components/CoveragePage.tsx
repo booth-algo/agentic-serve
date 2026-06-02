@@ -612,14 +612,23 @@ export function CoveragePage({
         ?? blocker.reason
         ?? failureReason(blocker.failure, blocker.reason)
         ?? `coverage requeue exhausted after ${blocker.attempt ?? 'unknown'} attempts`;
-      if (shouldCountFailureAsMissing(blocker.failure, blocker.reason, blocker.coverage_disposition)) {
-        for (const point of blocker.missing_points ?? []) {
-          failedPointReasons.set(pointKeyFromSummary(point), reason);
-        }
-        continue;
-      }
+      // Per-cell granularity (RFC §4.5): each missing point can carry its own
+      // disposition, so a job that serves at low concurrency but is quality-
+      // rejected at high concurrency splits across tones instead of inheriting
+      // one job-level disposition. Falls back to the job disposition.
+      const jobDisposition = shouldCountFailureAsMissing(blocker.failure, blocker.reason, blocker.coverage_disposition)
+        ? 'failed'
+        : 'na';
       for (const point of blocker.missing_points ?? []) {
-        blockedPointReasons.set(pointKeyFromSummary(point), reason);
+        const key = pointKeyFromSummary(point);
+        const cellDisposition = point.disposition ?? jobDisposition;
+        const cellReason = point.label ?? reason;
+        if (cellDisposition === 'failed') {
+          failedPointReasons.set(key, cellReason);
+        } else if (cellDisposition !== 'todo') {
+          blockedPointReasons.set(key, cellReason);  // na
+        }
+        // cellDisposition === 'todo' -> leave unblocked; renders as fillable work
       }
     }
 

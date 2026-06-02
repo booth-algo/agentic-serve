@@ -463,6 +463,41 @@ model_present_on_host() {
     esac
 }
 
+# Per-cell outcomes (RFC §4.5): parse the bench log for per-(profile,concurrency)
+# failures so a job that serves at low concurrency but fails at high concurrency
+# records distinct classes. Echoes a JSON map "<profile>|<conc>" -> failure_class
+# (only failed cells; succeeded cells have output JSONs). Best-effort; {} on error.
+cell_outcomes_on_host() {
+    local host="$1" remote_log="$2"
+    [[ -n "$remote_log" ]] || { echo "{}"; return; }
+    ssh "$host" "cat '$remote_log' 2>/dev/null" < /dev/null 2>/dev/null | python3 -c '
+import sys, json, re
+blocks, cur = {}, None
+for line in sys.stdin:
+    m = re.search(r"=== profile=(\S+) conc=(\d+)", line)
+    if m:
+        cur = (m.group(1), int(m.group(2)))
+        blocks.setdefault(cur, [])
+        continue
+    if cur is not None:
+        blocks[cur].append(line)
+def classify(text):
+    t = text.lower()
+    if "success rate" in t and "below min" in t:
+        return "low_success_rate"
+    if ("no requests completed" in t or "requests failed" in t
+            or "server may not be functional" in t):
+        return "requests_aborted"
+    return "unknown"
+out = {}
+for (profile, conc), lines in blocks.items():
+    low = " ".join(lines).lower()
+    if "bench failed for" in low or "abort:" in low:
+        out["%s|%d" % (profile, conc)] = classify(low)
+print(json.dumps(out))
+' 2>/dev/null || echo "{}"
+}
+
 state_read_file() {
     local jid="$1" suffix="$2" primary scope candidate
     primary="$STATE_DIR/${jid}.${suffix}"
@@ -520,14 +555,14 @@ write_failure_metadata() {
     local missing_outputs="$7" reason="$8" remote_log="$9" mirror_status="${10}"
     # Structured outcome (RFC: docs/coverage-classification-rfc.md). Optional and
     # additive: when empty, reconcile derives failure_class from the reason text.
-    local failure_class="${11:-}" gpu_mem_util="${12:-}"
+    local failure_class="${11:-}" gpu_mem_util="${12:-}" cell_outcomes_json="${13:-}"
     local path="$STATE_DIR/${jid}.failure.json"
     if dry_run; then
         log "$jid: dry-run would write failure metadata status=$status class=${failure_class:-?} attempt=$attempt reason=${reason:0:160}"
         return
     fi
     python3 - "$path" "$jid" "$status" "$attempt" "$max_attempts" "$present" "$total" \
-        "$missing_outputs" "$reason" "$remote_log" "$mirror_status" "$failure_class" "$gpu_mem_util" <<'PY'
+        "$missing_outputs" "$reason" "$remote_log" "$mirror_status" "$failure_class" "$gpu_mem_util" "$cell_outcomes_json" <<'PY'
 import json
 import os
 import sys
@@ -548,6 +583,7 @@ from pathlib import Path
     mirror_status,
     failure_class,
     gpu_mem_util,
+    cell_outcomes_json,
 ) = sys.argv[1:]
 
 def to_int(value: str) -> int | None:
@@ -569,12 +605,20 @@ evidence = {
 if to_float(gpu_mem_util) is not None:
     evidence["gpu_mem_util"] = to_float(gpu_mem_util)
 
+try:
+    cell_outcomes = json.loads(cell_outcomes_json) if cell_outcomes_json else {}
+    if not isinstance(cell_outcomes, dict):
+        cell_outcomes = {}
+except (ValueError, TypeError):
+    cell_outcomes = {}
+
 payload = {
     "job_id": jid,
     "status": status,
     "kind": "incomplete_outputs",
     "failure_class": (failure_class or None),
     "evidence": evidence,
+    "cell_outcomes": cell_outcomes,
     "attempt": to_int(attempt),
     "max_attempts": to_int(max_attempts),
     "expected_outputs_present": to_int(present),
@@ -1070,7 +1114,8 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                             REASON="retry limit reached after ${NEXT_ATT}/${MAX_INCOMPLETE_RETRIES} incomplete attempts: $FAILURE_DETAIL"
                             write_state_value "$JID" reason "$REASON"
                             FAILURE_CLASS=$(failure_class_on_host "$HOST" "$JOB_PORT" "$JOB_REMOTE_LOG" "${OOM:-}" "${FAILURE_DETAIL:-}")
-                            write_failure_metadata "$JID" "skipped" "$NEXT_ATT" "$MAX_INCOMPLETE_RETRIES" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "$MIRROR_STATUS" "$FAILURE_CLASS" "${GPU_MEM:-}"
+                            CELL_OUTCOMES=$(cell_outcomes_on_host "$HOST" "$JOB_REMOTE_LOG")
+                            write_failure_metadata "$JID" "skipped" "$NEXT_ATT" "$MAX_INCOMPLETE_RETRIES" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "$MIRROR_STATUS" "$FAILURE_CLASS" "${GPU_MEM:-}" "$CELL_OUTCOMES"
                             write_status "$JID" skipped
                             update_current_run_record_status "$JID" "skipped" "$REASON" "$NEXT_ATT" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$JOB_REMOTE_LOG"
                             log "$JID: SKIPPED incomplete retry limit ($EXPECTED_OUTPUT_PRESENT/$EXPECTED_OUTPUT_TOTAL expected outputs; attempt=$NEXT_ATT/$MAX_INCOMPLETE_RETRIES; missing=${EXPECTED_OUTPUT_MISSING_SAMPLE:-unknown}; $COUNT files copied to $OUT_DIR_LOCAL, warmup=${AGE}s backend=$BACKEND mirror=$MIRROR_STATUS)"
@@ -1101,7 +1146,8 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                             REASON="zero expected outputs and retry limit exhausted or no retryable OOM; attempt=$ATT oom_log=$OOM"
                             write_state_value "$JID" reason "$REASON"
                             FAILURE_CLASS=$(failure_class_on_host "$HOST" "$JOB_PORT" "$JOB_REMOTE_LOG" "${OOM:-}" "${FAILURE_DETAIL:-}")
-                            write_failure_metadata "$JID" "skipped" "$ATT" "$MAX_OOM_RETRIES" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "$MIRROR_STATUS" "$FAILURE_CLASS" "${GPU_MEM:-}"
+                            CELL_OUTCOMES=$(cell_outcomes_on_host "$HOST" "$JOB_REMOTE_LOG")
+                            write_failure_metadata "$JID" "skipped" "$ATT" "$MAX_OOM_RETRIES" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "$MIRROR_STATUS" "$FAILURE_CLASS" "${GPU_MEM:-}" "$CELL_OUTCOMES"
                             update_current_run_record_status "$JID" "skipped" "$REASON" "$ATT" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$JOB_REMOTE_LOG"
                             log "$JID: SKIPPED (0/$EXPECTED_OUTPUT_TOTAL expected outputs; copied only stale/non-matching files from $REMOTE_SYNC_DIR; attempt=$ATT, oom_log=$OOM)"
                         fi
@@ -1134,7 +1180,8 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                     REASON="zero results and retry limit exhausted or no retryable OOM; attempt=$ATT oom_log=$OOM"
                     write_state_value "$JID" reason "$REASON"
                     FAILURE_CLASS=$(failure_class_on_host "$HOST" "$JOB_PORT" "$JOB_REMOTE_LOG" "${OOM:-}" "${FAILURE_DETAIL:-}")
-                    write_failure_metadata "$JID" "skipped" "$ATT" "$MAX_OOM_RETRIES" "0" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "not_mirrored" "$FAILURE_CLASS" "${GPU_MEM:-}"
+                    CELL_OUTCOMES=$(cell_outcomes_on_host "$HOST" "$JOB_REMOTE_LOG")
+                    write_failure_metadata "$JID" "skipped" "$ATT" "$MAX_OOM_RETRIES" "0" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "not_mirrored" "$FAILURE_CLASS" "${GPU_MEM:-}" "$CELL_OUTCOMES"
                     update_current_run_record_status "$JID" "skipped" "$REASON" "$ATT" "0" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$JOB_REMOTE_LOG"
                     log "$JID: SKIPPED (zero results, attempt=$ATT, oom_log=$OOM)"
                 fi
