@@ -186,11 +186,17 @@ export function CoverageBlockersPanel({
           {visibleBlockers.map((blocker) => {
             const tone = statusTone(blocker.status, blocker.coverage_disposition);
             const attempts = attemptText(blocker.failure?.attempt ?? blocker.attempt, blocker.failure?.max_attempts);
-            const dispositionLabel = blocker.coverage_disposition === 'na'
-              ? 'N/A attempted'
-              : blocker.coverage_disposition === 'failed'
-                ? 'failed coverage'
-                : null;
+            // Prefer the artifact's structured label (e.g. "N/A — OOM at max
+            // gpu_mem", "failed — model not staged", "TODO — raise gpu_mem");
+            // fall back to the coarse disposition for older artifacts.
+            const dispositionLabel = blocker.coverage_label
+              ?? (blocker.coverage_disposition === 'na'
+                ? 'N/A attempted'
+                : blocker.coverage_disposition === 'failed'
+                  ? 'failed coverage'
+                  : blocker.coverage_disposition === 'todo'
+                    ? 'TODO'
+                    : null);
             return (
               <div key={blocker.job_id} className="rounded-md border border-[#30363d] bg-[#0d1117] p-3">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">

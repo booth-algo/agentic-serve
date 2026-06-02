@@ -265,6 +265,12 @@ function failureReason(failure?: CoverageFailure | null, fallback?: string | nul
   return label ?? reason;
 }
 
+// LEGACY — non-compact scopes only (no coverage artifact, e.g. some
+// trace_replay/archived cells). The synthetic_distributional path is driven
+// entirely by the artifact's `coverage_disposition` (see disposition() below);
+// this regex is NOT the source of truth and must not be extended for policy.
+// Coverage classification policy lives in reconcile_sweep_coverage.py.
+// (RFC: docs/coverage-classification-rfc.md §4.3 — dumb renderer.)
 function failureCategoryFromReason(reason?: string | null): string | undefined {
   const lower = (reason ?? '').toLowerCase();
   if (!lower) return undefined;
@@ -281,6 +287,8 @@ function failureCategory(failure?: CoverageFailure | null, fallback?: string | n
   return failure?.category ?? failureCategoryFromReason(failure?.reason ?? fallback);
 }
 
+// Legacy N/A categories for the non-compact fallback only (matches
+// classifySweepFailure's vocabulary). The compact artifact never reaches here.
 const N_A_FAILURE_CATEGORIES = new Set([
   'oom_or_kv_cache',
   'success_rate_below_min',
@@ -293,7 +301,11 @@ function failureCoverageDisposition(
   fallback?: string | null,
   explicit?: CoverageBlocker['coverage_disposition'],
 ): 'failed' | 'na' | undefined {
+  // The coverage artifact is authoritative (dumb renderer): when an explicit
+  // disposition is present we NEVER re-derive from the reason string.
   if (explicit === 'failed' || explicit === 'na') return explicit;
+  if (explicit === 'todo') return undefined;  // fillable work, not a blocked cell
+  // Legacy fallback: only scopes without a coverage artifact get here.
   const category = failureCategory(failure, fallback);
   if (!category) return undefined;
   return N_A_FAILURE_CATEGORIES.has(category) ? 'na' : 'failed';
