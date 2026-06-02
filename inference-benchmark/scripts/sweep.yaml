@@ -455,9 +455,9 @@ cells:
   - { host: 3090, model: gpt-oss-20b, tp: 2, mode: multi, backend: sglang, preset: multi_medium, max_len: 8192 }
   - { host: 3090, model: gpt-oss-20b, tp: 4, mode: single, backend: sglang, preset: single_large, max_len: 8192 }
   - { host: 3090, model: gpt-oss-20b, tp: 4, mode: multi, backend: sglang, preset: multi_medium, max_len: 8192 }
-  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, preset: single_large, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, preset: single_large, max_len: 8192, gpu_mem: 0.95 }
   - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, backend: sglang, preset: single_large, max_len: 8192 }
-  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, preset: multi_medium, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, preset: multi_medium, max_len: 8192, gpu_mem: 0.95 }
   - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, backend: sglang, preset: multi_medium, max_len: 8192 }
   - { host: h100, model: Llama-3.1-8B, tp: 1, mode: single, backend: sglang, preset: single_small, gpu_mem: 0.90 }
   - { host: h100, model: Llama-3.1-8B, tp: 1, mode: multi, backend: sglang, preset: multi_small, gpu_mem: 0.90 }
@@ -687,9 +687,9 @@ cells:
   - { host: 3090, model: gpt-oss-20b, tp: 2, mode: multi, backend: sglang, preset: fixed_multi, max_len: 8192 }
   - { host: 3090, model: gpt-oss-20b, tp: 4, mode: single, backend: sglang, preset: fixed_single, max_len: 8192 }
   - { host: 3090, model: gpt-oss-20b, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, max_len: 8192 }
-  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, preset: fixed_single, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, preset: fixed_single, max_len: 8192, gpu_mem: 0.95 }
   - { host: 3090, model: gpt-oss-120b, tp: 4, mode: single, backend: sglang, preset: fixed_single, max_len: 8192 }
-  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192 }
+  - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, preset: fixed_multi, max_len: 8192, gpu_mem: 0.95 }
   - { host: 3090, model: gpt-oss-120b, tp: 4, mode: multi, backend: sglang, preset: fixed_multi, max_len: 8192 }
   - { host: h100, model: Llama-3.1-8B, tp: 1, mode: single, backend: sglang, preset: fixed_single, gpu_mem: 0.90 }
   - { host: h100, model: Llama-3.1-8B, tp: 1, mode: multi, backend: sglang, preset: fixed_multi, gpu_mem: 0.90 }
