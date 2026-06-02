@@ -321,6 +321,11 @@ function shouldCountFailureAsMissing(
 
 const TERMINAL_BLOCKER_STATUSES = new Set(['skipped', 'failed', 'known_oom']);
 
+// Coverage artifact older than this (minutes) -> warn that it may be stale
+// (the orchestrator regenerates it every tick; staleness means it stopped).
+// RFC: docs/coverage-classification-rfc.md §4.7 (provenance).
+const COVERAGE_STALE_MINUTES = 20;
+
 function shouldRenderBlockedPoints(blocker: CoverageBlocker, exhaustedJobIds: Set<string>): boolean {
   if ((blocker.missing_points ?? []).length === 0) return false;
   // Demoted to TODO (attempted but no captured OOM): render as outstanding work,
@@ -961,6 +966,16 @@ export function CoveragePage({
       ? 'retired canonical, fixed-grid, and MSE runs kept as inventory'
       : 'real trace replay profiles containing full single-turn, short/medium/long multi-turn, and stress workloads';
   const coverageLabel = `${DATA_SCOPE_META[dataScope].shortLabel} coverage`;
+  // Provenance (RFC §4.7): surface the artifact's generated_at + a staleness
+  // warning so a stale coverage blob can never be silently rendered as truth.
+  const coverageGeneratedAt = dataScope === 'synthetic_distributional'
+    ? blockersState?.generated_at ?? null
+    : null;
+  const coverageGenMs = coverageGeneratedAt ? Date.parse(coverageGeneratedAt) : NaN;
+  const coverageAgeMin = Number.isFinite(coverageGenMs)
+    ? Math.max(0, Math.floor((Date.now() - coverageGenMs) / 60000))
+    : null;
+  const coverageStale = coverageAgeMin !== null && coverageAgeMin >= COVERAGE_STALE_MINUTES;
 
   return (
     <div className="space-y-4">
@@ -972,6 +987,18 @@ export function CoveragePage({
                 {coverageLabel}
               </span>
               <span>{hardwareList.length} hardware targets</span>
+              {coverageGeneratedAt && (
+                <span
+                  className={coverageStale
+                    ? 'rounded border border-[#f0883e] bg-[#3a2a12] px-1.5 py-0.5 font-medium text-[#f0883e]'
+                    : 'text-[#6e7681]'}
+                  title={`coverage artifact generated_at ${coverageGeneratedAt}`}
+                >
+                  {coverageStale
+                    ? `⚠ coverage data ${coverageAgeMin}m stale — orchestrator may be stopped`
+                    : `coverage fresh · ${coverageAgeMin}m old`}
+                </span>
+              )}
             </div>
             <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="font-mono text-3xl font-semibold text-[#e6edf3]">{primarySummary}</span>
