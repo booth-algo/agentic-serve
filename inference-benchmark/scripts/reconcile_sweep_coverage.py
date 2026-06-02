@@ -71,6 +71,12 @@ MAX_GPU_MEM_UTIL = 0.95
 # Coarse dispositions that exclude a cell from the fillable denominator.
 NA_DISPOSITIONS = {"na"}
 
+# Per-cell failure classes specific enough to override the job-level disposition
+# (RFC §4.5): the client observed the server was up and this cell was rejected
+# on its own merits. Weak client-side signals (requests_aborted / unknown) defer
+# to the server-log-informed job class so they can't flip e.g. oom -> failed.
+PER_CELL_OVERRIDE_CLASSES = {"low_success_rate"}
+
 # THE invariant (RFC §4.4): a cell is `na` only with positive evidence of an
 # irreducible limit. failure_class -> coarse disposition is the single source
 # of truth for that policy and lives only in disposition_for_class().
@@ -384,7 +390,7 @@ def write_coverage_blocker(
         "missing": group_missing_for_job(cov.missing),
         "expected_points": points_payload(cov.expected),
         "present_points": points_payload(cov.present),
-        "missing_points": points_payload(cov.missing),
+        "missing_points": missing_points_payload(cov),
         "missing_count": len(cov.missing),
         "attempt": cov.attempt,
         "failure": failure_payload(cov),
@@ -712,6 +718,65 @@ def coverage_explanation(cov: JobCoverage, disposition: str | None) -> str | Non
     return summary
 
 
+# --- Per-cell granularity (RFC §4.5) ---------------------------------------
+# A single job covers many (profile, concurrency) cells. The launcher captures
+# a per-cell failure class in failure_metadata["cell_outcomes"] keyed by
+# "<profile>|<concurrency>" so a job that serves at low concurrency but fails
+# at high concurrency splits correctly (e.g. conc 1-80 done, 120+ na_quality)
+# instead of smearing one disposition across every missing cell.
+
+def cell_failure_class(cov: JobCoverage, profile: str, conc: int) -> str | None:
+    outcomes = (cov.failure_metadata or {}).get("cell_outcomes")
+    if not isinstance(outcomes, dict):
+        return None
+    fc = outcomes.get(f"{profile}|{conc}")
+    return fc if fc in FAILURE_CLASSES else None
+
+
+def cell_effective_class(cov: JobCoverage, point: PointKey) -> str | None:
+    """The failure class that drives this cell's disposition: the per-cell
+    class only when it is specific enough to override (PER_CELL_OVERRIDE_CLASSES),
+    otherwise the job-level class."""
+    fc = cell_failure_class(cov, point[4], point[5])
+    if fc in PER_CELL_OVERRIDE_CLASSES:
+        return fc
+    return (failure_payload(cov) or {}).get("failure_class")
+
+
+def cell_disposition(cov: JobCoverage, point: PointKey) -> str | None:
+    """Disposition for one missing cell. A cell-specific class (e.g. a
+    low-success rejection at high concurrency) overrides the job level; weak
+    client-side signals defer to the job-level (server-log-informed) class."""
+    if not cov.missing or cov.status not in BLOCKING_STATUSES:
+        return None
+    fc = cell_failure_class(cov, point[4], point[5])
+    if fc in PER_CELL_OVERRIDE_CLASSES:
+        return disposition_for_class(fc, _evidence_for(cov.failure_metadata or {}), cov.status)
+    return coverage_disposition(cov)
+
+
+def cell_label(cov: JobCoverage, point: PointKey, disposition: str | None) -> str:
+    fc = cell_failure_class(cov, point[4], point[5])
+    if fc in PER_CELL_OVERRIDE_CLASSES:
+        return disposition_label_for(fc, disposition)
+    return coverage_disposition_label(cov, disposition)
+
+
+def missing_points_payload(cov: JobCoverage) -> list[dict[str, Any]]:
+    """Missing points annotated with their effective failure_class/disposition."""
+    rows = point_payload(cov.missing)
+    for row in rows:
+        point: PointKey = (
+            row["hardware"], row["model"], row["backend"],
+            row["mode"], row["profile"], row["concurrency"],
+        )
+        disposition = cell_disposition(cov, point)
+        row["failure_class"] = cell_effective_class(cov, point)
+        row["disposition"] = disposition
+        row["label"] = cell_label(cov, point, disposition)
+    return rows
+
+
 def format_job(cov: JobCoverage) -> str:
     return f"{cov.host}/{cov.hw_label}/{cov.model}/tp{cov.tp}/{cov.backend}/{cov.mode}"
 
@@ -746,20 +811,20 @@ def build_report(
     coverage_na_points = {
         point
         for cov in stale_jobs
-        if coverage_disposition(cov) == "na"
         for point in cov.missing
+        if cell_disposition(cov, point) == "na"
     }
     coverage_failed_points = {
         point
         for cov in stale_jobs
-        if coverage_disposition(cov) == "failed"
         for point in cov.missing
+        if cell_disposition(cov, point) == "failed"
     }
     coverage_todo_points = {
         point
         for cov in stale_jobs
-        if coverage_disposition(cov) == "todo"
         for point in cov.missing
+        if cell_disposition(cov, point) == "todo"
     }
     required_points = expected_points - coverage_na_points
     status_counts = Counter(cov.status for cov in all_jobs)
@@ -893,20 +958,20 @@ def coverage_payload(
     coverage_na_points = {
         point
         for cov in stale_jobs
-        if coverage_disposition(cov) == "na"
         for point in cov.missing
+        if cell_disposition(cov, point) == "na"
     }
     coverage_failed_points = {
         point
         for cov in stale_jobs
-        if coverage_disposition(cov) == "failed"
         for point in cov.missing
+        if cell_disposition(cov, point) == "failed"
     }
     coverage_todo_points = {
         point
         for cov in stale_jobs
-        if coverage_disposition(cov) == "todo"
         for point in cov.missing
+        if cell_disposition(cov, point) == "todo"
     }
     coverage_required_points = expected_points - coverage_na_points
     status_counts = Counter(cov.status for cov in all_jobs)
@@ -941,7 +1006,7 @@ def coverage_payload(
             "coverage_explanation": explanation,
         }
         if include_missing_points:
-            payload["missing_points"] = points_payload(cov.missing)
+            payload["missing_points"] = missing_points_payload(cov)
         return payload
 
     failure_category_counts = Counter(

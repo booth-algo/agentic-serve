@@ -78,6 +78,11 @@ class ReconcileSweepCoverageTests(unittest.TestCase):
                 "mode": "single-turn",
                 "profile": "chat-singleturn-synth",
                 "concurrency": 2,
+                # per-cell annotation (RFC §4.5): no cell_outcomes -> effective
+                # class is the job-level one (low_success_rate -> na).
+                "failure_class": "low_success_rate",
+                "disposition": "na",
+                "label": "N/A — low success rate",
             }])
             self.assertEqual(blocker["failure"]["category"], "low_success_rate")
             self.assertEqual(blocker["failure"]["failure_class"], "low_success_rate")
@@ -199,6 +204,44 @@ class FailureClassificationTests(unittest.TestCase):
         cov = self._cov(failure_class="oom_kv_cache", evidence={"gpu_mem_util": 0.85})
         self.assertEqual(reconcile.coverage_disposition_label(cov, "todo"),
                          "TODO — raise gpu_mem and retry")
+
+
+class PerCellGranularityTests(unittest.TestCase):
+    """RFC §4.5 — a job's missing cells take their own per-cell disposition from
+    failure_metadata['cell_outcomes'], falling back to the job level."""
+
+    def _cov(self, cell_outcomes, **meta):
+        expected = {("H100x2", "M", "vllm", "single-turn", "p", c) for c in (1, 80, 256, 320)}
+        present = {("H100x2", "M", "vllm", "single-turn", "p", c) for c in (1, 80)}
+        fm = {"status": "skipped", "reason": "retry limit reached: mixed",
+              "cell_outcomes": cell_outcomes, **meta}
+        return reconcile.JobCoverage(
+            job_id="h_M_tp2_single", data_scope="synthetic_distributional", host="h",
+            hw_label="H100x2", model="M", tp=2, mode="single", backend="vllm",
+            status="skipped", reason=fm["reason"], failure_metadata=fm,
+            expected=expected, present=present)
+
+    def test_cells_split_by_per_cell_outcome(self):
+        cov = self._cov({"p|256": "low_success_rate", "p|320": "oom_kv_cache"},
+                        evidence={"gpu_mem_util": 0.90})
+        disp = {pt[5]: reconcile.cell_disposition(cov, pt) for pt in cov.missing}
+        self.assertEqual(disp[256], "na")    # low_success_rate -> na
+        self.assertEqual(disp[320], "todo")  # oom at util<max -> fixable todo
+
+    def test_cell_without_outcome_falls_back_to_job(self):
+        # conc 320 has no per-cell outcome -> inherits the job-level disposition.
+        cov = self._cov({"p|256": "low_success_rate"})
+        self.assertIsNone(reconcile.cell_failure_class(cov, "p", 320))
+        # job-level reason is unknown -> todo
+        self.assertEqual(reconcile.cell_disposition(cov, ("H100x2", "M", "vllm", "single-turn", "p", 320)), "todo")
+
+    def test_missing_points_payload_annotates_each_cell(self):
+        cov = self._cov({"p|256": "low_success_rate", "p|320": "oom_kv_cache"},
+                        evidence={"gpu_mem_util": 0.90})
+        rows = {r["concurrency"]: r for r in reconcile.missing_points_payload(cov)}
+        self.assertEqual(rows[256]["failure_class"], "low_success_rate")
+        self.assertEqual(rows[256]["disposition"], "na")
+        self.assertEqual(rows[320]["disposition"], "todo")
 
 
 if __name__ == "__main__":
