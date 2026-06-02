@@ -47,6 +47,14 @@ COVERAGE_MAX_REQUEUES="${BENCH_COVERAGE_MAX_REQUEUES:-1}"
 if ! [[ "$COVERAGE_MAX_REQUEUES" =~ ^-?[0-9]+$ ]]; then
     COVERAGE_MAX_REQUEUES=1
 fi
+# Runtime override via a control file (no restart needed; mirrors
+# drained-hosts.txt / blocked-gpus.txt). Lets ops raise the coverage requeue
+# budget on the fly so incomplete jobs keep auto-requeuing onto idle GPUs.
+MAX_REQUEUES_FILE="${BENCH_MAX_REQUEUES_FILE:-$CONTROL_DIR/max-coverage-requeues}"
+if [[ -f "$MAX_REQUEUES_FILE" ]]; then
+    _mrq="$(tr -dc '0-9-' < "$MAX_REQUEUES_FILE" 2>/dev/null)"
+    [[ "$_mrq" =~ ^-?[0-9]+$ ]] && COVERAGE_MAX_REQUEUES="$_mrq"
+fi
 MAX_OOM_RETRIES="${BENCH_ORCHESTRATOR_MAX_OOM_RETRIES:-3}"
 if ! [[ "$MAX_OOM_RETRIES" =~ ^[0-9]+$ ]]; then
     MAX_OOM_RETRIES=3
