@@ -9,7 +9,7 @@ from pathlib import Path
 
 class CompareSimToEngineTraceTest(unittest.TestCase):
     def test_diff_csv_joins_on_profile_concurrency_turn(self) -> None:
-        from profiling.process.comparators.compare_sim_to_engine_trace import (
+        from profiling.process._legacy.compare_sim_to_engine_trace import (
             compute_diffs,
             load_sim_rows,
             load_truth_rows,
@@ -51,7 +51,7 @@ class CompareSimToEngineTraceTest(unittest.TestCase):
         self.assertEqual(steps.abs_delta, -16.0)
 
     def test_main_writes_csv_and_report(self) -> None:
-        from profiling.process.comparators.compare_sim_to_engine_trace import main
+        from profiling.process._legacy.compare_sim_to_engine_trace import main
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)

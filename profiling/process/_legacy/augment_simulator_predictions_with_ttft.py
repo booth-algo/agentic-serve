@@ -23,7 +23,7 @@ It also injects forward (workload-only) predictions when available:
 This augmenter never repoints any TPOT field (kernel headline stays byte-identical).
 
 Usage:
-    python3 -m profiling.process.emitters.augment_simulator_predictions_with_ttft
+    python3 -m profiling.process._legacy.augment_simulator_predictions_with_ttft
 """
 
 from __future__ import annotations

@@ -17,9 +17,9 @@ prediction outputs). Code lives in `profiling/` and `simulator/`; **data lives h
   - decode grid — `profiling/profile/vllm/cuda_events/decode_steps.py --output profile_data/results/<name>.csv [--tensor-parallel-size N]`
   - prefill grid — `profiling/profile/vllm/sweep/prefill_steps.py --output profile_data/kernels/<name>.csv [--tensor-parallel-size N]`
   - cached-prefill batch TTFT — `profiling/profile/vllm/cached_prefill_batch_ttft.py`
-- Predictions / dashboard JSON (no GPU): `profiling/process/predictors/predict_llama31_8b_h100_tpot_with_engine_steps.py`
-  then `python3 -m profiling.process.emitters.augment_simulator_predictions_with_{kernel,ttft}` and
-  `build_tp2_simulator_rows`; validate with `profiling.process.predictors.validate_{kernel_tpot,ttft}`.
+- Predictions / dashboard JSON (no GPU): `python3 -m profiling.process.build_simulator_rows` (one
+  config-driven generator for all GPU configs); validate with `python3 -m profiling.process.validate_tpot`
+  and `python3 -m profiling.process.validate_ttft`. See `profiling/docs/prediction_pipeline.yaml`.
 
 ## Data deliberately left in place (not under profile_data/)
 

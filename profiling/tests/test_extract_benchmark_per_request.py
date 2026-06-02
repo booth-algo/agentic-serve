@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from profiling.process.extractors.extract_benchmark_per_request import (
+from profiling.process.extract_benchmark_per_request import (
     collect_per_request_distributions,
 )
 

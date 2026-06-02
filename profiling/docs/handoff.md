@@ -161,8 +161,8 @@ holds the full derivation chain (amplifier law → eviction-gate → pcross jump
 
 ```bash
 python3 -m pytest simulator/tests/ profiling/tests/ -q          # 184 pass
-python3 -m profiling.process.emitters.augment_simulator_predictions_with_kernel  # regen JSON (1043 turns)
-python3 -m profiling.process.predictors.validate_kernel_tpot    # per-profile + plateau MAPE; GATE: kernel 16.48 / chat 6.1
+python3 -m profiling.process._legacy.augment_simulator_predictions_with_kernel  # regen JSON (1043 turns)
+python3 -m profiling.process.validate_tpot    # per-profile + plateau MAPE; GATE: kernel 16.48 / chat 6.1
 cd inference-benchmark/dashboard && npm run build               # bundle picks up dist/
 ```
 

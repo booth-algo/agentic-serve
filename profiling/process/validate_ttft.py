@@ -9,7 +9,7 @@ Console-only. Run after editing simulator/ttft_predict.py and re-running
 augment_simulator_predictions_with_ttft.
 
 Usage:
-    python3 -m profiling.process.predictors.validate_ttft
+    python3 -m profiling.process.validate_ttft
 """
 
 from __future__ import annotations
@@ -33,13 +33,11 @@ DEFAULT_SIM_PREDICTIONS = Path(
 )
 HIGH_TTFT_MS = 200.0  # queue-dominated slice (TTFT analog of the TPOT plateau)
 
-# (pred_key, meas_key, label) per metric. ``ttft_pred`` / ``e2el_pred`` are now the
-# HEADLINE forward closed-loop queue sim; the ``_static`` rows are the static M0 comparison.
+# (pred_key, meas_key, label) per metric. ``ttft_pred`` / ``e2el_pred`` are the HEADLINE forward
+# closed-loop queue sim (the static M0 comparison was retired with the old augmenter pipeline).
 METRICS = [
     ("ttft_pred", "ttft_meas", "ttft"),
     ("e2el_pred", "e2el_meas", "e2el"),
-    ("ttft_pred_static", "ttft_meas", "ttft_static"),
-    ("e2el_pred_static", "e2el_meas", "e2el_static"),
 ]
 
 
@@ -133,14 +131,6 @@ def main() -> None:
     ttft_ov = _summary(rows, "ttft_pred", "ttft_meas")["__overall__"]["mape"]
     e2el_ov = _summary(rows, "e2el_pred", "e2el_meas")["__overall__"]["mape"]
     print(f"\nGATE  overall TTFT MAPE = {ttft_ov:.2f}%   overall E2EL MAPE = {e2el_ov:.2f}%  (headline = queue sim)")
-
-    st_t = _summary(rows, "ttft_pred_static", "ttft_meas")["__overall__"]
-    st_e = _summary(rows, "e2el_pred_static", "e2el_meas")["__overall__"]
-    if st_t["n"]:
-        print(
-            f"STATIC(M0)  overall TTFT MAPE = {st_t['mape']:.2f}% (n={st_t['n']})   "
-            f"overall E2EL MAPE = {st_e['mape']:.2f}% (n={st_e['n']})"
-        )
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from profiling.process.predictors.predict_llama31_8b_h100_tpot_from_kernels import (  # noqa: E402
+from profiling.process._legacy.predict_llama31_8b_h100_tpot_from_kernels import (  # noqa: E402
     DEFAULT_ATTENTION_PROFILE,
     DEFAULT_GEMM_SUMMARY,
     DEFAULT_SMALL_KERNEL_SUMMARY,

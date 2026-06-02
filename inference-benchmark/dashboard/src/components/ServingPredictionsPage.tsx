@@ -1401,7 +1401,7 @@ function ServingPerTurnChart({
                     </svg>
                     <span className="text-[11px] text-[#c9d1d9]">
                       {(metric.label === 'TPOT'
-                        ? `${metric.label} predicted (roofline)`
+                        ? `${metric.label} predicted`
                         : `${metric.label} predicted (queue sim)`)
                         + (tableKey === 'pred' ? ' ★ table' : '')}
                     </span>

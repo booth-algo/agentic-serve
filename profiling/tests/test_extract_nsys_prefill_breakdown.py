@@ -9,7 +9,7 @@ from pathlib import Path
 
 class ExtractorClassifierTest(unittest.TestCase):
     def test_classify_routes_known_kernels_into_buckets(self) -> None:
-        from profiling.process.extractors.extract_nsys_prefill_breakdown import (
+        from profiling.process._legacy.extract_nsys_prefill_breakdown import (
             classify,
         )
 
@@ -32,7 +32,7 @@ class ExtractorClassifierTest(unittest.TestCase):
 class ExtractorEndToEndTest(unittest.TestCase):
     def test_extractor_emits_per_n_breakdown_csv(self) -> None:
         # Build a tiny in-memory sqlite that looks like an nsys capture.
-        from profiling.process.extractors.extract_nsys_prefill_breakdown import (
+        from profiling.process._legacy.extract_nsys_prefill_breakdown import (
             extract_trace,
         )
 
@@ -74,7 +74,7 @@ class ExtractorEndToEndTest(unittest.TestCase):
 
 class ExtractorReferenceCsvOutputShape(unittest.TestCase):
     def test_emitted_csv_has_expected_columns_and_sanity_ratio_one(self) -> None:
-        from profiling.process.extractors.extract_nsys_prefill_breakdown import (
+        from profiling.process._legacy.extract_nsys_prefill_breakdown import (
             main,
         )
         import sys

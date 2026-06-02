@@ -759,7 +759,7 @@ def _build_cohort_oracle(
     try:
         from pathlib import Path
 
-        from profiling.process.extractors.extract_benchmark_per_request import (
+        from profiling.process.extract_benchmark_per_request import (
             collect_session_timelines,
         )
     except Exception:

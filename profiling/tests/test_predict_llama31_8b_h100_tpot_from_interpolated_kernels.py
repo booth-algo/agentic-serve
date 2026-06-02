@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from profiling.process.predictors.predict_llama31_8b_h100_tpot_from_interpolated_kernels import (
+from profiling.process._legacy.predict_llama31_8b_h100_tpot_from_interpolated_kernels import (
     BenchmarkTarget,
     KernelSample,
     LogLinearKernelModel,

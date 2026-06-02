@@ -17,7 +17,7 @@ matrix / KPIs — the headline ``tpot_err`` always tracks the production
     session-length distribution (only for profiles with a known distribution).
 
 Usage:
-    python3 -m profiling.process.emitters.augment_simulator_predictions_with_kernel
+    python3 -m profiling.process._legacy.augment_simulator_predictions_with_kernel
 """
 
 from __future__ import annotations

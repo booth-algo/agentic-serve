@@ -15,7 +15,7 @@ class AggregateJsonlTest(unittest.TestCase):
                 handle.write(json.dumps(r) + "\n")
 
     def test_rolls_up_records_by_profile_concurrency_turn(self) -> None:
-        from profiling.process.extractors.aggregate_engine_step_trace_jsonl import (
+        from profiling.process._legacy.aggregate_engine_step_trace_jsonl import (
             aggregate,
         )
 
@@ -54,7 +54,7 @@ class AggregateJsonlTest(unittest.TestCase):
         self.assertEqual(row["scheduled_request_count"], 2)
 
     def test_profile_alias_remaps_name(self) -> None:
-        from profiling.process.extractors.aggregate_engine_step_trace_jsonl import (
+        from profiling.process._legacy.aggregate_engine_step_trace_jsonl import (
             aggregate,
         )
 
@@ -71,7 +71,7 @@ class AggregateJsonlTest(unittest.TestCase):
         self.assertEqual(rows[0]["profile"], "swebench-multiturn-synth")
 
     def test_main_end_to_end(self) -> None:
-        from profiling.process.extractors.aggregate_engine_step_trace_jsonl import (
+        from profiling.process._legacy.aggregate_engine_step_trace_jsonl import (
             main,
         )
 

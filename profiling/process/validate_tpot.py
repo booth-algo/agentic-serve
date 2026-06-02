@@ -11,7 +11,7 @@ Console-only by default (no doc artifact). Use after editing simulator/kernel_tp
 and re-running augment_simulator_predictions_with_kernel.
 
 Usage:
-    python3 -m profiling.process.predictors.validate_kernel_tpot
+    python3 -m profiling.process.validate_tpot
 """
 
 from __future__ import annotations
@@ -36,12 +36,10 @@ DEFAULT_SIM_PREDICTIONS = Path(
 PLATEAU_MS = 100.0  # turns above this are "on the plateau" (the capacity jump)
 
 PREDICTORS = [
-    ("tpot_pred", "roofline"),
-    ("tpot_pred_kernel", "kernel"),
-    # Classifier stepping-ramp soft-hint variant (comparison line, not headline).
-    ("tpot_pred_kernel_hint", "kern-hint"),
-    # Forward 3D-roofline eviction-deficit ramp predictor (comparison, not headline).
-    ("tpot_pred_ramp", "fwd-ramp"),
+    # Headline = the kernel-composed TPOT, now written directly to tpot_pred by
+    # build_simulator_rows.py (the old roofline / kernel+hint / fwd-ramp comparison lines
+    # were retired with the engine-step pipeline).
+    ("tpot_pred", "tpot"),
 ]
 
 
@@ -139,9 +137,9 @@ def main() -> None:
     _print_table(f"PLATEAU only (tpot_meas>{PLATEAU_MS:.0f}ms)", plateau_summary, "mape")
 
     # The two headline gate numbers.
-    ov = all_summary["__overall__"]["kernel"]["mape"]
-    swe_plateau = plateau_summary.get("swebench-multiturn-synth", {}).get("kernel", {}).get("mape", float("nan"))
-    print(f"\nGATE  overall kernel MAPE = {ov:.2f}%   swebench-plateau kernel MAPE = {swe_plateau:.2f}%")
+    ov = all_summary["__overall__"]["tpot"]["mape"]
+    swe_plateau = plateau_summary.get("swebench-multiturn-synth", {}).get("tpot", {}).get("mape", float("nan"))
+    print(f"\nGATE  overall TPOT MAPE = {ov:.2f}%   swebench-plateau TPOT MAPE = {swe_plateau:.2f}%")
 
 
 if __name__ == "__main__":

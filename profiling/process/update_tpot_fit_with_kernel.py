@@ -7,7 +7,7 @@ three-regime aggregates. The per-turn prediction lines for every predictor are
 left untouched — only the headline summary numbers change.
 
 Usage:
-    python3 -m profiling.process.emitters.update_tpot_fit_with_kernel
+    python3 -m profiling.process.update_tpot_fit_with_kernel
 """
 
 from __future__ import annotations

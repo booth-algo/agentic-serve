@@ -19,7 +19,7 @@ This writes ``<spec>_realized.json`` for each profile (pointed to by ``ramp_tpot
 Both are measured WORKLOAD properties (inputs), not TTFT fits — same category as the kernel grids.
 
 Usage:
-    python3 -m profiling.process.extractors.build_realized_session_distributions \
+    python3 -m profiling.process.build_realized_session_distributions \
         [--bench-root <dir>] [--nq 101]
 """
 from __future__ import annotations

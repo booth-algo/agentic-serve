@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from profiling.process.summarizers.summarize_ncu_decode_kernel_reports import (
+from profiling.process._legacy.summarize_ncu_decode_kernel_reports import (
     FUSED_BUCKETS,
     NUM_LAYERS,
     load_fused_metadata,

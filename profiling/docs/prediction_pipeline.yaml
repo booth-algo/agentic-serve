@@ -1,8 +1,10 @@
 # Prediction pipeline — how the dashboard's per-turn TTFT / TPOT / E2EL predictions are produced.
 #
-# End-to-end view: which scripts build inference-benchmark/dashboard/public/simulator-predictions.json,
-# in what order, what data they read, and how each metric is validated. The low-level kernel
-# composition (full/cached prefill + decode grids -> per-step cost) lives in kernel_composition_method.yaml.
+# ONE config-driven generator (build_simulator_rows.py) writes
+# inference-benchmark/dashboard/public/simulator-predictions.json for every (GPU, model, TP) config.
+# The low-level kernel composition (full/cached prefill + decode grids -> per-step cost) lives in
+# kernel_composition_method.yaml. The retired pre-2026-06 split pipeline (engine-step base producer +
+# kernel/ttft augmenters + the bespoke tp2 file) is quarantined under profiling/process/_legacy/.
 
 output:
   dashboard_json: inference-benchmark/dashboard/public/simulator-predictions.json   # gitignored, served by the dashboard from /
@@ -10,62 +12,43 @@ output:
   shape: >
     { <GPU_KEY>: [ row, ... ] }.  Each row = one (model, profile, concurrency) cell with
     multiturn_turn_predictions[]; each turn carries {ttft,tpot,e2el}_meas (ground truth),
-    {ttft,tpot,e2el}_pred (headline), comparison lines, and *_err / *_signed_err_ms / *_abs_err_ms.
-    Cell-level {ttft,tpot,e2el}_err (mean APE) drive the dashboard MAPE badges.
+    {ttft,tpot,e2el}_pred (the single headline), and {ttft,tpot,e2el}_{err,signed_err_ms,abs_err_ms}.
+    Cell-level {ttft,tpot,e2el}_err (mean APE) drive the dashboard MAPE badges. Identical fields
+    across all GPU keys (no per-config comparison lines).
   gpu_keys:
     H100:   "tp1 Llama-3.1-8B — the primary, fully-calibrated config"
-    H100x2: "tp2 (2xH100) — measured decode grid + KV pool; prefill still tp1 (first cut)"
+    H100x2: "tp2 (2xH100) — measured decode grid + KV pool; serving prefill law still tp1 (first cut)"
 
-pipeline:   # run IN ORDER; each stage reads the JSON from the previous stage and augments it in place
-  1_base_tpot:
-    script: profiling/process/predictors/predict_llama31_8b_h100_tpot_with_engine_steps.py
-    writes: "the base rows + per-turn multiturn_turn_predictions, and tpot_pred (engine-step roofline) via --dashboard-output"
-    reads:
-      - profile_data/kernels/forward_pass/gemm/H100.csv          # GEMM
-      - profile_data/kernels/forward_pass/flash_attn/H100.csv    # attention
-      - profile_data/kernels/fa3_prefill_H100.csv                # FA3 prefill
-      - profile_data/results/cached_prefill_v3_H100.csv          # cached-prefill grid
-      - profile_data/results/decode_profile_H100_large_2026-05-17.csv
-      - profile_data/kernels/roofline_params_H100_llama31_8b.json
-      - profile_data/results/benchmark_turns_llama31_8b_h100_vllm.csv   # per-turn structure source
-    kv_pool: "--available-gpu-kv-blocks 27651 (H100 tp1)"
-  2_kernel_tpot:
-    script: profiling/process/emitters/augment_simulator_predictions_with_kernel.py
-    writes: "tpot_pred_kernel (HEADLINE TPOT), tpot_pred_kernel_hint (classifier stepping-ramp), tpot_pred_ramp — per turn; leaves tpot_pred (roofline) untouched"
-    uses: "simulator/kernel_tpot.py::predict_cell_tpot (+ kernel_tpot_hint, ramp_tpot.predict_cell_tpot_ramp)"
-  3_ttft_e2el:
-    script: profiling/process/emitters/augment_simulator_predictions_with_ttft.py
-    writes:
-      - "ttft_meas / e2el_meas  (GROUND TRUTH, median over successful requests per turn_index)"
-      - "ttft_pred / e2el_pred  (HEADLINE = forward queue sim; e2el composes on kernel TPOT)"
-      - "ttft_pred_static / e2el_pred_static  (static M0 comparison)"
-      - "ttft_err / e2el_err (+ signed/abs) and the _static error twins"
-    uses: "simulator/ttft_queue_sim.py::predict_cell_ttft_qsim (headline) + simulator/ttft_predict.py::predict_cell_ttft (M0)"
-  4_tp2_rows:
-    script: profiling/process/emitters/build_tp2_simulator_rows.py
-    writes: "the H100x2 GPU key (tp2 first-cut rows) — measured tp2 decode grid + KV pool 62416; prefill law still tp1"
+pipeline:   # the whole JSON is produced by ONE script
+  generator:
+    script: profiling/process/build_simulator_rows.py   # run: python3 -m profiling.process.build_simulator_rows
+    how: >
+      A CONFIGS table (gpu_key, tp, bench_dir, available_kv_blocks, decode_grid) drives it. Per config x
+      (profile, concurrency): build_turns() takes per-turn medians from the benchmark per_request, then
+      predict_cell_tpot (headline tpot_pred) + predict_cell_ttft_qsim (ttft_pred) + e2el = ttft + out*tpot,
+      with errors. Per config the decode grid is swapped via kernel_step_cost._default_grid and
+      RooflineParams gets the config available_kv_blocks. Add a GPU/TP config = add a CONFIGS row.
 
 predict:
 
   tpot:
     description: "Per-turn inter-token latency (ITL). Kernel-composed cost mapped to TPOT, regime-aware."
     status: validated
-    headline_field: tpot_pred_kernel
-    gate: "overall 16.48% MAPE; swebench-plateau 9.20% (validate_kernel_tpot.py)"
+    headline_field: tpot_pred
+    gate: "overall 15.91% MAPE; swebench-plateau 8.83% (validate_tpot.py)"
     predictor:
       module: simulator/kernel_tpot.py  (predict_cell_tpot)
       step_cost: "simulator/kernel_step_cost.py — measured decode grid, bilinear-interp in log space + roofline beyond the grid"
       formula: "kernel_step = decode_step_ms(B_eff, ctx); B_eff capped by KV pool; pressure-aware amplifier toward a saturated ITL ceiling"
-      comparison_lines: "tpot_pred (engine-step roofline), tpot_pred_kernel_hint, tpot_pred_ramp"
     data:
-      decode_grid: profile_data/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv  (kernel_step_cost DEFAULT_CSV)
-      roofline_params: profile_data/kernels/roofline_params_H100_llama31_8b.json  (available_kv_blocks=27250, kv_bytes/token, bandwidth)
+      decode_grid: profile_data/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv  (kernel_step_cost DEFAULT_CSV; tp2 swaps in decode_profile_H100x2_*.csv)
+      roofline_params: profile_data/kernels/roofline_params_H100_llama31_8b.json  (kv_bytes/token, bandwidth; available_kv_blocks per config: 27250 tp1 / 62416 tp2)
 
   ttft:
     description: "Per-turn time-to-first-token. Wall-clock queue wait of a synchronized herd of C sessions."
     status: validated
     headline_field: ttft_pred
-    gate: "overall 33.12% MAPE (validate_ttft.py). Static M0 comparison = 61.93%."
+    gate: "overall 33.01% MAPE (validate_ttft.py)"
     predictor:
       module: simulator/ttft_queue_sim.py  (predict_cell_ttft_qsim)
       mechanism: >
@@ -76,29 +59,28 @@ predict:
         by a measured per-session context-size factor (small sessions stay resident=hits, large minority
         preempted -> median stays a hit near the sharp KV cliff = the osworld saturate-recover).
       cohort_source: "simulator/ramp_tpot.py PROFILE_DIST -> inference-benchmark/data/distributions/<profile>_realized.json"
-      shared_kernels: "decode_step_ms (same grid as tpot) for the per-step decode cost; KV pool 27250"
-      comparison: "simulator/ttft_predict.py::predict_cell_ttft (static M0 = c1 prefill baseline x Little's-law queue amplifier) -> ttft_pred_static"
+      shared_kernels: "decode_step_ms (same grid as tpot) for the per-step decode cost; KV pool per config"
     data:
-      survival_and_scale: inference-benchmark/data/distributions/*_realized.json  (turn_count histogram + context_scale_quantiles; built by profiling/process/extractors/build_realized_session_distributions.py)
+      survival_and_scale: inference-benchmark/data/distributions/*_realized.json  (turn_count histogram + context_scale_quantiles; built by profiling/process/build_realized_session_distributions.py)
       prefill_law: "c1-anchored serving constants in ttft_queue_sim.py (FLOOR 22.5 + NEW 0.031/tok + HOST 6.103/1k split 57/43 + FA3 8.31e-7/tok^2)"
 
   e2el:
     description: "Per-turn end-to-end latency. Composed, not separately modeled."
     status: validated
     headline_field: e2el_pred
-    gate: "overall 19.67% MAPE (validate_ttft.py). Static M0 comparison = 29.87%."
-    formula: "e2el_pred[t] = ttft_pred[t] + output_tokens[t] * tpot[t]   (tpot = the kernel TPOT headline)"
+    gate: "overall 19.61% MAPE (validate_ttft.py)"
+    formula: "e2el_pred[t] = ttft_pred[t] + output_tokens[t] * tpot_pred[t]"
     note: "E2EL is decode-dominated so it tracks far better than TTFT once TPOT + TTFT are in place."
 
 ground_truth:
   source: /mnt/100g/agent-bench/results/synthetic_distributional/h100_Llama-3.1-8B_tp{1,2}_vllm/<profile>_conc<C>.json
-  field: "per_request[] -> ttft_ms / tpot_ms / e2el_ms, success-filtered, MEDIAN per turn_index (matches how tpot_meas is built)"
+  field: "per_request[] -> ttft_ms / tpot_ms / e2el_ms + cached/new/output tokens, success-filtered, MEDIAN per turn_index. One source for BOTH structure and *_meas (the generator is self-consistent)."
   profiles: [chat-multiturn-synth, osworld-multiturn-synth, swebench-multiturn-synth, terminalbench-multiturn-synth]
   concurrencies: [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320]
 
 validate:   # console-only gates, read the JSON, change nothing
-  tpot: "python3 -m profiling.process.predictors.validate_kernel_tpot   -> kernel 16.48% / swe-plateau 9.20%"
-  ttft_e2el: "python3 -m profiling.process.predictors.validate_ttft     -> TTFT 33.12% / E2EL 19.67% (+ STATIC M0 line)"
+  tpot: "python3 -m profiling.process.validate_tpot   -> TPOT 15.91% / swe-plateau 8.83%"
+  ttft_e2el: "python3 -m profiling.process.validate_ttft   -> TTFT 33.01% / E2EL 19.61%"
   metric_note: "MAPE = mean per-turn APE (the dashboard badge number). Judge the TTFT climb by WAPE + signed bias, not MAPE (turn-0 noise dominates MAPE)."
 
 how_to_improve:
@@ -106,6 +88,6 @@ how_to_improve:
     - "TTFT WAPE is still ~20% (irreducible c5-c40 stochastic perturbation band + osworld). Deprioritized."
   tp2:
     - "Re-anchor the serving prefill law (FLOOR/NEW/HOST) on tp2 c1 cells -> fixes the tp2 TTFT prefill over-prediction (offline, no GPU)."
-    - "Lower the tp2 TPOT-plateau amplifier ceiling (T_upper ~237ms is tp1-measured) -> too high for tp2's faster decode."
+    - "Override RooflineParams.peak_bw_bytes_per_s for 2xH100 + re-anchor the TPOT-plateau ceiling (kernel_tpot.py) -> fixes the tp2 TPOT over-prediction (see the tp2 investigation)."
   general:
-    - "New (model, GPU) config: profile its decode/prefill grids + KV pool (see kernel_composition_method.yaml + profile_data/README.md), add a GPU key here, no dashboard change needed."
+    - "New (model, GPU) config: profile its decode grid + KV pool (see kernel_composition_method.yaml + profile_data/README.md), add a CONFIGS row to build_simulator_rows.py — no dashboard change needed."
