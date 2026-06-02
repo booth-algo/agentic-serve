@@ -45,21 +45,41 @@ BLOCKING_STATUSES = {"done", "skipped", "failed", "known_oom"}
 DEFAULT_RESET_STATUSES = {"done"}
 COVERAGE_REQUEUE_COUNT_SUFFIX = "coverage_requeue_count"
 COVERAGE_BLOCKER_SUFFIX = "coverage_blocker.json"
-# Captured-OOM evidence: a run that actually hit an OOM / KV-cache limit.
-CAPTURED_OOM_CATEGORIES = {"oom_or_kv_cache"}
-# Explainable terminal limits that stay N/A (model ran; result rejected on its
-# merits, not because we failed to capture what happened).
-N_A_FAILURE_CATEGORIES = {
-    "oom_or_kv_cache",
-    "success_rate_below_min",
+# --- Failure taxonomy (see docs/coverage-classification-rfc.md) -------------
+# `failure_class` is *what actually happened*, captured at the launcher when
+# possible and otherwise derived ONCE here (the only place reason strings are
+# parsed). The dashboard never re-infers it.
+FAILURE_CLASSES = {
+    "none",               # success
+    "model_missing",      # weights/config absent or unloadable
+    "hw_infeasible",      # static: won't fit / unsupported arch
+    "oom_kv_cache",       # engine-init or runtime OOM / no cache blocks
+    "engine_crash",       # server/engine died on startup
+    "requests_aborted",   # server up, 100% requests failed
+    "low_success_rate",   # ran, success rate below threshold
+    "timeout",            # warmup/serving exceeded budget
+    "incomplete_partial", # some cells produced, some missing
+    "not_attempted",      # never dispatched
+    "driver_fault",       # XID / NVML / GPU fell off the bus
+    "unknown",            # produced nothing, no positive evidence of a cause
 }
-# Attempted but produced nothing AND no OOM was captured -> not proven
-# infeasible. Demote back to TODO so the cell is re-queued / investigated
-# rather than silently hidden as N/A.
-TODO_FAILURE_CATEGORIES = {
-    "zero_results",
-    "incomplete_outputs",
+
+# gpu_mem_util at/above which a captured OOM is treated as an irreducible limit
+# (N/A) rather than a fixable "raise gpu_mem and retry" TODO.
+MAX_GPU_MEM_UTIL = 0.95
+
+# Coarse dispositions that exclude a cell from the fillable denominator.
+NA_DISPOSITIONS = {"na"}
+
+# THE invariant (RFC §4.4): a cell is `na` only with positive evidence of an
+# irreducible limit. failure_class -> coarse disposition is the single source
+# of truth for that policy and lives only in disposition_for_class().
+NA_FAILURE_CLASSES = {"hw_infeasible", "low_success_rate"}  # + oom_kv_cache @ max util
+FAILED_FAILURE_CLASSES = {
+    "model_missing", "engine_crash", "requests_aborted", "timeout", "driver_fault",
 }
+# everything else (unknown, incomplete_partial, not_attempted, oom @ <max util)
+# -> "todo": fillable work, never silently hidden as N/A.
 
 PointKey = tuple[str, str, str, str, str, int]  # hw, model, backend, data_mode, profile, conc
 ProfileKey = tuple[str, str, str, int, str, str, str]  # scope, host, model, tp, mode, backend, profile
@@ -488,49 +508,127 @@ def optional_present_points(data: list[dict[str, Any]], scope: str, expected_poi
     }
 
 
-def failure_category(reason: str | None) -> str:
+def _to_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def derive_failure_class(metadata: dict[str, Any], reason: str | None, status: str) -> str:
+    """Structured failure class for a terminal job.
+
+    Prefers the launcher's explicit `failure_class` field. Falls back to a
+    single centralized derivation from the legacy reason text + signals. This
+    is the ONLY place reason strings are parsed; new runs carry `failure_class`
+    directly and skip it entirely.
+    """
+    explicit = metadata.get("failure_class")
+    if explicit in FAILURE_CLASSES:
+        return explicit
     text = (reason or "").lower()
-    if any(token in text for token in (
-        "xid",
-        "nvml",
-        "driver",
-        "gpu has fallen off",
-        "cuda error",
-        "uncorrectable",
-        "nvidia-smi",
-        "cuda initialization",
-    )):
-        return "driver_failure"
-    if any(token in text for token in (
-        "out of memory",
-        "cuda out of memory",
-        "kv-cache",
-        "kv cache",
-        "cache blocks",
-    )):
-        return "oom_or_kv_cache"
+    if status == "known_oom":
+        return "oom_kv_cache"
+    if any(t in text for t in ("xid", "nvml", "driver", "gpu has fallen off",
+                               "cuda error", "uncorrectable", "nvidia-smi",
+                               "cuda initialization")):
+        return "driver_fault"
+    if any(t in text for t in ("can't load the configuration", "repo id must be",
+                               "no such file or directory", "is not a valid model",
+                               "no usable temporary directory")):
+        return "model_missing"
+    if any(t in text for t in ("no available memory for the cache blocks",
+                               "out of memory", "cuda out of memory",
+                               "kv-cache", "kv cache", "cache blocks")):
+        return "oom_kv_cache"
+    if "engine core" in text and ("fail" in text or "initialization failed" in text):
+        return "engine_crash"
     if "success rate" in text and "below minimum" in text:
-        return "success_rate_below_min"
-    if "[warn]" in text and "failed" in text:
-        return "benchmark_failed"
-    if "zero results" in text or "zero expected outputs" in text:
-        return "zero_results"
-    if "incomplete" in text or "expected outputs missing" in text:
-        return "incomplete_outputs"
+        return "low_success_rate"
+    if any(t in text for t in ("requests failed", "no requests completed",
+                               "server may not be functional", "abort:")):
+        return "requests_aborted"
+    if "timeout" in text or "timed out" in text:
+        return "timeout"
+    present = metadata.get("expected_outputs_present")
+    total = metadata.get("expected_outputs_total")
+    if isinstance(present, int) and isinstance(total, int) and 0 < present < total:
+        return "incomplete_partial"
+    # "zero results / no retryable OOM" etc. -> we have NO positive evidence of a
+    # cause, so it is NOT proven infeasible. The invariant: never N/A without
+    # evidence; this stays fillable work to re-run / investigate.
     return "unknown"
 
 
-def failure_category_label(category: str) -> str:
-    labels = {
-        "driver_failure": "driver failure",
-        "oom_or_kv_cache": "OOM / KV-cache limit",
-        "success_rate_below_min": "success rate below threshold",
-        "benchmark_failed": "benchmark command failed",
-        "zero_results": "zero results",
-        "incomplete_outputs": "incomplete outputs",
-        "unknown": "unknown failure",
+def failure_class_label(failure_class: str) -> str:
+    return {
+        "none": "ok",
+        "model_missing": "model not staged",
+        "hw_infeasible": "infeasible (won't fit)",
+        "oom_kv_cache": "OOM / KV-cache limit",
+        "engine_crash": "engine crash",
+        "requests_aborted": "requests aborted",
+        "low_success_rate": "success rate below threshold",
+        "timeout": "timeout",
+        "incomplete_partial": "partial outputs",
+        "not_attempted": "not attempted",
+        "driver_fault": "driver fault",
+        "unknown": "no captured cause",
+    }.get(failure_class, failure_class.replace("_", " "))
+
+
+def disposition_for_class(failure_class: str, evidence: dict[str, Any], status: str) -> str:
+    """SINGLE SOURCE OF TRUTH: failure_class -> coarse disposition (na/todo/failed).
+
+    Enforces the RFC invariant: `na` only with positive evidence of an
+    irreducible limit (a captured OOM at max gpu_mem, a measured low success
+    rate, or static infeasibility). Everything else is `todo` (fillable) or
+    `failed` (has a cause to inspect) -- never silently N/A.
+    """
+    if status == "known_oom":
+        return "na"
+    if failure_class in NA_FAILURE_CLASSES:
+        return "na"
+    if failure_class == "oom_kv_cache":
+        util = _to_float((evidence or {}).get("gpu_mem_util"))
+        # A captured OOM is irreducible only at/above max util; below it, it is
+        # a fixable "raise gpu_mem and retry" TODO (the 3090 vllm gpt-oss case).
+        return "todo" if (util is not None and util < MAX_GPU_MEM_UTIL) else "na"
+    if failure_class in FAILED_FAILURE_CLASSES:
+        return "failed"
+    return "todo"
+
+
+def disposition_label_for(failure_class: str, disposition: str | None) -> str:
+    if disposition is None:
+        return ""
+    specific = {
+        ("na", "hw_infeasible"): "N/A — infeasible (won't fit)",
+        ("na", "oom_kv_cache"): "N/A — OOM at max gpu_mem",
+        ("na", "low_success_rate"): "N/A — low success rate",
+        ("failed", "model_missing"): "failed — model not staged",
+        ("failed", "engine_crash"): "failed — engine crash",
+        ("failed", "requests_aborted"): "failed — server up, requests aborted",
+        ("failed", "timeout"): "failed — timeout",
+        ("failed", "driver_fault"): "failed — driver fault",
+        ("todo", "oom_kv_cache"): "TODO — raise gpu_mem and retry",
+        ("todo", "incomplete_partial"): "TODO — partial, re-queue",
     }
-    return labels.get(category, category.replace("_", " "))
+    return specific.get(
+        (disposition, failure_class),
+        {"na": "N/A", "failed": "failed — inspect", "todo": "TODO"}[disposition],
+    )
+
+
+def _evidence_for(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Structured evidence: prefer the launcher's `evidence` block, backfill
+    from the flat legacy fields so the mapping has what it needs."""
+    evidence = dict(metadata.get("evidence") or {})
+    evidence.setdefault("outputs_present", metadata.get("expected_outputs_present"))
+    evidence.setdefault("outputs_expected", metadata.get("expected_outputs_total"))
+    if "gpu_mem_util" not in evidence and metadata.get("gpu_mem_util") is not None:
+        evidence["gpu_mem_util"] = metadata.get("gpu_mem_util")
+    return evidence
 
 
 def failure_payload(cov: JobCoverage) -> dict[str, Any] | None:
@@ -538,11 +636,15 @@ def failure_payload(cov: JobCoverage) -> dict[str, Any] | None:
     reason = str(metadata.get("reason") or cov.reason or "")
     if not metadata and not reason:
         return None
-    category = failure_category(reason)
+    failure_class = derive_failure_class(metadata, reason, cov.status)
+    evidence = _evidence_for(metadata)
     attempt = metadata.get("attempt", cov.attempt)
     return {
-        "category": category,
-        "label": failure_category_label(category),
+        "failure_class": failure_class,
+        # `category` kept as an alias of failure_class for older readers.
+        "category": failure_class,
+        "label": failure_class_label(failure_class),
+        "evidence": evidence,
         "kind": metadata.get("kind"),
         "status": metadata.get("status", cov.status),
         "reason": reason or None,
@@ -588,40 +690,25 @@ def coverage_disposition(cov: JobCoverage) -> str | None:
     """
     if not cov.missing or cov.status not in BLOCKING_STATUSES:
         return None
-    if cov.status == "known_oom":
-        return "na"
-    category = str((failure_payload(cov) or {}).get("category") or "unknown")
-    if category in N_A_FAILURE_CATEGORIES:
-        return "na"
-    if category in TODO_FAILURE_CATEGORIES:
-        return "todo"
-    return "failed"
+    fp = failure_payload(cov) or {}
+    return disposition_for_class(
+        str(fp.get("failure_class") or "unknown"), fp.get("evidence") or {}, cov.status
+    )
 
 
 def coverage_disposition_label(cov: JobCoverage, disposition: str | None) -> str:
-    """Human label for the disposition; distinguishes captured-OOM N/A."""
-    if disposition == "na":
-        category = str((failure_payload(cov) or {}).get("category") or "")
-        if cov.status == "known_oom" or category in CAPTURED_OOM_CATEGORIES:
-            return "N/A OOM"
-        return "N/A low-success"
-    if disposition == "todo":
-        return "TODO (no captured OOM)"
-    if disposition == "failed":
-        return "failed"
-    return ""
+    """Human label for the disposition, specialised by failure_class."""
+    fp = failure_payload(cov) or {}
+    return disposition_label_for(str(fp.get("failure_class") or "unknown"), disposition)
 
 
 def coverage_explanation(cov: JobCoverage, disposition: str | None) -> str | None:
+    label = coverage_disposition_label(cov, disposition)
     summary = failure_summary(cov) or cov.reason
     if not summary:
-        return None
-    if disposition == "na":
-        return f"{coverage_disposition_label(cov, disposition)} after retry exhaustion: {summary}"
-    if disposition == "todo":
-        return f"attempted, no captured OOM — re-queue as TODO: {summary}"
-    if disposition == "failed":
-        return f"failed after retry; needs inspection: {summary}"
+        return label or None
+    if disposition in ("na", "todo", "failed"):
+        return f"{label}: {summary}"
     return summary
 
 
@@ -848,6 +935,9 @@ def coverage_payload(
             "failure": failure,
             "reason": cov.reason,
             "coverage_disposition": disposition,
+            "coverage_failure_class": (failure or {}).get("failure_class"),
+            "coverage_label": coverage_disposition_label(cov, disposition),
+            "coverage_evidence": (failure or {}).get("evidence"),
             "coverage_explanation": explanation,
         }
         if include_missing_points:

@@ -7,8 +7,25 @@ export interface CoveragePoint {
   concurrency: number;
 }
 
+// Structured failure classes (see docs/coverage-classification-rfc.md). Captured
+// at the launcher; the dashboard renders, it never re-classifies.
+export type FailureClass =
+  | 'none' | 'model_missing' | 'hw_infeasible' | 'oom_kv_cache' | 'engine_crash'
+  | 'requests_aborted' | 'low_success_rate' | 'timeout' | 'incomplete_partial'
+  | 'not_attempted' | 'driver_fault' | 'unknown';
+
+export interface CoverageEvidence {
+  gpu_mem_util?: number | null;
+  outputs_present?: number | null;
+  outputs_expected?: number | null;
+  oom_log_excerpt?: string | null;
+  success_rate?: number | null;
+}
+
 export interface CoverageFailure {
-  category: string;
+  category: string;            // alias of failure_class (legacy readers)
+  failure_class?: FailureClass;
+  evidence?: CoverageEvidence | null;
   label: string;
   kind?: string | null;
   status?: string | null;
@@ -27,6 +44,9 @@ export interface CoverageBlocker {
   attempt?: number | null;
   backend: string;
   coverage_disposition?: 'failed' | 'na' | 'todo' | null;
+  coverage_failure_class?: FailureClass | null;
+  coverage_label?: string | null;
+  coverage_evidence?: CoverageEvidence | null;
   coverage_explanation?: string | null;
   expected: number;
   expected_points?: CoveragePoint[];

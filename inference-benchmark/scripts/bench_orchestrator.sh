@@ -426,6 +426,28 @@ failure_log_summary_on_host() {
     ssh "$host" "grep -E 'ABORT: (Success rate|No requests completed)|\\[warn\\] (bench|mt-bench) failed' '$remote_log' 2>/dev/null | tail -6 | paste -sd '; ' -" < /dev/null 2>/dev/null || true
 }
 
+# Best-effort structured failure_class from the server/bench logs, so the
+# coverage classifier no longer has to guess from a collapsed reason string.
+# (RFC: docs/coverage-classification-rfc.md.) Echoes one of model_missing|
+# oom_kv_cache|engine_crash|low_success_rate|requests_aborted, or "" if unknown.
+failure_class_on_host() {
+    local host="$1" port="$2" remote_log="$3" oom_hint="$4" detail="$5" log_path sig
+    [[ -n "$oom_hint" ]] && { echo "oom_kv_cache"; return; }
+    case "${detail,,}" in
+        *"success rate"*) echo "low_success_rate"; return;;
+    esac
+    log_path="$(remote_tmp_root "$host")/vllm_${port}.log"
+    sig=$(ssh "$host" "grep -hoiE \"Can't load the configuration|Repo id must be in the form|No available memory for the cache blocks|CUDA out of memory|out of memory|Engine core initialization failed|EngineCore failed to start|Success rate .* below minimum|No requests completed\" '$log_path' \"/tmp/vllm_${port}.log\" '$remote_log' 2>/dev/null | head -1" < /dev/null 2>/dev/null || true)
+    case "${sig,,}" in
+        *"can't load the configuration"*|*"repo id must be"*) echo "model_missing";;
+        *"no available memory for the cache blocks"*|*"cuda out of memory"*|*"out of memory"*) echo "oom_kv_cache";;
+        *"engine core initialization failed"*|*"enginecore failed"*) echo "engine_crash";;
+        *"success rate"*) echo "low_success_rate";;
+        *"no requests completed"*) echo "requests_aborted";;
+        *) echo "";;
+    esac
+}
+
 state_read_file() {
     local jid="$1" suffix="$2" primary scope candidate
     primary="$STATE_DIR/${jid}.${suffix}"
@@ -481,13 +503,16 @@ write_signature() { write_state_value "$1" signature "$2"; }
 write_failure_metadata() {
     local jid="$1" status="$2" attempt="$3" max_attempts="$4" present="$5" total="$6"
     local missing_outputs="$7" reason="$8" remote_log="$9" mirror_status="${10}"
+    # Structured outcome (RFC: docs/coverage-classification-rfc.md). Optional and
+    # additive: when empty, reconcile derives failure_class from the reason text.
+    local failure_class="${11:-}" gpu_mem_util="${12:-}"
     local path="$STATE_DIR/${jid}.failure.json"
     if dry_run; then
-        log "$jid: dry-run would write failure metadata status=$status attempt=$attempt reason=${reason:0:160}"
+        log "$jid: dry-run would write failure metadata status=$status class=${failure_class:-?} attempt=$attempt reason=${reason:0:160}"
         return
     fi
     python3 - "$path" "$jid" "$status" "$attempt" "$max_attempts" "$present" "$total" \
-        "$missing_outputs" "$reason" "$remote_log" "$mirror_status" <<'PY'
+        "$missing_outputs" "$reason" "$remote_log" "$mirror_status" "$failure_class" "$gpu_mem_util" <<'PY'
 import json
 import os
 import sys
@@ -506,6 +531,8 @@ from pathlib import Path
     reason,
     remote_log,
     mirror_status,
+    failure_class,
+    gpu_mem_util,
 ) = sys.argv[1:]
 
 def to_int(value: str) -> int | None:
@@ -514,10 +541,25 @@ def to_int(value: str) -> int | None:
     except ValueError:
         return None
 
+def to_float(value: str) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+evidence = {
+    "outputs_present": to_int(present),
+    "outputs_expected": to_int(total),
+}
+if to_float(gpu_mem_util) is not None:
+    evidence["gpu_mem_util"] = to_float(gpu_mem_util)
+
 payload = {
     "job_id": jid,
     "status": status,
     "kind": "incomplete_outputs",
+    "failure_class": (failure_class or None),
+    "evidence": evidence,
     "attempt": to_int(attempt),
     "max_attempts": to_int(max_attempts),
     "expected_outputs_present": to_int(present),
@@ -1012,7 +1054,8 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                         if [[ "$NEXT_ATT" -ge "$MAX_INCOMPLETE_RETRIES" ]]; then
                             REASON="retry limit reached after ${NEXT_ATT}/${MAX_INCOMPLETE_RETRIES} incomplete attempts: $FAILURE_DETAIL"
                             write_state_value "$JID" reason "$REASON"
-                            write_failure_metadata "$JID" "skipped" "$NEXT_ATT" "$MAX_INCOMPLETE_RETRIES" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "$MIRROR_STATUS"
+                            FAILURE_CLASS=$(failure_class_on_host "$HOST" "$JOB_PORT" "$JOB_REMOTE_LOG" "${OOM:-}" "${FAILURE_DETAIL:-}")
+                            write_failure_metadata "$JID" "skipped" "$NEXT_ATT" "$MAX_INCOMPLETE_RETRIES" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "$MIRROR_STATUS" "$FAILURE_CLASS" "${GPU_MEM:-}"
                             write_status "$JID" skipped
                             update_current_run_record_status "$JID" "skipped" "$REASON" "$NEXT_ATT" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$JOB_REMOTE_LOG"
                             log "$JID: SKIPPED incomplete retry limit ($EXPECTED_OUTPUT_PRESENT/$EXPECTED_OUTPUT_TOTAL expected outputs; attempt=$NEXT_ATT/$MAX_INCOMPLETE_RETRIES; missing=${EXPECTED_OUTPUT_MISSING_SAMPLE:-unknown}; $COUNT files copied to $OUT_DIR_LOCAL, warmup=${AGE}s backend=$BACKEND mirror=$MIRROR_STATUS)"
@@ -1042,7 +1085,8 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                             write_status "$JID" skipped
                             REASON="zero expected outputs and retry limit exhausted or no retryable OOM; attempt=$ATT oom_log=$OOM"
                             write_state_value "$JID" reason "$REASON"
-                            write_failure_metadata "$JID" "skipped" "$ATT" "$MAX_OOM_RETRIES" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "$MIRROR_STATUS"
+                            FAILURE_CLASS=$(failure_class_on_host "$HOST" "$JOB_PORT" "$JOB_REMOTE_LOG" "${OOM:-}" "${FAILURE_DETAIL:-}")
+                            write_failure_metadata "$JID" "skipped" "$ATT" "$MAX_OOM_RETRIES" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "$MIRROR_STATUS" "$FAILURE_CLASS" "${GPU_MEM:-}"
                             update_current_run_record_status "$JID" "skipped" "$REASON" "$ATT" "$EXPECTED_OUTPUT_PRESENT" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$JOB_REMOTE_LOG"
                             log "$JID: SKIPPED (0/$EXPECTED_OUTPUT_TOTAL expected outputs; copied only stale/non-matching files from $REMOTE_SYNC_DIR; attempt=$ATT, oom_log=$OOM)"
                         fi
@@ -1074,7 +1118,8 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
                     write_status "$JID" skipped
                     REASON="zero results and retry limit exhausted or no retryable OOM; attempt=$ATT oom_log=$OOM"
                     write_state_value "$JID" reason "$REASON"
-                    write_failure_metadata "$JID" "skipped" "$ATT" "$MAX_OOM_RETRIES" "0" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "not_mirrored"
+                    FAILURE_CLASS=$(failure_class_on_host "$HOST" "$JOB_PORT" "$JOB_REMOTE_LOG" "${OOM:-}" "${FAILURE_DETAIL:-}")
+                    write_failure_metadata "$JID" "skipped" "$ATT" "$MAX_OOM_RETRIES" "0" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$REASON" "$JOB_REMOTE_LOG" "not_mirrored" "$FAILURE_CLASS" "${GPU_MEM:-}"
                     update_current_run_record_status "$JID" "skipped" "$REASON" "$ATT" "0" "$EXPECTED_OUTPUT_TOTAL" "${EXPECTED_OUTPUT_MISSING_ALL:-}" "$JOB_REMOTE_LOG"
                     log "$JID: SKIPPED (zero results, attempt=$ATT, oom_log=$OOM)"
                 fi
