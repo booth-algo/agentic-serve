@@ -26,7 +26,7 @@ export interface CoverageFailure {
 export interface CoverageBlocker {
   attempt?: number | null;
   backend: string;
-  coverage_disposition?: 'failed' | 'na' | null;
+  coverage_disposition?: 'failed' | 'na' | 'todo' | null;
   coverage_explanation?: string | null;
   expected: number;
   expected_points?: CoveragePoint[];
@@ -52,6 +52,7 @@ export interface CoverageBlockersState {
   coverage_failed_points?: number;
   coverage_missing_required_points?: number;
   coverage_na_points?: number;
+  coverage_todo_points?: number;
   coverage_required_points?: number;
   data_rows: number;
   data_scopes: Record<string, number>;
