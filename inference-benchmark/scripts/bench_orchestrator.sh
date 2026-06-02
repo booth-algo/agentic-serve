@@ -448,6 +448,21 @@ failure_class_on_host() {
     esac
 }
 
+# Preflight (RFC §4.2): is the model actually staged on the host? Echoes
+# present|missing|unknown. Only checks absolute local paths -- HF repo ids
+# download on demand so are never "missing" -- and only reports `missing` when
+# the SSH succeeded and the dir is genuinely absent (transient SSH errors ->
+# unknown, so we never false-flag a reachable model).
+model_present_on_host() {
+    local host="$1" model_path="$2" out
+    [[ "$model_path" == /* ]] || { echo "unknown"; return; }
+    out=$(ssh "$host" "if test -d '$model_path' && { test -f '$model_path/config.json' || ls '$model_path'/*.safetensors >/dev/null 2>&1; }; then echo present; else echo missing; fi" < /dev/null 2>/dev/null || echo unknown)
+    case "$out" in
+        present|missing) echo "$out";;
+        *) echo "unknown";;
+    esac
+}
+
 state_read_file() {
     local jid="$1" suffix="$2" primary scope candidate
     primary="$STATE_DIR/${jid}.${suffix}"
@@ -1139,6 +1154,19 @@ while IFS='|' read -r HOST MODEL_PATH TP SHORT MODE BACKEND MAX_LEN GPU_MEM CONC
             fi
 
             if [[ "$MAX_DISPATCHES" =~ ^[0-9]+$ && "$MAX_DISPATCHES" -gt 0 && "$DISPATCHES" -ge "$MAX_DISPATCHES" ]]; then
+                continue
+            fi
+
+            # Preflight (RFC §4.2): don't claim a GPU slot or launch a server for
+            # a model that isn't staged. Emit a structured model_missing outcome
+            # and skip -- the dashboard surfaces "model not staged" instead of a
+            # generic "zero results" after a wasted launch.
+            if [[ "$(model_present_on_host "$HOST" "$MODEL_PATH")" == "missing" ]]; then
+                REASON="preflight: model not staged at $MODEL_PATH on $HOST"
+                write_state_value "$JID" reason "$REASON"
+                write_failure_metadata "$JID" "skipped" "0" "$MAX_OOM_RETRIES" "0" "0" "" "$REASON" "" "not_mirrored" "model_missing" "${GPU_MEM:-}"
+                write_status "$JID" skipped
+                log "$JID: PREFLIGHT model_missing — $MODEL_PATH absent on $HOST; skipping dispatch (no server launched)"
                 continue
             fi
 
