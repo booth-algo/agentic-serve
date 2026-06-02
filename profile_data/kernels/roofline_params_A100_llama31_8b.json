@@ -1,0 +1,21 @@
+{
+  "n_params": 8030000000,
+  "peak_flops_per_s": 312000000000000.0,
+  "peak_bw_bytes_per_s": 1555000000000.0,
+  "kv_bytes_per_token": 131072.0,
+  "util_flops": 0.65,
+  "util_bw": 0.93,
+  "bytes_per_param": 2.0,
+  "available_kv_blocks": 8458,
+  "cache_block_size": 16,
+  "tensor_parallel": 1,
+  "kv_heads": 8,
+  "scheduler_overhead_ms_per_step": 5.7,
+  "_notes": {
+    "gpu": "A100-SXM4-40GB (1.555 TB/s HBM2e, 312 TFLOPS BF16 dense)",
+    "kv_pool_derivation": "GPU KV cache size 135,328 tokens / 16 = 8458 blocks; measured at gpu_memory_utilization=0.85 (vLLM 0.19.0, max_model_len 32768; vLLM reported max concurrency 4.13x). Source: decode_steps.py on a100 GPU 2, 2026-06-02. ~31% of the H100 tp1 pool (27250).",
+    "util_flops_util_bw": "PLACEHOLDER (copied from H100) — RE-ANCHOR from the A100 grid: util_bw from a bandwidth-bound decode cell, util_flops from a prefill cell. Only affects the analytic OOM-fill, not measured in-grid cells.",
+    "scheduler_overhead": "PLACEHOLDER (H100 value); re-anchor from an A100 trace if needed.",
+    "status": "A100x1 config with REAL ground truth (a100_Llama-3.1-8B_tp1_vllm in /mnt/100g, gpu_mem=0.85 — same as this decode profiling). Real-GT MAPE: TPOT 25.4% / TTFT 46.4% / E2EL 25.1% (first-cut: real A100 decode grid; TTFT cached-prefill grid + saturated-ITL ceiling still H100-anchored -> re-anchor on A100 next). See profiling/docs/defit_and_a100_plan.md."
+  }
+}

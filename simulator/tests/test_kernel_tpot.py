@@ -73,9 +73,34 @@ def test_saturated_ceiling_inverse_in_output() -> None:
     assert 120 < long < 160
 
 
-def test_saturated_ceiling_capped() -> None:
-    # a 1-token output would explode the 1/output term; the cap holds it
-    assert saturated_ceiling_ms(1) == 260.0
+def test_saturated_ceiling_clamps_to_short_anchor() -> None:
+    # No 1/output term to explode anymore: a tiny output clamps to the measured
+    # short-output plateau anchor and stays bounded by the max measured plateau.
+    tiny = saturated_ceiling_ms(1)
+    assert tiny == saturated_ceiling_ms(28)  # clamps to the shortest measured anchor
+    assert 220.0 < tiny < 261.0              # a measured plateau, not unbounded
+
+
+def test_ceiling_is_swappable_per_config(tmp_path) -> None:
+    """saturated_ceiling_ms reads the ACTIVE ceiling artifact; swapping it per-config (as the
+    generator does for A100) changes the result, and restoring returns the H100 default."""
+    import json as _json
+
+    from simulator import kernel_tpot as K
+
+    h100 = saturated_ceiling_ms(28)  # default H100 short-output anchor (~243)
+    alt = tmp_path / "ceiling_alt.json"
+    alt.write_text(_json.dumps({"anchors": [{"output_tokens": 28, "plateau_ms": 175.0},
+                                            {"output_tokens": 86, "plateau_ms": 126.0}]}))
+    orig = K._active_ceiling_json
+    try:
+        K._active_ceiling_json = alt
+        assert abs(saturated_ceiling_ms(28) - 175.0) < 1e-6  # reads the swapped artifact
+        assert abs(saturated_ceiling_ms(86) - 126.0) < 1e-6
+    finally:
+        K._active_ceiling_json = orig
+    assert abs(saturated_ceiling_ms(28) - h100) < 1e-6       # restored to H100
+    assert h100 != 175.0
 
 
 # ------------------------------------------------------------ regime behavior

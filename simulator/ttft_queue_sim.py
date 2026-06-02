@@ -99,11 +99,14 @@ LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
 # is HOST work — re-tokenize/hash the re-sent conversation — NOT a GPU kernel; the GPU
 # prefills only the new/re-prefilled tokens):
 #
-# 1. NEW (serving per-(re)prefilled-token rate, 0.0310 ms/tok): fit to the benchmark c1 cells
-#    (concurrency=1 = zero queue). This is the SERVING cost of a prefilled token = the kernel
-#    GEMM (~0.0042 ms/tok from prefill_profile) PLUS chunked-prefill re-launch + host-tokenize
-#    overhead (~7×). The single-pass kernel alone under-predicts serving ~7× (measured:
-#    swapping in 0.0042 regressed chat 25→47), so the serving rate is the load-bearing anchor.
+# 1. NEW (serving per-(re)prefilled-token, 0.0310 ms/tok measured at c1): SPLIT into a DERIVED,
+#    tensor-parallel-aware GEMM roofline (``_prefill_gemm_per_tok`` = 2·(params/tp)/tok at
+#    util_flops=0.65 → 0.02498 ms/tok on tp1) PLUS a small per-token off-GPU dispatch residual
+#    (0.00602 ms/tok). NEW is 1.24× the realistic roofline — NOT "7×" (the retired comment
+#    compared to a util=1 / large-K kernel 0.0042; corrected by the de-fit audit). The residual
+#    is framework dispatch (ATen/CUDA-library/launch, per TaxBreak ISPASS'26), a backed-out
+#    remainder PENDING the host-vs-device stage-split microbench. The GEMM part is now fit-free
+#    and tp-scales; see profiling/docs/prefill_law_defit_trace.md.
 # 2. FA3 (pipeline attention kernel, 8.31e-7 ms/token^2): from fa3_prefill_H100.csv
 #    (FA3(8192)=27.9ms / (8192²/2)). Adds the SUPER-LINEAR attention growth — negligible for a
 #    HIT (Q=new small), the quadratic re-encode for a MISS. Extra physical grounding at ~no
@@ -113,11 +116,24 @@ LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
 #    TTFT(16,P)/TTFT(1,P)≈6.6-7.5) → ~57% amortized once per step + ~43% per request.
 # All three are MEASURED (c1 + controlled serving sweeps + the pipeline FA3 grid) — held out
 # from the multi-turn data we report.
-PREFILL_FLOOR_MS = 22.5
-PREFILL_NEW_MS_PER_TOKEN = 0.0310               # serving per-(re)prefilled-token (c1 anchor)
+PREFILL_FLOOR_MS = 22.5                          # fixed per-request cost (schedule+first-token+detok+return); genuine intercept ~= min pure-prefill TTFT. PENDING microbench (new=1,cached=0).
+# NEW = DERIVED tp-aware GEMM roofline (``_prefill_gemm_per_tok``, below) + this off-GPU dispatch
+# residual. On tp1 their sum reproduces the retired fitted 0.0310 rate to 5-digit rounding
+# (~2e-6 ms/tok; TTFT/E2EL gates unchanged). On tp2 the GEMM part halves → tp2 prefill is no
+# longer tp1-anchored (TTFT 43.3→31.7% cell-MAPE).
+PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN = 0.00602
 PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel, ms per token^2
 PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.003485     # host re-tokenize, amortized once per step (0.571×6.103e-3)
 PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002618     # host re-tokenize, per request, summed (0.429×6.103e-3)
+
+
+def _prefill_gemm_per_tok(p: RooflineParams) -> float:
+    """DERIVED compute-bound prefill GEMM time per (re)prefilled token: 2·(n_params/tp) FLOPs
+    per token at ``peak_flops·util_flops``, tensor-parallel sharded. The fit-free dominant part
+    of the serving NEW rate — 0.02498 ms/tok on tp1, halving per added TP rank. No fitted constant."""
+    tp = max(1, int(getattr(p, "tensor_parallel", 1)))
+    return 2.0 * (float(p.n_params) / tp) / (p.peak_flops_per_s * p.util_flops) * 1e3
+
 
 # Event kinds; ordering is (epoch, seq, kind) — deterministic FIFO at equal epochs.
 _ARRIVAL = 0
@@ -552,7 +568,7 @@ def _price_step(state: _ServerState) -> float:
         cached_w_sum += r.cached * frac
         cached_w_n += 1
     if any_prefill:
-        gpu_new_ms = PREFILL_NEW_MS_PER_TOKEN * total_chunk
+        gpu_new_ms = (_prefill_gemm_per_tok(p) + PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN) * total_chunk
         mean_cached = cached_w_sum / cached_w_n if cached_w_n else 0.0
         host_shared_ms = PREFILL_HOST_SHARED_MS_PER_TOKEN * mean_cached  # amortized once/step
         prefill_ms = (

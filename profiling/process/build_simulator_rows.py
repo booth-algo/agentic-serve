@@ -22,7 +22,7 @@ import json
 import statistics as st
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -31,10 +31,12 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import simulator.kernel_step_cost as kernel_step_cost  # noqa: E402
+import simulator.kernel_tpot as kernel_tpot  # noqa: E402
 from simulator.closed_form_tpot import RooflineParams  # noqa: E402
 from simulator.kernel_step_cost import load_grid  # noqa: E402
 from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot  # noqa: E402
 from simulator.ttft_queue_sim import predict_cell_ttft_qsim  # noqa: E402
+from configs.loader import Deployment, all_deployments  # noqa: E402
 
 DASHBOARD_JSON = Path("inference-benchmark/dashboard/public/simulator-predictions.json")
 BENCH_BASE = Path("/mnt/100g/agent-bench/results/synthetic_distributional")
@@ -48,25 +50,11 @@ PROFILES = [
 CONCURRENCIES = [1, 5, 10, 20, 40, 80, 120, 160, 200, 256, 320]
 
 
-@dataclass(frozen=True)
-class Config:
-    gpu_key: str            # dashboard GPU key (e.g. "H100", "H100x2")
-    tp: int                 # tensor-parallel degree
-    bench_dir: str          # under BENCH_BASE; the measured ground-truth run
-    available_kv_blocks: int
-    decode_grid: Path | None  # measured decode grid; None -> default (tp1 H100) grid
-    backend: str
-    calibration_status: str
-
-
-# To add a GPU/TP config: profile its decode grid + KV pool, then add a Config row.
-CONFIGS = [
-    Config("H100", 1, "h100_Llama-3.1-8B_tp1_vllm", 27_250, None,
-           "kernel-headline", "kernel_tpot_qsim_ttft_headline"),
-    Config("H100x2", 2, "h100_Llama-3.1-8B_tp2_vllm", 62_416,
-           Path("profile_data/results/decode_profile_H100x2_2026-06-01.csv"),
-           "kernel-tp2-decode-measured-kv", "tp2_decode_grid_measured_kv_tp1_prefill"),
-]
+# Deployments live in configs/deployments/*.json, composed by configs/loader.py (model + GPU + deployment
+# + a per-input `data` manifest). To add a GPU/TP config, add a deployment JSON — no code change here.
+# Each Deployment exposes: gpu_key, tp, bench_dir, available_kv_blocks, decode_grid, saturated_ceiling,
+# backend, calibration_status, ground_truth, roofline (composed RooflineParams), data (manifest).
+CONFIGS = all_deployments()
 
 
 def _ape(pred: float | None, meas: float | None) -> float | None:
@@ -113,7 +101,7 @@ def build_turns(bench_file: Path) -> list[dict[str, Any]]:
     return turns
 
 
-def build_row(profile: str, conc: int, params: RooflineParams, cfg: Config,
+def build_row(profile: str, conc: int, params: RooflineParams, cfg: Deployment,
               bench_root: Path) -> dict[str, Any] | None:
     bench = bench_root / f"{profile}_conc{conc}.json"
     if not bench.exists():
@@ -133,6 +121,9 @@ def build_row(profile: str, conc: int, params: RooflineParams, cfg: Config,
         t["tpot_pred"] = round(float(tp), 4)
         t["ttft_pred"] = round(float(tf), 4)
         t["e2el_pred"] = round(float(tf) + out * float(tp), 4)
+        if not cfg.ground_truth:  # predictions-only: bench_dir gave only the workload structure
+            for m in ("tpot", "ttft", "e2el"):
+                t[f"{m}_meas"] = None
         for m in ("tpot", "ttft", "e2el"):
             pred, meas = t[f"{m}_pred"], t[f"{m}_meas"]
             t[f"{m}_err"] = round(_ape(pred, meas), 4) if _ape(pred, meas) is not None else None
@@ -141,6 +132,13 @@ def build_row(profile: str, conc: int, params: RooflineParams, cfg: Config,
 
     ctxs = [t["total_context_tokens"] for t in turns]
     outs = [t["output_tokens"] for t in turns]
+
+    def cell_meas(key: str) -> float | None:
+        if not cfg.ground_truth:
+            return None
+        vals = [t[key] for t in turns if isinstance(t.get(key), (int, float))]
+        return round(st.mean(vals), 4) if vals else None
+
     return {
         "model": MODEL,
         "backend": cfg.backend,
@@ -157,12 +155,12 @@ def build_row(profile: str, conc: int, params: RooflineParams, cfg: Config,
         "multiturn_prediction_mode": "kernel_tpot_qsim_ttft_headline",
         "multiturn_turn_predictions": turns,
         "tpot_pred": round(st.mean([t["tpot_pred"] for t in turns]), 4),
-        "tpot_meas": round(st.mean([t["tpot_meas"] for t in turns]), 4),
+        "tpot_meas": cell_meas("tpot_meas"),
         "tpot_err": _cell_mape(turns, "tpot_pred", "tpot_meas"),
-        "ttft_meas": round(st.mean([t["ttft_meas"] for t in turns]), 4),
+        "ttft_meas": cell_meas("ttft_meas"),
         "ttft_pred": round(st.mean([t["ttft_pred"] for t in turns]), 4),
         "ttft_err": _cell_mape(turns, "ttft_pred", "ttft_meas"),
-        "e2el_meas": round(st.mean([t["e2el_meas"] for t in turns]), 4),
+        "e2el_meas": cell_meas("e2el_meas"),
         "e2el_pred": round(st.mean([t["e2el_pred"] for t in turns]), 4),
         "e2el_err": _cell_mape(turns, "e2el_pred", "e2el_meas"),
     }
@@ -170,6 +168,7 @@ def build_row(profile: str, conc: int, params: RooflineParams, cfg: Config,
 
 def main() -> None:
     orig_default_grid = kernel_step_cost._default_grid  # the cached tp1 H100 decode grid
+    orig_ceiling = kernel_tpot._active_ceiling_json     # the default (H100) saturated-ITL ceiling
     payload: dict[str, list[dict[str, Any]]] = {}
     for cfg in CONFIGS:
         bench_root = BENCH_BASE / cfg.bench_dir
@@ -185,7 +184,16 @@ def main() -> None:
         else:
             kernel_step_cost._default_grid = orig_default_grid
             print(f"{cfg.gpu_key}: default decode grid")
-        params = RooflineParams(available_kv_blocks=cfg.available_kv_blocks)
+        # Swap the saturated-ITL ceiling for this config (mirror the grid swap). None -> H100 anchors.
+        if cfg.saturated_ceiling is not None and cfg.saturated_ceiling.exists():
+            kernel_tpot._active_ceiling_json = cfg.saturated_ceiling
+            print(f"{cfg.gpu_key}: saturated ceiling {cfg.saturated_ceiling.name}")
+        else:
+            kernel_tpot._active_ceiling_json = orig_ceiling
+        params = cfg.roofline  # composed by configs.loader from the gpu + model + deployment JSONs
+        print(f"{cfg.gpu_key}: roofline flops={params.peak_flops_per_s:.3g} bw={params.peak_bw_bytes_per_s:.3g} "
+              f"kv={params.available_kv_blocks} tp={params.tensor_parallel}"
+              + ("" if cfg.ground_truth else f"  (PREDICTIONS-ONLY: structure from {cfg.bench_dir})"))
         rows: list[dict[str, Any]] = []
         for profile in PROFILES:
             for conc in CONCURRENCIES:
@@ -197,6 +205,7 @@ def main() -> None:
               f"(tpot {_overall(rows,'tpot_err')} / ttft {_overall(rows,'ttft_err')} "
               f"/ e2el {_overall(rows,'e2el_err')} cell-MAPE)")
     kernel_step_cost._default_grid = orig_default_grid
+    kernel_tpot._active_ceiling_json = orig_ceiling
     if not payload:
         raise SystemExit("no configs produced rows")
     DASHBOARD_JSON.write_text(json.dumps(payload, indent=2))

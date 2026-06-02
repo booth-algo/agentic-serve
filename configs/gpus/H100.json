@@ -1,0 +1,9 @@
+{
+  "name": "H100",
+  "peak_flops_per_s": 989000000000000.0,
+  "peak_bw_bytes_per_s": 3350000000000.0,
+  "util_flops": 0.65,
+  "util_bw": 0.93,
+  "scheduler_overhead_ms_per_step": 5.7,
+  "_notes": "H100 SXM (3.35 TB/s HBM3, 989 TFLOPS BF16 dense). util_flops/util_bw are single-anchor measured (vllm_engine_step_trace_swe_c40); scheduler_overhead from 99 quiet decode steps. These are the RooflineParams dataclass defaults."
+}

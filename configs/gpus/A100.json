@@ -1,0 +1,9 @@
+{
+  "name": "A100",
+  "peak_flops_per_s": 312000000000000.0,
+  "peak_bw_bytes_per_s": 1555000000000.0,
+  "util_flops": 0.65,
+  "util_bw": 0.93,
+  "scheduler_overhead_ms_per_step": 5.7,
+  "_notes": "A100-SXM4-40GB (1.555 TB/s HBM2e, 312 TFLOPS BF16 dense). peak_flops/peak_bw are datasheet (measured-equivalent). util_flops/util_bw/scheduler_overhead are H100 PLACEHOLDERS — re-anchor from an A100 grid (affects only the analytic OOM-fill). Tracked as 'placeholder' in the deployment manifest."
+}

@@ -1,0 +1,24 @@
+{
+  "gpu_key": "H100x2",
+  "gpu": "H100",
+  "model": "Llama-3.1-8B",
+  "tp": 2,
+  "engine": "vllm",
+  "available_kv_blocks": 62416,
+  "bench_dir": "h100_Llama-3.1-8B_tp2_vllm",
+  "backend": "kernel-tp2-decode-measured-kv",
+  "calibration_status": "tp2_decode_grid_measured_kv_tp1_prefill",
+  "ground_truth": true,
+  "data": {
+    "decode_grid":         {"status": "measured", "path": "profile_data/results/decode_profile_H100x2_2026-06-01.csv"},
+    "kv_pool":             {"status": "measured", "value": 62416},
+    "saturated_ceiling":   {"status": "inherited", "from": "H100", "note": "TPOT plateau still H100-anchored; re-anchor on tp2"},
+    "roofline_peak":       {"status": "inherited", "from": "H100", "note": "uses single-H100 peak_bw for tp2 (known over-pred; should be ~2x aggregate bw)"},
+    "util_flops":          {"status": "inherited", "from": "H100"},
+    "util_bw":             {"status": "inherited", "from": "H100"},
+    "scheduler_overhead":  {"status": "inherited", "from": "H100"},
+    "cached_prefill_grid": {"status": "inherited", "from": "H100", "note": "TTFT first-cut"},
+    "fa3_grid":            {"status": "inherited", "from": "H100"},
+    "ground_truth":        {"status": "measured", "path": "h100_Llama-3.1-8B_tp2_vllm"}
+  }
+}

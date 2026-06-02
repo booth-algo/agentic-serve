@@ -1,0 +1,9 @@
+{
+  "name": "Llama-3.1-8B",
+  "n_params": 8030000000,
+  "kv_bytes_per_token": 131072.0,
+  "kv_heads": 8,
+  "bytes_per_param": 2.0,
+  "cache_block_size": 16,
+  "_notes": "kv_bytes_per_token = 2(K+V) * 32 layers * 8 kv_heads * 128 head_dim * 2 (bf16) = 131072. GQA, 8 KV heads. cache_block_size is the vLLM v1 block (16 tokens)."
+}

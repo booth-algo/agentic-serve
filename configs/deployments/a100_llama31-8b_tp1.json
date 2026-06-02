@@ -1,0 +1,24 @@
+{
+  "gpu_key": "A100",
+  "gpu": "A100",
+  "model": "Llama-3.1-8B",
+  "tp": 1,
+  "engine": "vllm",
+  "available_kv_blocks": 8458,
+  "bench_dir": "a100_Llama-3.1-8B_tp1_vllm",
+  "backend": "a100-measured-decode",
+  "calibration_status": "a100_tp1_measured_decode_kv_roofline_ceiling_real_gt",
+  "ground_truth": true,
+  "data": {
+    "decode_grid":         {"status": "measured", "path": "profile_data/results/decode_profile_A100_2026-06-02.csv", "source": "decode_steps.py (a100 GPU2)", "date": "2026-06-02"},
+    "kv_pool":             {"status": "measured", "value": 8458, "note": "135328 tokens / 16 @ gpu_mem=0.85"},
+    "saturated_ceiling":   {"status": "measured", "path": "profile_data/kernels/saturated_ceiling_A100_llama31_8b.json", "source": "build_saturated_ceiling.py", "date": "2026-06-02", "note": "anchors 27->175 / 87->126 ms"},
+    "roofline_peak":       {"status": "measured", "note": "A100 datasheet 312 TFLOPS / 1.555 TB/s"},
+    "util_flops":          {"status": "placeholder", "from": "H100", "note": "affects only OOM-fill; re-anchor on A100"},
+    "util_bw":             {"status": "placeholder", "from": "H100"},
+    "scheduler_overhead":  {"status": "placeholder", "from": "H100"},
+    "cached_prefill_grid": {"status": "inherited", "from": "H100", "note": "TTFT first-cut; drives A100 TTFT 46%"},
+    "fa3_grid":            {"status": "inherited", "from": "H100"},
+    "ground_truth":        {"status": "measured", "path": "a100_Llama-3.1-8B_tp1_vllm", "source": "/mnt/100g"}
+  }
+}

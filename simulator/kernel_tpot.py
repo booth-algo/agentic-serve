@@ -19,14 +19,13 @@ Pieces (see project memory ``tpot-amplifier-pressure-law``):
   (corr +0.79 across 1043 cells): ≈1 below pressure ~0.8, ramping to its
   ceiling by pressure ~2.5. ``smoothstep`` over [P_LO, P_HI] is that ramp.
 
-* ``T_upper(output) = base + turn_overhead / output`` — the saturated ITL
-  ceiling. At saturation the per-turn cohort-prefill + scheduling wall is fixed
-  and gets amortized over a session's output tokens, so short-output workloads
-  (swe/terminal, ~28 tokens → ~237 ms) saturate far higher than long-output
-  ones (osworld, ~87 tokens → ~135 ms). ``base`` and ``turn_overhead`` are a
-  least-squares fit of measured saturated ITL (pressure ≥ 2.5) against
-  1/output over 120 cells (R²=0.64) — two physical anchors (a per-token
-  saturated-decode floor and a per-turn overhead), not MAPE knobs.
+* ``T_upper(output)`` — the saturated ITL ceiling, read from MEASURED anchors
+  (the median benchmark ITL at pressure ≥ 2.5, one per output-length cluster:
+  short-output swe/terminal ~28 tok → ~243 ms, long-output osworld ~86 tok →
+  ~135 ms) and linearly interpolated in output. Fit-free — measured medians +
+  interpolation, the same pattern as the decode grid; replaces the retired
+  least-squares ceiling ``118.7 + 3263/output``. Artifact:
+  ``profile_data/kernels/saturated_ceiling_H100_llama31_8b.json``.
 
 Validated: overall TPOT MAPE 19.4% (median 10.7%) — chat 6.1%, osworld 18.7%,
 swebench 21.0%, terminalbench 29.3% — beating the telemetry-using three-regime
@@ -35,9 +34,12 @@ predictor (22.8% overall) while needing no engine telemetry.
 
 from __future__ import annotations
 
+import json
 import math
 import statistics
 from dataclasses import dataclass
+from functools import cache
+from pathlib import Path
 
 from simulator.closed_form_tpot import RooflineParams
 from simulator.kernel_step_cost import decode_step_ms
@@ -73,15 +75,34 @@ OUT_KNEE_HI = 80.0  # above this output, treat as long (soft/recovering)
 SAT_SUSTAIN_LO = 10.0  # below this output, essentially no saturation possible
 SAT_SUSTAIN_HI = 24.0  # full saturation by here (just above the 22-tok plateau min)
 
-# --- saturated-ITL ceiling: T_upper(output) = BASE + OVERHEAD / output -------
-# Least-squares fit of measured ITL at pressure >= 2.5 vs 1/output (120 cells,
-# R²=0.64). BASE ≈ per-token saturated-decode floor; OVERHEAD ≈ per-turn
-# cohort-prefill + scheduling wall amortized over a session's output tokens.
-SATURATED_BASE_MS = 118.7
-SATURATED_TURN_OVERHEAD_MS = 3263.0
-# Hard ceiling (~p90 of measured saturated ITL) so tiny-output turns don't blow
-# up the 1/output term.
-T_UPPER_MAX_MS = 260.0
+# --- saturated-ITL ceiling: measured anchors, interpolated --------------------
+# The ceiling the amplifier pulls toward at saturation is read from MEASURED
+# anchors — the median benchmark ITL at KV pressure >= 2.5 (the "C=300+"
+# asymptote), one anchor per output-length cluster — and linearly interpolated
+# in output. Fit-free (measured medians + interpolation, the same pattern as the
+# decode kernel grid). REPLACES the retired least-squares ceiling
+# 118.7 + 3263/output. Regenerate the artifact with
+# `python3 -m profiling.process.build_saturated_ceiling`. See
+# profiling/docs/fitted_constants_audit.md.
+_CEILING_JSON = Path("profile_data/kernels/saturated_ceiling_H100_llama31_8b.json")
+
+# Active ceiling artifact — swappable PER-CONFIG (e.g. build_simulator_rows sets this to an A100
+# artifact before predicting the A100 cells, then restores), mirroring kernel_step_cost._default_grid.
+# Defaults to the H100 anchors so imports / tests / ramp_tpot / kernel_tpot_hint are unaffected.
+# _ceiling_anchors is @cache'd BY PATH, so swapping is safe with no cache_clear.
+_active_ceiling_json = _CEILING_JSON
+
+
+@cache
+def _ceiling_anchors(path: Path = _CEILING_JSON) -> tuple[tuple[float, float], ...]:
+    """Measured (output_tokens, plateau_ms) anchors, sorted ascending by output."""
+    data = json.loads(path.read_text())
+    anchors = sorted(
+        (float(a["output_tokens"]), float(a["plateau_ms"])) for a in data["anchors"]
+    )
+    if not anchors:
+        raise RuntimeError(f"no saturated-ceiling anchors in {path}")
+    return tuple(anchors)
 
 
 def _smoothstep(x: float, lo: float, hi: float) -> float:
@@ -105,9 +126,22 @@ class KernelTurnInput:
 
 
 def saturated_ceiling_ms(output_tokens: float) -> float:
-    """Saturated ITL ceiling for a turn producing ``output_tokens`` per session."""
+    """Saturated ITL ceiling for a turn producing ``output_tokens`` per session.
+
+    Linear interpolation between the measured saturated-plateau anchors, clamped
+    to the nearest anchor outside the measured output range (monotone: short
+    output saturates higher). Fit-free — the anchors are measured medians.
+    """
     out = max(1.0, float(output_tokens))
-    return min(T_UPPER_MAX_MS, SATURATED_BASE_MS + SATURATED_TURN_OVERHEAD_MS / out)
+    anchors = _ceiling_anchors(_active_ceiling_json)
+    if out <= anchors[0][0]:
+        return anchors[0][1]
+    if out >= anchors[-1][0]:
+        return anchors[-1][1]
+    for (o0, p0), (o1, p1) in zip(anchors, anchors[1:]):
+        if o0 <= out <= o1:
+            return p0 + (out - o0) / (o1 - o0) * (p1 - p0)
+    return anchors[-1][1]
 
 
 def _kernel_step_ms(inp: KernelTurnInput, params: RooflineParams | None = None) -> float:

@@ -56,12 +56,19 @@ class DecodeStepGrid:
         """``fixed_floor + bandwidth_term`` — the decode roofline anchored to the
         measured small-batch floor. Used to fill OOM corners and to extrapolate
         beyond the grid. compute term included for the (rare) compute-bound case.
+
+        Tensor-parallel aware: under TP the KV cache is sharded by head and the
+        weights are sharded across ranks, so each GPU streams only 1/tp of the
+        weights and 1/min(tp, kv_heads) of the KV per token from its OWN HBM
+        (``peak_bw`` stays per-GPU). tp=1 is byte-identical to the single-GPU form.
         """
-        kv = float(params.kv_bytes_per_token)
+        tp = max(1, int(params.tensor_parallel))
+        kv_shards = min(tp, max(1, int(params.kv_heads)))
+        kv = float(params.kv_bytes_per_token) / kv_shards
         bw = params.peak_bw_bytes_per_s * params.util_bw
         bandwidth_ms = (b * t * kv) / bw * 1e3
         compute_ms = (
-            2.0 * float(params.n_params) * b
+            2.0 * (float(params.n_params) / tp) * b
             / (params.peak_flops_per_s * params.util_flops) * 1e3
         )
         return max(self.fixed_floor_ms + bandwidth_ms, compute_ms)

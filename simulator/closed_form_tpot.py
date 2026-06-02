@@ -71,6 +71,8 @@ class RooflineParams:
     available_kv_blocks: int = 27_250          # empirical H100 (max free_kv_blocks across 4 vLLM engine traces 2026-05-27; ~1.5% less than spec-derived 27651)
     cache_block_size: int = 16                 # vLLM v1 default
     scheduler_overhead_ms_per_step: float = 5.7  # per-step Python/dispatcher cost. Calibrated from 99 lowest-work decode steps in swe_c40 trace (mean engine_step_wall=6.61ms minus mean model_submit_wall=0.93ms = 5.68ms). Single-anchor discipline, not a fit.
+    tensor_parallel: int = 1                   # TP degree: shards KV (by head) + weights across GPUs. tp=1 = single-GPU (unchanged).
+    kv_heads: int = 8                          # GQA KV heads (Llama-3.1-8B); caps KV sharding at min(tp, kv_heads).
 
     @property
     def kv_capacity_bytes(self) -> int:
