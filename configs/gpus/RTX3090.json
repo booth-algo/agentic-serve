@@ -1,0 +1,10 @@
+{
+  "name": "RTX3090",
+  "peak_flops_per_s": 71000000000000.0,
+  "peak_bw_bytes_per_s": 936000000000.0,
+  "util_flops": 0.65,
+  "util_bw": 0.93,
+  "scheduler_overhead_ms_per_step": 5.7,
+  "total_memory_bytes": 25769803776,
+  "_notes": "RTX 3090 (GA102, Ampere consumer, 24 GiB GDDR6X). peak_bw 936 GB/s datasheet. peak_flops = 71 TFLOPS FP16 tensor with FP32 accumulate (consumer Ampere halves the FP16-accumulate 142 TFLOPS rate; vLLM uses FP32 accumulate). util_*/scheduler_overhead are H100 PLACEHOLDERS. FIRST-CUT: no measured kernels for this GPU."
+}

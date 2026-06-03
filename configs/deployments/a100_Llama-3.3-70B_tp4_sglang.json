@@ -1,0 +1,63 @@
+{
+  "gpu_key": "A100x4 (sglang)",
+  "gpu": "A100",
+  "model": "Llama-3.3-70B",
+  "tp": 4,
+  "engine": "sglang",
+  "available_kv_blocks": 1,
+  "bench_dir": "a100_Llama-3.3-70B_tp4_sglang",
+  "backend": "a100-tp4-sglang-analytic-roofline",
+  "calibration_status": "a100_tp4_sglang_analytic_roofline_firstcut",
+  "ground_truth": true,
+  "data": {
+    "decode_grid": {
+      "status": "missing",
+      "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
+    },
+    "kv_pool": {
+      "status": "missing",
+      "value": 1,
+      "source": "configs/kv_pool.py",
+      "note": "40GiB util 0.9, weights 141.1GB/tp4, reserve 3.5GB -> bf16 weights exceed budget (run likely quantized); pool UNRELIABLE"
+    },
+    "saturated_ceiling": {
+      "status": "inherited",
+      "from": "H100",
+      "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
+    },
+    "roofline_peak": {
+      "status": "measured",
+      "note": "datasheet peak FLOPS/BW"
+    },
+    "util_flops": {
+      "status": "placeholder",
+      "from": "H100",
+      "note": "H100 util scalars; re-anchor from a measured grid for this GPU"
+    },
+    "util_bw": {
+      "status": "placeholder",
+      "from": "H100",
+      "note": "H100 util scalars; re-anchor from a measured grid for this GPU"
+    },
+    "scheduler_overhead": {
+      "status": "placeholder",
+      "from": "H100",
+      "note": "H100 util scalars; re-anchor from a measured grid for this GPU"
+    },
+    "cached_prefill_grid": {
+      "status": "inherited",
+      "from": "H100",
+      "note": "TTFT prefill law H100-measured -> first-cut"
+    },
+    "fa3_grid": {
+      "status": "inherited",
+      "from": "H100",
+      "note": "FA3 prefill grid H100-measured -> first-cut"
+    },
+    "ground_truth": {
+      "status": "measured",
+      "path": "a100_Llama-3.3-70B_tp4_sglang",
+      "source": "/mnt/100g"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "RTX2080Ti",
+  "peak_flops_per_s": 53800000000000.0,
+  "peak_bw_bytes_per_s": 616000000000.0,
+  "util_flops": 0.65,
+  "util_bw": 0.93,
+  "scheduler_overhead_ms_per_step": 5.7,
+  "total_memory_bytes": 11811160064,
+  "_notes": "RTX 2080 Ti (TU102, Turing, 11 GiB GDDR6). peak_bw 616 GB/s datasheet. peak_flops = 53.8 TFLOPS FP16 tensor with FP32 accumulate (107.6 with FP16 accumulate). HEAVY FIRST-CUT: Turing has NO bf16 and NO FlashAttention-3; runs fp16. util_*/scheduler_overhead are H100 PLACEHOLDERS; no measured kernels."
+}

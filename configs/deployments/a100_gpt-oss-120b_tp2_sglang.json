@@ -1,0 +1,63 @@
+{
+  "gpu_key": "A100x2 (sglang)",
+  "gpu": "A100",
+  "model": "gpt-oss-120b",
+  "tp": 2,
+  "engine": "sglang",
+  "available_kv_blocks": 4288,
+  "bench_dir": "a100_gpt-oss-120b_tp2_sglang",
+  "backend": "a100-tp2-sglang-analytic-roofline",
+  "calibration_status": "a100_tp2_sglang_analytic_roofline_firstcut",
+  "ground_truth": true,
+  "data": {
+    "decode_grid": {
+      "status": "missing",
+      "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
+    },
+    "kv_pool": {
+      "status": "derived",
+      "value": 4288,
+      "source": "configs/kv_pool.py",
+      "note": "40GiB util 0.9, weights 65.3GB/tp2, reserve 3.5GB"
+    },
+    "saturated_ceiling": {
+      "status": "inherited",
+      "from": "H100",
+      "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
+    },
+    "roofline_peak": {
+      "status": "measured",
+      "note": "datasheet peak FLOPS/BW"
+    },
+    "util_flops": {
+      "status": "placeholder",
+      "from": "H100",
+      "note": "H100 util scalars; re-anchor from a measured grid for this GPU"
+    },
+    "util_bw": {
+      "status": "placeholder",
+      "from": "H100",
+      "note": "H100 util scalars; re-anchor from a measured grid for this GPU"
+    },
+    "scheduler_overhead": {
+      "status": "placeholder",
+      "from": "H100",
+      "note": "H100 util scalars; re-anchor from a measured grid for this GPU"
+    },
+    "cached_prefill_grid": {
+      "status": "inherited",
+      "from": "H100",
+      "note": "TTFT prefill law H100-measured -> first-cut"
+    },
+    "fa3_grid": {
+      "status": "inherited",
+      "from": "H100",
+      "note": "FA3 prefill grid H100-measured -> first-cut"
+    },
+    "ground_truth": {
+      "status": "measured",
+      "path": "a100_gpt-oss-120b_tp2_sglang",
+      "source": "/mnt/100g"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "Mixtral-8x7B",
+  "n_params": 46702792704,
+  "kv_bytes_per_token": 131072.0,
+  "kv_heads": 8,
+  "bytes_per_param": 2.0,
+  "cache_block_size": 16,
+  "_notes": "Sparse MoE (8 experts, 2 active/token, ~12.9B active). kv_bytes_per_token = 2*32 layers*8 kv_heads*128 head_dim*2 = 131072 (same as Llama-3.1-8B). n_params is TOTAL (93405585408 / 2); the decode weight-read term uses total weight bytes (justified in the saturated batch regime where most experts activate per step) -> first-cut over-counts at very low batch. config.json read from h100 host 2026-06-02."
+}

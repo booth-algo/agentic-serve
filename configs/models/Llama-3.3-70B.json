@@ -1,0 +1,9 @@
+{
+  "name": "Llama-3.3-70B",
+  "n_params": 70553706496,
+  "kv_bytes_per_token": 327680.0,
+  "kv_heads": 8,
+  "bytes_per_param": 2.0,
+  "cache_block_size": 16,
+  "_notes": "Dense Llama, architecturally identical to Llama-3.1-70B (80 layers, 8 kv_heads, 128 head_dim, bf16). kv_bytes_per_token = 2*80*8*128*2 = 327680. total_size 141107412992 / 2. config.json read from h100 host 2026-06-02."
+}

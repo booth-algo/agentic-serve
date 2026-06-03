@@ -1,0 +1,63 @@
+{
+  "gpu_key": "RTX2080Tix2",
+  "gpu": "RTX2080Ti",
+  "model": "Llama-3.1-8B",
+  "tp": 2,
+  "engine": "vllm",
+  "available_kv_blocks": 1,
+  "bench_dir": "2080ti_Llama-3.1-8B_tp2_vllm",
+  "backend": "rtx2080ti-tp2-vllm-analytic-roofline",
+  "calibration_status": "2080ti_tp2_vllm_analytic_roofline_firstcut",
+  "ground_truth": true,
+  "data": {
+    "decode_grid": {
+      "status": "missing",
+      "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
+    },
+    "kv_pool": {
+      "status": "missing",
+      "value": 1,
+      "source": "configs/kv_pool.py",
+      "note": "11GiB util 0.85, weights 16.1GB/tp2, reserve 3.5GB -> bf16 weights exceed budget (run likely quantized); pool UNRELIABLE"
+    },
+    "saturated_ceiling": {
+      "status": "inherited",
+      "from": "H100",
+      "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
+    },
+    "roofline_peak": {
+      "status": "placeholder",
+      "note": "datasheet peak FLOPS/BW (FP16-accumulate ambiguity on consumer GPUs)"
+    },
+    "util_flops": {
+      "status": "placeholder",
+      "from": "H100",
+      "note": "H100 util scalars; re-anchor from a measured grid for this GPU"
+    },
+    "util_bw": {
+      "status": "placeholder",
+      "from": "H100",
+      "note": "H100 util scalars; re-anchor from a measured grid for this GPU"
+    },
+    "scheduler_overhead": {
+      "status": "placeholder",
+      "from": "H100",
+      "note": "H100 util scalars; re-anchor from a measured grid for this GPU"
+    },
+    "cached_prefill_grid": {
+      "status": "inherited",
+      "from": "H100",
+      "note": "TTFT prefill law H100-measured -> first-cut"
+    },
+    "fa3_grid": {
+      "status": "inherited",
+      "from": "H100",
+      "note": "FA3 prefill grid H100-measured -> first-cut"
+    },
+    "ground_truth": {
+      "status": "measured",
+      "path": "2080ti_Llama-3.1-8B_tp2_vllm",
+      "source": "/mnt/100g"
+    }
+  }
+}

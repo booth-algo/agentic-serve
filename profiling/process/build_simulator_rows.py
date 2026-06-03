@@ -40,7 +40,6 @@ from configs.loader import Deployment, all_deployments  # noqa: E402
 
 DASHBOARD_JSON = Path("inference-benchmark/dashboard/public/simulator-predictions.json")
 BENCH_BASE = Path("/mnt/100g/agent-bench/results/synthetic_distributional")
-MODEL = "Llama-3.1-8B"
 PROFILES = [
     "chat-multiturn-synth",
     "osworld-multiturn-synth",
@@ -140,7 +139,7 @@ def build_row(profile: str, conc: int, params: RooflineParams, cfg: Deployment,
         return round(st.mean(vals), 4) if vals else None
 
     return {
-        "model": MODEL,
+        "model": cfg.model,
         "backend": cfg.backend,
         "profile": profile,
         "data_scope": "synthetic_distributional",
@@ -182,8 +181,12 @@ def main() -> None:
             kernel_step_cost._default_grid = lambda grid=grid: grid
             print(f"{cfg.gpu_key}: measured decode grid {cfg.decode_grid.name} ({len(grid.cells)} cells)")
         else:
-            kernel_step_cost._default_grid = orig_default_grid
-            print(f"{cfg.gpu_key}: default decode grid")
+            # No measured grid for this GPU/model -> use the full decode ROOFLINE (scales with the
+            # config's own weight bytes / bandwidth / KV), NOT the H100 8B grid. First-cut but physical.
+            agrid = kernel_step_cost.analytic_grid()
+            kernel_step_cost._default_grid = lambda agrid=agrid: agrid
+            print(f"{cfg.gpu_key}: analytic decode roofline (no measured grid; launch_floor "
+                  f"{kernel_step_cost.default_launch_floor_ms():.2f} ms)")
         # Swap the saturated-ITL ceiling for this config (mirror the grid swap). None -> H100 anchors.
         if cfg.saturated_ceiling is not None and cfg.saturated_ceiling.exists():
             kernel_tpot._active_ceiling_json = cfg.saturated_ceiling
@@ -200,8 +203,11 @@ def main() -> None:
                 row = build_row(profile, conc, params, cfg, bench_root)
                 if row:
                     rows.append(row)
-        payload[cfg.gpu_key] = rows
-        print(f"  {cfg.gpu_key}: {len(rows)} rows  "
+        # Multiple deployments can share one gpu_key (e.g. different models on the same GPU/TP/engine,
+        # disambiguated by the row `model` field + the dashboard model dropdown) -> accumulate, never
+        # overwrite. The gpu_key gate (validate_*) filters to model=Llama-3.1-8B so this stays gate-safe.
+        payload.setdefault(cfg.gpu_key, []).extend(rows)
+        print(f"  {cfg.gpu_key} += {len(rows)} rows [{cfg.model}]  "
               f"(tpot {_overall(rows,'tpot_err')} / ttft {_overall(rows,'ttft_err')} "
               f"/ e2el {_overall(rows,'e2el_err')} cell-MAPE)")
     kernel_step_cost._default_grid = orig_default_grid

@@ -5,5 +5,6 @@
   "util_flops": 0.65,
   "util_bw": 0.93,
   "scheduler_overhead_ms_per_step": 5.7,
-  "_notes": "H100 SXM (3.35 TB/s HBM3, 989 TFLOPS BF16 dense). util_flops/util_bw are single-anchor measured (vllm_engine_step_trace_swe_c40); scheduler_overhead from 99 quiet decode steps. These are the RooflineParams dataclass defaults."
+  "total_memory_bytes": 85899345920,
+  "_notes": "H100 SXM (3.35 TB/s HBM3, 989 TFLOPS BF16 dense, 80 GiB). util_flops/util_bw are single-anchor measured (vllm_engine_step_trace_swe_c40); scheduler_overhead from 99 quiet decode steps. RooflineParams dataclass defaults. total_memory_bytes (80 GiB) is read by configs/kv_pool.py only (not a RooflineParams field)."
 }

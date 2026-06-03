@@ -47,6 +47,10 @@ def collect_rows(sim_json: Path) -> list[dict[str, Any]]:
     payload = json.loads(sim_json.read_text())
     out: list[dict[str, Any]] = []
     for cell in payload.get("H100", []):
+        # The "H100" payload key now also holds other-model rows (gpt-oss, Qwen) run on the same
+        # H100 tp1 vllm; the gate is the kernel-calibrated Llama-3.1-8B config only.
+        if cell.get("model") not in (None, "Llama-3.1-8B"):
+            continue
         prof = cell.get("profile")
         c = cell.get("concurrency")
         if prof is None or c is None:

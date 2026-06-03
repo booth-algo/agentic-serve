@@ -51,6 +51,37 @@ class DecodeStepGrid:
     t_axis: tuple[float, ...]
     cells: dict[tuple[float, float], float]
     fixed_floor_ms: float  # measured small-batch step time (B=1, T=min)
+    analytic_only: bool = False    # no measured cells -> lookup() returns the full decode roofline
+    launch_floor_ms: float = 0.0   # analytic_only floor: per-step launch/sampling cost NOT explained by HBM reads
+
+    def _decode_roofline_full(self, b: float, t: float, params: RooflineParams) -> float:
+        """Full decode-step roofline for an UNCALIBRATED config (no measured grid).
+
+        Unlike ``_analytic`` (which fills only OOM corners of a measured grid and so
+        leans on the grid's measured ``fixed_floor`` to capture weight reads), this is
+        self-contained and must model the weight read explicitly — otherwise a 70B model
+        would be predicted like the 8B grid floor. Decode reads, per step:
+
+            FFN/proj GEMM   : max(weight_bytes/tp / bw, 2*n_params/tp*b / flops)   # mem- or compute-bound
+            attention KV    : b * ctx * kv_per_gpu / bw                            # separate kernel -> adds
+            launch floor    : CUDA-graph launch + sampling (HBM-independent)
+
+        ``weight_bytes = n_params * bytes_per_param`` is the real HBM footprint (quant-aware:
+        MXFP4 experts give bytes_per_param < 2). ``launch_floor_ms`` is anchored to the measured
+        8B grid floor minus its own weight+KV reads (see ``default_launch_floor_ms``), so this
+        reproduces the measured Llama-3.1-8B/H100 floor (~6.5 ms) exactly at (b=1, t=min).
+        """
+        tp = max(1, int(params.tensor_parallel))
+        kv_shards = min(tp, max(1, int(params.kv_heads)))
+        bw = params.peak_bw_bytes_per_s * params.util_bw
+        weight_bytes = float(params.n_params) * float(params.bytes_per_param) / tp
+        kv = float(params.kv_bytes_per_token) / kv_shards
+        gemm_ms = max(
+            weight_bytes / bw * 1e3,
+            2.0 * (float(params.n_params) / tp) * b / (params.peak_flops_per_s * params.util_flops) * 1e3,
+        )
+        attn_ms = (b * t * kv) / bw * 1e3
+        return self.launch_floor_ms + gemm_ms + attn_ms
 
     def _analytic(self, b: float, t: float, params: RooflineParams) -> float:
         """``fixed_floor + bandwidth_term`` — the decode roofline anchored to the
@@ -79,6 +110,8 @@ class DecodeStepGrid:
         which is continuous with the measured grid at the coverage boundary.
         Queries outside the axes clamp to the nearest edge before bracketing.
         """
+        if self.analytic_only:
+            return self._decode_roofline_full(max(1.0, float(b)), max(1.0, float(t)), params)
         if not self.b_axis or not self.t_axis:
             raise RuntimeError("empty decode-step grid")
 
@@ -161,6 +194,40 @@ def load_grid(path: Path = DEFAULT_CSV) -> DecodeStepGrid:
 @cache
 def _default_grid() -> DecodeStepGrid:
     return load_grid(DEFAULT_CSV)
+
+
+@cache
+def default_launch_floor_ms() -> float:
+    """Per-step launch/sampling cost, anchored to the measured Llama-3.1-8B/H100 grid floor.
+
+    The measured small-batch floor (~6.5 ms at b=1, t=512) is weight-read + min-KV-read +
+    launch. Subtracting the modelled HBM reads (with the default 8B/H100 params) leaves the
+    HBM-independent launch + sampling overhead — used as the floor for analytic (uncalibrated)
+    configs so they continue from the same physical anchor instead of a magic constant.
+    """
+    grid = _default_grid()
+    p = RooflineParams()  # Llama-3.1-8B / H100 defaults — the config the floor was measured on
+    bw = p.peak_bw_bytes_per_s * p.util_bw
+    b0, t0 = grid.b_axis[0], grid.t_axis[0]
+    weight_ms = float(p.n_params) * float(p.bytes_per_param) / bw * 1e3
+    attn_ms = (b0 * t0 * float(p.kv_bytes_per_token)) / bw * 1e3
+    return max(0.3, grid.fixed_floor_ms - weight_ms - attn_ms)
+
+
+def analytic_grid(launch_floor_ms: float | None = None) -> DecodeStepGrid:
+    """A cell-free DecodeStepGrid whose ``lookup`` returns the full decode roofline.
+
+    For configs with NO measured decode grid (a different GPU and/or model): instead of
+    borrowing the H100 8B grid, ``decode_step_ms`` then scales physically with the config's
+    own RooflineParams (weight bytes, bandwidth, KV). Swap it in via ``_default_grid`` exactly
+    like a measured grid (see build_simulator_rows). The axes are nominal (unused for analytic
+    lookups). ``launch_floor_ms`` defaults to the 8B-anchored value.
+    """
+    floor = default_launch_floor_ms() if launch_floor_ms is None else launch_floor_ms
+    return DecodeStepGrid(
+        b_axis=(1.0, 256.0), t_axis=(1.0, 16384.0), cells={},
+        fixed_floor_ms=floor, analytic_only=True, launch_floor_ms=floor,
+    )
 
 
 def decode_step_ms(

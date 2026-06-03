@@ -1,0 +1,9 @@
+{
+  "name": "Llama-3.1-70B",
+  "n_params": 70553706496,
+  "kv_bytes_per_token": 327680.0,
+  "kv_heads": 8,
+  "bytes_per_param": 2.0,
+  "cache_block_size": 16,
+  "_notes": "Dense Llama. kv_bytes_per_token = 2(K+V) * 80 layers * 8 kv_heads * 128 head_dim * 2 (bf16) = 327680. n_params from safetensors index total_size 141107412992 / 2. Arch read from /data/kevinlau/models/Llama-3.1-70B-Instruct/config.json (h100 host) 2026-06-02."
+}

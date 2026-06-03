@@ -1,0 +1,9 @@
+{
+  "name": "gpt-oss-20b",
+  "n_params": 21000000000,
+  "kv_bytes_per_token": 49152.0,
+  "kv_heads": 8,
+  "bytes_per_param": 0.6553,
+  "cache_block_size": 16,
+  "_notes": "MoE (32 experts, 4 active/token, ~3.6B active), MXFP4-quantized experts. bytes_per_param = actual HBM footprint total_size 13761264768 / 21e9 nominal params = 0.655 (so n_params*bytes_per_param = real weight bytes, quant-aware). kv_bytes_per_token counts the 12 full_attention layers = 2*12*8 kv_heads*64 head_dim*2 = 49152; the 12 sliding_attention layers (window 128) are window-capped -> negligible growth at multi-turn ctx, omitted. FIRST-CUT: MoE active-vs-total + sliding-window not precisely modeled. config.json read from h100 host 2026-06-02."
+}

@@ -35,22 +35,26 @@ def main() -> None:
         for k in d.data:
             if k not in inputs:
                 inputs.append(k)
-    w = max((len(i) for i in inputs), default=10) + 2
+    # One row per deployment, inputs as columns (many deployments share a gpu_key now, so a
+    # deployment-per-column matrix would have duplicate headers; transpose for readability).
+    lw = max((len(f"{d.gpu_key} [{d.model}]") for d in deps), default=20) + 2
+    cw = 10
 
     print("\nDATA COVERAGE (configs/deployments)")
-    print("input".ljust(w) + "".join(d.gpu_key.ljust(12) for d in deps))
-    for inp in inputs:
-        row = inp.ljust(w)
-        for d in deps:
+    print("config".ljust(lw) + "".join(i[:cw - 1].ljust(cw) for i in inputs))
+    for d in deps:
+        row = f"{d.gpu_key} [{d.model}]".ljust(lw)
+        for inp in inputs:
             st = (d.data.get(inp) or {}).get("status", "-")
-            row += _ABBR.get(st, st).ljust(12)
+            row += _ABBR.get(st, st)[:cw - 1].ljust(cw)
         print(row)
 
     print("\nper-config status counts:")
+    kw = max((len(f"{d.gpu_key} [{d.model}]") for d in deps), default=20) + 2
     for d in deps:
         counts = Counter(e.get("status", "?") for e in d.data.values())
         miss = [k for k, e in d.data.items() if e.get("status") == "missing"]
-        line = "  " + d.gpu_key.ljust(8) + ", ".join(f"{n} {s}" for s, n in sorted(counts.items()))
+        line = "  " + f"{d.gpu_key} [{d.model}]".ljust(kw) + ", ".join(f"{n} {s}" for s, n in sorted(counts.items()))
         if miss:
             line += f"   MISSING: {miss}"
         print(line)

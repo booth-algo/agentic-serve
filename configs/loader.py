@@ -23,8 +23,11 @@ from simulator.closed_form_tpot import RooflineParams
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIGS_DIR = REPO_ROOT / "configs"
-# Dashboard display order; gpu_keys not listed sort after, lexicographically.
-_GPU_ORDER = ["H100", "H100x2", "H100x4", "A100", "A100x2", "A100x4"]
+# Dashboard display order (mirrors ServingPredictionsPage SERVING_GPU_ORDER); gpu_keys not listed
+# (e.g. the " (sglang)"-suffixed ones) sort after, in JSON insertion order.
+_GPU_ORDER = ["H100", "H100x2", "H100x4", "A100", "A100x2", "A100x4", "A100x8",
+              "RTX3090", "RTX3090x2", "RTX3090x4", "RTX3090x8",
+              "RTX2080Ti", "RTX2080Tix2", "RTX2080Tix4"]
 # Manifest statuses where THIS config provides the artifact (else it inherits the H100 module default).
 _OWNED = {"measured", "derived"}
 
