@@ -68,14 +68,32 @@ def _cell_mape(turns: list[dict[str, Any]], pred_key: str, meas_key: str) -> flo
     return round(st.mean(apes), 4) if apes else None
 
 
-def build_turns(bench_file: Path) -> list[dict[str, Any]]:
-    """Per-turn median ground truth (cached/new/output + ttft/tpot/e2el) from a benchmark run."""
+def _shared_prefix_tokens(reqs: list[dict[str, Any]]) -> float:
+    """Median ``request_metadata.shared_prefix_actual_tokens`` over a turn's successful requests.
+
+    The ``prefix_aware_synthetic`` workloads inject a profile-constant cross-session APC prefix
+    (swebench/osworld 1024, terminalbench 976, chat 48) that vLLM dedups across sessions but the
+    per-session cache estimate records as cached=0. Threading it lets the queue sim credit it once
+    instead of re-prefilling it for every concurrent session. 0.0 when absent (non-prefix-aware)."""
+    vals = [
+        float((r.get("request_metadata") or {}).get("shared_prefix_actual_tokens"))
+        for r in reqs
+        if isinstance((r.get("request_metadata") or {}).get("shared_prefix_actual_tokens"), (int, float))
+    ]
+    vals = [v for v in vals if v > 0.0]
+    return st.median(vals) if vals else 0.0
+
+
+def build_turns(bench_file: Path) -> tuple[list[dict[str, Any]], float]:
+    """Per-turn median ground truth (cached/new/output + ttft/tpot/e2el) from a benchmark run,
+    plus the cell's shared cross-session APC prefix size (from turn-0 request_metadata; 0 if none)."""
     data = json.loads(bench_file.read_text())
     by_turn: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for r in data.get("per_request") or []:
         if not r.get("success"):
             continue
         by_turn[int(r.get("turn_index") or 0)].append(r)
+    shared_prefix_tokens = _shared_prefix_tokens(by_turn[min(by_turn)]) if by_turn else 0.0
     turns: list[dict[str, Any]] = []
     for ti in sorted(by_turn):
         reqs = by_turn[ti]
@@ -97,7 +115,7 @@ def build_turns(bench_file: Path) -> list[dict[str, Any]]:
             "tpot_meas": round(med("tpot_ms"), 4),
             "e2el_meas": round(med("e2el_ms"), 4),
         })
-    return turns
+    return turns, shared_prefix_tokens
 
 
 def build_row(profile: str, conc: int, params: RooflineParams, cfg: Deployment,
@@ -105,16 +123,23 @@ def build_row(profile: str, conc: int, params: RooflineParams, cfg: Deployment,
     bench = bench_root / f"{profile}_conc{conc}.json"
     if not bench.exists():
         return None
-    turns = build_turns(bench)
+    turns, shared_prefix_tokens = build_turns(bench)
     if not turns:
         return None
 
     # Headline predictions: kernel-composed TPOT + queue-sim TTFT (the active decode grid + KV pool
-    # are set per-config in main()). E2EL composes on the kernel TPOT.
+    # are set per-config in main()). E2EL composes on the kernel TPOT. ``shared_prefix_tokens`` lets
+    # the queue sim dedup the cross-session APC prefix instead of re-prefilling it per session.
     kin = [KernelTurnInput(t["cached_context_tokens"], t["new_prefill_tokens"],
                            t["output_tokens"], t["scheduled_requests"]) for t in turns]
     tpot_pred = predict_cell_tpot(kin, params)
-    ttft_pred = predict_cell_ttft_qsim(turns, profile, float(conc), params)
+    # The per-GPU realized/trajectory-pool artifacts are Llama-3.1-8B-derived; only activate the
+    # per-(conc,gpu) cohort for Llama configs. Other models on the same gpu_key (gpt-oss, Qwen) keep
+    # the pooled cohort (gpu_key=None) — no cross-model contamination.
+    cohort_gpu_key = cfg.gpu_key if cfg.model == "Llama-3.1-8B" else None
+    ttft_pred = predict_cell_ttft_qsim(
+        turns, profile, float(conc), params, shared_prefix_tokens=shared_prefix_tokens,
+        gpu_key=cohort_gpu_key)
     for t, tp, tf in zip(turns, tpot_pred, ttft_pred):
         out = float(t["output_tokens"])
         t["tpot_pred"] = round(float(tp), 4)

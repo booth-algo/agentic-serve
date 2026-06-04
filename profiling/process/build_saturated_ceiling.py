@@ -71,7 +71,8 @@ def _saturated_turns(cfg: CeilingConfig) -> list[tuple[float, float]]:
             f = root / f"{prof}_conc{c}.json"
             if not f.exists():
                 continue
-            for tn in build_turns(f):
+            turns, _shared_prefix = build_turns(f)
+            for tn in turns:
                 output = max(1.0, float(tn["output_tokens"]))
                 sched = max(1.0, float(tn["scheduled_requests"]))
                 ctx = (tn["cached_context_tokens"] + tn["new_prefill_tokens"]

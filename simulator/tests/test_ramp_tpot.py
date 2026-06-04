@@ -44,6 +44,44 @@ def test_sched_hat_decreases_and_matches_round() -> None:
     assert osw_late < osw_early < 160  # steep drain
 
 
+# ----------------------------- per-GPU / per-concurrency cohort resolver ---------------------------
+from simulator.ramp_tpot import (  # noqa: E402
+    _gpu_slug,
+    _select_conc,
+    context_scale_quantiles,
+    survival_for,
+)
+
+
+def test_survival_for_default_byte_identical_to_pooled() -> None:
+    # Default args (no concurrency, no gpu_key) MUST reproduce the legacy pooled curve exactly,
+    # and so must a gpu_key with no per-GPU file present (falls back to pooled).
+    for prof in PROFILE_DIST:
+        pooled = forward_survival(PROFILE_DIST[prof])
+        assert survival_for(prof) == pooled, prof
+        assert survival_for(prof, 320, "no-such-gpu-xyz") == pooled, prof
+        assert context_scale_quantiles(prof) == context_scale_quantiles(prof, 320, "no-such-gpu-xyz"), prof
+
+
+def test_gpu_slug_deterministic() -> None:
+    assert _gpu_slug("A100") == "a100"
+    assert _gpu_slug("A100 (sglang)") == "a100sglang"
+    assert _gpu_slug("H100x2") == "h100x2"
+    assert _gpu_slug(None) == "" and _gpu_slug("") == ""
+
+
+def test_select_conc_nearest_rule() -> None:
+    fake = {"by_concurrency": {"10": {}, "80": {}, "200": {}}}
+    assert _select_conc(fake, 80) == "80"           # exact
+    assert _select_conc(fake, 90) == "80"           # nearest
+    assert _select_conc(fake, 1) == "10"            # below range
+    assert _select_conc(fake, 999) == "200"         # above range
+    assert _select_conc(fake, 45) == "10"           # tie (|45-10|=35==|45-80|) -> smaller conc
+    assert _select_conc({}, 80) is None             # no by_concurrency -> pooled
+    assert _select_conc(None, 80) is None
+    assert _select_conc(fake, None) is None          # concurrency None -> pooled
+
+
 def test_unknown_profile_falls_back_to_concurrency() -> None:
     # No spec -> sched_hat returns the full concurrency (no drain), predictor still runs.
     assert sched_hat("nonexistent-profile", 64, 5) == 64.0
