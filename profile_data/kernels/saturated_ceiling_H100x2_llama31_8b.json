@@ -1,0 +1,21 @@
+{
+  "gpu": "H100x2",
+  "model": "Llama-3.1-8B",
+  "tensor_parallel": 2,
+  "criterion": "median measured tpot_ms over turns at KV pressure >= 2.5 (the saturated 'C=300+' asymptote)",
+  "pressure_threshold": 2.5,
+  "cluster_split_output": 50.0,
+  "source": "/mnt/100g/agent-bench/results/synthetic_distributional/h100_Llama-3.1-8B_tp2_vllm",
+  "n_saturated_turns": 21,
+  "max_measured_plateau_ms": 146.8,
+  "p90_measured_plateau_ms": 145.4,
+  "anchors": [
+    {
+      "output_tokens": 28,
+      "plateau_ms": 143.5,
+      "n": 21
+    }
+  ],
+  "lookup": "linear interpolation in output between anchors; clamp to the nearest anchor outside the range (monotone non-increasing: short output saturates higher)",
+  "_notes": "Measured-anchor replacement for the retired least-squares ceiling 118.7 + 3263/output (no fit; measured plateau medians + interpolation, same pattern as the decode kernel grid). Regenerate: python3 -m profiling.process.build_saturated_ceiling. See profiling/docs/fitted_constants_audit.md."
+}

@@ -12,7 +12,7 @@
   "data": {
     "decode_grid":         {"status": "measured", "path": "profile_data/results/decode_profile_H100x2_2026-06-01.csv"},
     "kv_pool":             {"status": "measured", "value": 62416},
-    "saturated_ceiling":   {"status": "inherited", "from": "H100", "note": "TPOT plateau still H100-anchored; re-anchor on tp2"},
+    "saturated_ceiling":   {"status": "derived", "path": "profile_data/kernels/saturated_ceiling_H100x2_llama31_8b.json", "source": "build_saturated_ceiling.py (tp2 ground truth @pressure>=2.5)", "date": "2026-06-03"},
     "roofline_peak":       {"status": "inherited", "from": "H100", "note": "uses single-H100 peak_bw for tp2 (known over-pred; should be ~2x aggregate bw)"},
     "util_flops":          {"status": "inherited", "from": "H100"},
     "util_bw":             {"status": "inherited", "from": "H100"},
