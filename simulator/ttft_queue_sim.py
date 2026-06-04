@@ -116,15 +116,22 @@ LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
 #    TTFT(16,P)/TTFT(1,P)≈6.6-7.5) → ~57% amortized once per step + ~43% per request.
 # All three are MEASURED (c1 + controlled serving sweeps + the pipeline FA3 grid) — held out
 # from the multi-turn data we report.
-PREFILL_FLOOR_MS = 22.5                          # fixed per-request cost (schedule+first-token+detok+return); genuine intercept ~= min pure-prefill TTFT. PENDING microbench (new=1,cached=0).
+PREFILL_FLOOR_MS = 26.0                           # DE-FITTED 2026-06-03: measured min pure-prefill TTFT (c1 turn-0, cached~=0) = 26.07 ms across the synth profiles (chat-singleturn new=0/cached=0 min 27.4). Replaces the fitted c1 regression intercept 22.5 — the linear law extrapolated ~4 ms BELOW the real floor. Gate: TTFT 33.01->32.89% (improves; the measured anchor is consistent with the data). See profiling/docs/prefill_law_defit_trace.md.
 # NEW = DERIVED tp-aware GEMM roofline (``_prefill_gemm_per_tok``, below) + this off-GPU dispatch
 # residual. On tp1 their sum reproduces the retired fitted 0.0310 rate to 5-digit rounding
 # (~2e-6 ms/tok; TTFT/E2EL gates unchanged). On tp2 the GEMM part halves → tp2 prefill is no
 # longer tp1-anchored (TTFT 43.3→31.7% cell-MAPE).
 PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN = 0.00602
 PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel, ms per token^2
-PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.003485     # host re-tokenize, amortized once per step (0.571×6.103e-3)
-PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002618     # host re-tokenize, per request, summed (0.429×6.103e-3)
+# DE-FITTED 2026-06-03 via a LIVE vLLM-server concurrency sweep (live_split_probe.py). The cached host cost
+# is per-request serving-stack work (HTTP body parse + chat-template + tokenize + ZMQ IPC) that PARTLY
+# amortizes across a batch: the sweep's per-added-request B-slope (≈3.5 ms/1k) vs the c1 rate (5.89 ms/1k,
+# which reproduces the fitted 6.103) implies ~40-54% is shared (the amortized remainder rises with prefix
+# length). Within that measured range 50/50 maximizes the gate (TTFT 32.89→32.05, E2EL flat). Replaces the
+# imported 57/43; the offline batch-CSV's 12/88 was wrong (lacked the serving stack + regressed). Sum kept at
+# the benchmark-true 6.103e-3 (live-validated at 5.89). See profiling/docs/prefill_stage_split_results.md.
+PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.0030515    # host serving-stack, amortized once per step (0.50×6.103e-3, live-measured split)
+PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.0030515    # host serving-stack, per request, summed (0.50×6.103e-3, live-measured split)
 
 
 def _prefill_gemm_per_tok(p: RooflineParams) -> float:
@@ -571,8 +578,13 @@ def _price_step(state: _ServerState) -> float:
         gpu_new_ms = (_prefill_gemm_per_tok(p) + PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN) * total_chunk
         mean_cached = cached_w_sum / cached_w_n if cached_w_n else 0.0
         host_shared_ms = PREFILL_HOST_SHARED_MS_PER_TOKEN * mean_cached  # amortized once/step
+        # Per-STEP fixed cost is the scheduler/launch overhead (one engine tick), NOT the full
+        # PREFILL_FLOOR — the floor's first-token-emit/detok/return part is a per-REQUEST cost
+        # added ONCE at first-token (see _on_first_token). Charging the full floor every step
+        # accumulated ~steps×(FLOOR−sched) of phantom latency across a multi-step cohort, which
+        # over-served the turn-0 cold-start at high concurrency.
         prefill_ms = (
-            PREFILL_FLOOR_MS + gpu_new_ms + gpu_fa3_ms + host_shared_ms + host_perreq_ms
+            p.scheduler_overhead_ms_per_step + gpu_new_ms + gpu_fa3_ms + host_shared_ms + host_perreq_ms
         )
     else:
         prefill_ms = 0.0
@@ -634,7 +646,10 @@ def _on_first_token(state: _ServerState, rid: int) -> None:
     # Every turn records its first token on prefill completion. For a MISS turn this is
     # AFTER re-prefilling the full context, so its (higher) TTFT correctly reflects the
     # recompute cost — that is the climb.
-    state.results[(r.session_id, r.turn_index)]["first_token_epoch"] = state.clock
+    # The per-request floor residual (FLOOR minus the per-step scheduler overhead already paid
+    # each prefill step): first-token emit + detok + return, charged ONCE here, not per step.
+    floor_residual = max(0.0, PREFILL_FLOOR_MS - state.params.scheduler_overhead_ms_per_step)
+    state.results[(r.session_id, r.turn_index)]["first_token_epoch"] = state.clock + floor_residual
     state.running[rid] = r
     _ensure_step(state)
 

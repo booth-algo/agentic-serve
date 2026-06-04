@@ -45,23 +45,31 @@ from simulator.closed_form_tpot import RooflineParams
 from simulator.kernel_step_cost import decode_step_ms
 
 
-# --- pressure ramp window (read from the amplifier-vs-pressure curve) --------
-# Below P_LO the amplifier sits at ~1 (kernel step IS the ITL); by the upper knee
-# it has reached the saturated ceiling. The upper knee is *output-gated*: the
-# jump is eviction-gated saturation, and short-output workloads (agentic coding —
-# swebench/terminalbench, ~28 tok) saturate as a sharp 1-2 turn STEP, while
-# long-output workloads (chat/osworld, ~80+ tok) ramp gently and often recover.
-# So the step is steep for short outputs and gradual for long ones. Physical
-# basis: the saturated per-turn overhead is amortized over output tokens (the
-# same mechanism behind the output-keyed ceiling) — short outputs concentrate it
-# into a hard step. P_LO=0.8 onset is kept (lowering it lifts easy sub-saturation
-# cells and measured worse). Knees retuned vs the data; reuse the existing ceiling.
-P_LO = 0.8
+# --- pressure ramp window (MEASURED eviction-watermark crossing) -------------
+# DE-FITTED 2026-06-03: the four hand-tuned knees were re-anchored to MEASURED
+# quantities (the eviction-watermark jump-pressure cluster + the saturated-ceiling
+# output clusters), eliminating the "knees retuned vs the data" tuning. Gate:
+# overall TPOT 15.89→15.42% (improves), swe-plateau 8.64→8.65% (holds), osworld
+# plateau 19.1→11.8, terminalbench plateau 18.4→15.9, chat flat — no profile
+# regresses. The amplifier rises from the watermark onset to the saturated ceiling;
+# the upper knee is output-gated (short outputs saturate as a sharp step, long
+# ones ramp gently / recover).
+#
+# P_LO / P_HI_SHORT are the measured eviction-watermark band — the jump-pressure
+# cluster across all real-jump cells fires at pressure ≈ 0.88–1.22 (pool ~88–92%
+# committed). These are ramp_tpot's DEF_LO/DEF_HI (= defcap −0.12/+0.22) read off
+# the measured cluster floor/max, NOT a MAPE fit. P_HI_LONG is the two-roofline
+# wave-factor knee at 2× pool commit (ramp_tpot DEF_SAT=1.0 → pressure 2.0).
+P_LO = 0.88        # eviction-watermark onset (pressure 0.88, pool ~88% committed) — measured cluster floor
 # Upper knee interpolates P_HI_SHORT -> P_HI_LONG as output grows over [OUT_KNEE_LO, OUT_KNEE_HI].
-P_HI_SHORT = 1.6   # short-output (swe/terminal): steep step, ceiling reached by pressure ~1.6
-P_HI_LONG = 2.5    # long-output (chat/osworld): gentle ramp to the ceiling
-OUT_KNEE_LO = 40.0  # below this output, treat as short (hard-saturating)
-OUT_KNEE_HI = 80.0  # above this output, treat as long (soft/recovering)
+P_HI_SHORT = 1.22  # short-output (swe/terminal): sharp step, full recompute by pressure ~1.22 (measured cluster max)
+P_HI_LONG = 2.0    # long-output (chat/osworld): gentle ramp to the ceiling by 2× pool commit (pressure 2.0)
+# OUT_KNEE_LO/HI = the MEASURED saturated-ceiling output clusters (short ~28 tok,
+# long ~86 tok in saturated_ceiling_H100_llama31_8b.json) — replaces the hand-picked
+# [40,80] window with the same measured cluster outputs that key the ceiling. Keep
+# in sync if the ceiling artifact is regenerated.
+OUT_KNEE_LO = 28.0  # short-output ceiling cluster (measured)
+OUT_KNEE_HI = 86.0  # long-output ceiling cluster (measured)
 
 # --- output-sustain gate ------------------------------------------------------
 # Saturation ITL is a SUSTAINED effect: the cohort must co-reside through enough
@@ -69,10 +77,11 @@ OUT_KNEE_HI = 80.0  # above this output, treat as long (soft/recovering)
 # output tokens finishes before that happens, so its ITL stays near the
 # unsaturated kernel step even when instantaneous pressure > 1 (the high-c early
 # turns: full cohort scheduled but tiny context + tiny output). So the
-# saturation weight is scaled down for short-output turns. Anchor: the minimum
-# output observed on any saturated plateau turn (tpot_meas > 150 ms) is 22 tok —
-# below that, no sustained saturation is ever measured.
-SAT_SUSTAIN_LO = 10.0  # below this output, essentially no saturation possible
+# saturation weight is scaled down for short-output turns. Anchors (MEASURED): the
+# p5 output of saturated turns (tpot_meas > 100 ms across the H100 run) is 9 tok —
+# below it sustained saturation is essentially never measured; SAT_SUSTAIN_HI=24
+# is just above the 22-tok min turn-median plateau output.
+SAT_SUSTAIN_LO = 9.0   # measured p5 output of saturated turns — below it, ~no saturation
 SAT_SUSTAIN_HI = 24.0  # full saturation by here (just above the 22-tok plateau min)
 
 # --- saturated-ITL ceiling: measured anchors, interpolated --------------------
