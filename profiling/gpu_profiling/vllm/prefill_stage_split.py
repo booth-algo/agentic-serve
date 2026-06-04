@@ -1,73 +1,49 @@
 #!/usr/bin/env python3
 """Prefill stage-split microbench — the one measurement that closes the TTFT prefill-law de-fit.
 
-The serving prefill law `ttft = FLOOR + NEW·new + HOST·cached` was fit to end-to-end c1 TTFT, so
-its coefficients bundle GPU and off-GPU work that the kernel grids (GPU-forward only) can't separate.
-The de-fit audit (profiling/docs/prefill_law_defit_trace.md) reduced everything to a single missing
-fact: **the host-vs-device split of c1 TTFT vs new/cached tokens.** This script measures exactly that,
-in-process, so each fitted coefficient becomes a measured/derived quantity:
+Measures c1 TTFT vs new/cached tokens, in-process. See profiling/docs/prefill_law_defit_trace.md
+and the 2026-06-03 results in profiling/docs/prefill_stage_split_results.md.
 
-  * FLOOR (22.5)        -> intercept = TTFT at new->0, cached=0 (smallest pure-prefill, here new~8)
-  * NEW dispatch tail   -> the HOST (CPU) slope vs `new` ABOVE the device GEMM slope
-                           (we already derive the GEMM part from the roofline = 0.025 ms/tok tp1)
-  * CACHED host (~2.5/1k) -> the HOST slope vs `cached` ABOVE the measured GPU paged-attn (~1.5/1k)
-  * SHA-256 hypothesis  -> rerun with --hash builtin vs sha256; the CACHED host-slope DELTA is the
-                           prefix-cache block-hash cost (vLLM default sha256 >= v0.11)
-  * CUDA-graph launch   -> rerun with --eager; the host-slope delta vs graph mode is launch overhead
-
-Method (offline vLLM `LLM`, B=1, isolates one request's stages):
-  * For each (new, cached): build a `cached`-token shared prefix + `new` fresh tokens. PRIME the prefix
-    once (so the measured request is a cache HIT on `cached`, prefilling only `new`). Then measure the
-    request with max_tokens=1 (= TTFT), capturing per stage:
-       tokenize_ms = wall of tokenizer.encode(prompt)            [pure host]
-       device_ms   = sum of CUDA kernel self-time (torch.profiler) [GPU forward]
-       host_ms     = wall(generate) - device_ms                   [non-overlapped host: dispatch/sched/sample/return]
-  * Median over --trials. Sweep new x cached. Regress each stage on (new, cached).
-
-Output CSV: profile_data/results/prefill_stage_split_H100.csv
-  columns: new, cached, hash_algo, eager, n, tokenize_ms, device_ms, host_ms, ttft_ms
-Plus a printed regression: device/host slopes vs new and vs cached, the SHA-256 delta, and the FLOOR.
-
-Run on the H100 (see profiling/docs/h100_setup.md) from a clean CWD (avoid a local flash_attn.py shadow),
-e.g.:  VLLM_WORKER_MULTIPROC_METHOD=spawn python3 prefill_stage_split.py \
-         --model meta-llama/Llama-3.1-8B-Instruct --hash sha256
-       (then again with --hash builtin, and once with --eager, to fill the deltas)
-
-NOTE: vLLM's offline kwarg for the hash algo and torch.profiler's CUDA-time attribute name vary by
-version — both are handled with fallbacks below; if your vLLM rejects `prefix_caching_hash_algo`, set it
-via the documented flag for your version (the two TODO spots are marked).
+RUN NOTES (learned the hard way — see results doc):
+  * Run from a CLEAN cwd — a stray flash_attn.py shadows the package ('flash_attn' is not a package').
+  * For device_ms: set VLLM_ENABLE_V1_MULTIPROCESSING=0 (vLLM v1's engine is a separate process, so an
+    in-main-process torch.profiler sees 0 CUDA kernels). NOTE this is incompatible with --tp > 1.
+  * CAVEAT: even then the host/device split is UNRELIABLE here — device_ms (Σ CUDA self-time) over-counts
+    wall in eager and is hidden under CUDA graphs. Only end-to-end ttft_ms + tokenize_ms are trustworthy.
+  * The `new` tail is freshly random PER TRIAL so it is a real cache MISS (else the warmup primes it and
+    every measured trial is a hit — the original bug).
+  Example:  CUDA_VISIBLE_DEVICES=7 VLLM_ENABLE_V1_MULTIPROCESSING=0 python3 prefill_stage_split.py \\
+              --model /data48/kevinlau/models/Llama-3.1-8B-Instruct --tp 1   (then --tp 2 without mp=0)
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import random
 import statistics as st
 import time
 from pathlib import Path
 
-# 1-token-per-word vocab so token count ~= word count (server reports true prompt_tokens; here we
-# approximate, which is fine — we regress on the REQUESTED new/cached, the controlled variable).
 _VOCAB = ("the of and to in a is that for it as was with on be at by this had not are but from or "
           "have an they which one you were her all she there would their we him been has when who "
           "will more no if out so up said what its about into than them can only other new some "
           "could time these two may then do first any my now such like our over man me even most "
           "made after also did many before must through back years where much your way well down").split()
-import random
 _RNG = random.Random(0)
 _WORDS = [_RNG.choice(_VOCAB) for _ in range(40000)]
+_TAIL_RNG = random.Random(777)  # fresh new-tail per trial -> the `new` tokens are a real cache MISS
 
 
-def build_prompt(cached: int, new: int) -> str:
-    """`cached` shared-prefix tokens (FIXED across calls → cache HIT) + `new` fresh-ish tokens."""
-    nc = int(cached * 0.96)
-    prefix = _WORDS[:nc]
-    # fresh tail: shift into a disjoint region of the word stream so it isn't already cached
-    tail = _WORDS[20000:20000 + int(new * 0.96)]
-    return " ".join(prefix + tail)
+def cached_prefix(cached: int) -> str:
+    return " ".join(_WORDS[:int(cached * 0.96)])
+
+
+def fresh_tail(new: int) -> str:
+    """A UNIQUE fresh tail each call (random over the vocab) so `new` is never prefix-cached."""
+    return " ".join(_TAIL_RNG.choice(_VOCAB) for _ in range(int(new * 0.96)))
 
 
 def _cuda_self_ms(prof) -> float:
-    """Sum CUDA kernel self-time (ms) across the profiled region, across torch versions."""
     total_us = 0.0
     for k in prof.key_averages():
         for attr in ("self_device_time_total", "self_cuda_time_total"):
@@ -83,14 +59,16 @@ def measure(llm, tok, cached: int, new: int, trials: int) -> dict:
     from torch.profiler import profile, ProfilerActivity
 
     sp = SamplingParams(max_tokens=1, temperature=0.0)
-    prompt = build_prompt(cached, new)
+    prefix = cached_prefix(cached)
 
-    # PRIME: send the cached prefix alone so its blocks are prefix-cached (HIT on the next call).
+    # Prime the cached prefix once so it is a HIT every trial (we only want to prefill `new`).
     if cached > 0:
-        llm.generate([" ".join(_WORDS[:int(cached * 0.96)])], sp, use_tqdm=False)
+        llm.generate([prefix], sp, use_tqdm=False)
 
     tok_ms, dev_ms, host_ms, ttft_ms = [], [], [], []
     for _ in range(trials + 1):  # +1 warmup (discarded)
+        # Fresh `new` tail EVERY trial -> `new` is a genuine cache miss (real prefill); cached part hits.
+        prompt = (prefix + " " + fresh_tail(new)) if cached > 0 else fresh_tail(new)
         t0 = time.perf_counter()
         _ = tok.encode(prompt)
         t_tok = (time.perf_counter() - t0) * 1000.0
@@ -101,7 +79,6 @@ def measure(llm, tok, cached: int, new: int, trials: int) -> dict:
         dev = _cuda_self_ms(prof)
         tok_ms.append(t_tok); dev_ms.append(dev)
         host_ms.append(max(0.0, wall - dev)); ttft_ms.append(wall)
-    # drop warmup (first)
     med = lambda xs: st.median(xs[1:])
     return dict(new=new, cached=cached, n=trials,
                 tokenize_ms=med(tok_ms), device_ms=med(dev_ms),
@@ -109,26 +86,26 @@ def measure(llm, tok, cached: int, new: int, trials: int) -> dict:
 
 
 def regress(rows: list[dict]) -> None:
-    """OLS each stage on [1, new, cached]; print the de-fit-relevant slopes."""
     try:
         import numpy as np
     except ImportError:
         print("(numpy unavailable — skipping regression; CSV has the raw stage rows)")
         return
     X = np.array([[1.0, r["new"], r["cached"]] for r in rows])
-    print("\n=== stage regressions: stage ~ FLOOR + a·new + b·cached ===")
+    print("\n=== stage regressions: stage ~ FLOOR + a*new + b*cached ===")
     for stage in ("ttft_ms", "device_ms", "host_ms", "tokenize_ms"):
         y = np.array([r[stage] for r in rows])
         beta, *_ = np.linalg.lstsq(X, y, rcond=None)
         print(f"  {stage:<12} FLOOR={beta[0]:7.2f} ms | new={beta[1]*1000:7.3f} ms/1k | cached={beta[2]*1000:7.3f} ms/1k")
-    print("\nInterpret: device.new ≈ GEMM roofline (~25 ms/1k tp1); host.new = the NEW dispatch residual; "
-          "device.cached ≈ GPU paged-attn (~1.5 ms/1k); host.cached = the CACHED host residual. "
-          "Run --hash builtin vs sha256 → host.cached delta = block-hash cost.")
+    print("\nInterpret: device.new ~ GEMM roofline (~25 ms/1k tp1); host.new = NEW dispatch residual; "
+          "device.cached ~ GPU paged-attn (~1.5 ms/1k); host.cached = CACHED host residual. "
+          "Run --hash builtin vs sha256 -> host.cached delta = block-hash cost.")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", required=True)
+    ap.add_argument("--tp", type=int, default=1, help="tensor_parallel_size (needs that many visible GPUs)")
     ap.add_argument("--gpu-mem", type=float, default=0.80)
     ap.add_argument("--max-model-len", type=int, default=32768)
     ap.add_argument("--news", default="8,128,512,1024,2048", help="fresh-token counts to sweep")
@@ -136,19 +113,19 @@ def main() -> None:
     ap.add_argument("--hash", default="sha256", choices=["sha256", "builtin"], help="prefix-cache hash algo")
     ap.add_argument("--eager", action="store_true", help="enforce_eager (no CUDA graphs) — isolates launch overhead")
     ap.add_argument("--trials", type=int, default=5)
-    ap.add_argument("--out", default="profile_data/results/prefill_stage_split_H100.csv")
+    ap.add_argument("--out", default="prefill_stage_split_H100.csv")
     a = ap.parse_args()
 
     from vllm import LLM
     kw = dict(model=a.model, dtype="bfloat16", gpu_memory_utilization=a.gpu_mem,
               max_model_len=a.max_model_len, enable_prefix_caching=True,
-              enable_chunked_prefill=True, enforce_eager=a.eager)
-    # TODO(version): kwarg name for the prefix-cache hash algo varies; try the common one, fall back.
+              enable_chunked_prefill=True, enforce_eager=a.eager,
+              tensor_parallel_size=a.tp)
     try:
         llm = LLM(prefix_caching_hash_algo=a.hash, **kw)
     except TypeError:
         print(f"[warn] LLM() rejected prefix_caching_hash_algo; launching without it "
-              f"(set --prefix-caching-hash-algo {a.hash} via your vLLM version's flag).", flush=True)
+              f"({a.hash}).", flush=True)
         llm = LLM(**kw)
     tok = llm.get_tokenizer()
 
