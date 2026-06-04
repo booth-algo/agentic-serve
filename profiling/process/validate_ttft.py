@@ -41,12 +41,12 @@ METRICS = [
 ]
 
 
-def collect_rows(sim_json: Path) -> list[dict[str, Any]]:
+def collect_rows(sim_json: Path, gpu_key: str = "H100") -> list[dict[str, Any]]:
     payload = json.loads(sim_json.read_text())
     out: list[dict[str, Any]] = []
-    for cell in payload.get("H100", []):
-        # The "H100" payload key now also holds other-model rows (gpt-oss, Qwen) run on the same
-        # H100 tp1 vllm; the gate is the kernel-calibrated Llama-3.1-8B config only.
+    for cell in payload.get(gpu_key, []):
+        # The payload key may also hold other-model rows (gpt-oss, Qwen) run on the same
+        # GPU/tp/engine; the gate is the kernel-calibrated Llama-3.1-8B config only.
         if cell.get("model") not in (None, "Llama-3.1-8B"):
             continue
         prof = cell.get("profile")
@@ -117,11 +117,13 @@ def _print_table(title: str, summary: dict[str, dict[str, float]], metric_stat: 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--simulator-predictions-json", type=Path, default=DEFAULT_SIM_PREDICTIONS)
+    ap.add_argument("--gpu-key", default="H100",
+                    help="payload GPU key to gate (e.g. H100 [default, headline], A100, 3090, 2080ti)")
     args = ap.parse_args()
 
-    rows = collect_rows(args.simulator_predictions_json)
+    rows = collect_rows(args.simulator_predictions_json, args.gpu_key)
     high = [r for r in rows if r["ttft_meas"] > HIGH_TTFT_MS]
-    print(f"loaded {len(rows)} turns ({len(high)} high-TTFT, ttft_meas>{HIGH_TTFT_MS:.0f}ms)")
+    print(f"[{args.gpu_key}] loaded {len(rows)} turns ({len(high)} high-TTFT, ttft_meas>{HIGH_TTFT_MS:.0f}ms)")
 
     for pred_key, meas_key, label in METRICS:
         _print_table(f"{label.upper()} — ALL turns", _summary(rows, pred_key, meas_key), "mape")
@@ -134,7 +136,7 @@ def main() -> None:
 
     ttft_ov = _summary(rows, "ttft_pred", "ttft_meas")["__overall__"]["mape"]
     e2el_ov = _summary(rows, "e2el_pred", "e2el_meas")["__overall__"]["mape"]
-    print(f"\nGATE  overall TTFT MAPE = {ttft_ov:.2f}%   overall E2EL MAPE = {e2el_ov:.2f}%  (headline = queue sim)")
+    print(f"\nGATE [{args.gpu_key}]  overall TTFT MAPE = {ttft_ov:.2f}%   overall E2EL MAPE = {e2el_ov:.2f}%  (headline = queue sim)")
 
 
 if __name__ == "__main__":

@@ -70,7 +70,7 @@ from simulator.cached_prefill_lookup import cached_prefill_step_ms
 from simulator.closed_form_tpot import RooflineParams
 from simulator.kernel_step_cost import decode_step_ms
 from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot
-from simulator.ramp_tpot import PROFILE_DIST, context_scale_quantiles, forward_survival
+from simulator.ramp_tpot import PROFILE_DIST, context_scale_quantiles, survival_for, trajectory_pool
 from simulator.ttft_predict import _prefill_per_token_ms, predict_turn_ttft
 
 __all__ = ["predict_cell_ttft_qsim", "predict_cell_e2el_qsim", "PROFILE_DIST"]
@@ -133,6 +133,16 @@ PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel,
 PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.0030515    # host serving-stack, amortized once per step (0.50×6.103e-3, live-measured split)
 PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.0030515    # host serving-stack, per request, summed (0.50×6.103e-3, live-measured split)
 
+# Prefill GEMM efficiency is BATCH-dependent (measured 2026-06-04 from GT turn-0 cohorts). A small prefill
+# (a single/low-conc request, or a cache-hit's few new tokens) runs at the small-batch util_flops (~0.65),
+# but a deep turn-0 cohort fills the chunked-prefill budget → compute-bound, util→1. H100 GT cohort rate
+# ~15.5 ms/1k ≈ its util-1 roofline 16.2. util ramps util_flops→UTIL_SAT over the per-step batch from
+# long_prefill_token_threshold to max_num_batched_tokens (so only budget-filling steps saturate).
+PREFILL_GEMM_UTIL_SAT = 1.0                      # compute-bound util a budget-filling prefill step reaches
+# Per-token tensor-parallel all-reduce, charged per EXTRA rank (tp>1). Microbench tp2: ttft.new 18.5 =
+# GEMM/2 (12.65) + 5.85; the GEMM halves with tp but this NVLink comm is added back. tp1 → 0.
+PREFILL_TP_COMM_MS_PER_TOKEN = 0.00585
+
 
 def _prefill_gemm_per_tok(p: RooflineParams) -> float:
     """DERIVED compute-bound prefill GEMM time per (re)prefilled token: 2·(n_params/tp) FLOPs
@@ -140,6 +150,21 @@ def _prefill_gemm_per_tok(p: RooflineParams) -> float:
     of the serving NEW rate — 0.02498 ms/tok on tp1, halving per added TP rank. No fitted constant."""
     tp = max(1, int(getattr(p, "tensor_parallel", 1)))
     return 2.0 * (float(p.n_params) / tp) / (p.peak_flops_per_s * p.util_flops) * 1e3
+
+
+def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> float:
+    """Batch-aware prefill GEMM rate: util ramps util_flops→PREFILL_GEMM_UTIL_SAT with the per-step batch
+    (a step that fills the chunked-prefill budget is compute-bound, util≈1; a small cache-hit prefill is
+    not), plus the per-extra-rank tensor-parallel all-reduce. Ramps over [long_prefill_threshold,
+    max_num_batched_tokens] so a single/low request (or a small hit) stays at util_flops and only the deep
+    turn-0 cohort that saturates the batch reaches util_sat. Reduces to ``_prefill_gemm_per_tok`` at small
+    batch, tp=1. Measured anchors, not fits — see the PREFILL_GEMM_* constants."""
+    tp = max(1, int(getattr(p, "tensor_parallel", 1)))
+    lo, hi = float(LONG_PREFILL_TOKEN_THRESHOLD), float(MAX_NUM_BATCHED_TOKENS)
+    frac = 0.0 if hi <= lo else min(1.0, max(0.0, (batch_tokens - lo) / (hi - lo)))
+    util = p.util_flops + (PREFILL_GEMM_UTIL_SAT - p.util_flops) * frac
+    gemm = 2.0 * (float(p.n_params) / tp) / (p.peak_flops_per_s * util) * 1e3
+    return gemm + PREFILL_TP_COMM_MS_PER_TOKEN * (tp - 1)
 
 
 # Event kinds; ordering is (epoch, seq, kind) — deterministic FIFO at equal epochs.
@@ -349,6 +374,19 @@ class _ServerState:
     herd_remaining: int = 0     # requests of the current herd not yet departed; 0 -> barrier
     preempt_policy: str = "tail"  # over-subscription victim: 'tail' (vLLM RECOMPUTE) or 'lru'
     resident_at_barrier: dict[int, int] = field(default_factory=dict)  # sid -> resident blocks at herd release (hit/miss frozen here)
+    # --- shared cross-session APC prefix (prefix_aware_synthetic workloads) ---
+    # ``shared_prefix_tokens`` (S) is the profile-constant prefix that EVERY session's prompt
+    # carries at the FRONT of its context (system-prompt-level, generated from a per-PROFILE label
+    # -> identical token blocks across sessions). vLLM's APC dedups it: the FIRST session to prefill
+    # it pays once, all others HIT. The benchmark's per-session cache estimate records cached=0 at
+    # turn-0 (it tracks only intra-session history), so without this the sim would re-prefill S for
+    # ALL C sessions (C-fold over-count -> the turn-0 over-prediction). ``shared_primed`` flips True
+    # on the first SUCCESSFUL admission (global, monotone) so exactly one session pays S; thereafter
+    # the shared prefix is MRU-resident (touched every turn by every session -> never the LRU victim)
+    # and credited to all peers. S=0 -> feature off, behaviour byte-identical. NOT a fitted constant
+    # (a per-cell DATA input read from request_metadata.shared_prefix_actual_tokens).
+    shared_prefix_tokens: float = 0.0
+    shared_primed: bool = False
 
     def push(self, epoch: float, kind: int, payload: Any) -> None:
         heapq.heappush(self.heap, (epoch, self.seq, kind, payload))
@@ -376,12 +414,50 @@ def _draw_turn_count(survival: list[float], quantile: float) -> int:
     return max(1, reached)
 
 
+def _cohort_from_pool(pool: list, c: int) -> list[Session]:
+    """Trajectory-REPLAY cohort: build ``c`` sessions by deterministically cycling the per-GPU pool of
+    REAL session trajectories (each a list of ``[cached, new, output]`` per turn). This is the JOINT
+    cohort (survival + context-scale + their correlation) that reaches the oracle floor — vs the
+    survival/scale marginals which lose the joint structure (feasibility 2026-06-04)."""
+    n = len(pool)
+    sessions: list[Session] = []
+    for k in range(c):
+        traj = pool[k % n]
+        specs = [
+            TurnSpec(
+                turn_index=i,
+                cached_context_tokens=float(t[0]),
+                new_prefill_tokens=float(t[1]),
+                output_tokens=max(1.0, float(t[2])),
+            )
+            for i, t in enumerate(traj)
+        ]
+        if specs:
+            sessions.append(Session(session_id=k, turn_count=len(specs), turns=specs))
+    return sessions
+
+
 def _build_cohort(
-    turns: list[dict[str, Any]], profile: str, concurrency: float
+    turns: list[dict[str, Any]], profile: str, concurrency: float,
+    gpu_key: str | None = None,
+    survival_override: list[float] | None = None,
+    scale_override: list[float] | None = None,
 ) -> list[Session]:
-    """Deterministic survival-quantile cohort (forward; same source ``sched_hat`` uses)."""
+    """Forward cohort. PREFERRED: trajectory REPLAY from the per-GPU real-session pool (the joint
+    cohort that reaches the oracle floor). FALLBACK (no pool, or LOCO override): deterministic
+    survival-quantile + context-scale marginals resolved per-(profile, concurrency, gpu) via
+    ``ramp_tpot`` (pooled when ``gpu_key=None`` → byte-identical to legacy). ``survival_override``/
+    ``scale_override`` (LOCO test seam) force the marginal path with caller-supplied curves."""
     c = max(1, int(round(float(concurrency))))
-    survival = forward_survival(PROFILE_DIST[profile]) if profile in PROFILE_DIST else None
+    # Trajectory-replay when a per-GPU pool is available and no LOCO override is forcing the marginals.
+    if survival_override is None and scale_override is None:
+        pool = trajectory_pool(profile, concurrency, gpu_key)
+        if pool:
+            return _cohort_from_pool(pool, c)
+    survival = (
+        survival_override if survival_override is not None
+        else survival_for(profile, concurrency, gpu_key)
+    )
 
     spec_by_idx: dict[int, TurnSpec] = {}
     max_turn_idx = 0
@@ -409,7 +485,10 @@ def _build_cohort(
     # real spread — small sessions stay resident (hits) while the large minority is evicted,
     # keeping the MEDIAN session a hit near the pool cliff (the osworld saturate-RECOVER). The
     # per-(conc,turn) MEDIAN trajectory is preserved; only the per-session spread is added.
-    scale_q = context_scale_quantiles(profile)
+    scale_q = (
+        scale_override if scale_override is not None
+        else context_scale_quantiles(profile, concurrency, gpu_key)
+    )
 
     def session_scale(qk: float) -> float:
         if not scale_q:
@@ -484,10 +563,28 @@ def _schedule(state: _ServerState) -> None:
         # peer's in-pass eviction can't cascade this session into a spurious MISS.
         snap_blocks = state.resident_at_barrier.get(sid, cache.cached_blocks(sid))
         resident_prefix = min(head.cached, snap_blocks * cache.block_size)
-        reprefill_cached = max(0.0, head.cached - resident_prefix)
-        head.is_miss = reprefill_cached > 0.0
-        head.remaining_prefill = reprefill_cached + head.new_prefill
-        head.resident_prefix = resident_prefix          # HIT prefix attended each prefill step
+        # Shared cross-session APC prefix: once primed (some session has prefilled it), the front
+        # S tokens of THIS session's context are resident too — a HIT — even at turn-0 where the
+        # per-session ``cached`` is 0 and the shared block lives inside ``new_prefill``. Credited
+        # via MAX with the per-session resident prefix (both describe front-of-context resident
+        # tokens; a SUM would double-count at turn>=1, where the session's own prefix already
+        # covers the shared block). The first session to admit this run gets shared_resident=0
+        # (``shared_primed`` is still False when computed here) so it PAYS the shared prefill once.
+        shared_resident = (
+            min(state.shared_prefix_tokens, head.cached + head.new_prefill)
+            if state.shared_prefix_tokens > 0.0 and state.shared_primed
+            else 0.0
+        )
+        resident_credit = max(resident_prefix, shared_resident)
+        # Split the resident credit front-to-back: cached tokens first, then new (the shared block
+        # is the front of new at turn-0). reprefill = the un-resident remainder of each.
+        cached_hit = min(head.cached, resident_credit)
+        new_hit = min(head.new_prefill, max(0.0, resident_credit - head.cached))
+        reprefill_cached = head.cached - cached_hit
+        reprefill_new = head.new_prefill - new_hit
+        head.is_miss = reprefill_cached > 0.0            # MISS = own prefix was evicted (unchanged semantics)
+        head.remaining_prefill = reprefill_cached + reprefill_new
+        head.resident_prefix = resident_credit           # HIT prefix attended each prefill step
         head.prefill_total = max(1.0, head.remaining_prefill)  # to spread the cached-attn cost across chunks
         target_blocks = cache.tokens_to_blocks(head.kv_tokens)
         # Reserve the full context: reclaim the surviving prefix, then free residents, then (only
@@ -501,6 +598,11 @@ def _schedule(state: _ServerState) -> None:
             continue
         state.prefilling[head.rid] = head
         in_flight.add(sid)
+        # The first session to physically admit primes the shared prefix (it just paid the
+        # full prefill incl. S); thereafter every peer/turn credits it as resident. Set AFTER
+        # the grow_to success so a DEFERRED head never falsely primes a block nobody prefilled.
+        if state.shared_prefix_tokens > 0.0:
+            state.shared_primed = True
         budget -= min(head.remaining_prefill, LONG_PREFILL_TOKEN_THRESHOLD)
     state.waiting = deferred
 
@@ -575,7 +677,7 @@ def _price_step(state: _ServerState) -> float:
         cached_w_sum += r.cached * frac
         cached_w_n += 1
     if any_prefill:
-        gpu_new_ms = (_prefill_gemm_per_tok(p) + PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN) * total_chunk
+        gpu_new_ms = (_prefill_gemm_per_tok_loaded(p, total_chunk) + PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN) * total_chunk
         mean_cached = cached_w_sum / cached_w_n if cached_w_n else 0.0
         host_shared_ms = PREFILL_HOST_SHARED_MS_PER_TOKEN * mean_cached  # amortized once/step
         # Per-STEP fixed cost is the scheduler/launch overhead (one engine tick), NOT the full
@@ -718,9 +820,13 @@ def _advance_herd(state: _ServerState) -> None:
 def _run_sim(
     sessions: list[Session], params: RooflineParams, max_events: int,
     preempt_policy: str = "tail",
+    shared_prefix_tokens: float = 0.0,
 ) -> dict[tuple[int, int], float]:
     cache = PrefixLRUCache(params.available_kv_blocks, params.cache_block_size)
-    state = _ServerState(params=params, cache=cache, sessions=sessions, preempt_policy=preempt_policy)
+    state = _ServerState(
+        params=params, cache=cache, sessions=sessions, preempt_policy=preempt_policy,
+        shared_prefix_tokens=max(0.0, float(shared_prefix_tokens)),
+    )
 
     _release_herd(state, 0)  # turn-0 herd: all sessions arrive at epoch 0
 
@@ -751,6 +857,7 @@ def _aggregate(
     profile: str,
     concurrency: float,
     params: RooflineParams,
+    gpu_key: str | None = None,
 ) -> list[float]:
     by_idx: dict[int, list[float]] = {}
     for (_sid, ti), v in ttfts.items():
@@ -760,21 +867,23 @@ def _aggregate(
     for t in turns:
         ti = int(t.get("turn_index", 0))
         vals = by_idx.get(ti)
-        out.append(statistics.median(vals) if vals else _fallback_ttft(t, profile, concurrency, params))
+        out.append(statistics.median(vals) if vals else _fallback_ttft(t, profile, concurrency, params, gpu_key))
     return out
 
 
 def _fallback_ttft(
-    turn: dict[str, Any], profile: str, concurrency: float, params: RooflineParams
+    turn: dict[str, Any], profile: str, concurrency: float, params: RooflineParams,
+    gpu_key: str | None = None,
 ) -> float:
-    """Forward static-formula fallback for a turn no session reached (keeps list length)."""
+    """Forward static-formula fallback for a turn no session reached (keeps list length).
+    ``gpu_key`` selects the per-(conc,gpu) cohort survival (pooled fallback when absent)."""
     from simulator.ramp_tpot import sched_hat
 
     ti = int(turn.get("turn_index", 0))
     cached = float(turn.get("cached_context_tokens") or 0.0)
     new = float(turn.get("new_prefill_tokens") or 0.0)
     out = float(turn.get("output_tokens") or 1.0)
-    sched = sched_hat(profile, float(concurrency), ti) if profile in PROFILE_DIST else float(concurrency)
+    sched = sched_hat(profile, float(concurrency), ti, gpu_key) if profile in PROFILE_DIST else float(concurrency)
     tpot = predict_cell_tpot([KernelTurnInput(cached, new, out, sched)], params)[0]
     return predict_turn_ttft(cached, new, out, sched, tpot, params)
 
@@ -783,10 +892,16 @@ def _fallback_ttft(
 
 
 def _build_cohort_oracle(
-    turns: list[dict[str, Any]], profile: str, concurrency: float
+    turns: list[dict[str, Any]], profile: str, concurrency: float,
+    bench_root: "Path | str | None" = None,
 ) -> list[Session] | None:
     """Validation-only: build the cohort from measured session_timelines (per-session turn
-    lists) instead of the survival quantile. Off the forward path; None if unavailable."""
+    lists) instead of the survival quantile. Off the forward path; None if unavailable.
+
+    ``bench_root`` selects which GPU/model store to read the measured timelines from (the
+    per-request JSONs carry ``session_id`` + ``turn_index``). Defaults to the H100 tp1 store
+    for back-compat; pass the matching store (e.g. the A100 dir) to run oracle on that config —
+    this is what makes the oracle-vs-forward drain/amplifier split available for non-H100."""
     try:
         from pathlib import Path
 
@@ -795,7 +910,7 @@ def _build_cohort_oracle(
         )
     except Exception:
         return None
-    bench_root = Path(
+    bench_root = Path(bench_root) if bench_root is not None else Path(
         "/mnt/100g/agent-bench/results/synthetic_distributional/h100_Llama-3.1-8B_tp1_vllm"
     )
     if not bench_root.exists():
@@ -835,6 +950,11 @@ def predict_cell_ttft_qsim(
     oracle: bool = False,
     max_events: int = 4_000_000,
     preempt_policy: str = "tail",
+    shared_prefix_tokens: float = 0.0,
+    oracle_bench_root: "Path | str | None" = None,
+    gpu_key: str | None = None,
+    _survival_override: list[float] | None = None,
+    _scale_override: list[float] | None = None,
 ) -> list[float]:
     """Per-turn TTFT (ms) for a (profile, concurrency) cell, emergent from a forward
     closed-loop event-driven queue sim with session-persistent KV + RECOMPUTE preemption.
@@ -843,19 +963,31 @@ def predict_cell_ttft_qsim(
     to ``turns`` order; ``[]`` for empty; a turn_index reached by no session falls back to the
     forward static predictor. Forward by default (cohort from ``forward_survival``);
     ``oracle=True`` overlays measured ``session_timelines`` (validation only). ``preempt_policy``
-    selects the over-subscription victim: ``'tail'`` (vLLM RECOMPUTE, MRU-first) or ``'lru'``."""
+    selects the over-subscription victim: ``'tail'`` (vLLM RECOMPUTE, MRU-first) or ``'lru'``.
+
+    ``shared_prefix_tokens`` (S) models a profile-constant cross-session APC prefix (the
+    ``prefix_aware_synthetic`` workloads): the front S tokens of every session's context are an
+    identical shared block that vLLM dedups — ONE session prefills it, the rest HIT. Threaded by
+    the emitter from ``request_metadata.shared_prefix_actual_tokens``; ``0.0`` (default) is a
+    no-op (byte-identical). NOT a fitted constant (per-cell measured workload input)."""
     if not turns:
         return []
     p = params or RooflineParams()
 
     sessions: list[Session] | None = None
     if oracle:
-        sessions = _build_cohort_oracle(turns, profile, float(concurrency))
+        sessions = _build_cohort_oracle(turns, profile, float(concurrency), oracle_bench_root)
     if sessions is None:
-        sessions = _build_cohort(turns, profile, float(concurrency))
+        sessions = _build_cohort(
+            turns, profile, float(concurrency), gpu_key,
+            survival_override=_survival_override, scale_override=_scale_override,
+        )
 
-    ttfts = _run_sim(sessions, p, max_events, preempt_policy=preempt_policy)
-    return _aggregate(ttfts, turns, profile, float(concurrency), p)
+    ttfts = _run_sim(
+        sessions, p, max_events, preempt_policy=preempt_policy,
+        shared_prefix_tokens=shared_prefix_tokens,
+    )
+    return _aggregate(ttfts, turns, profile, float(concurrency), p, gpu_key)
 
 
 def predict_cell_e2el_qsim(

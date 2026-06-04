@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import statistics
 from pathlib import Path
 
@@ -98,17 +99,64 @@ PROFILE_DIST = {
     "chat-multiturn-synth": "chat_multiturn_realized.json",
 }
 
-_SURVIVAL_CACHE: dict[str, list[float]] = {}
+_SURVIVAL_CACHE: dict[tuple, list[float]] = {}
+_REALIZED_CACHE: dict[tuple[str, str], dict | None] = {}
 
 
-def forward_survival(dist_file: str) -> list[float]:
-    """``S(t)`` = fraction of sessions still alive AT turn ``t``, read forward from a
-    profile's session-length histogram. Pure workload spec — no fit, no telemetry.
+def _gpu_slug(gpu_key: str | None) -> str:
+    """Filesystem-safe slug for a GPU key, SHARED by the generator and the resolver so
+    writer and reader agree (e.g. 'A100'->'a100', 'A100 (sglang)'->'a100sglang'). '' -> ''."""
+    return re.sub(r"[^a-z0-9]", "", str(gpu_key).lower()) if gpu_key else ""
 
-    ``S(t) = (#sessions with turn_count > t) / N``; ``S(0) == 1`` by construction.
-    """
-    d = json.loads((DIST_DIR / dist_file).read_text())
-    hist = {int(k): int(v) for k, v in d["histograms"]["turn_count"].items()}
+
+def _resolve_dist_path(profile: str, gpu_key: str | None = None) -> Path | None:
+    """Realized-dist path: the per-GPU file (``<spec>_realized_<slug>.json``) if it exists,
+    else the pooled ``PROFILE_DIST`` file. None when the profile has no spec."""
+    if profile not in PROFILE_DIST:
+        return None
+    pooled = PROFILE_DIST[profile]
+    slug = _gpu_slug(gpu_key)
+    if slug:
+        cand = DIST_DIR / pooled.replace(".json", f"_{slug}.json")
+        if cand.exists():
+            return cand
+    return DIST_DIR / pooled
+
+
+def _load_realized(profile: str, gpu_key: str | None = None) -> dict | None:
+    """Parsed realized dist JSON (per-GPU if present, else pooled), cached by (profile, slug)."""
+    if profile not in PROFILE_DIST:
+        return None
+    key = (profile, _gpu_slug(gpu_key))
+    if key not in _REALIZED_CACHE:
+        path = _resolve_dist_path(profile, gpu_key)
+        try:
+            _REALIZED_CACHE[key] = json.loads(path.read_text()) if path else None
+        except Exception:
+            _REALIZED_CACHE[key] = None
+    return _REALIZED_CACHE[key]
+
+
+def _select_conc(realized: dict | None, concurrency: float | None) -> str | None:
+    """Nearest measured-concurrency key in ``by_concurrency`` (exact preferred; ties -> smaller
+    conc, deterministic), or None to fall back to the pooled curve."""
+    if not realized or concurrency is None:
+        return None
+    bc = realized.get("by_concurrency")
+    if not bc:
+        return None
+    keys = sorted(int(k) for k in bc)
+    if not keys:
+        return None
+    target = int(round(float(concurrency)))
+    if str(target) in bc:
+        return str(target)
+    return str(min(keys, key=lambda k: (abs(k - target), k)))
+
+
+def _survival_from_hist(hist: dict[int, int]) -> list[float]:
+    """``S(t)`` = fraction of sessions with ``turn_count > t`` from a turn_count histogram.
+    ``S(0) == 1`` by construction; pure workload distribution."""
     n = sum(hist.values())
     if n <= 0:
         return [1.0]
@@ -116,43 +164,108 @@ def forward_survival(dist_file: str) -> list[float]:
     return [sum(v for k, v in hist.items() if k > t) / n for t in range(tmax)]
 
 
-def _survival(profile: str) -> list[float] | None:
-    """Cached survival curve for a profile, or None if the profile has no spec."""
+def forward_survival(dist_file: str) -> list[float]:
+    """``S(t)`` read forward from a dist file's POOLED ``histograms.turn_count`` (public API,
+    unchanged signature — the pooled-curve path). The per-(conc,gpu) path goes via ``_survival``."""
+    d = json.loads((DIST_DIR / dist_file).read_text())
+    hist = {int(k): int(v) for k, v in d["histograms"]["turn_count"].items()}
+    return _survival_from_hist(hist)
+
+
+def _survival(
+    profile: str, concurrency: float | None = None, gpu_key: str | None = None
+) -> list[float] | None:
+    """Survival curve for a (profile, concurrency, gpu). Fallback chain: per-conc block (nearest
+    measured conc) -> in-file pooled -> legacy ``PROFILE_DIST`` pooled. ``concurrency=None,
+    gpu_key=None`` reproduces the legacy pooled curve byte-identically. None if no spec."""
     if profile not in PROFILE_DIST:
         return None
-    if profile not in _SURVIVAL_CACHE:
-        _SURVIVAL_CACHE[profile] = forward_survival(PROFILE_DIST[profile])
-    return _SURVIVAL_CACHE[profile]
+    realized = _load_realized(profile, gpu_key)
+    conc_key = _select_conc(realized, concurrency)
+    cache_key = (profile, _gpu_slug(gpu_key), conc_key)
+    if cache_key not in _SURVIVAL_CACHE:
+        hist: dict[int, int] | None = None
+        if realized:
+            if conc_key is not None:
+                block = (realized.get("by_concurrency") or {}).get(conc_key) or {}
+                if block.get("turn_count"):
+                    hist = {int(k): int(v) for k, v in block["turn_count"].items()}
+            if hist is None:  # in-file pooled fallback
+                pooled = (realized.get("histograms") or {}).get("turn_count")
+                if pooled:
+                    hist = {int(k): int(v) for k, v in pooled.items()}
+        _SURVIVAL_CACHE[cache_key] = (
+            _survival_from_hist(hist) if hist is not None
+            else forward_survival(PROFILE_DIST[profile])  # last resort: legacy pooled file
+        )
+    return _SURVIVAL_CACHE[cache_key]
 
 
-_SCALE_CACHE: dict[str, list[float]] = {}
+def survival_for(
+    profile: str, concurrency: float | None = None, gpu_key: str | None = None
+) -> list[float] | None:
+    """Public per-(profile, concurrency, gpu) survival curve. Default args == pooled curve."""
+    return _survival(profile, concurrency, gpu_key)
 
 
-def context_scale_quantiles(profile: str) -> list[float] | None:
-    """Per-session context-size SCALE quantiles (p0..p100) for a profile, or None.
+def trajectory_pool(
+    profile: str, concurrency: float | None = None, gpu_key: str | None = None
+) -> list | None:
+    """Real per-session trajectory POOL for concurrency-MATCHED cohort REPLAY (per-GPU), or None. Each
+    session is a list of ``[cached, new, output]`` per turn. This is the JOINT cohort input (survival +
+    context-scale + their correlation) that reaches the oracle floor. Selects the NEAREST measured
+    concurrency's pool from ``by_concurrency`` — osworld's trajectory shapes are concurrency-dependent,
+    so conc-matching beats a single pooled-over-conc pool (tournament 2026-06-04). Falls back to a
+    top-level pooled ``trajectory_pool`` if present, else None -> caller uses the survival/scale
+    marginals (pooled when ``gpu_key=None`` → byte-identical)."""
+    realized = _load_realized(profile, gpu_key)
+    if not realized:
+        return None
+    conc_key = _select_conc(realized, concurrency)
+    if conc_key is not None:
+        blk = (realized.get("by_concurrency") or {}).get(conc_key) or {}
+        if blk.get("trajectory_pool"):
+            return blk["trajectory_pool"]
+    return realized.get("trajectory_pool") or None
 
-    Each session in a cohort runs systematically larger/smaller contexts than the
-    per-turn median (a measured workload property: ``context_scale_quantiles`` in the
-    realized dist file = per-session median of context/per-(conc,turn)-median, pooled).
-    The cohort applies a session's quantile scale to the median trajectory so the KV
-    working set has the measured SPREAD — small sessions stay cache-resident (hits)
-    while the large minority is evicted, keeping the MEDIAN session a hit near the pool
-    cliff (the osworld saturate-RECOVER). Pure workload distribution — no TTFT fit."""
+
+_SCALE_CACHE: dict[tuple, list[float]] = {}
+
+
+def context_scale_quantiles(
+    profile: str, concurrency: float | None = None, gpu_key: str | None = None
+) -> list[float] | None:
+    """Per-session context-size SCALE quantiles (p0..p100) for a (profile, concurrency, gpu),
+    or None. Each session runs systematically larger/smaller contexts than the per-turn median
+    (a measured workload property); the cohort applies a session's quantile scale to the median
+    trajectory so the KV working set has the measured SPREAD (small sessions stay resident=hits,
+    the large minority is evicted -> the osworld saturate-RECOVER). Fallback: per-conc block
+    (nearest measured conc) -> in-file pooled. ``concurrency=None, gpu_key=None`` == pooled curve
+    (byte-identical to legacy). Pure workload distribution — no TTFT fit."""
     if profile not in PROFILE_DIST:
         return None
-    if profile not in _SCALE_CACHE:
-        try:
-            d = json.loads((DIST_DIR / PROFILE_DIST[profile]).read_text())
-            q = d.get("context_scale_quantiles")
-            _SCALE_CACHE[profile] = [float(x) for x in q] if q else []
-        except Exception:
-            _SCALE_CACHE[profile] = []
-    return _SCALE_CACHE[profile] or None
+    realized = _load_realized(profile, gpu_key)
+    conc_key = _select_conc(realized, concurrency)
+    cache_key = (profile, _gpu_slug(gpu_key), conc_key)
+    if cache_key not in _SCALE_CACHE:
+        q = None
+        if realized:
+            if conc_key is not None:
+                block = (realized.get("by_concurrency") or {}).get(conc_key) or {}
+                q = block.get("context_scale_quantiles")
+            if not q:  # in-file pooled fallback
+                q = realized.get("context_scale_quantiles")
+        _SCALE_CACHE[cache_key] = [float(x) for x in q] if q else []
+    return _SCALE_CACHE[cache_key] or None
 
 
-def sched_hat(profile: str, concurrency: float, turn_index: int) -> float:
-    """Forward cohort estimate ``round(C · S(t))`` (replaces measured scheduled_requests)."""
-    s = _survival(profile)
+def sched_hat(
+    profile: str, concurrency: float, turn_index: int, gpu_key: str | None = None
+) -> float:
+    """Forward cohort estimate ``round(C · S(t))`` (replaces measured scheduled_requests).
+    ``gpu_key=None`` (default, used by the ramp column + ttft_predict fallback) -> the pooled
+    survival, byte-identical to legacy (the pooled ``*_realized.json`` carry no per-conc block)."""
+    s = _survival(profile, concurrency, gpu_key)
     if not s:
         return max(1.0, float(concurrency))
     frac = s[turn_index] if turn_index < len(s) else s[-1]
@@ -292,6 +405,9 @@ __all__ = [
     "predict_cell_tpot_ramp",
     "predict_turn_ramp",
     "forward_survival",
+    "survival_for",
+    "trajectory_pool",
+    "context_scale_quantiles",
     "sched_hat",
     "PROFILE_DIST",
     "DEF_LO",
