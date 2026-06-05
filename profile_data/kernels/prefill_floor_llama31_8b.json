@@ -1,0 +1,142 @@
+{
+  "h100": {
+    "floor_ms": 25.86,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "H100",
+    "tensor_parallel": 1
+  },
+  "h100x2": {
+    "floor_ms": 14.01,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "H100x2",
+    "tensor_parallel": 2
+  },
+  "h100x4": {
+    "floor_ms": 18.08,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "H100x4",
+    "tensor_parallel": 4
+  },
+  "a100": {
+    "floor_ms": 36.91,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "A100",
+    "tensor_parallel": 1
+  },
+  "a100x2": {
+    "floor_ms": 22.19,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "A100x2",
+    "tensor_parallel": 2
+  },
+  "a100x4": {
+    "floor_ms": 20.67,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "A100x4",
+    "tensor_parallel": 4
+  },
+  "rtx3090": {
+    "floor_ms": 44.56,
+    "method": "min_clean_c1",
+    "n_clean": 33,
+    "gpu_key": "RTX3090",
+    "tensor_parallel": 1
+  },
+  "rtx3090x2": {
+    "floor_ms": 51.69,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "RTX3090x2",
+    "tensor_parallel": 2
+  },
+  "rtx3090x4": {
+    "floor_ms": 48.84,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "RTX3090x4",
+    "tensor_parallel": 4
+  },
+  "rtx2080ti": {
+    "floor_ms": 77.67,
+    "method": "min_clean_c1",
+    "n_clean": 33,
+    "gpu_key": "RTX2080Ti",
+    "tensor_parallel": 1
+  },
+  "rtx2080tix2": {
+    "floor_ms": 54.1,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "RTX2080Tix2",
+    "tensor_parallel": 2
+  },
+  "rtx2080tix4": {
+    "floor_ms": 79.11,
+    "method": "min_clean_c1",
+    "n_clean": 40,
+    "gpu_key": "RTX2080Tix4",
+    "tensor_parallel": 4
+  },
+  "a100sglang": {
+    "floor_ms": 35.42,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "A100 (sglang)",
+    "tensor_parallel": 1
+  },
+  "a100x2sglang": {
+    "floor_ms": 31.96,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "A100x2 (sglang)",
+    "tensor_parallel": 2
+  },
+  "a100x4sglang": {
+    "floor_ms": 29.87,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "A100x4 (sglang)",
+    "tensor_parallel": 4
+  },
+  "h100sglang": {
+    "floor_ms": 23.44,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "H100 (sglang)",
+    "tensor_parallel": 1
+  },
+  "h100x2sglang": {
+    "floor_ms": 26.1,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "H100x2 (sglang)",
+    "tensor_parallel": 2
+  },
+  "rtx3090sglang": {
+    "floor_ms": 69.92,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "RTX3090 (sglang)",
+    "tensor_parallel": 1
+  },
+  "rtx3090x2sglang": {
+    "floor_ms": 93.22,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "RTX3090x2 (sglang)",
+    "tensor_parallel": 2
+  },
+  "rtx3090x4sglang": {
+    "floor_ms": 96.48,
+    "method": "min_clean_c1",
+    "n_clean": 63,
+    "gpu_key": "RTX3090x4 (sglang)",
+    "tensor_parallel": 4
+  }
+}

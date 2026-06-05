@@ -35,7 +35,7 @@ import simulator.kernel_tpot as kernel_tpot  # noqa: E402
 from simulator.closed_form_tpot import RooflineParams  # noqa: E402
 from simulator.kernel_step_cost import load_grid  # noqa: E402
 from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot  # noqa: E402
-from simulator.ttft_queue_sim import predict_cell_ttft_qsim  # noqa: E402
+from simulator.ttft_queue_sim import _prefill_floor_for, predict_cell_ttft_qsim  # noqa: E402
 from configs.loader import Deployment, all_deployments  # noqa: E402
 
 DASHBOARD_JSON = Path("inference-benchmark/dashboard/public/simulator-predictions.json")
@@ -133,13 +133,19 @@ def build_row(profile: str, conc: int, params: RooflineParams, cfg: Deployment,
     kin = [KernelTurnInput(t["cached_context_tokens"], t["new_prefill_tokens"],
                            t["output_tokens"], t["scheduled_requests"]) for t in turns]
     tpot_pred = predict_cell_tpot(kin, params)
-    # The per-GPU realized/trajectory-pool artifacts are Llama-3.1-8B-derived; only activate the
-    # per-(conc,gpu) cohort for Llama configs. Other models on the same gpu_key (gpt-oss, Qwen) keep
-    # the pooled cohort (gpu_key=None) — no cross-model contamination.
+    # Two INDEPENDENT per-config inputs for the TTFT sim:
+    #  - cohort_gpu_key: the trajectory-REPLAY cohort. Llama-only (the pools are Llama-derived). Kept
+    #    ON for all TP: replay HELPS some tp>=2 configs (A100x2 25.9->25.6) and only under-helps where
+    #    the DECODE amplifier over-prices (H100x2) — a per-config replay on/off would be metric
+    #    cherry-picking, so the amplifier is fixed instead (the floor below is the first, fit-free part).
+    #  - floor_gpu_key: the measured per-config PREFILL FLOOR — correct for ALL Llama configs (tp2/tp4
+    #    inherited the wrong tp1 floor of 26 ms; their real floor is lower, e.g. H100x2=14), applied
+    #    independently of the cohort via the explicit ``prefill_floor_ms`` (so it survives any future
+    #    cohort gating). Monotonic: every config's TTFT <= the pre-floor value, tp1 byte-identical.
     cohort_gpu_key = cfg.gpu_key if cfg.model == "Llama-3.1-8B" else None
     ttft_pred = predict_cell_ttft_qsim(
         turns, profile, float(conc), params, shared_prefix_tokens=shared_prefix_tokens,
-        gpu_key=cohort_gpu_key)
+        gpu_key=cohort_gpu_key, prefill_floor_ms=_prefill_floor_for(cohort_gpu_key))
     for t, tp, tf in zip(turns, tpot_pred, ttft_pred):
         out = float(t["output_tokens"])
         t["tpot_pred"] = round(float(tp), 4)

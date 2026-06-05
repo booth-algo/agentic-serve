@@ -185,7 +185,14 @@ def load_grid(path: Path = DEFAULT_CSV) -> DecodeStepGrid:
         raise RuntimeError(f"no usable decode-step rows in {path}")
     b_axis = tuple(sorted({b for b, _ in cells}))
     t_axis = tuple(sorted({t for _, t in cells}))
-    floor = cells[(b_axis[0], t_axis[0])]
+    # ``fixed_floor`` = the small-batch launch+weights floor that anchors the analytic decode roofline
+    # (``_analytic``) for cells beyond the measured grid. Take the MIN over the smallest-batch row, not
+    # the single (B_min, T_min) cell: that cell can carry a one-off warm-up overhead (e.g. H100x2 B=1
+    # T=512 = 9.1 ms vs the row's true 4.7 ms floor at T=2048), which would inflate EVERY analytic-fill
+    # cell. The min over the B_min row is the robust measured floor. No-op for well-behaved grids whose
+    # T_min cell already is the row minimum (e.g. H100 tp1: 6.56 vs 6.55 — within rounding).
+    b0 = b_axis[0]
+    floor = min(cells[(b0, t)] for t in t_axis if (b0, t) in cells)
     return DecodeStepGrid(
         b_axis=b_axis, t_axis=t_axis, cells=cells, fixed_floor_ms=floor
     )
