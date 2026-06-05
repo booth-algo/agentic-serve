@@ -35,8 +35,10 @@ from simulator.closed_form_tpot import RooflineParams
 from simulator.ttft_queue_sim import (
     MAX_NUM_BATCHED_TOKENS,
     MAX_NUM_SEQS,
+    PREFILL_FLOOR_MS,
     _build_cohort,
     _draw_turn_count,
+    _prefill_floor_for,
     _run_sim,
     predict_cell_e2el_qsim,
     predict_cell_ttft_qsim,
@@ -420,6 +422,38 @@ def test_trajectory_replay_activates_when_pool_present():
     # LOCO override still forces the marginal path (replay is bypassed when an override is given).
     forced = predict_cell_ttft_qsim(turns, SWE, 120, gpu_key="A100", _survival_override=[1.0] * 30)
     assert forced != replay
+
+
+def test_prefill_floor_resolver_default_and_per_config():
+    # The per-config measured prefill floor is opt-in by gpu_key. None and any unknown key fall
+    # back to the legacy PREFILL_FLOOR_MS (26.0) -> byte-identical default. When the measured
+    # artifact is present, tp2 resolves to a LOWER floor than the tp1 anchor (H100x2 << H100),
+    # which is the whole point (tp2/tp4 must stop inheriting the tp1 floor).
+    assert _prefill_floor_for(None) == PREFILL_FLOOR_MS
+    assert _prefill_floor_for("no-such-gpu-xyz") == PREFILL_FLOOR_MS
+    import simulator.ttft_queue_sim as mod
+    if mod._PREFILL_FLOOR_JSON.exists():
+        h100 = _prefill_floor_for("H100")
+        h100x2 = _prefill_floor_for("H100x2")
+        assert h100x2 < h100                      # tp2 floor is genuinely lower (measured ~14 vs ~26)
+        assert 0.0 < h100x2 < PREFILL_FLOOR_MS     # and below the tp1 fallback
+        assert abs(h100 - PREFILL_FLOOR_MS) < 3.0  # tp1 measured floor ≈ the blessed 26.0 (no headline drift)
+
+
+def test_prefill_floor_changes_tp2_but_not_default():
+    # gpu_key=None keeps the legacy floor (byte-identical); a tp2 gpu_key with a measured floor
+    # present lowers TTFT (smaller per-request floor residual). Skips if the artifact is absent.
+    import simulator.ttft_queue_sim as mod
+    turns = _mk_turns(10, new=1200.0, output=28.0)
+    base = predict_cell_ttft_qsim(turns, SWE, 40)
+    assert base == predict_cell_ttft_qsim(turns, SWE, 40, gpu_key=None)
+    if mod._PREFILL_FLOOR_JSON.exists() and _prefill_floor_for("H100x2") < PREFILL_FLOOR_MS:
+        # Force the marginal (non-replay) path via an override so ONLY the floor differs vs base.
+        ov = [1.0] * 30
+        b = predict_cell_ttft_qsim(turns, SWE, 40, _survival_override=ov)
+        f = predict_cell_ttft_qsim(turns, SWE, 40, gpu_key="H100x2", _survival_override=ov)
+        assert f != b
+        assert all(v > 0 for v in f)
 
 
 def test_no_fitted_constants():

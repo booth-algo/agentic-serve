@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from simulator.closed_form_tpot import RooflineParams
 from simulator.kernel_step_cost import (
     _default_grid,
@@ -18,6 +20,31 @@ def test_grid_loads_with_expected_axes() -> None:
     assert 16384.0 in g.t_axis
     # measured small-batch floor is ~6.5 ms
     assert 6.0 < g.fixed_floor_ms < 7.0
+
+
+def test_fixed_floor_is_robust_to_warmup_outlier(tmp_path: Path) -> None:
+    # fixed_floor anchors the analytic decode roofline for cells beyond the measured grid; it must be
+    # the MIN over the smallest-batch row, not the single (B_min, T_min) cell, so a one-off warm-up
+    # overhead in that cell does not inflate every analytic-fill cell (the H100x2 B=1,T=512=9.1 vs the
+    # row's true 4.7 floor was the dominant tp2 high-conc TPOT over-prediction).
+    csv = tmp_path / "grid.csv"
+    csv.write_text(
+        "batch_size,context_len,decode_step_ms,validation_status\n"
+        "1,512,9.10,ok\n"      # warm-up outlier at (B_min, T_min)
+        "1,2048,4.68,ok\n"     # the real small-batch floor
+        "1,8192,5.49,ok\n"
+        "256,512,10.5,ok\n"
+        "256,2048,16.25,ok\n"
+    )
+    g = load_grid(csv)
+    assert g.fixed_floor_ms == 4.68          # row minimum, NOT the 9.10 corner
+    # well-behaved grid (corner already the row min) is unaffected
+    csv2 = tmp_path / "grid2.csv"
+    csv2.write_text(
+        "batch_size,context_len,decode_step_ms,validation_status\n"
+        "1,512,6.55,ok\n1,2048,6.60,ok\n256,512,10.0,ok\n"
+    )
+    assert load_grid(csv2).fixed_floor_ms == 6.55
 
 
 def test_lookup_matches_grid_at_measured_points() -> None:
