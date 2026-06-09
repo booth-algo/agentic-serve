@@ -218,7 +218,11 @@ def default_launch_floor_ms() -> float:
     b0, t0 = grid.b_axis[0], grid.t_axis[0]
     weight_ms = float(p.n_params) * float(p.bytes_per_param) / bw * 1e3
     attn_ms = (b0 * t0 * float(p.kv_bytes_per_token)) / bw * 1e3
-    return max(0.3, grid.fixed_floor_ms - weight_ms - attn_ms)
+    # Non-negativity guard only (a launch floor cannot be < 0). With the 8B/H100 defaults the
+    # residual is ~1.37 ms for every config (fixed_floor 6.55 - weight 5.15 - attn 0.02), so this
+    # max() never binds. De-fit 2026-06-05: the retired 0.3 was an unexplained magic literal; 0.0 is
+    # the physical floor and a proven no-op (TPOT byte-identical on every analytic config).
+    return max(0.0, grid.fixed_floor_ms - weight_ms - attn_ms)
 
 
 def analytic_grid(launch_floor_ms: float | None = None) -> DecodeStepGrid:

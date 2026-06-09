@@ -45,25 +45,31 @@ from simulator.closed_form_tpot import RooflineParams
 from simulator.kernel_step_cost import decode_step_ms
 
 
-# --- pressure ramp window (MEASURED eviction-watermark crossing) -------------
-# DE-FITTED 2026-06-03: the four hand-tuned knees were re-anchored to MEASURED
-# quantities (the eviction-watermark jump-pressure cluster + the saturated-ceiling
-# output clusters), eliminating the "knees retuned vs the data" tuning. Gate:
-# overall TPOT 15.89→15.42% (improves), swe-plateau 8.64→8.65% (holds), osworld
-# plateau 19.1→11.8, terminalbench plateau 18.4→15.9, chat flat — no profile
-# regresses. The amplifier rises from the watermark onset to the saturated ceiling;
-# the upper knee is output-gated (short outputs saturate as a sharp step, long
-# ones ramp gently / recover).
-#
-# P_LO / P_HI_SHORT are the measured eviction-watermark band — the jump-pressure
-# cluster across all real-jump cells fires at pressure ≈ 0.88–1.22 (pool ~88–92%
-# committed). These are ramp_tpot's DEF_LO/DEF_HI (= defcap −0.12/+0.22) read off
-# the measured cluster floor/max, NOT a MAPE fit. P_HI_LONG is the two-roofline
-# wave-factor knee at 2× pool commit (ramp_tpot DEF_SAT=1.0 → pressure 2.0).
-P_LO = 0.88        # eviction-watermark onset (pressure 0.88, pool ~88% committed) — measured cluster floor
+# --- pressure ramp window (TUNED-KNOB band; measured band documented & disagrees) ---
+# All three knees are TUNED KNOBS, not measurements. The reproducible jump-band
+# measurement (`python3 -m profiling.process.build_ramp_knees` →
+# profile_data/kernels/ramp_knees_h100_llama31_8b.json: per-cell inversion of the
+# measured implied-weight-vs-pressure curve through its sustained w=0.1/0.9 crossings)
+# DISAGREES with these values — measured H100 band ≈ [0.45, 1.69(short)] vs the tuned
+# [0.88, 1.22] — and adopting the measured band fails the no-regression gates badly
+# (H100 TPOT 15.4→23.3%, chat 5.6→16.7%; per-knee isolation no better — see the
+# 2026-06-09 De-fit log in profiling/docs/prediction_construction.md). Interpretation:
+# the implied weight attributes ANY excess over kernel_step to KV pressure, so at low
+# pressure the measurement absorbs non-ramp excess (host overhead, scheduling jitter)
+# while the tuned late-onset/steep band compensates for that misattribution. The knees
+# are therefore COMPENSATING FITS for the smoothstep-in-pressure ramp shape itself;
+# making them physical requires restructuring the ramp (fitted_constants_audit.md
+# item 6: per-cell eviction-watermark crossing), not re-anchoring the literals.
+# A previous comment here claimed a "measured eviction-watermark cluster" — there was
+# no reproducible measurement behind that claim (audit: relabeled fit); this honest
+# label + the artifact replace it. test_kernel_tpot pins both facts (tuned literals
+# unchanged + measured band reproducible) so neither can drift silently.
+P_LO = 0.88        # TUNED ramp onset (measured onset ≈ 0.45 — rejected on the gate, see above)
 # Upper knee interpolates P_HI_SHORT -> P_HI_LONG as output grows over [OUT_KNEE_LO, OUT_KNEE_HI].
-P_HI_SHORT = 1.22  # short-output (swe/terminal): sharp step, full recompute by pressure ~1.22 (measured cluster max)
-P_HI_LONG = 2.0    # long-output (chat/osworld): gentle ramp to the ceiling by 2× pool commit (pressure 2.0)
+P_HI_SHORT = 1.22  # TUNED short-output knee (measured ≈ 1.69; every measured short cell reaches
+                   # w=0.9 only at pressure ≥ 1.35 — rejected on the gate: swe-plateau 8.7→10.4)
+P_HI_LONG = 2.0    # TUNED long-output knee (measurement data-starved: 2 usable cells, 1 profile;
+                   # its point estimate 2.31 is consistent with this value)
 # OUT_KNEE_LO/HI = the MEASURED saturated-ceiling output clusters (short ~28 tok,
 # long ~86 tok in saturated_ceiling_H100_llama31_8b.json) — replaces the hand-picked
 # [40,80] window with the same measured cluster outputs that key the ceiling. Keep

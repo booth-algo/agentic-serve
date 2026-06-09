@@ -147,3 +147,59 @@ def test_predict_cell_returns_per_turn_list() -> None:
 def test_params_passthrough_does_not_crash() -> None:
     p = RooflineParams()
     assert predict_turn_tpot(_turn(1000, 100, 60, 40), p) > 0
+
+
+# ------------------------------------------------------------ ramp-knee provenance
+def test_ramp_knees_tuned_values_and_measured_band_both_pinned() -> None:
+    """Provenance lock for the ramp knees (2026-06-09 de-fit attempt + the same-day
+    corrected-floor follow-up — see the De-fit log in
+    profiling/docs/prediction_construction.md and
+    profiling/docs/ramp_knee_adoption_plan.md "Execution record").
+
+    The knees are TUNED KNOBS: the reproducible jump-band measurement
+    (build_ramp_knees -> ramp_knees_h100_llama31_8b.json) DISAGREES with them
+    (measured band ~[0.45, 1.69] vs tuned [0.88, 1.22]) and adopting the measured
+    values failed the no-regression gates (H100 TPOT 15.4->23.3%). The follow-up
+    corrected-floor round (ramp_knee_adoption_plan.md) measured the
+    pressure-independent decode floor-excess D per GPU and hit the pre-registered
+    Phase-0 stop-point: D < 0.5 ms everywhere (H100 0.0, A100 0.1246, H100x2 0.0)
+    -> floor misattribution unsupported, NOTHING adopted, knees stay tuned, no
+    production wiring of D. This pins ALL of it so none of it drifts silently:
+      * the tuned literals stay at their documented values — retuning them requires
+        consciously updating this test + the honest tuned-knob comments;
+      * the artifact's measured band stays reproducible — a change to the builder's
+        pre-registered detection rule (or to the GT) that moves the measurement
+        must be reviewed, not absorbed;
+      * the per-GPU D stays below the 0.5 ms stop-point threshold — if a data or
+        rule change pushes it over, the adoption question must be re-opened
+        deliberately, not silently.
+    """
+    import json
+    from pathlib import Path
+
+    assert P_LO == 0.88
+    assert P_HI_SHORT == 1.22
+    assert P_HI_LONG == 2.0
+
+    kernels_dir = Path(__file__).resolve().parents[2] / "profile_data/kernels"
+    art = json.loads((kernels_dir / "ramp_knees_h100_llama31_8b.json").read_text())
+    knees = art["knees"]
+    assert knees["P_LO"]["value"] == 0.4456          # measured onset (n=8, 3 profiles)
+    assert knees["P_HI_SHORT"]["value"] == 1.6866    # measured short knee (n=6, 2 profiles)
+    assert not knees["P_HI_LONG"]["adoptable"]       # data-starved: 1 profile, 2 cells
+    # The artifact records which literals were in production when it was built.
+    assert art["current_literals"] == {"P_LO": P_LO, "P_HI_SHORT": P_HI_SHORT,
+                                       "P_HI_LONG": P_HI_LONG}
+
+    # Corrected-floor round (gate run 2026-06-09, ADOPTED = none): D negligible on
+    # every GPU per the pre-registered Phase-0 stop-point, so D is NOT wired into
+    # production and knees_corrected is documentation only.
+    expected_d = {"h100": 0.0, "a100": 0.1246, "h100x2": 0.0}
+    for gpu, d in expected_d.items():
+        a = json.loads((kernels_dir / f"ramp_knees_{gpu}_llama31_8b.json").read_text())
+        assert a["floor_excess_ms"]["value"] == d
+        assert a["floor_excess_ms"]["value"] < 0.5   # the stop-point rule that gated adoption
+    # With D=0 on H100 the corrected band is identical to the uncorrected one.
+    corr = art["knees_corrected"]
+    assert corr["P_LO"]["value"] == knees["P_LO"]["value"]
+    assert corr["P_HI_SHORT"]["value"] == knees["P_HI_SHORT"]["value"]

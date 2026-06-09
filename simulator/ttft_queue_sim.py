@@ -105,12 +105,14 @@ LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
 #
 # 1. NEW (serving per-(re)prefilled-token, 0.0310 ms/tok measured at c1): SPLIT into a DERIVED,
 #    tensor-parallel-aware GEMM roofline (``_prefill_gemm_per_tok`` = 2·(params/tp)/tok at
-#    util_flops=0.65 → 0.02498 ms/tok on tp1) PLUS a small per-token off-GPU dispatch residual
-#    (0.00602 ms/tok). NEW is 1.24× the realistic roofline — NOT "7×" (the retired comment
-#    compared to a util=1 / large-K kernel 0.0042; corrected by the de-fit audit). The residual
-#    is framework dispatch (ATen/CUDA-library/launch, per TaxBreak ISPASS'26), a backed-out
-#    remainder PENDING the host-vs-device stage-split microbench. The GEMM part is now fit-free
-#    and tp-scales; see profiling/docs/prefill_law_defit_trace.md.
+#    util_flops=0.65 → 0.02498 ms/tok on tp1) PLUS a small per-new-token HOST serving-stack term
+#    (0.005745 ms/tok). DE-FIT 2026-06-05: this term was a backed-out remainder (fitted 0.0310 −
+#    roofline) mis-labelled "off-GPU framework dispatch"; the c1 live-server stage-split microbench
+#    (serving_stage_split.py → profile_data/results/serving_stage_split_H100.csv) MEASURED it directly
+#    as frontend.new = tokenize + chat-template/parse + ZMQ-IPC per new token = 5.745 ms/1k. It is NOT
+#    GPU framework dispatch: the GPU forward window is roofline-clean (prefill_span.new 22.7 ≈ the
+#    util-ramped GEMM, no above-roofline excess). The GEMM part is fit-free + tp-scales; this host term
+#    does NOT shard with tp. See profiling/docs/prefill_stage_split_results.md + prefill_law_defit_trace.md.
 # 2. FA3 (pipeline attention kernel, 8.31e-7 ms/token^2): from fa3_prefill_H100.csv
 #    (FA3(8192)=27.9ms / (8192²/2)). Adds the SUPER-LINEAR attention growth — negligible for a
 #    HIT (Q=new small), the quadratic re-encode for a MISS. Extra physical grounding at ~no
@@ -144,11 +146,12 @@ def _prefill_floor_for(gpu_key: str | None) -> float:
         except Exception:
             _PREFILL_FLOOR_CACHE = {}
     return _PREFILL_FLOOR_CACHE.get(_gpu_slug(gpu_key), PREFILL_FLOOR_MS)
-# NEW = DERIVED tp-aware GEMM roofline (``_prefill_gemm_per_tok``, below) + this off-GPU dispatch
-# residual. On tp1 their sum reproduces the retired fitted 0.0310 rate to 5-digit rounding
-# (~2e-6 ms/tok; TTFT/E2EL gates unchanged). On tp2 the GEMM part halves → tp2 prefill is no
-# longer tp1-anchored (TTFT 43.3→31.7% cell-MAPE).
-PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN = 0.00602
+# NEW = DERIVED tp-aware GEMM roofline (``_prefill_gemm_per_tok``, below) + this per-new-token HOST
+# serving-stack term. DE-FIT 2026-06-05: MEASURED = frontend.new 5.745 ms/1k from the c1 live-server
+# stage-split (serving_stage_split_H100.csv), replacing the backed-out remainder (fitted 0.0310 −
+# roofline = 0.00602) that was mis-labelled GPU "dispatch". Name retained for diff-minimality; it is a
+# HOST term (tokenize + parse + ZMQ-IPC per new token) and does NOT shard with tp.
+PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN = 0.005745   # MEASURED frontend.new (host serving-stack / new tok)
 PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel, ms per token^2
 # DE-FITTED 2026-06-03 via a LIVE vLLM-server concurrency sweep (live_split_probe.py). The cached host cost
 # is per-request serving-stack work (HTTP body parse + chat-template + tokenize + ZMQ IPC) that PARTLY

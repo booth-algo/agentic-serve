@@ -472,11 +472,11 @@ def test_no_fitted_constants():
     # Prefill cost = measured-serving anchors + pipeline FA3 kernel (all held out from the
     # multi-turn data we report). Asserted to value so a silent retune is caught.
     assert mod.PREFILL_FLOOR_MS == 26.0  # DE-FITTED 2026-06-03: measured min pure-prefill TTFT (c1 turn-0, cached≈0 ≈26.07 ms), replaces the fitted regression intercept 22.5
-    assert mod.PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN == 0.00602  # off-GPU dispatch remainder
-    # NEW = DERIVED tp-aware GEMM roofline + residual; on tp1 their sum reproduces the retired
-    # fitted 0.0310 rate to the residual's 5-digit rounding (~2e-6 ms/tok; TTFT/E2EL gates unchanged).
-    assert abs(mod._prefill_gemm_per_tok(mod.RooflineParams())
-               + mod.PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN - 0.0310) < 5e-5
+    # DE-FIT 2026-06-05: MEASURED host serving-stack per new token (frontend.new = tokenize+parse+IPC),
+    # = 5.745 ms/1k from the c1 live-server stage-split (serving_stage_split_H100.csv). Replaces the
+    # backed-out remainder 0.00602 (fitted 0.0310 − roofline); the old gemm+residual≈0.0310 fit-pin is
+    # intentionally removed — the value is now anchored to a measurement, not to the retired fit.
+    assert mod.PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN == 0.005745  # measured frontend.new
     assert mod.PREFILL_FA3_MS_PER_TOKEN2 == 8.31e-7        # pipeline FA3 kernel (fa3_prefill grid)
     # Host serving-stack cached split (live-measured: live_split_probe.py concurrency sweep on the real server).
     assert mod.PREFILL_HOST_SHARED_MS_PER_TOKEN == 0.0030515  # DE-FITTED 2026-06-03: live-server split 50/50 (was 0.003485)
