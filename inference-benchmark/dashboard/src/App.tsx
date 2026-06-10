@@ -182,7 +182,7 @@ function App() {
       {visiblePage === 'gpu' ? (
         <GpuStatePage />
       ) : visiblePage === 'serving' ? (
-        <PredictionsMatrixPage dataScope={dataScope} />
+        <PredictionsMatrixPage dataScope={dataScope} predictionsUrl={simulatorPredictionsJsonUrl} />
       ) : visiblePage === 'simulator' ? (
         <ServingPredictionsPage
           dataScope={dataScope}
