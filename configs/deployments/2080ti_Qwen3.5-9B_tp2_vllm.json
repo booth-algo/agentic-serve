@@ -4,7 +4,7 @@
   "model": "Qwen3.5-9B",
   "tp": 2,
   "engine": "vllm",
-  "available_kv_blocks": 1,
+  "available_kv_blocks": 6407,
   "max_num_batched_tokens": 2048,
   "bench_dir": "2080ti_Qwen3.5-9B_tp2_vllm",
   "backend": "rtx2080ti-tp2-vllm-analytic-roofline",
@@ -16,10 +16,10 @@
       "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
     },
     "kv_pool": {
-      "status": "missing",
-      "value": 1,
-      "source": "configs/kv_pool.py",
-      "note": "11GiB util 0.85, weights 19.3GB/tp2, reserve 3.5GB -> bf16 weights exceed budget (run likely quantized); pool UNRELIABLE"
+      "status": "derived",
+      "value": 6407,
+      "source": "engine-log-anchored reconstruction (tp4 sibling log)",
+      "note": "ENGINE-ANCHORED RECONSTRUCTION (no surviving engine log): per-GPU non-KV overhead back-solved from the SAME host+model tp4 engine log (2080ti:/tmp/vllm_8089.log: total*0.85 20.08GB - weights/4 4.83GB - avail-KV 11.55GB = 3.70GB), applied at tp2: avail/GPU = 20.08 - 9.65 - 3.70 = 6.73GB; per-GPU per-token bytes from the tp4 log (11.55GB/352176 tok = 32804 B, kv-shards 4) scale to 65608 B at shards 2 -> 102522 tokens -> 6407 blocks. The kv_pool.py rule gives 26420 (4.1x over: hybrid linear-attention page padding unmodeled). Successor: capture the tp2 engine log."
     },
     "saturated_ceiling": {
       "status": "inherited",
@@ -27,8 +27,8 @@
       "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
     },
     "roofline_peak": {
-      "status": "placeholder",
-      "note": "datasheet peak FLOPS/BW (FP16-accumulate ambiguity on consumer GPUs)"
+      "status": "derived",
+      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (2080Ti: fp16 cast, sm75; 3090: bf16 \u2014 both FP32-accumulate GeForce half-rate) \u2014 see configs/gpus/*.json _notes (L9-consumer 2026-06-10)"
     },
     "util_flops": {
       "status": "placeholder",

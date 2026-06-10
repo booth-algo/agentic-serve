@@ -1,0 +1,26 @@
+{
+  "gpu": "RTX2080Tix2",
+  "model": "Llama-3.1-8B",
+  "tensor_parallel": 2,
+  "criterion": "median measured tpot_ms over turns at KV pressure >= 2.5 (the saturated 'C=300+' asymptote)",
+  "pressure_threshold": 2.5,
+  "cluster_split_output": 50.0,
+  "source": "/mnt/100g/agent-bench/results/synthetic_distributional/2080ti_Llama-3.1-8B_tp2_vllm",
+  "n_saturated_turns": 321,
+  "max_measured_plateau_ms": 730.5,
+  "p90_measured_plateau_ms": 701.5,
+  "anchors": [
+    {
+      "output_tokens": 26,
+      "plateau_ms": 671.9,
+      "n": 174
+    },
+    {
+      "output_tokens": 86,
+      "plateau_ms": 421.0,
+      "n": 147
+    }
+  ],
+  "lookup": "linear interpolation in output between anchors; clamp to the nearest anchor outside the range (monotone non-increasing: short output saturates higher)",
+  "_notes": "Measured-anchor replacement for the retired least-squares ceiling 118.7 + 3263/output (no fit; measured plateau medians + interpolation, same pattern as the decode kernel grid). Regenerate: python3 -m profiling.process.build_saturated_ceiling. See profiling/docs/fitted_constants_audit.md. Sensitivity (audit-v2 G9): PRESSURE_THRESHOLD=2.5 is a one-time curve read-off ('saturates by ~2.5'), not derived; recomputing this artifact's anchors at thresholds 2.0/3.0 gives \u2014 @2.0: out=26: 671.9->668.6 ms (-0.49%), out=86: 421.0->411.6 ms (-2.23%); @3.0: out=26: 671.9->675.4 ms (+0.52%), out=86: 421.0->422.4 ms (+0.33%). CLUSTER_SPLIT_OUTPUT=50 check \u2014 split=40: plateau_ms 673.2/420.9 vs 671.9/421.0; split=60: anchors identical. Production cuts unchanged (2026-06-10, lane L5)."
+}

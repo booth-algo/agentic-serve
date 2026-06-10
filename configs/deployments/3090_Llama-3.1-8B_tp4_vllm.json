@@ -19,16 +19,16 @@
       "status": "derived",
       "value": 27445,
       "source": "configs/kv_pool.py",
-      "note": "24GiB util 0.85, weights 16.1GB/tp4, reserve 3.5GB"
+      "note": "24GiB util 0.85, weights 16.1GB/tp4, reserve 3.5GB CAVEAT (L9-consumer 2026-06-10): the 3.5GB reserve back-solves to ~1.6GB on this host (Llama tp1 engine log) \u2014 derived pool likely UNDER-estimates by ~10-20%; no surviving engine log for this tp. Successor: capture it."
     },
     "saturated_ceiling": {
-      "status": "inherited",
-      "from": "H100",
-      "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
+      "status": "measured",
+      "path": "profile_data/kernels/saturated_ceiling_RTX3090x4_llama31_8b.json",
+      "note": "own measured plateau anchors from this config GT (build_saturated_ceiling; replaces the H100-inherited ceiling that under-caps the measured consumer plateaus at conc>=200, L9-consumer 2026-06-10)"
     },
     "roofline_peak": {
-      "status": "placeholder",
-      "note": "datasheet peak FLOPS/BW (FP16-accumulate ambiguity on consumer GPUs)"
+      "status": "derived",
+      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (3090: bf16 -> FP32 accumulate, GeForce half-rate) \u2014 see configs/gpus/RTX3090.json _notes (L9-consumer 2026-06-10)"
     },
     "util_flops": {
       "status": "placeholder",
@@ -59,6 +59,11 @@
       "status": "measured",
       "path": "3090_Llama-3.1-8B_tp4_vllm",
       "source": "/mnt/100g"
+    },
+    "prefill_floor": {
+      "status": "measured",
+      "path": "profile_data/kernels/prefill_floor_llama31_8b.json",
+      "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) \u2014 manifest entry documents ownership (L9-consumer 2026-06-10)"
     }
   }
 }
