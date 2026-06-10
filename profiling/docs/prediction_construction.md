@@ -86,8 +86,10 @@ Per engine step (`_price_step`) — a mixed prefill+decode step:
 → **`TTFT[turn] = first_token_epoch − arrival_epoch`** = queue-wait + prefill service + per-request floor.
 A turn no session reaches falls back to the forward static predictor (`_fallback_ttft`).
 
-The fitted constants (🔴) live in the **prefill host-split**: `PREFILL_NEW_DISPATCH_RESIDUAL`,
-`PREFILL_HOST_SHARED`, `PREFILL_HOST_PERREQ`.
+The remaining 🔴 rows are the **prefill host-split partition** (`PREFILL_HOST_SHARED`/`PREFILL_HOST_PERREQ`):
+the sum (6.103e-3) is measured; the 50/50 partition is a within-measured-band [0.40,0.54] engineering
+choice — the measured point estimate 0.5236 was gate-rejected 2026-06-09 (see the De-fit log).
+(`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit 2026-06-05 and is 🔵.)
 
 ---
 
@@ -96,13 +98,13 @@ The fitted constants (🔴) live in the **prefill host-split**: `PREFILL_NEW_DIS
 
 ---
 
-## Fitted-constant debt (7 found 2026-06-05, workflow `wpa6sviup`; **2 de-fit, 3 resolved-as-tuned, 2 remaining**)
+## Fitted-constant debt (7 found 2026-06-05, workflow `wpa6sviup`; **2 de-fit, 5 resolved-as-tuned, 0 remaining**)
 
 | Constant | Module | Value | Status / issue |
 |---|---|---|---|
 | ~~`PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN`~~ | ttft_queue_sim | 0.00602 → **0.005745** | ✅ **DE-FIT 2026-06-05** — measured (frontend.new); fit-pin dropped — see log |
-| `PREFILL_HOST_SHARED_MS_PER_TOKEN` | ttft_queue_sim | 0.0030515 | ⏳ sum (6.103e-3) measured; the 50/50 split was chosen to "maximize the gate" |
-| `PREFILL_HOST_PERREQ_MS_PER_TOKEN` | ttft_queue_sim | 0.0030515 | ⏳ same 50/50 partition |
+| `PREFILL_HOST_SHARED_MS_PER_TOKEN` | ttft_queue_sim | 0.0030515 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — sum (6.103e-3) measured; partition measured (band [0.40,0.54], point est. 0.5236 via `build_host_split.py`) but adoption gate-rejected (H100 TTFT-cell 33.36→33.79) → 50/50 kept as explicit within-band choice — see log |
+| `PREFILL_HOST_PERREQ_MS_PER_TOKEN` | ttft_queue_sim | 0.0030515 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — same 50/50 partition (measured point est. would be 0.4764×sum; gate-rejected) — see log |
 | `P_LO` | kernel_tpot | 0.88 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — measurement built (measured onset ≈ 0.45); adoption gate-rejected → honest tuned-knob label, false "measured" claim removed — see log |
 | `P_HI_SHORT` | kernel_tpot | 1.22 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — measured ≈ 1.69; gate-rejected (swe-plateau 8.7→10.4) — see log |
 | `P_HI_LONG` | kernel_tpot | 2.0 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — measurement data-starved (2 cells, 1 profile; point est. 2.31 consistent) — see log |
@@ -116,6 +118,34 @@ disagreement, and a test pins both so neither drifts silently.)
 `.omc/specs/deep-dive-whether-there-are-fitted.md`.
 
 ### De-fit log
+- **2026-06-09 — `PREFILL_HOST_SHARED`/`PERREQ` 50/50 partition: measurement built, adoption gate-rejected → resolved-as-tuned** (`ttft_queue_sim`; the last 2 debt rows — spec `.omc/specs/deep-dive-whether-there-are-fitted.md` rows 2-3, "use the point estimate of the 40-54% band, not the gate-max").
+  The SUM 6.103e-3 ms/cached-token was always measured (the c1 serving-regression cached coefficient;
+  live-validated at 5.89 by the 2026-06-03 loopback probe, commit 9dce1dc; corroborated by stage-split
+  frontend.cached 5.174 in `serving_stage_split_H100.csv`). Only the shared/per-request PARTITION was a
+  fit: 50/50 chosen to "maximize the gate" within a live-measured ~40-54% band (pre-06-03 it was 57/43,
+  imported from the offline batch CSV `cached_prefill_batch_ttft_H100.csv` via commit 7748e70). The
+  missing measurement now exists, recomputed OFFLINE from the on-disk live-probe CSVs (no GPU, no
+  server): `profiling/process/build_host_split.py` → `profile_data/kernels/prefill_host_split_H100.json`
+  (deterministic numpy lstsq; band-membership check built in). (1) Denominator: 2-var lstsq
+  `ttft = floor + new_rate·new + c1_rate·cached` over the 20 rows of `prefill_live_ttft_H100.csv` →
+  c1 cached rate **5.8872e-3 ms/tok** (floor 16.03 ms, new 29.397 ms/1k) — exactly the documented
+  "5.89" that reproduces the fitted 6.103. (2) B-sweep endpoint slopes (`prefill_live_split_H100.csv`,
+  B∈{1,2,4,8,16} concurrent cache-hits on one primed P-token prefix):
+  `shared_frac = 1 − (B-slope/P)/c1_rate` → P=8000: **0.4017**, P=16000: **0.5460** — the in-code
+  "~40-54%" band is real and reproduces from raw data on disk; P=2000 excluded exactly as the band
+  always did (shared_frac −0.017: a fixed ~12.5 ms/req cost misattributed as per-token at short
+  prefixes; recorded in the artifact). (3) Pre-registered point estimate: pooled OLS (per-P intercepts
+  + one common B·P slope) over the two band planes → perreq 2.8048e-3 → **shared_frac 0.5236**
+  (in-band; sensitivities: endpoint-mean 0.474, sum-denominator 0.540). Candidate constants =
+  0.5236/0.4764 × the exact sum: SHARED 0.0031955 / PERREQ 0.0029075. **Adoption gate
+  (`gate_scoped_rows`, 50/50 → measured 0.5236): REJECTED** — TTFT-cell H100 **33.36→33.79** (primary
+  gate), A100 42.60→42.73, H100x2 29.97→29.60 (improves); E2EL-cell H100 21.27→21.32, A100
+  29.08→29.16, H100x2 21.63→21.17; TPOT unchanged everywhere. Outcome: the measured point estimate is
+  not behavior-superior on the primary cell, so per the sanctioned fallback the shipped partition
+  stays **50/50, relabeled honestly** as a within-measured-band [0.40, 0.54] engineering choice (like
+  the ramp knees), with the point estimate 0.5236 recorded. Constants byte-identical (0.0030515 each);
+  comments + docs updated; the measurement script + artifact are committed so the disagreement is
+  regenerable; the existing test pins on 0.0030515 stay green.
 - **2026-06-09 — ramp-knee corrected-floor follow-up: Phase-0 stop-point, ADOPTED = none** (gated
   re-attempt per `profiling/docs/ramp_knee_adoption_plan.md`; full numbers in its Execution record).
   Hypothesis: the gate-rejection below was floor misattribution — at low pressure the implied weight

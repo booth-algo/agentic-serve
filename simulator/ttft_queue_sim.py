@@ -118,10 +118,12 @@ LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
 #    HIT (Q=new small), the quadratic re-encode for a MISS. Extra physical grounding at ~no
 #    accuracy cost (the serving re-prefill is ~linear; FA3 is small vs chunked+host overhead).
 # 3. HOST (re-tokenize the re-sent cached context, 0.006103 ms/1k total): the dominant HIT
-#    cost. Batch split measured on this H100 (cached_prefill_batch_ttft_H100.csv:
-#    TTFT(16,P)/TTFT(1,P)≈6.6-7.5) → ~57% amortized once per step + ~43% per request.
-# All three are MEASURED (c1 + controlled serving sweeps + the pipeline FA3 grid) — held out
-# from the multi-turn data we report.
+#    cost. The SUM is measured; the shared/per-request PARTITION is a within-measured-band
+#    [0.40,0.54] engineering choice (50/50; measured point estimate 0.5236 was gate-rejected —
+#    see the PREFILL_HOST_* block below).
+# All three RATES are MEASURED (c1 + controlled serving sweeps + the pipeline FA3 grid) — held out
+# from the multi-turn data we report; the HOST shared/per-request partition alone is a
+# within-band choice, not a measurement.
 PREFILL_FLOOR_MS = 26.0                           # DE-FITTED 2026-06-03: measured min pure-prefill TTFT (c1 turn-0, cached~=0) = 26.07 ms across the synth profiles (chat-singleturn new=0/cached=0 min 27.4). Replaces the fitted c1 regression intercept 22.5 — the linear law extrapolated ~4 ms BELOW the real floor. Gate: TTFT 33.01->32.89% (improves; the measured anchor is consistent with the data). See profiling/docs/prefill_law_defit_trace.md. NOTE: 26.0 is the H100-TP1 floor; it is a FALLBACK only — the per-config measured floor (below) supersedes it when present (a single tp1 constant wrongly imposed 26 on tp2/tp4, whose real floors are lower: H100x2=14, the dominant tp2 low-conc over-prediction).
 
 # Per-config MEASURED prefill floor (ms), keyed by gpu_key slug — the SAME measured-anchor method
@@ -153,15 +155,21 @@ def _prefill_floor_for(gpu_key: str | None) -> float:
 # HOST term (tokenize + parse + ZMQ-IPC per new token) and does NOT shard with tp.
 PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN = 0.005745   # MEASURED frontend.new (host serving-stack / new tok)
 PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel, ms per token^2
-# DE-FITTED 2026-06-03 via a LIVE vLLM-server concurrency sweep (live_split_probe.py). The cached host cost
-# is per-request serving-stack work (HTTP body parse + chat-template + tokenize + ZMQ IPC) that PARTLY
-# amortizes across a batch: the sweep's per-added-request B-slope (≈3.5 ms/1k) vs the c1 rate (5.89 ms/1k,
-# which reproduces the fitted 6.103) implies ~40-54% is shared (the amortized remainder rises with prefix
-# length). Within that measured range 50/50 maximizes the gate (TTFT 32.89→32.05, E2EL flat). Replaces the
-# imported 57/43; the offline batch-CSV's 12/88 was wrong (lacked the serving stack + regressed). Sum kept at
-# the benchmark-true 6.103e-3 (live-validated at 5.89). See profiling/docs/prefill_stage_split_results.md.
-PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.0030515    # host serving-stack, amortized once per step (0.50×6.103e-3, live-measured split)
-PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.0030515    # host serving-stack, per request, summed (0.50×6.103e-3, live-measured split)
+# WITHIN-MEASURED-BAND [0.40,0.54] ENGINEERING CHOICE (relabeled 2026-06-09; band live-measured 2026-06-03
+# via the vLLM-server concurrency sweep live_split_probe.py, commit 9dce1dc). The cached host cost is
+# per-request serving-stack work (HTTP body parse + chat-template + tokenize + ZMQ IPC) that PARTLY
+# amortizes across a batch: the B-sweep's per-added-request slope (prefill_live_split_H100.csv) vs the c1
+# rate (5.887 ms/1k from prefill_live_ttft_H100.csv — reproduces the fitted 6.103) bounds the shared
+# fraction to [0.40, 0.54] (P=8000 → 0.402, P=16000 → 0.546; P=2000 excluded: a fixed ~12.5 ms/req cost
+# misattributed as per-token). The measured POINT ESTIMATE of that band is 0.5236 (pooled OLS over the band
+# planes; profiling/process/build_host_split.py → profile_data/kernels/prefill_host_split_H100.json), but
+# its adoption was GATE-REJECTED 2026-06-09 (TTFT-cell H100 33.36→33.79; A100 42.60→42.73; H100x2 improved
+# 29.97→29.60), so the shipped partition stays the within-band 50/50 — an explicit engineering choice (like
+# the ramp knees), NOT a measurement. Replaces the imported 57/43; the offline batch-CSV's 12/88 was wrong
+# (lacked the serving stack + regressed). Sum kept at the benchmark-true 6.103e-3 (live-validated at 5.89).
+# See profiling/docs/prediction_construction.md De-fit log + prefill_stage_split_results.md.
+PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.0030515    # host serving-stack, amortized once per step (0.50×6.103e-3; within-band choice, point est. 0.5236)
+PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.0030515    # host serving-stack, per request, summed (0.50×6.103e-3; within-band choice)
 
 # Prefill GEMM efficiency is BATCH-dependent (measured 2026-06-04 from GT turn-0 cohorts). A small prefill
 # (a single/low-conc request, or a cache-hit's few new tokens) runs at the small-batch util_flops (~0.65),
