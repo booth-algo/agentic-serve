@@ -113,7 +113,7 @@ interface BackendSpecSummary {
   kv_budget_tokens?: number;
 }
 
-interface ServingRow {
+export interface ServingRow {
   model: string; backend?: string; profile: string; concurrency?: number; isl: number; osl: number;
   data_scope?: string;
   dataScope?: string;
@@ -184,7 +184,7 @@ interface ServingScopeIndex {
   summariesByGpu: Record<string, GpuConfigSummary>;
 }
 
-interface ServingIndex {
+export interface ServingIndex {
   trace_replay: ServingScopeIndex;
   synthetic_distributional: ServingScopeIndex;
   archived: ServingScopeIndex;
@@ -925,7 +925,7 @@ function createServingScopeIndex(): ServingScopeIndex {
   };
 }
 
-function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
+export function buildServingIndex(data: Record<string, ServingRow[]>): ServingIndex {
   const index: ServingIndex = {
     trace_replay: createServingScopeIndex(),
     synthetic_distributional: createServingScopeIndex(),

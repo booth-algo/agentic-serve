@@ -13,6 +13,7 @@ import { DataTable } from './components/DataTable';
 import { CoveragePage } from './components/CoveragePage';
 import { GpuStatePage } from './components/GpuStatePage';
 import { ServingPredictionsPage } from './components/ServingPredictionsPage';
+import { PredictionsMatrixPage } from './components/PredictionsMatrixPage';
 import { simulatorPredictionsJsonUrl } from './dataUrls';
 import type { TabId } from './types';
 import { hasSyntheticRuntime, normalizeDataScope, type DataScope } from './profileMeta';
@@ -181,7 +182,7 @@ function App() {
       {visiblePage === 'gpu' ? (
         <GpuStatePage />
       ) : visiblePage === 'serving' ? (
-        <ServingPredictionsPage dataScope={dataScope} />
+        <PredictionsMatrixPage dataScope={dataScope} />
       ) : visiblePage === 'simulator' ? (
         <ServingPredictionsPage
           dataScope={dataScope}
