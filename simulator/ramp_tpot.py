@@ -18,8 +18,9 @@ Three roofline bounds (compute / memory-bandwidth / KV-capacity-eviction):
   the eviction deficit develops for long-output ones (drain-aware ``lift``).
 * ``frac`` = ``smoothstep(defcap; DEF_LO, DEF_HI)`` — the KV-capacity transition. The
   ramp emerges from the turn-by-turn growth of the eviction **deficit**
-  ``defcap = pressure − 1`` crossing the eviction watermark (``DEF_LO``, pool ~88%
-  committed) toward full recompute (``DEF_HI``). Gated by the output-sustain factor.
+  ``defcap = pressure − 1`` crossing the band ``[DEF_LO, DEF_HI]`` — both TUNED knobs,
+  not measured watermarks (see the band comment block). Gated by the output-sustain
+  factor.
 
 **Forward cohort drain (the key forward piece).** Instead of the measured per-turn
 ``scheduled_requests``, the resident cohort is forecast as ``sched_hat[t] = round(C ·
@@ -52,8 +53,10 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import statistics
+import sys
 from pathlib import Path
 
 from simulator.closed_form_tpot import RooflineParams
@@ -67,20 +70,26 @@ from simulator.kernel_tpot import (
     saturated_ceiling_ms,
 )
 
-# --- eviction-deficit ramp band (defcap = pressure − 1) ----------------------
-# The saturation jump is the KV-pool eviction WATERMARK crossing, not the pool-full
-# crossing. Measured across all real-jump cells the jump fires at pressure ≈ 0.88–1.22
-# (pool ~88–92% committed). So the ramp band straddles defcap = 0:
-DEF_LO = -0.12   # eviction-watermark onset: pool ~88% committed (pressure 0.88). Read
-                 # off the measured jump-pressure cluster floor (term c80 @ -0.12),
-                 # NOT a MAPE fit. Sibling of kernel P_LO=0.8 amplifier onset.
-DEF_HI = 0.22    # second-wave-recompute knee: pressure ~1.22, ~22% oversubscription
-                 # forces the full prefill recompute. Cluster max (swe c200 @ +0.22).
-DEF_SAT = 1.0    # eviction fully developed at 2× pool commit (pressure 2.0) — the
-                 # two-roofline wave-factor knee. Controls the long-output ceiling lift.
+# --- eviction-deficit ramp band (defcap = pressure − 1) — TUNED KNOBS --------
+# All three knees are TUNED KNOBS, not measurements. A previous comment here claimed
+# they were read off a "measured jump-pressure cluster" at pressure ≈ 0.88–1.22 ("NOT
+# a MAPE fit"); the reproducible jump-band measurement (`python3 -m
+# profiling.process.build_ramp_knees` ->
+# profile_data/kernels/ramp_knees_h100_llama31_8b.json) DISPROVED that claim: the
+# measured H100 onset is pressure ≈ 0.4456 (defcap −0.55) and the short-output knee
+# ≈ 1.6866 (defcap +0.69) — no cluster exists at 0.88–1.22. The kernel-side twins
+# (P_LO=0.88 / P_HI_SHORT=1.22 / P_HI_LONG=2.0) were honest-relabeled as tuned on
+# 2026-06-09 (commit 2515007) and have since been restructured away
+# (kernel_tpot._overflow_weight); this diagnostic side-by-side column keeps its tuned
+# literals (values unchanged — comment-only relabel) with the same honest label.
+DEF_LO = -0.12   # TUNED ramp onset (measured onset ≈ −0.55 in defcap; see artifact above)
+DEF_HI = 0.22    # TUNED upper knee (measured short-output knee ≈ +0.69 in defcap)
+DEF_SAT = 1.0    # TUNED long-output ceiling-lift knee (measured long-output knee ≈ +1.31,
+                 # n=2 cells, not adoptable). Controls the long-output ceiling lift.
 
 # Output-sustain gate + short/long-output split: reused verbatim from kernel_tpot
-# (SAT_SUSTAIN_LO/HI = 10/24 tok; OUT_KNEE_LO/HI = 40/80 tok).
+# (SAT_SUSTAIN_LO/HI = 9/24 tok — measured saturated-turn p5 / plateau-min anchors;
+# OUT_KNEE_LO/HI = 28/86 tok — measured short/long output-cluster labels).
 
 _PARAMS = RooflineParams()
 KV_BLOCKS = float(_PARAMS.available_kv_blocks)   # 27250
@@ -109,9 +118,38 @@ def _gpu_slug(gpu_key: str | None) -> str:
     return re.sub(r"[^a-z0-9]", "", str(gpu_key).lower()) if gpu_key else ""
 
 
+_MISSING_POOL_WARNED: set[tuple[str, str]] = set()
+
+
+def _warn_missing_pool(profile: str, slug: str, cand: Path) -> None:
+    """LOUD once-per-(gpu_key, profile) stderr warning when a requested per-GPU replay
+    pool file is absent (S13). The silent fallback to the pooled cohort flipped two gate
+    verdicts on 2026-06-09/10 — a missing pool must be impossible to miss. Setting
+    ``RAMP_TPOT_REQUIRE_POOLS=1`` (gate runs) escalates every occurrence to a hard error."""
+    require = os.environ.get("RAMP_TPOT_REQUIRE_POOLS", "") == "1"
+    msg = (
+        f"RAMP_TPOT: PER-GPU REPLAY POOL MISSING for gpu_key slug '{slug}' "
+        f"(profile {profile}): {cand} not found — falling back to the POOLED cohort. "
+        f"TTFT/E2EL trajectory-replay gates are INVALID under this fallback. "
+        f"Restore the committed file (git checkout -- {cand.name}) or regenerate via "
+        f"`python3 -m profiling.process.build_realized_session_distributions` (then "
+        f"re-minify). Set RAMP_TPOT_REQUIRE_POOLS=1 to make this fatal."
+    )
+    if require:
+        raise FileNotFoundError(msg)
+    key = (slug, profile)
+    if key in _MISSING_POOL_WARNED:
+        return
+    _MISSING_POOL_WARNED.add(key)
+    bar = "!" * 78
+    print(f"\n{bar}\n{msg}\n{bar}", file=sys.stderr, flush=True)
+
+
 def _resolve_dist_path(profile: str, gpu_key: str | None = None) -> Path | None:
     """Realized-dist path: the per-GPU file (``<spec>_realized_<slug>.json``) if it exists,
-    else the pooled ``PROFILE_DIST`` file. None when the profile has no spec."""
+    else the pooled ``PROFILE_DIST`` file — but NEVER silently (S13): a requested-but-absent
+    per-GPU file warns loudly to stderr (or raises under ``RAMP_TPOT_REQUIRE_POOLS=1``).
+    None when the profile has no spec."""
     if profile not in PROFILE_DIST:
         return None
     pooled = PROFILE_DIST[profile]
@@ -120,6 +158,7 @@ def _resolve_dist_path(profile: str, gpu_key: str | None = None) -> Path | None:
         cand = DIST_DIR / pooled.replace(".json", f"_{slug}.json")
         if cand.exists():
             return cand
+        _warn_missing_pool(profile, slug, cand)
     return DIST_DIR / pooled
 
 
