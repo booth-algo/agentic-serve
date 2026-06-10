@@ -1,0 +1,45 @@
+{
+  "gpu": "H100",
+  "model": "Llama-3.1-8B",
+  "source": "/mnt/100g/agent-bench/results/synthetic_distributional/h100_Llama-3.1-8B_tp1_vllm",
+  "saturated_criterion": "measured tpot_ms > 100.0 (the plateau/saturated regime)",
+  "quantile_convention": "empirical lower quantile sorted[ceil(q*n)-1] (statistics.quantiles(n=20) p5 agrees on both populations)",
+  "population_preregistered": "turn_median",
+  "population_note": "turn-median rows (build_simulator_rows.build_turns) are what predict_cell_tpot consumes \u2014 KernelTurnInput.output_tokens IS a turn median \u2014 so they are the canonical population for output anchors; per-request rows are reported because the production LO was read there.",
+  "per_request": {
+    "n_rows": 86671,
+    "n_saturated": 45450,
+    "p1_output": 6.0,
+    "p5_output": 9.0,
+    "p10_output": 12.0,
+    "min_output": 2.0
+  },
+  "turn_median": {
+    "n_rows": 1043,
+    "n_saturated": 301,
+    "p1_output": 22.0,
+    "p5_output": 24.0,
+    "p10_output": 24.5,
+    "min_plateau_output": 21.5,
+    "smallest_plateau_outputs": [
+      21.5,
+      22.0,
+      22.0,
+      22.0,
+      22.0,
+      22.0,
+      22.5,
+      22.5
+    ]
+  },
+  "production": {
+    "SAT_SUSTAIN_LO": 9.0,
+    "SAT_SUSTAIN_HI": 24.0,
+    "lo_reading": "p5 of saturated PER-REQUEST outputs (9.0; n=45450)",
+    "hi_readings": [
+      "historical: min turn-median plateau output 21.5 (~22 tok) + 2 (the +2 was an underived hand margin)",
+      "derived equivalent: p5 of saturated TURN-MEDIAN outputs = 24.0 exactly (same quantile as LO, on the canonical population)"
+    ]
+  },
+  "_notes": "audit-v2 G1/G2 regenerable artifact (2026-06-10, lane L5). The two populations disagree: per-request p5 = 9.0 (the production LO) vs turn-median p5 = 24.0 (= the production HI). On the pre-registered canonical population (turn-medians feed predict_cell_tpot) the [9, 24] smoothstep band has no measured support below 21.5 \u2014 LO = 9 is a per-request-population read. Production values unchanged this round (byte-identity contract); any retune must start from the turn-median numbers recorded here. Regenerate: python3 -m profiling.process.build_sat_sustain"
+}

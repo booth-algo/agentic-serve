@@ -5,6 +5,7 @@
   "tp": 4,
   "engine": "sglang",
   "available_kv_blocks": 18417,
+  "max_num_batched_tokens": 4096,
   "bench_dir": "a100_Mixtral-8x7B_tp4_sglang",
   "backend": "a100-tp4-sglang-analytic-roofline",
   "calibration_status": "a100_tp4_sglang_analytic_roofline_firstcut",

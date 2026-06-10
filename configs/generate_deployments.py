@@ -70,6 +70,40 @@ def vllm_max_num_batched_tokens(total_memory_bytes: float, gpu_name: str) -> int
                     and "a100" not in gpu_name.lower()) else 2048
 
 
+def sglang_chunked_prefill_size(total_memory_bytes: float) -> int:
+    """The sglang resolved ``chunked_prefill_size`` default (ENGINE CONFIG, not a model
+    choice) — a PER-DEVICE memory-tier rule, NOT vLLM's >=70GiB/non-A100 device rule
+    (audit-v2 item G8: the sglang configs used to inherit the loader's vLLM 8192,
+    a 4x error on 24GiB devices). Source: sglang
+    ``python/sglang/srt/server_args.py`` ``ServerArgs._handle_gpu_memory_settings``
+    (upstream main @ 255843d45462, fetched 2026-06-10; gpu_mem compared in MiB):
+
+        gpu_mem <  20 GiB -> 2048   (T4, 4080; covers RTX2080Ti 11GiB)
+        gpu_mem <  35 GiB -> 2048   (A10, 4090, 5090; covers RTX3090 24GiB)
+        gpu_mem <  60 GiB -> 4096   (A100 40GB, L40)
+        gpu_mem <  90 GiB -> 8192   (H100, A100 80GB)
+        gpu_mem < 160 GiB -> 8192   (H20, H200)
+        else              -> 16384  (B200, MI300)
+
+    Benchmarks ran the sglang server with --chunked-prefill-size unset, so the
+    resolved default IS the engine value. ``total_memory_bytes`` is the per-device
+    gpu JSON value (matching sglang's get_device_memory_capacity per-GPU read; TP
+    does not change the tier). Emitted as ``max_num_batched_tokens`` — the loader
+    key the simulator consumes as the per-step chunked-prefill token budget."""
+    gib = total_memory_bytes / 1024**3
+    if gib < 20:
+        return 2048
+    if gib < 35:
+        return 2048
+    if gib < 60:
+        return 4096
+    if gib < 90:
+        return 8192
+    if gib < 160:
+        return 8192
+    return 16384
+
+
 def parse_dir(name: str) -> tuple[str, str, int, str] | None:
     """``<gpu>_<model...>_tp<N>_<engine>`` -> (gpu_token, model, tp, engine)."""
     parts = name.split("_")
@@ -181,10 +215,12 @@ def main() -> None:
             "tp": tp,
             "engine": engine,
             "available_kv_blocks": kv_blocks,
-            # vLLM-only: sglang's chunked_prefill_size follows a different memory-tier rule
-            # (audit-v2 G8, unresolved) — its key stays absent rather than wrong.
-            **({"max_num_batched_tokens": vllm_max_num_batched_tokens(total_mem, gpu_name)}
-               if engine == "vllm" else {}),
+            # Per-engine chunked-prefill budget rule (both ENGINE CONFIG): vLLM's device
+            # rule vs sglang's per-device memory-tier rule (audit-v2 G8, resolved
+            # 2026-06-10 — sglang configs no longer inherit the vLLM 8192 default).
+            "max_num_batched_tokens": (
+                vllm_max_num_batched_tokens(total_mem, gpu_name) if engine == "vllm"
+                else sglang_chunked_prefill_size(total_mem)),
             "bench_dir": d.name,
             "backend": f"{disp.lower()}-tp{tp}-{engine}-analytic-roofline",
             "calibration_status": f"{gpu_token}_tp{tp}_{engine}_analytic_roofline_firstcut",

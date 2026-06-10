@@ -5,6 +5,7 @@
   "tp": 1,
   "engine": "sglang",
   "available_kv_blocks": 1117,
+  "max_num_batched_tokens": 2048,
   "bench_dir": "3090_Llama-3.1-8B_tp1_sglang",
   "backend": "rtx3090-tp1-sglang-analytic-roofline",
   "calibration_status": "3090_tp1_sglang_analytic_roofline_firstcut",

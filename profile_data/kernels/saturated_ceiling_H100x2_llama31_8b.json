@@ -17,5 +17,5 @@
     }
   ],
   "lookup": "linear interpolation in output between anchors; clamp to the nearest anchor outside the range (monotone non-increasing: short output saturates higher)",
-  "_notes": "Measured-anchor replacement for the retired least-squares ceiling 118.7 + 3263/output (no fit; measured plateau medians + interpolation, same pattern as the decode kernel grid). Regenerate: python3 -m profiling.process.build_saturated_ceiling. See profiling/docs/fitted_constants_audit.md."
+  "_notes": "Measured-anchor replacement for the retired least-squares ceiling 118.7 + 3263/output (no fit; measured plateau medians + interpolation, same pattern as the decode kernel grid). Regenerate: python3 -m profiling.process.build_saturated_ceiling. See profiling/docs/fitted_constants_audit.md. Sensitivity (audit-v2 G9): PRESSURE_THRESHOLD=2.5 is a one-time curve read-off ('saturates by ~2.5'), not derived; recomputing this artifact's anchors at thresholds 2.0/3.0 gives \u2014 @2.0: out=28: 143.5->142.6 ms (-0.63%); @3.0: out=28: 143.5->144.2 ms (+0.49%). CLUSTER_SPLIT_OUTPUT=50 check \u2014 split=40: anchors identical; split=60: anchors identical. Production cuts unchanged (2026-06-10, lane L5)."
 }
