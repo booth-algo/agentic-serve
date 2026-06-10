@@ -186,6 +186,16 @@ def main(argv: list[str] | None = None) -> None:
     if missing:
         raise SystemExit(f"no {MODEL} {ENGINE} deployment for gpu keys: {missing}")
 
+    # The per-GPU realized pool files are GITIGNORED (~100MB) — a fresh worktree silently lacks
+    # them, the TTFT cohort falls back to the pooled forward mode, and TTFT/E2EL gates then
+    # measure a NON-PRODUCTION configuration (H100 ttft_cell ~33% instead of ~18%). This exact
+    # failure flipped a host-split adoption verdict on 2026-06-09/10 — see the De-fit log.
+    if not list(Path("inference-benchmark/data/distributions").glob("*_realized_*.json")):
+        print("WARNING: no per-GPU realized distribution files found under "
+              "inference-benchmark/data/distributions/ — TTFT trajectory REPLAY IS OFF "
+              "(pooled cohort, non-production). TTFT/E2EL gates are NOT production-faithful; "
+              "symlink the *_realized_*.json files from the main checkout first.", flush=True)
+
     orig_grid = kernel_step_cost._default_grid
     orig_ceiling = kernel_tpot._active_ceiling_json
     orig_decode = kernel_tpot.decode_step_ms

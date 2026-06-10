@@ -28,8 +28,9 @@ per-added-request slope is ``perreq*P`` and ``shared_frac = 1 - perreq/c1_rate``
 Estimator (PRE-REGISTERED — the spec's "point estimate, not the gate-max"): pooled OLS of
 the common ``B*P`` slope with per-P intercepts over the two band-defining planes
 P in {8000, 16000}. P=2000 is EXCLUDED exactly as the documented band excluded it: at short
-prefixes a fixed ~8.3 ms per-request serving cost (4-param refit, reported in the artifact)
-is misattributed as per-token, driving its plane's shared_frac to ~-0.02 (non-physical).
+prefixes a fixed ~12.5 ms per-request serving cost (band-planes 4-param refit, reported in the
+artifact as ``diagnostic_fixed_cost_refit.fixed_ms_per_req`` = 12.458) is misattributed as
+per-token, driving its plane's shared_frac to ~-0.02 (non-physical).
 Band endpoints for context: P=8000 -> 0.402, P=16000 -> 0.546 (the in-code "~40-54%").
 
 Caveats recorded in the artifact:
@@ -37,8 +38,9 @@ Caveats recorded in the artifact:
     15 rows): it returns shared = -1.303 ms/1k (negative) because the model omits the fixed
     per-request cost; the band never came from it.
   * The pooled per-P intercepts come out INVERTED (84.3 ms at P=8000 vs 52.4 ms at
-    P=16000) — same omitted-fixed-cost symptom. A 4-param refit (fixed-per-request term)
-    gives shared_frac ~0.63, OUTSIDE the band; adopting it would add a new pricing term to
+    P=16000) — same omitted-fixed-cost symptom. The band-planes 4-param refit
+    (fixed-per-request term; the artifact's ``diagnostic_fixed_cost_refit``) implies
+    shared_frac ~0.68, OUTSIDE the band; adopting it would add a new pricing term to
     the simulator, beyond this partition-only de-fit.
   * Denominator: the same-day live c1 rate 5.887 (internally consistent with the band);
     using the shipped sum 6.103 instead would give 0.540 (reported as sensitivity).

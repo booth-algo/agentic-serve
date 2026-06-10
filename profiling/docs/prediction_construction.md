@@ -78,18 +78,19 @@ Per engine step (`_price_step`) — a mixed prefill+decode step:
 | prefill NEW | `(gemm_per_tok_loaded(total_chunk) + PREFILL_NEW_DISPATCH_RESIDUAL)·total_chunk` | 🟢 + 🔵 `0.005745` (measured host serving-stack/new tok; de-fit 2026-06-05) |
 | └ `gemm_per_tok` | `2·(n_params/tp)/(peak_flops·util-ramp)` + `PREFILL_TP_COMM·(tp>1)` (util ramps `util_flops→PREFILL_GEMM_UTIL_SAT=1.0` over the chunk budget) | 🟢; 🔵 `TP_COMM=0.00585` |
 | prefill FA3 | `PREFILL_FA3_MS_PER_TOKEN2 · M·(R + 0.5·M)·frac` (super-linear attn; M=tokens (re)prefilled, R=resident prefix) | 🔵 `8.31e-7` |
-| host per-req | `PREFILL_HOST_PERREQ_MS_PER_TOKEN · cached · frac` (re-tokenize cached context, summed over concurrent prefills) | 🔴 `0.0030515` |
-| host shared | `PREFILL_HOST_SHARED_MS_PER_TOKEN · mean_cached` (amortized once/step) | 🔴 `0.0030515` |
+| host per-req | `PREFILL_HOST_PERREQ_MS_PER_TOKEN · cached · frac` (re-tokenize cached context, summed over concurrent prefills) | 🔵 `0.0029076` = 0.4764×6.103e-3 (measured split, de-fit 2026-06-10) |
+| host shared | `PREFILL_HOST_SHARED_MS_PER_TOKEN · mean_cached` (amortized once/step) | 🔵 `0.0031954` = 0.5236×6.103e-3 (measured split, de-fit 2026-06-10) |
 | step cost | `step_ms = max(decode_ms + scheduler_overhead, prefill_ms)` | 🔵 |
 | floor (once per req, at first token) | `floor_residual = max(0, prefill_floor − scheduler_overhead)` added to `first_token_epoch` | 🔵 (PR #73: per-config; H100=25.86, H100x2=14.01) |
 
 → **`TTFT[turn] = first_token_epoch − arrival_epoch`** = queue-wait + prefill service + per-request floor.
 A turn no session reaches falls back to the forward static predictor (`_fallback_ttft`).
 
-The remaining 🔴 rows are the **prefill host-split partition** (`PREFILL_HOST_SHARED`/`PREFILL_HOST_PERREQ`):
-the sum (6.103e-3) is measured; the 50/50 partition is a within-measured-band [0.40,0.54] engineering
-choice — the measured point estimate 0.5236 was gate-rejected 2026-06-09 (see the De-fit log).
-(`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit 2026-06-05 and is 🔵.)
+No 🔴 rows remain in the TTFT step pricing: the **prefill host-split partition** is now the measured
+point estimate (shared fraction 0.5236 of the measured sum 6.103e-3 — pooled OLS of the live B-sweep
+band [0.40,0.54]; adopted 2026-06-10 on the production replay-ON re-gate after an initial replay-OFF
+worktree gate had rejected it — see the De-fit log). (`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit
+2026-06-05 and is 🔵.)
 
 ---
 
@@ -98,13 +99,13 @@ choice — the measured point estimate 0.5236 was gate-rejected 2026-06-09 (see 
 
 ---
 
-## Fitted-constant debt (7 found 2026-06-05, workflow `wpa6sviup`; **2 de-fit, 5 resolved-as-tuned, 0 remaining**)
+## Fitted-constant debt (7 found 2026-06-05, workflow `wpa6sviup`; **4 de-fit, 3 resolved-as-tuned, 0 remaining**)
 
 | Constant | Module | Value | Status / issue |
 |---|---|---|---|
 | ~~`PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN`~~ | ttft_queue_sim | 0.00602 → **0.005745** | ✅ **DE-FIT 2026-06-05** — measured (frontend.new); fit-pin dropped — see log |
-| `PREFILL_HOST_SHARED_MS_PER_TOKEN` | ttft_queue_sim | 0.0030515 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — sum (6.103e-3) measured; partition measured (band [0.40,0.54], point est. 0.5236 via `build_host_split.py`) but adoption gate-rejected (H100 TTFT-cell 33.36→33.79) → 50/50 kept as explicit within-band choice — see log |
-| `PREFILL_HOST_PERREQ_MS_PER_TOKEN` | ttft_queue_sim | 0.0030515 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — same 50/50 partition (measured point est. would be 0.4764×sum; gate-rejected) — see log |
+| ~~`PREFILL_HOST_SHARED_MS_PER_TOKEN`~~ | ttft_queue_sim | 0.0030515 → **0.0031954** | ✅ **DE-FIT 2026-06-10** — measured partition adopted: shared fraction 0.5236 (pooled-OLS point estimate of the live B-sweep band [0.40,0.54], `build_host_split.py`). An initial replay-OFF worktree gate rejected it (+0.44pt); the production replay-ON re-gate PASSED and improves (H100 TTFT 18.20→18.07) — see log |
+| ~~`PREFILL_HOST_PERREQ_MS_PER_TOKEN`~~ | ttft_queue_sim | 0.0030515 → **0.0029076** | ✅ **DE-FIT 2026-06-10** — the complementary 0.4764 share; sum pinned EXACTLY at the measured 6.103e-3 — see log |
 | `P_LO` | kernel_tpot | 0.88 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — measurement built (measured onset ≈ 0.45); adoption gate-rejected → honest tuned-knob label, false "measured" claim removed — see log |
 | `P_HI_SHORT` | kernel_tpot | 1.22 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — measured ≈ 1.69; gate-rejected (swe-plateau 8.7→10.4) — see log |
 | `P_HI_LONG` | kernel_tpot | 2.0 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — measurement data-starved (2 cells, 1 profile; point est. 2.31 consistent) — see log |
@@ -118,7 +119,7 @@ disagreement, and a test pins both so neither drifts silently.)
 `.omc/specs/deep-dive-whether-there-are-fitted.md`.
 
 ### De-fit log
-- **2026-06-09 — `PREFILL_HOST_SHARED`/`PERREQ` 50/50 partition: measurement built, adoption gate-rejected → resolved-as-tuned** (`ttft_queue_sim`; the last 2 debt rows — spec `.omc/specs/deep-dive-whether-there-are-fitted.md` rows 2-3, "use the point estimate of the 40-54% band, not the gate-max").
+- **2026-06-09/10 — `PREFILL_HOST_SHARED`/`PERREQ` 50/50 partition: measurement built → ADOPTED on the production re-gate (de-fit)** (`ttft_queue_sim`; the last 2 debt rows — spec `.omc/specs/deep-dive-whether-there-are-fitted.md` rows 2-3, "use the point estimate of the 40-54% band, not the gate-max").
   The SUM 6.103e-3 ms/cached-token was always measured (the c1 serving-regression cached coefficient;
   live-validated at 5.89 by the 2026-06-03 loopback probe, commit 9dce1dc; corroborated by stage-split
   frontend.cached 5.174 in `serving_stage_split_H100.csv`). Only the shared/per-request PARTITION was a
@@ -137,15 +138,19 @@ disagreement, and a test pins both so neither drifts silently.)
   prefixes; recorded in the artifact). (3) Pre-registered point estimate: pooled OLS (per-P intercepts
   + one common B·P slope) over the two band planes → perreq 2.8048e-3 → **shared_frac 0.5236**
   (in-band; sensitivities: endpoint-mean 0.474, sum-denominator 0.540). Candidate constants =
-  0.5236/0.4764 × the exact sum: SHARED 0.0031955 / PERREQ 0.0029075. **Adoption gate
-  (`gate_scoped_rows`, 50/50 → measured 0.5236): REJECTED** — TTFT-cell H100 **33.36→33.79** (primary
-  gate), A100 42.60→42.73, H100x2 29.97→29.60 (improves); E2EL-cell H100 21.27→21.32, A100
-  29.08→29.16, H100x2 21.63→21.17; TPOT unchanged everywhere. Outcome: the measured point estimate is
-  not behavior-superior on the primary cell, so per the sanctioned fallback the shipped partition
-  stays **50/50, relabeled honestly** as a within-measured-band [0.40, 0.54] engineering choice (like
-  the ramp knees), with the point estimate 0.5236 recorded. Constants byte-identical (0.0030515 each);
-  comments + docs updated; the measurement script + artifact are committed so the disagreement is
-  regenerable; the existing test pins on 0.0030515 stay green.
+  0.5236/0.4764 × the exact sum: SHARED 0.0031954 / PERREQ 0.0029076. **Gate history — a
+  measurement-fidelity lesson:** the first adoption gate (2026-06-09, in the fresh `defit-host-split`
+  worktree) REJECTED the split: TTFT-cell H100 33.36→33.79 (+0.44 > 0.3). But that gate ran with
+  **trajectory replay OFF** — the per-GPU realized pool files (`*_realized_<slug>.json`) are
+  gitignored (~100MB, excluded from PR #72) and absent from a fresh worktree, so the TTFT cohort
+  silently fell back to the pooled forward mode (baseline 33.4% instead of the production ~18.2%).
+  **Re-gated 2026-06-10 with the pools restored (production replay-ON): PASSED and improves** —
+  TTFT-cell H100 **18.20→18.07**, E2EL 11.33→11.20; A100 21.94→22.06 / 15.84→15.93 (within ±0.3);
+  H100x2 advisory TTFT 34.71→33.06, E2EL 25.92→24.71; TPOT byte-identical everywhere. **Outcome:
+  measured split ADOPTED** (shared 0.0031954 / perreq 0.0029076, sum exactly 6.103e-3);
+  `test_ttft_queue_sim` pins the literals to the regenerable artifact AND the artifact's measured
+  band (both-ways pin, knee-precedent). Lesson recorded: worktree gates must verify the per-GPU
+  realized pools are present, or TTFT/E2EL gates measure a non-production cohort mode.
 - **2026-06-09 — ramp-knee corrected-floor follow-up: Phase-0 stop-point, ADOPTED = none** (gated
   re-attempt per `profiling/docs/ramp_knee_adoption_plan.md`; full numbers in its Execution record).
   Hypothesis: the gate-rejection below was floor misattribution — at low pressure the implied weight

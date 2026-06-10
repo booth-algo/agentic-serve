@@ -155,21 +155,24 @@ def _prefill_floor_for(gpu_key: str | None) -> float:
 # HOST term (tokenize + parse + ZMQ-IPC per new token) and does NOT shard with tp.
 PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN = 0.005745   # MEASURED frontend.new (host serving-stack / new tok)
 PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel, ms per token^2
-# WITHIN-MEASURED-BAND [0.40,0.54] ENGINEERING CHOICE (relabeled 2026-06-09; band live-measured 2026-06-03
-# via the vLLM-server concurrency sweep live_split_probe.py, commit 9dce1dc). The cached host cost is
-# per-request serving-stack work (HTTP body parse + chat-template + tokenize + ZMQ IPC) that PARTLY
-# amortizes across a batch: the B-sweep's per-added-request slope (prefill_live_split_H100.csv) vs the c1
-# rate (5.887 ms/1k from prefill_live_ttft_H100.csv — reproduces the fitted 6.103) bounds the shared
-# fraction to [0.40, 0.54] (P=8000 → 0.402, P=16000 → 0.546; P=2000 excluded: a fixed ~12.5 ms/req cost
-# misattributed as per-token). The measured POINT ESTIMATE of that band is 0.5236 (pooled OLS over the band
-# planes; profiling/process/build_host_split.py → profile_data/kernels/prefill_host_split_H100.json), but
-# its adoption was GATE-REJECTED 2026-06-09 (TTFT-cell H100 33.36→33.79; A100 42.60→42.73; H100x2 improved
-# 29.97→29.60), so the shipped partition stays the within-band 50/50 — an explicit engineering choice (like
-# the ramp knees), NOT a measurement. Replaces the imported 57/43; the offline batch-CSV's 12/88 was wrong
-# (lacked the serving stack + regressed). Sum kept at the benchmark-true 6.103e-3 (live-validated at 5.89).
-# See profiling/docs/prediction_construction.md De-fit log + prefill_stage_split_results.md.
-PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.0030515    # host serving-stack, amortized once per step (0.50×6.103e-3; within-band choice, point est. 0.5236)
-PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.0030515    # host serving-stack, per request, summed (0.50×6.103e-3; within-band choice)
+# MEASURED SPLIT (de-fit 2026-06-10; band live-measured 2026-06-03 via the vLLM-server concurrency sweep
+# live_split_probe.py, commit 9dce1dc). The cached host cost is per-request serving-stack work (HTTP body
+# parse + chat-template + tokenize + ZMQ IPC) that PARTLY amortizes across a batch: the B-sweep's
+# per-added-request slope (prefill_live_split_H100.csv) vs the c1 rate (5.887 ms/1k from
+# prefill_live_ttft_H100.csv — reproduces the fitted 6.103) bounds the shared fraction to [0.40, 0.54]
+# (P=8000 → 0.402, P=16000 → 0.546; P=2000 excluded: a fixed ~12.5 ms/req cost misattributed as
+# per-token). Shipped values = the measured POINT ESTIMATE of that band, shared fraction 0.5236 (pooled
+# OLS over the band planes; regenerate: python3 -m profiling.process.build_host_split →
+# profile_data/kernels/prefill_host_split_H100.json, which pins these literals via test_ttft_queue_sim).
+# Gate history: an initial 2026-06-09 worktree gate REJECTED the split by +0.44pt H100 TTFT — but that
+# gate ran with trajectory replay OFF (the per-GPU realized pools are gitignored and were absent from the
+# fresh worktree, i.e. a non-production cohort). Re-gated 2026-06-10 under the production replay-ON
+# config: H100 TTFT-cell 18.20→18.07, E2EL 11.33→11.20 (improves), A100 +0.12/+0.10 (within ±0.3),
+# H100x2 advisory 34.71→33.06 → ADOPTED. Replaces the gate-tuned 50/50 (and the earlier imported 57/43;
+# the offline batch-CSV's 12/88 was wrong — lacked the serving stack). Sum kept EXACTLY at the
+# benchmark-true 6.103e-3 (live-validated at 5.89). See prediction_construction.md De-fit log.
+PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.003195416551520391   # MEASURED 0.5236×6.103e-3 — amortized once per step
+PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002907583448479609   # MEASURED 0.4764×6.103e-3 — per request, summed
 
 # Prefill GEMM efficiency is BATCH-dependent (measured 2026-06-04 from GT turn-0 cohorts). A small prefill
 # (a single/low-conc request, or a cache-hit's few new tokens) runs at the small-batch util_flops (~0.65),
