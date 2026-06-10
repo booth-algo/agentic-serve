@@ -95,3 +95,69 @@ terminal c80 t16, no controlled pressure sweep). Combined set (archive serving-m
 whole-session MRU vs LRU-oldest-block), S8 (barrier-frozen vs live hit/miss), and S9
 (herd_pending protection vs engine order). Re-derivation work proceeds against these
 oracles next.
+
+## 2026-06-10 — S7/S8/S9 ADJUDICATION (analysis only, no sim edits yet)
+
+Tool: `profiling/profile/vllm/engine_trace/compare_eviction_semantics.py` — a faithful
+re-implementation of the vLLM v1 BlockPool (block-hash prefix cache, single LRU free
+queue, tail-first frees, popleft eviction) driven by each trace's own kv_events stream
+and VALIDATED against the trace's live `get_computed_blocks` truth, plus counterfactual
+replays of the production `PrefixLRUCache` rule variants under the engine's own
+admission/finish order. Engine request id `<n>-<hash>` maps to token_history by global
+submission counter (verified 100% by prompt-token match on every trace).
+
+**Replica validation (the S7 order+granularity verdict in one number):** the LRU-oldest
+block-by-block replica reproduces the engine's live computed_tokens EXACTLY on
+100% (osworld no-pressure), 92.7% (osworld pool050), 98.1-98.6% (swe pool035/060) of
+lookups. Flipping ONLY the eviction order to MRU-newest degrades exactness to 80.9-93.3%
+and grows absolute token error 3.2-26x (pool050: 136k -> 1115k tok; pool060 final
+deterministic run: 14.8k -> 384k). vLLM v1 evicts
+free-queue blocks LRU-OLDEST, block-by-block — the sim's tier-2 whole-session MRU has no
+engine analog.
+
+**S7 granularity:** all four ARCHIVE serving traces (natural load): 100% of turn>0
+prefix losses are PARTIAL (tail-trim, head survives; zero whole-prefix misses in 602
+lossy lookups; terminal c80 median loss frac 0.997 yet never 1.0). Full-cell barrier
+replays: partial losses appear at the pressure edge (swe pool060 t11: 16 full / 9
+partial / 15 zero) and 100%-zero turns occur ONLY when the herd working set exceeds the
+whole pool (then LRU recycling kills every prefix before reuse — an emergent outcome,
+not victim selection). The sim's whole-session eviction is a victim-selection primitive
+the engine does not have.
+
+**S8 frozen-vs-barrier vs live:** freeze over-credit (replica barrier snapshot minus
+live truth at scheduling): osworld pool050 977k tok = 27.0% of frozen credit (135 reqs
+lose prefix MID-TURN); swe pool060 360k = 20.2%; swe pool035 826k = 85.4%. No-pressure
+control: 0 (freeze is harmless when nothing evicts). Live erosion is visible even within
+a SINGLE scheduling step (pool060 step 287: five same-step lookups descend 353/313/273/
+233/193 blocks as each peer's allocation eats the next prefix).
+
+**S9 herd protection:** owner status of evicted blocks at eviction time: WAITING herd
+members supply 69.6% (pool060), 50.2% (pool050), 43.0% (pool035) of all evicted blocks —
+the sim's herd_pending forbids exactly these. The engine also evicts just-finished
+sessions' blocks LAST (newest in free queue) while the sim trims them FIRST
+(depart -> herd_pending.discard -> tier-1 victim): the order inversion is real on both
+ends.
+
+**Counterfactual re-prefill tokens (engine admission/finish order, trace pool):**
+
+| trace | engine truth | sim CURRENT (frozen+tail+whole) | live+lru+PARTIAL |
+|---|---|---|---|
+| osworld pool050 | 1,850,012 | 882,728 (-52.3%) | 1,617,408 (-12.6%) |
+| swe pool060 | 669,064 | 307,024 (-54.1%) | 660,360 (-1.3%) |
+| swe pool035 | 1,952,856 | 1,126,512 (-42.3%) | 1,924,488 (-1.5%) |
+| osworld full pool (control) | 395,660 | 405,616 (+2.5%) | 405,616 (+2.5%) |
+
+Same story on the FA3-quadratic proxy sum M*(R+M/2): current -35% to -51% vs truth;
+live+lru+partial -0.9% to -11.8%. The current cluster UNDER-counts re-prefill work
+under pressure in BOTH linear and quadratic terms; engine-faithful partial LRU + live
+hits IS the missing mechanism (the S8 freeze + S9 protection were compensating for the
+cascade that whole-session eviction itself caused). Residual osworld pool050 gap
+(-12.6%, concentrated t8/t10 drain handoff) is the session-granular cache's inability
+to represent block interleaving — documented as the honest stop-point for the cache
+model itself.
+
+Caveats: Spearman(finish-order, loss) per-turn correlations are CONFOUNDED (drain +
+context-size correlate with finish order; signs mixed) — the LRU-vs-MRU replica
+falsification supersedes them. Counterfactuals use the engine's admission order, not
+the sim's emergent queueing; production gate impact still requires the replay-ON gate
+after any sim edit (baseline pinned above).
