@@ -228,3 +228,29 @@ Final state: `configs/gpus/*.json` and `closed_form_tpot.py` defaults unchanged 
 `closed_form_tpot.py:69`, and `roofline_params_H100_llama31_8b.json`
 `_notes.util_provenance.values_kept` now record the gate numbers and the rejection.
 pytest after revert: 145 passed, 1 skipped.
+
+## Lane-final status (2026-06-10)
+
+- **Action taken: `kept-documented-disagreement`.** Pinned 0.93/0.65/5.7 stay in
+  `configs/gpus/*.json` and the `RooflineParams` defaults; the pre-registered recipe's
+  re-derived values 0.8111/0.5886/4.5574 live in
+  `profile_data/kernels/roofline_utils_H100.json` and in the provenance comments next to
+  every kept constant. The 0.8111 candidate was wired, replay-ON gated, and REJECTED
+  (H100 tpot_cell +0.67pt, chat +0.77pt > +0.3) — see the gate table above. Retiring
+  0.93 requires the paired host-floor change in L3-owned decode pricing (integration
+  concern, recorded above).
+- **A100 measurement (G7): DEFERRED, not attempted.** 7/8 GPUs on the A100 host
+  (ssh alias `a100`, hostname gpu-4) are running another latency-sensitive benchmark
+  campaign; a util measurement there now would contaminate both sides (decided at lane
+  launch). Deliverables instead: runbook `profiling/docs/a100_roofline_utils_runbook.md`
+  (env `/home/kevinlau/miniconda3/envs/vllm`, weights under `/data/models`, exact JSONL
+  field contract, builder invocation) + preflight
+  `profiling/process/preflight_a100_roofline_utils.sh` (read-only run 2026-06-10:
+  everything PASS except gpu_quiet — the deferral condition). A100 JSON keeps its H100
+  placeholders, `_notes` says so and points at the runbook.
+- Deliverables tracked in this lane (all committed locally, never pushed):
+  `profiling/process/build_roofline_utils.py` (deterministic builder),
+  `profile_data/kernels/roofline_utils_H100.json` (artifact, sha256 `a8e644b6…`),
+  `configs/gpus/*.json` + `simulator/closed_form_tpot.py` provenance comments,
+  runbook + preflight, this entry. `prediction_construction.md` untouched (integration
+  merges this entry).
