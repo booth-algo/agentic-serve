@@ -24,7 +24,15 @@
     "saturated_ceiling": {
       "status": "inherited",
       "from": "H100",
-      "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
+      "note": "KEPT inherited BY MEASUREMENT (2026-06-10, lane L8): the tp4 GT never reaches the saturated regime (max KV pressure 1.81 over 1043 turns vs build_saturated_ceiling threshold 2.5; builder would refuse) -> no own ceiling is derivable. The inherited H100-tp1 anchors bind ONLY as a clamp on swebench conc320 (pred pinned at 243.1 ms vs measured 83-90): they truncate the analytic-decode amplifier over-prediction rather than model a real tp4 plateau. Fix is the measured tp4 decode grid, not a ceiling."
+    },
+    "prefill_floor": {
+      "status": "measured",
+      "value": 18.08,
+      "path": "profile_data/kernels/prefill_floor_llama31_8b.json",
+      "source": "build_prefill_floor.py (min_clean_c1, n=63; regenerated 2026-06-10 byte-identical)",
+      "date": "2026-06-10",
+      "note": "per-config measured floor resolved by ttft_queue_sim._prefill_floor_for('H100x4') -> 18.08 ms (slug h100x4); supersedes the 26.0 tp1 fallback. Already active in the L8 baseline (TTFT 39.4507)."
     },
     "roofline_peak": {
       "status": "measured",
