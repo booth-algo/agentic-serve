@@ -119,3 +119,23 @@ Merged into `prediction_construction.md`'s De-fit log by the integration phase. 
   Tests: 199 passed + 12 subtests (new pins: merged-grid load, sub-linear ≤ linear
   beyond-hull, interior-holes-keep-analytic, roofline-increment cap, hold-out regression,
   launch-floor classes/resolution/analytic-grid dynamics).
+- **2026-06-10 — FINALIZE: lane outcome PASSED (binding clean + H100x2 target met ≥2×).**
+  Final gate (replay-ON): H100x2 tpot_cell **21.5336** (Δ −7.215 vs 28.7486 baseline; target
+  ≥3 pt), ttft_cell 29.0163 (unchanged), e2el_cell 18.5506; H100 tpot_cell 14.4697 (+0.1515
+  ≤ +0.3 binding), A100 14.3728 (+0.0311) — all binding gates clean. Full worktree test
+  suite green: **374 passed, 1 skipped, 15 subtests**. h100 GPUs 6+7 verified clean after
+  the runs (`nvidia-smi --query-compute-apps` empty; no running processes, 0% util).
+  **Grid artifacts** live in the shared `profile_data/results/` (gitignored by the repo
+  convention that holds for ALL measured decode grids — A100 `decode_profile_A100_2026-06-02`
+  and tp1 H100 `decode_kernel_trace_H100_large_2026-05-17` are likewise R2-synced, never
+  committed); the worktree reaches them through the setup symlink. For integration
+  verification (sync these three to R2 with the other results):
+  `decode_profile_H100x2_2026-06-10_main.csv` md5 `38933d281fdd34bbda00d0e24e5e4e0e`,
+  `decode_profile_H100_2026-06-10_s12recheck.csv` md5 `3c227ff8bc2c3fe9ce127dd57a105e3a`,
+  `decode_profile_H100x2_merged_2026-06-10.csv` md5 `089aca9074604e2aa7895e7f0615d614`
+  (the config-referenced merged grid; regenerable from the two raw CSVs via
+  `profiling/process/build_decode_grid.py`). Owned-file delta vs main: `simulator/
+  kernel_step_cost.py`, `simulator/tests/test_kernel_step_cost.py`, `profiling/process/
+  build_decode_grid.py`, `profiling/tests/test_build_decode_grid.py`, the single allowed
+  `configs/deployments/h100x2_llama31-8b_tp2.json` `decode_grid` manifest line, and this
+  entry. `kernel_tpot.py` / `ttft_queue_sim.py` untouched.
