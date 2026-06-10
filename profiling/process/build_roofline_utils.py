@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the roofline-utils artifact from committed serving-wall step traces.
+"""Build the roofline-utils artifact from the pinned serving-wall step traces (gitignored working-set on this host — see the de-fit entry).
 
 Audit-v2 G4: ``util_bw = 0.93`` reproduces from a real trace byte-wise but matches NO
 documented computation (the documented recipe gives 0.945; real step walls give

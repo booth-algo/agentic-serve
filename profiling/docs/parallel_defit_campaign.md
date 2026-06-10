@@ -42,6 +42,29 @@ ordered L7 → L2 → L5 → L6 → L3 → L4 (cheap/byte-identical first, predi
 re-gate after each merge, merge `defit_log_entries/*` into `prediction_construction.md`, full
 pytest + replay-ON gate + dashboard re-rebuild, ONE PR.
 
-## Execution record
+## Execution record (2026-06-10, integration complete)
 
-_pending — filled at integration_
+**All 7 lanes executed; 6 merged into this branch (order L7→L2→L5→L6→L3→L4, every merge clean — the
+ownership matrix held: zero cross-lane conflicts).** Final composition gate (replay-ON, pools-required)
+vs the campaign base `5f06393`: the ONLY deltas are L3's adopted ones — **H100x2 TPOT 28.75→21.53
+(−7.2pt), E2EL 21.83→18.55 (−3.3pt)**, H100 TPOT +0.15 (disclosed binding-clean trade), A100 +0.03;
+ALL TTFT cells byte-flat; L2/L4/L5/L6/L7 prediction-byte-identical as contracted. 200 tests +
+12 subtests green on the composition.
+
+| Lane | Outcome | Headline |
+|---|---|---|
+| L1 dashboard | ✅ published | official post-PR-#74 gates: TPOT 15.02%, H100 17.90/11.39, A100 22.21/16.49, H100x2 30.97/23.28 (pre-campaign) |
+| L2 pools | ✅ closed (S13, D1–D4) | pools committed (19.9MB), replay-OFF footgun structurally dead |
+| L3 tp2 | ✅ **adopted** | H100x2 TPOT **−7.2pt**; sub-linear fill measured; G5+S12 closed |
+| L4 queue | ✅ rederived | S7 falsified+retired byte-identically; S8 pinned compensating; residual localized to S10 |
+| L5 gray | ✅ closed (G1/G2/G6/G8/G9) | SAT_SUSTAIN population finding; sglang budgets engine-true (3090 honestly worse) |
+| L6 utils | ✅ resolved-as-compensating-fit (G4) | util_bw 0.8111 measured ≠ 0.93 kept; decode host-overhead term implicated; A100 deferred w/ runbook |
+| L7 cleanup | ✅ closed (D5–D9) | dead modules retired with proofs; byte-identical |
+
+**Named successors (the remaining honest debt):** (1) the S10/S8/util-cap cluster — re-derive the
+re-prefill-volume→TTFT amplification, then re-gate S8-unfreeze + the prefill util cap + (likely)
+decode util_bw together (L4+L6 independently implicate the same missing host/queue term; A100 already
+improves under the honest values); (2) G7 A100 measurement (turnkey runbook committed, host was busy);
+(3) the kernel-ramp structural choices S1–S5 and the fallback coefficient S11 (audit-v2, unassigned);
+(4) R2-sync of L3's three grid CSVs (md5s in `defit_log_entries/L3-tp2.md`) — PR checklist item.
+

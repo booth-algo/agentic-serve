@@ -37,7 +37,7 @@ A **measured unsaturated decode-kernel step, ramped toward a measured saturation
 | 3 | `capacity_batch = available_kv_blocks / per_session_blocks` | 🟢 |
 | 4 | `b_eff = min(scheduled, capacity_batch)` — KV-throttled running batch | 🟢 |
 | 5 | `pressure = scheduled · per_session_blocks / available_kv_blocks` | 🟢 |
-| 6 | `kernel_step = decode_step_ms(b_eff, ctx)` — measured grid (bilinear) where covered 🔵; beyond the grid edge / OOM corners the analytic roofline `max(fixed_floor + b·ctx·kv_bytes/(kv_shards·bw·util_bw), 2·(n_params/tp)·b/(flops·util_flops))` | 🔵 grid; 🟢 roofline; 🔵 `fixed_floor`; 🟢 launch-floor `max(0.0,·)` guard (de-fit 2026-06-05; was `0.3`) |
+| 6 | `kernel_step = decode_step_ms(b_eff, ctx)` — measured grid (bilinear) where covered 🔵; beyond the grid edge / OOM corners the analytic roofline `max(fixed_floor + b·ctx·kv_bytes/(kv_shards·bw·util_bw), 2·(n_params/tp)·b/(flops·util_flops))` | 🔵 grid (tp2 extended +54 cells 2026-06-10); 🟢 roofline with 🔵 measured-shape SUB-linear beyond-hull fill (L3, de-fit 2026-06-10); 🔵 `fixed_floor`; 🔵 per-class launch floors H100 1.37 / H100x2 1.82 / A100 2.06 ms (G5, de-fit 2026-06-10; was one config-independent 1.37 + `max(0.0,·)` guard) |
 | 7 | `t_upper = max(kernel_step, saturated_ceiling_ms(median_output))` — measured plateau anchors, interpolated | 🔵 |
 | 8 | `z = pressure · qbar` — distribution-integrated KV demand / pool. `qbar` = trapezoid mean of the MEASURED `context_scale_quantiles` (per-cell, `cohort_scale.cohort_scale_mean`; swe 1.1269, term 1.3463, osworld 0.9834, chat 1.0003 → onsets `1/qbar` = 0.887/0.743/1.017/1.000) | 🔵 quantile artifact; 🟢 trapezoid |
 | 9 | `sustain = smoothstep(output, SAT_SUSTAIN_LO=9, SAT_SUSTAIN_HI=24)` | 🔵 |
@@ -61,12 +61,14 @@ A **measured unsaturated decode-kernel step, ramped toward a measured saturation
 - `decode_step_ms` is the same composition for all configs; `predict_cell_tpot` calls `predict_turn_tpot`
   per turn using the cell's **median output** as the ceiling output (so the plateau doesn't jitter).
 
-### Why this over-prices tp=2 (context)
-tp=2's 2.29× KV pool keeps `z` below the overflow point even at high concurrency, so `weight≈0` and TPOT = the
-raw step-6 kernel. At high `b_eff` × high `ctx` that lands beyond the (sparse) tp2 grid edge, where the
-analytic roofline's `b·ctx` term grows **linearly** while the real kernel is **sub-linear** → ~1.25–1.30×
-over-price. On tp=1 the same regime is hidden because tp1 saturates first and is priced by the (correct)
-measured ceiling (step 7). See `.omc/specs/deep-dive-trace-whether-there-are-fitted.md`.
+### tp=2 over-pricing — RESOLVED 2026-06-10 (campaign lane L3)
+Historically tp=2's 2.29× KV pool kept `z` below the overflow point, so TPOT = the raw step-6 kernel —
+which, beyond the sparse tp2 grid edge, used an analytic fill whose `b·ctx` term grew **linearly** while
+the real kernel is **sub-linear** (~1.25–1.30× over-price). Fixed by measurement: a 54-cell tp2 grid
+extension + a measured-shape sub-linear beyond-hull fill (hold-out worst over-price 1.24×→1.11×) →
+**H100x2 TPOT cell-MAPE 28.75 → 21.53 (−7.2pt)**, tp1 within +0.15 binding. See
+`defit_log_entries/L3-tp2.md` for the derivation and `.omc/specs/deep-dive-trace-whether-there-are-fitted.md`
+for the original trace.
 
 ---
 
@@ -155,6 +157,13 @@ retirement.)
 `.omc/specs/deep-dive-whether-there-are-fitted.md`.
 
 ### De-fit log
+- **2026-06-10 — PARALLEL DE-FIT CAMPAIGN (6 lanes; see `parallel_defit_campaign.md` Execution record + `defit_log_entries/L*.md` for full per-lane evidence).** Net gate movement (replay-ON, vs the campaign base `5f06393`): **H100x2 TPOT 28.75→21.53 (−7.2), E2EL 21.83→18.55 (−3.3)**; H100 +0.15 TPOT (disclosed L3 fill-consistency trade, binding-clean); all TTFT byte-flat; everything else byte-identical. Lane outcomes:
+  - **L3 (tp2 sub-linearity, ADOPTED):** 54-cell tp2 grid + measured-shape sub-linear fill + per-class launch floors (G5) + S12 resolved by re-measurement (drop vindicated, "OOM" docstring fixed).
+  - **L4 (eviction cluster, REDERIVED):** S7 whole-session MRU preemption FALSIFIED against engine traces and retired (engine-faithful partial LRU-oldest trims; predictions byte-identical, counterfactual-replay-proven). S8 live hit/miss built and gate-rejected (+3.47 H100 TTFT) → freeze retained as a PINNED compensating rule. S9 kept (trace-validated). Residual localized: the S10 re-prefill-volume→TTFT amplification; successor = re-derive S10, then re-gate S8-unfreeze + the prefill util cap TOGETHER (A100 already improves under both).
+  - **L2 (S13 CLOSED):** the 78 per-GPU replay pools are now COMMITTED (minified, 19.9MB) + warn-once/`RAMP_TPOT_REQUIRE_POOLS=1` hard-fail — the silent replay-OFF gate footgun is structurally dead. ramp_tpot's false "measured cluster" provenance (D1–D4) honest-relabeled.
+  - **L5 (gray batch CLOSED):** SAT_SUSTAIN anchors regenerable + the population finding (turn-median p5 = 24.0; the 9.0 anchor exists only per-request — band retune deferred honestly); RESERVE_BYTES rule stated + reproduction test; sglang budgets fixed to the real engine tier rule (cited; RTX3090-sglang honestly regresses — the wrong budget had masked a tiny pool); ceiling-cut sensitivity embedded.
+  - **L6 (G4 resolved-as-compensating-fit):** pre-registered recipe re-derives H100 `util_bw = 0.8111` ≠ 0.93; candidate gate-rejected (H100 TPOT +0.67) → 0.93 kept, exposed as compensating for a missing decode host-overhead term (net-of-sched util 1.25 > 1, unphysical) — pairs with the S10 successor. A100 measurement deferred (host busy) with a turnkey runbook + preflight.
+  - **L7 (dead paths CLOSED):** classifier/hint modules retired to `_legacy` with reachability proofs; D5–D9 + audit-doc S7 misfile fixed; byte-identical.
 - **2026-06-10 — `PREFILL_TP_COMM` 5.85 → 3.279 ms/1k (like-for-like measurement): audit-v2 G3 CLOSED** (`ttft_queue_sim`; `ttft_pricing_defit_plan.md` Item 3).
   The retired 5.85 was a backed-out remainder (tp2 ttft.new 18.5 − GEMM/2 12.65) from an
   instrumentation-INCONSISTENT pair (tp2 multiprocess api_server vs tp1 in-process LLM). Measured

@@ -1274,7 +1274,7 @@ function ServingPerTurnChart({
         // classifier predicts WHEN saturation steps (KV-eviction crossing) and over
         // how many turns it ramps; this pulls the kernel up over that window (one-
         // sided, never lowers). Beats the headline kernel on every profile but is
-        // shown as a comparison line. See simulator/kernel_tpot_hint.py.
+        // shown as a comparison line. See simulator/_legacy/kernel_tpot_hint.py (retired 2026-06-10, L7).
         const kernelHint =
           metric.label === 'TPOT' ? turn.tpot_pred_kernel_hint : undefined;
         // Forward 3D-roofline eviction-deficit ramp predictor (comparison line).
