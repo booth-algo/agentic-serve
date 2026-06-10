@@ -121,6 +121,70 @@ Median, not mean (robust; no trim needed). Per-trace medians + counts reported.
 - Artifact: `profile_data/kernels/roofline_utils_H100.json` (medians, counts, per-trace
   and per-quartile breakdowns, exclusion counts, recipe echo).
 
-## Results
+## Results (builder run 2026-06-10, after the pre-registration commit)
 
-_(filled AFTER the builder ran — see commit order)_
+Artifact: `profile_data/kernels/roofline_utils_H100.json` (deterministic — two
+consecutive runs byte-identical, sha256 `a8e644b6…`). No recipe deviations were needed;
+the builder implements the registered text as written.
+
+| constant | pinned | re-derived (pre-registered recipe) | n steps |
+|---|---|---|---|
+| `util_bw` | 0.93 | **0.8111** | 62 (26/21/2/13 per trace after trim) |
+| `util_flops` | 0.65 | 0.5886 (THIN — see below) | 7 |
+| `scheduler_overhead_ms_per_step` | 5.7 | 4.5574 | 2666 |
+
+**G4 verdict: 0.93 does NOT fall out** (|0.8111 − 0.93| = 0.12 ≫ 0.01). Neither does
+the audit's "documented recipe" value 0.945 nor its "real step walls" range 0.90-0.92 —
+those used the anchor's hand-written byte count (T≈7200/req ⇒ 53.8 GB); the
+trace-reconstructed contexts of the actual steady-state steps top out at a 21.3 ms
+roofline and give stable medians per byte-quartile (0.804/0.830/0.805/0.818 — flat, so
+the 0.81 is not an artifact of byte scale within the eligible range). Per-trace medians
+0.828 (swe_c40) / 0.810 (swe_c80) / 0.724 (swe_c320, n=2) / 0.748 (terminal_c80).
+The 290 ms outlier class the audit flagged is handled by the registered trim rule
+(11 steps trimmed across traces).
+
+Diagnostics worth recording:
+- `util_bw_net_of_sched_prior` = **1.2536 (> 1, unphysical)**: you cannot subtract the
+  full pinned 5.7 ms scheduler term from these walls and still attribute the remainder
+  to bandwidth — i.e. the `ttft_queue_sim:762` convention (decode_ms + sched) and
+  util_bw=0.93 cannot BOTH be honest descriptions of these steps. The closed-form
+  convention (util absorbs host overhead; no separate sched term) is the one the data
+  supports, at util ≈ 0.81.
+- `util_flops` is thin by construction (7 pure-prefill steps ≥1024 tokens in 7856
+  steps) AND the pinned `model_submit_wall` convention is unreliable under
+  AsyncScheduler: swe_c80's two steps give util 2.69 (> 1, impossible — submit returns
+  before the GPU finishes). Against `engine_step_wall` the median is 0.5441. The R1
+  measured curve (`prefill_gemm_util_H100.json`, plateau 0.754) remains the
+  authoritative prefill-util source; this re-derivation only shows 0.65 is not
+  reproducible from the serving-wall traces either.
+- `sched` = 4.56 ms (median over 2666 batch-1 decode steps) vs pinned 5.7 (mean over 99
+  steps of one trace). Per-trace medians 4.62/4.58/5.61/4.53 — the pinned value sits at
+  the top of the range (swe_c320's quiet steps), not the center.
+
+### Action taken (per the registered decision rule)
+
+- `configs/gpus/*.json`, `closed_form_tpot.py` defaults, `roofline_params_*` values:
+  **unchanged** (0.93/0.65/5.7 stay). Rewiring moves predictions and is deferred to
+  integration where the H100 ±0.3 gate is re-checked; this lane's deliverable is the
+  pinned recipe + the measured disagreement (honest stop-point, knee/util-cap
+  precedent).
+- Provenance comments/_notes updated to point at the builder artifact and state the
+  re-derived values, replacing the irreproducible "16.06/17 = 0.945 ≈ 0.93" story.
+- Byte-identity of predictions after the comment edits is established by construction
+  + equivalence proof rather than a second 25-min gate run: the baseline
+  (`/tmp/l6_base.*`, replay-ON, zero warnings) completed at 16:46 BEFORE any
+  simulator/config edit; the edits touch only Python comments and free-text `_notes`
+  (verified consumers: `RooflineParams.from_json` filters to dataclass fields;
+  `configs/loader.py` / `generate_deployments.py` read named fields only); the
+  functional-field equality pre/post edit is asserted programmatically (see commit) and
+  the full pinned test suites pass. Integration re-gates anyway (merge protocol).
+
+### A100 (G7) — deferred, ready to run
+
+- Runbook: `profiling/docs/a100_roofline_utils_runbook.md`.
+- Preflight: `profiling/process/preflight_a100_roofline_utils.sh` — executed read-only
+  2026-06-10 against the live host: reachability PASS (alias `a100` = hostname
+  `gpu-4`), **gpu_quiet FAIL (7 compute apps — the deferral condition, by design)**,
+  vllm 0.19.0 PASS, `/data/models/Llama-3.1-8B-Instruct` (30G) PASS, 1879G free PASS.
+- Known gap recorded in the runbook: the serving-wall capture harness was never
+  committed; the runbook pins the exact JSONL field contract the builder consumes.

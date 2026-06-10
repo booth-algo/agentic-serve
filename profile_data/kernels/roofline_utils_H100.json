@@ -1,0 +1,135 @@
+{
+  "gpu": "H100",
+  "recipe": "profiling/docs/defit_log_entries/L6-utils.md (pre-registered 2026-06-10; implemented by profiling/process/build_roofline_utils.py)",
+  "params_source": "profile_data/kernels/roofline_params_H100_llama31_8b.json",
+  "util_bw": 0.8111,
+  "util_flops": 0.5886,
+  "scheduler_overhead_ms_per_step": 4.5574,
+  "n_steps": {
+    "util_bw": 62,
+    "util_flops": 7,
+    "sched": 2666
+  },
+  "diagnostics": {
+    "util_bw_net_of_sched_prior": 1.2536,
+    "util_bw_net_note": "same steps, ratio vs (engine_wall - 5.7ms): the ttft_queue_sim.py:762 convention (sched added separately). Headline uses the full engine wall: closed_form_tpot adds no sched term to tpot.",
+    "util_flops_vs_engine_wall": 0.5441,
+    "util_flops_thinness": "pure-prefill steps are rare in decode-heavy serving traces; prefill_gemm_util_H100.json (R1 measured curve) remains the better prefill-util source.",
+    "util_bw_by_byte_quartile": [
+      {
+        "bw_roofline_ms_range": [
+          11.52,
+          11.97
+        ],
+        "n": 15,
+        "util_bw_median": 0.804
+      },
+      {
+        "bw_roofline_ms_range": [
+          11.97,
+          12.83
+        ],
+        "n": 16,
+        "util_bw_median": 0.8298
+      },
+      {
+        "bw_roofline_ms_range": [
+          12.92,
+          13.54
+        ],
+        "n": 15,
+        "util_bw_median": 0.8049
+      },
+      {
+        "bw_roofline_ms_range": [
+          13.55,
+          21.26
+        ],
+        "n": 16,
+        "util_bw_median": 0.8181
+      }
+    ]
+  },
+  "per_trace": {
+    "swe_c40_t12": {
+      "steps": 1993,
+      "util_bw": {
+        "n_candidates": 29,
+        "n_after_trim": 26,
+        "n_outliers_trimmed": 3,
+        "n_decode_steps_unknown_ctx": 0,
+        "max_decode_batch": 40,
+        "median": 0.828
+      },
+      "util_flops": {
+        "n_candidates": 0,
+        "n_after_trim": 0,
+        "median": null
+      },
+      "sched": {
+        "n": 1047,
+        "median": 4.6224
+      }
+    },
+    "swe_c80_t12": {
+      "steps": 1822,
+      "util_bw": {
+        "n_candidates": 25,
+        "n_after_trim": 21,
+        "n_outliers_trimmed": 4,
+        "n_decode_steps_unknown_ctx": 0,
+        "max_decode_batch": 80,
+        "median": 0.8099
+      },
+      "util_flops": {
+        "n_candidates": 2,
+        "n_after_trim": 2,
+        "median": 2.6936
+      },
+      "sched": {
+        "n": 415,
+        "median": 4.5805
+      }
+    },
+    "swe_c320_t2": {
+      "steps": 454,
+      "util_bw": {
+        "n_candidates": 3,
+        "n_after_trim": 2,
+        "n_outliers_trimmed": 1,
+        "n_decode_steps_unknown_ctx": 0,
+        "max_decode_batch": 201,
+        "median": 0.7238
+      },
+      "util_flops": {
+        "n_candidates": 1,
+        "n_after_trim": 1,
+        "median": 0.5791
+      },
+      "sched": {
+        "n": 92,
+        "median": 5.6051
+      }
+    },
+    "terminal_c80_t16": {
+      "steps": 3587,
+      "util_bw": {
+        "n_candidates": 16,
+        "n_after_trim": 13,
+        "n_outliers_trimmed": 3,
+        "n_decode_steps_unknown_ctx": 0,
+        "max_decode_batch": 79,
+        "median": 0.748
+      },
+      "util_flops": {
+        "n_candidates": 6,
+        "n_after_trim": 4,
+        "median": 0.5608
+      },
+      "sched": {
+        "n": 1112,
+        "median": 4.5337
+      }
+    }
+  }
+}
