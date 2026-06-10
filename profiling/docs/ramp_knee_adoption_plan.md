@@ -234,3 +234,14 @@ overshoot magnitude (needs a re-derivation, not a knob), shallow-z armed duty un
 sub-pool-full saturation (runtime effective pool < traced `available_kv_blocks`), and the
 non-binding H100x2 osworld plateau advisory regression. Full suite green: 357 passed,
 2 skipped (2026-06-10).
+
+**Production-fidelity re-gate (2026-06-10, replay ON):** the loop's binding gates above ran in a
+fresh worktree that lacked the gitignored per-GPU realized pools, i.e. TTFT trajectory replay was
+silently OFF (the same fidelity gap that flipped the host-split verdict — see the host-split De-fit
+log entry). Re-gated at `aea241e` with the pools symlinked in (production replay-ON config), against
+the byte-equivalent parent-state baseline: **PASS 9/9 and improves** — H100 tpot_cell 14.536→**14.318**,
+e2el 11.334→**10.997**, chat 5.559→5.463, swe-plateau 8.652→8.822 (+0.17, in-tolerance), ttft
+byte-flat (the queue sim prices decode via `decode_step_ms` directly, not the amplifier); A100
+tpot_cell 15.367→**14.342** (−1.03), chat 19.985→**17.223** (−2.76), e2el 15.835→15.664; H100x2
+advisory ~flat (tpot 28.735→28.749, ttft byte-flat, e2el 25.919→26.261). The TPOT improvement is
+GENUINE under the production cohort, not an artifact of the pooled mode.
