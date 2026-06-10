@@ -221,3 +221,27 @@ documented honest stop-point of the cache model (it cannot represent block inter
 `test_preempt_policy_default_is_engine_faithful_lru`,
 `test_hit_miss_frozen_at_barrier_retained_compensating_rule` (replaces nothing — the freeze had
 no behavior pin before). Full suite green.
+
+### PRIZE check — measured util curve re-gate on the landed state (NOT passed)
+
+Module-attribute patch only (gate_scoped_rows override style): `_prefill_gemm_per_tok_loaded`
+replaced by interpolation of `prefill_gemm_util_H100.json` `util_sim` anchors
+(0.6397@512 → 0.7541@8192, clamped) in the per-step batch tokens, measured TP-comm kept.
+Replay-ON, 0 warnings → `/tmp/l4_r1_util.metrics.json`. Deltas vs the landed state
+(= pinned baseline, byte-identical):
+
+| gpu | ttft_cell | e2el_cell | tpot_cell |
+|---|---|---|---|
+| H100 | 18.1328 → 21.2797 (**+3.15, FAIL**) | 10.7586 → 10.8400 (+0.08) | identical |
+| A100 | 22.2221 → 21.8384 (−0.38, improves) | 15.8638 → 14.0765 (−1.79, improves) | identical |
+| H100x2 (advisory) | 29.0163 → 31.7404 (+2.72) | 21.8316 → 23.7673 (+1.94) | identical |
+
+Verdict: virtually unchanged from the original R1/S6 rejection (+3.15 then, +3.15 now) —
+expected, because the landed S7-only state is prediction-byte-identical: with the S8 freeze
+retained, eviction stays hidden from hit accounting, so the structural successor the util cap
+is waiting for has NOT materially landed. `PREFILL_GEMM_UTIL_SAT = 1.0` (the last RED
+compensating fit) does NOT retire this round. The two retained compensators (S8 freeze, util
+cap) and the S8-unfreeze gate numbers above jointly localize the remaining structural error:
+H100/H100x2 deep-cohort TTFT needs the re-prefill volume→TTFT amplification re-derived
+(pricing/queue interaction), after which BOTH compensators should retire TOGETHER — on A100
+every engine-faithful change improves the gate already.
