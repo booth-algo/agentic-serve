@@ -268,3 +268,42 @@ metrics IDENTICAL to round 1's util re-gate. Deltas vs landed state: H100 ttft_c
 (FAIL)**, e2el +0.0814, tpot 0; A100 ttft −0.3837, e2el −1.7873 (improves), tpot 0; H100x2
 (advisory) ttft +2.7241, e2el +1.9357, tpot 0. `PREFILL_GEMM_UTIL_SAT = 1.0` does NOT retire;
 verdict and localization unchanged from round 1.
+
+## 2026-06-10 — FINALIZATION: lane outcome `rederived` (binding gates PASS; util cap stays)
+
+Final verification at the landed HEAD (code unchanged since the round-2 verification —
+the intervening commit touched only this entry):
+
+- **Gate (binding) PASS at delta 0:** fresh replay-ON run, 0 warnings, 132 rows →
+  `/tmp/l4_final.{predictions,metrics}.json`; predictions AND metrics byte-identical
+  (`cmp`) to the pinned baseline `/tmp/l4_base.{predictions,metrics}.json`. All binding
+  metrics (H100/A100 ttft_cell/e2el_cell/tpot_cell/chat, H100 swe-plateau) equal to the
+  baseline table at the top of this entry.
+- **pytest green:** 365 passed, 1 skipped, 15 subtests (`/tmp/l4_final_pytest.log`).
+- **GPU clean:** h100 GPU 5 — zero compute apps, 4 MiB residual; no further launches
+  since the round-1 captures.
+
+**Per-fix adjudication summary (S7–S9):**
+
+| item | verdict | disposition |
+|---|---|---|
+| S7 whole-session MRU tier-2 preemption | FALSIFIED by traces (LRU-oldest replica exact on 92.7–100% of live lookups; MRU flip 3.2–26x token error; 100% of natural-load prefix losses partial) | **LANDED**: engine-faithful partial LRU-oldest tail trims, `preempt_policy` default `'lru'`; prediction-byte-identical, retired at zero gate risk |
+| S8 barrier-frozen hit/miss | Compensating rule CONFIRMED (freeze over-credits 20–85% of frozen hit tokens; live+lru+partial within −1.3…−12.6% of engine re-prefill truth) — but the engine-true LIVE rule was **gate-rejected** (H100 ttft_cell +3.47) | **GATE-RETAINED**, relabelled as a compensating rule at every site, pinned by `test_hit_miss_frozen_at_barrier_retained_compensating_rule` |
+| S9 herd_pending protection | No engine analog (waiting herd supplied 43–69.6% of evicted blocks; finished-session order inverted) — but the trace-VALIDATED counterfactual kept it inside `grow_to` | **KEPT**; documented honest stop-point of the session-granular cache model (cannot represent block interleaving) |
+
+**Util re-gate outcome (PRIZE): NOT passed — the compensating-fit ramp/util cap stays.**
+Both rounds identical: H100 ttft_cell +3.15 vs the +0.3 binding gate (A100 improves; same
+asymmetric shape as the original R1/S6 rejection). The measured util lookup is NOT wired;
+`PREFILL_GEMM_UTIL_SAT = 1.0` does not retire this round. With the S8 freeze gate-retained,
+eviction stays hidden from hit accounting, so the structural successor the util cap waits
+for has not materially landed. The S8-unfreeze gate numbers and the util re-gate jointly
+localize the remaining error to the re-prefill volume→TTFT amplification (pricing/queue
+interaction; pinned PREFILL_* cluster, audit-v2 S10 territory — outside this lane). On A100
+every engine-faithful change improves the gate; when S10 is re-derived, the S8 freeze and
+the util cap should be re-gated TOGETHER.
+
+Deliverables of this lane: engine_trace capture tooling recovered + committed,
+`compare_eviction_semantics.py` adjudication tool + quantified verdicts, S7 landed
+(falsified rule retired), S8/S9 compensators labelled + behavior-pinned, 4 fresh
+pressure-sweep oracle captures archived. Integration order note: L4 merges LAST
+(prediction-moving), re-gate after merge per the campaign protocol.
