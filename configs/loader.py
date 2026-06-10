@@ -68,6 +68,13 @@ def load_deployment(dep_path: Path) -> Deployment:
     model = _read(CONFIGS_DIR / "models" / f"{d['model']}.json")
     merged = {**gpu, **model,
               "available_kv_blocks": d["available_kv_blocks"], "tensor_parallel": d["tp"]}
+    # Optional ENGINE-CONFIG key (not a fit knob): the vLLM per-step token budget the
+    # deployment actually ran with. vLLM resolves the OPENAI_API_SERVER default by device
+    # name (vllm/engine/arg_utils.py _set_default_args): 8192 for >=70GiB non-A100 GPUs
+    # (= the RooflineParams default), 2048 for A100 — a100 deployments pin 2048 here.
+    # Any explicitly-launched value belongs in the deployment JSON, same key.
+    if "max_num_batched_tokens" in d:
+        merged["max_num_batched_tokens"] = int(d["max_num_batched_tokens"])
     fields = RooflineParams.__dataclass_fields__
     roofline = RooflineParams(**{k: v for k, v in merged.items() if k in fields})
     data = d.get("data", {})

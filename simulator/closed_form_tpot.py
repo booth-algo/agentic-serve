@@ -70,6 +70,7 @@ class RooflineParams:
     bytes_per_param: float = 2.0
     available_kv_blocks: int = 27_250          # empirical H100 (max free_kv_blocks across 4 vLLM engine traces 2026-05-27; ~1.5% less than spec-derived 27651)
     cache_block_size: int = 16                 # vLLM v1 default
+    max_num_batched_tokens: int = 8192         # ENGINE CONFIG, not a fit: vLLM OPENAI_API_SERVER resolved default for >=70GiB non-A100 devices (vllm/engine/arg_utils.py _set_default_args; A100-named devices resolve 2048 — set per-deployment JSON). Benchmark servers launched with the flag unset (server metadata: null), so the resolved default is what ran. Consumed by kernel_tpot._overflow_weight as the chunked-prefill per-step token budget.
     scheduler_overhead_ms_per_step: float = 5.7  # per-step Python/dispatcher cost. Calibrated from 99 lowest-work decode steps in swe_c40 trace (mean engine_step_wall=6.61ms minus mean model_submit_wall=0.93ms = 5.68ms). Single-anchor discipline, not a fit.
     tensor_parallel: int = 1                   # TP degree: shards KV (by head) + weights across GPUs. tp=1 = single-GPU (unchanged).
     kv_heads: int = 8                          # GQA KV heads (Llama-3.1-8B); caps KV sharding at min(tp, kv_heads).

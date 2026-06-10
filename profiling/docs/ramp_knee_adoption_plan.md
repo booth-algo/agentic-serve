@@ -199,3 +199,49 @@ is null on H100/H100x2 (no chat turns with tpot_meas > 100 ms; the chat gate is 
   `knees_corrected`, `--exclude-profile`), `profiling/process/gate_scoped_rows.py` (new).
 - Docs: De-fit log entry (2026-06-09 corrected-floor follow-up) in
   `prediction_construction.md`; memory status line appended.
+
+## Restructure outcome (2026-06-10) — the audit-item-6 restructure ADOPTED under these Phase-2 gates
+
+The "no global pressure constant exists" conclusion above was resolved by the ramp RESTRUCTURE
+(distribution-overflow eviction-drain weight, `kernel_tpot._overflow_weight`; 3 rounds, see the
+`prediction_construction.md` De-fit log): the tuned band `P_LO`/`P_HI_SHORT`/`P_HI_LONG` +
+`OUT_KNEE` interpolation was ELIMINATED, onset/width computed per cell. The pre-registered
+Phase-2 binding gates of THIS plan were the arbiter each round (vs the reproduced baseline
+captured here; the TPOT baselines reproduce exactly — recorded TTFT/e2el baselines were
+re-captured in-environment, `/tmp/restructure/baseline.metrics.json`):
+
+| round | result |
+|---|---|
+| 1 (overflow duty, z-only onset) | 7/10 FAIL→ kept on branch (H100 tpot_cell +1.31, chat +0.3025, A100 e2el +1.25) |
+| 2 (P0b pool-full gate + chunk-quantized drain + rotation + fresh-crossing damping) | 8/9, FAIL H100 swe-plateau 8.652→9.674 |
+| 3 (firing-gate hysteresis: arm at pressure≥1∧z>1, hold while z>1, release at z≤1) | **9/9 PASS** — H100 swe-plateau **8.511**, tpot_cell 14.556, e2el 21.304, chat 5.469; A100/H100x2 rows bit-identical to round 2 |
+
+The measured `ramp_knees_*` artifacts stay the valid measured record of the old band (pinned as
+history in `test_kernel_tpot`); in z-units (`z = p_low·qbar`, qbar from the measured
+`context_scale_quantiles`) the per-GPU onset medians collapse 0.964/1.188/0.963 — the
+cross-GPU disagreement documented above was the cohort context-spread.
+
+**Adopted wiring (this branch):** `kernel_tpot._overflow_weight` + the cell-path armed state in
+`predict_cell_tpot` (`predict_turn_tpot` gains kw-only `armed: bool = False`; cell signature
+unchanged), `simulator/cohort_scale.py` (trapezoid mean of the measured quantiles),
+`KernelTurnInput.cohort_scale_mean` set per cell by `build_simulator_rows`, and the
+`max_num_batched_tokens` ENGINE-CONFIG key in the deployment JSONs (vLLM device-rule default:
+8192 H100-class / 2048 A100). The tuned literals `P_LO`/`P_HI_SHORT`/`P_HI_LONG`/`OUT_KNEE` are
+deleted; zero tuned numeric constants remain in the ramp. Determinism verified (gate rebuild run
+twice, byte-identical); the protected twin A100 term@20 never arms (pressure peak 0.965).
+Honest residuals carried forward (documented in the De-fit log round-3 entry): first-fire
+overshoot magnitude (needs a re-derivation, not a knob), shallow-z armed duty undershoot /
+sub-pool-full saturation (runtime effective pool < traced `available_kv_blocks`), and the
+non-binding H100x2 osworld plateau advisory regression. Full suite green: 357 passed,
+2 skipped (2026-06-10).
+
+**Production-fidelity re-gate (2026-06-10, replay ON):** the loop's binding gates above ran in a
+fresh worktree that lacked the gitignored per-GPU realized pools, i.e. TTFT trajectory replay was
+silently OFF (the same fidelity gap that flipped the host-split verdict — see the host-split De-fit
+log entry). Re-gated at `aea241e` with the pools symlinked in (production replay-ON config), against
+the byte-equivalent parent-state baseline: **PASS 9/9 and improves** — H100 tpot_cell 14.536→**14.318**,
+e2el 11.334→**10.997**, chat 5.559→5.463, swe-plateau 8.652→8.822 (+0.17, in-tolerance), ttft
+byte-flat (the queue sim prices decode via `decode_step_ms` directly, not the amplifier); A100
+tpot_cell 15.367→**14.342** (−1.03), chat 19.985→**17.223** (−2.76), e2el 15.835→15.664; H100x2
+advisory ~flat (tpot 28.735→28.749, ttft byte-flat, e2el 25.919→26.261). The TPOT improvement is
+GENUINE under the production cohort, not an artifact of the pooled mode.

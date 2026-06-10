@@ -8,9 +8,12 @@ does — same per-config decode-grid / saturated-ceiling swap, same ``build_row`
 OPTIONAL adoption-candidate overrides applied as MODULE-ATTRIBUTE patches only, never
 source edits:
 
-  * ``--p-lo`` / ``--p-hi-short``  ->  ``kernel_tpot.P_LO`` / ``kernel_tpot.P_HI_SHORT``
   * ``--floor-excess "H100=1.2,A100=0.8,H100x2=2.0"``  ->  ``kernel_tpot.decode_step_ms``
     wrapped with ``+D``, swapped per active config (D absent/0 -> the unwrapped original).
+
+(The 2026-06-09 ``--p-lo`` / ``--p-hi-short`` knee-override flags were REMOVED with the
+2026-06-10 ramp restructure: ``kernel_tpot`` no longer has tuned ramp-knee attributes —
+the saturation onset/width are computed per cell by ``_overflow_weight``.)
 
 Patch-binding facts (the decode wrapper is self-verified at startup by
 ``_verify_decode_patch_binds``):
@@ -161,10 +164,6 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--gpu-keys", default=DEFAULT_GPU_KEYS, metavar="K1,K2",
                     help=f"comma-separated deployment gpu_keys (default: {DEFAULT_GPU_KEYS})")
-    ap.add_argument("--p-lo", type=float, default=None,
-                    help="override kernel_tpot.P_LO (module-attribute patch)")
-    ap.add_argument("--p-hi-short", type=float, default=None,
-                    help="override kernel_tpot.P_HI_SHORT (module-attribute patch)")
     ap.add_argument("--floor-excess", default=None, metavar="GPU=MS,...",
                     help='per-gpu decode floor excess D, e.g. "H100=1.2,A100=0.8,H100x2=2.0" '
                          "(wraps kernel_tpot.decode_step_ms with +D per active config)")
@@ -199,13 +198,8 @@ def main(argv: list[str] | None = None) -> None:
     orig_grid = kernel_step_cost._default_grid
     orig_ceiling = kernel_tpot._active_ceiling_json
     orig_decode = kernel_tpot.decode_step_ms
-    orig_p_lo, orig_p_hi_short = kernel_tpot.P_LO, kernel_tpot.P_HI_SHORT
     payload: dict[str, list[dict[str, Any]]] = {}
     try:
-        if args.p_lo is not None:
-            kernel_tpot.P_LO = float(args.p_lo)
-        if args.p_hi_short is not None:
-            kernel_tpot.P_HI_SHORT = float(args.p_hi_short)
         for cfg in configs:
             bench_root = BENCH_BASE / cfg.bench_dir
             if not bench_root.exists():
@@ -236,13 +230,11 @@ def main(argv: list[str] | None = None) -> None:
                         rows.append(row)
             payload.setdefault(cfg.gpu_key, []).extend(rows)
             print(f"{cfg.gpu_key}: {len(rows)} rows ({grid_desc}; floor_excess={d} ms; "
-                  f"P_LO={kernel_tpot.P_LO}, P_HI_SHORT={kernel_tpot.P_HI_SHORT})")
+                  f"max_num_batched_tokens={cfg.roofline.max_num_batched_tokens})")
     finally:
         kernel_step_cost._default_grid = orig_grid
         kernel_tpot._active_ceiling_json = orig_ceiling
         kernel_tpot.decode_step_ms = orig_decode
-        kernel_tpot.P_LO = orig_p_lo
-        kernel_tpot.P_HI_SHORT = orig_p_hi_short
 
     if not payload:
         raise SystemExit("no rows produced")

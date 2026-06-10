@@ -377,8 +377,13 @@ def build(dep, exclude_profile: str | None = None) -> dict | None:
         },
         "defcap_units": {k: (None if v["value"] is None else round(v["value"] - 1.0, 4))
                          for k, v in knees.items()},  # ramp_tpot DEF_* cross-reference
-        "current_literals": {"P_LO": kernel_tpot.P_LO, "P_HI_SHORT": kernel_tpot.P_HI_SHORT,
-                             "P_HI_LONG": kernel_tpot.P_HI_LONG},
+        # What production runs at build time. Since the 2026-06-10 ramp restructure
+        # kernel_tpot has NO tuned knee literals (saturation onset/width are computed by
+        # _overflow_weight) -> getattr returns None; the committed artifacts keep the
+        # historical {0.88, 1.22, 2.0} record (pinned in test_kernel_tpot).
+        "current_literals": {"P_LO": getattr(kernel_tpot, "P_LO", None),
+                             "P_HI_SHORT": getattr(kernel_tpot, "P_HI_SHORT", None),
+                             "P_HI_LONG": getattr(kernel_tpot, "P_HI_LONG", None)},
         "verdict_counts": dict(sorted(verdicts.items())),
         "n_usable_cells": len(cells),
         "cells": [vars(c) for c in sorted(cells, key=lambda c: (c.profile, c.conc))],
