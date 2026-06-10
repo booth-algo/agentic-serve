@@ -1,0 +1,181 @@
+{
+  "gpu": "A100",
+  "model": "Llama-3.1-8B",
+  "tensor_parallel": 1,
+  "criterion": "per-cell inversion of the measured implied-weight-vs-pressure curve through its sustained w=0.1/w=0.9 rolling-median crossings; knees = median of the per-cell inverted band edges (P_LO over all usable cells; P_HI_SHORT/P_HI_LONG over short-/long-output cells only)",
+  "rule": {
+    "w_low": 0.1,
+    "w_high": 0.9,
+    "u_low": 0.1958,
+    "u_high": 0.8042,
+    "rolling_window": 5,
+    "sustain_steps": 2,
+    "sustain_min_output": 24.0,
+    "min_turns_per_cell": 8,
+    "conditioning": "t_upper - kernel_step >= max(10.0 ms, 0.5*kernel_step)",
+    "short_cell_max_median_output": 28.0,
+    "long_cell_min_median_output": 86.0,
+    "min_cells_per_knee": 3,
+    "min_profiles_per_knee": 2,
+    "stability": "jackknife max-dev <= max(0.05, 0.5*IQR), no emptied replicate"
+  },
+  "knees": {
+    "P_LO": {
+      "value": 0.6048,
+      "n": 2,
+      "iqr": 0.2437,
+      "profiles": [
+        "swebench-multiturn-synth",
+        "terminalbench-multiturn-synth"
+      ],
+      "jackknife_max_dev": 0.1219,
+      "jackknife_emptied": 0,
+      "stable": false,
+      "adoptable": false
+    },
+    "P_HI_SHORT": {
+      "value": 1.7842,
+      "n": 1,
+      "iqr": 0.0,
+      "profiles": [
+        "terminalbench-multiturn-synth"
+      ],
+      "jackknife_max_dev": 0.0,
+      "jackknife_emptied": 2,
+      "stable": false,
+      "adoptable": false
+    },
+    "P_HI_LONG": {
+      "value": null,
+      "n": 0,
+      "iqr": null,
+      "profiles": [],
+      "jackknife_max_dev": 0.0,
+      "jackknife_emptied": 0,
+      "stable": false,
+      "adoptable": false
+    }
+  },
+  "floor_excess_ms": {
+    "value": 0.1246,
+    "raw_median": 0.1246,
+    "iqr": 0.9569,
+    "n": 178,
+    "spearman_vs_sched": 0.4665
+  },
+  "knees_corrected": {
+    "P_LO": {
+      "value": 0.6048,
+      "n": 2,
+      "iqr": 0.2437,
+      "profiles": [
+        "swebench-multiturn-synth",
+        "terminalbench-multiturn-synth"
+      ],
+      "jackknife_max_dev": 0.1219,
+      "jackknife_emptied": 0,
+      "stable": false,
+      "adoptable": false
+    },
+    "P_HI_SHORT": {
+      "value": 1.7842,
+      "n": 1,
+      "iqr": 0.0,
+      "profiles": [
+        "terminalbench-multiturn-synth"
+      ],
+      "jackknife_max_dev": 0.0,
+      "jackknife_emptied": 2,
+      "stable": false,
+      "adoptable": false
+    },
+    "P_HI_LONG": {
+      "value": null,
+      "n": 0,
+      "iqr": null,
+      "profiles": [],
+      "jackknife_max_dev": 0.0,
+      "jackknife_emptied": 0,
+      "stable": false,
+      "adoptable": false
+    }
+  },
+  "corrected_rule": {
+    "floor": "kernel_step + floor_excess_ms.value (D) substituted for kernel_step everywhere (implied-weight numerator/denominator, conditioning, t_upper)",
+    "floor_excess": "D_raw = median(tpot_meas - kernel_step) over turns with pressure < 0.3, output >= 24.0, tpot_meas > 0; D = max(0, D_raw); FULL-sample even under --exclude-profile (LOCO drops band cells only)",
+    "band": "identical pre-registered detection rule as 'knees' (see 'rule')"
+  },
+  "defcap_units": {
+    "P_LO": -0.3952,
+    "P_HI_SHORT": 0.7842,
+    "P_HI_LONG": null
+  },
+  "current_literals": {
+    "P_LO": 0.88,
+    "P_HI_SHORT": 1.22,
+    "P_HI_LONG": 2.0
+  },
+  "verdict_counts": {
+    "knee-censored": 4,
+    "left-censored": 21,
+    "never-saturates": 16,
+    "ok": 2,
+    "too-few-turns": 1
+  },
+  "n_usable_cells": 2,
+  "cells": [
+    {
+      "profile": "swebench-multiturn-synth",
+      "conc": 20,
+      "cluster": "mid",
+      "n_turns": 24,
+      "p_low": 0.8276,
+      "p_high": 1.1412,
+      "lo": 0.7267,
+      "hi": 1.2421
+    },
+    {
+      "profile": "terminalbench-multiturn-synth",
+      "conc": 40,
+      "cluster": "short",
+      "n_turns": 16,
+      "p_low": 0.7378,
+      "p_high": 1.5294,
+      "lo": 0.483,
+      "hi": 1.7842
+    }
+  ],
+  "verdict_counts_corrected": {
+    "knee-censored": 4,
+    "left-censored": 21,
+    "never-saturates": 16,
+    "ok": 2,
+    "too-few-turns": 1
+  },
+  "n_usable_cells_corrected": 2,
+  "cells_corrected": [
+    {
+      "profile": "swebench-multiturn-synth",
+      "conc": 20,
+      "cluster": "mid",
+      "n_turns": 24,
+      "p_low": 0.8276,
+      "p_high": 1.1412,
+      "lo": 0.7267,
+      "hi": 1.2421
+    },
+    {
+      "profile": "terminalbench-multiturn-synth",
+      "conc": 40,
+      "cluster": "short",
+      "n_turns": 16,
+      "p_low": 0.7378,
+      "p_high": 1.5294,
+      "lo": 0.483,
+      "hi": 1.7842
+    }
+  ],
+  "excluded_profile": null,
+  "source": "/mnt/100g/agent-bench/results/synthetic_distributional/a100_Llama-3.1-8B_tp1_vllm",
+  "_notes": "Measured ramp-knee band for the kernel_tpot amplifier. Regenerate: python3 -m profiling.process.build_ramp_knees. 'adoptable' is the MEASUREMENT-QUALITY verdict only (enough cells/profiles + jackknife-stable); production adoption is additionally gate-conditional (no TPOT/TTFT/E2EL regression). OUTCOME 2026-06-09: the measured band DISAGREES with the tuned production knees and failed the gates (H100 TPOT 15.4->23.3%; per-knee isolation also failed) -> production keeps the tuned values with honest tuned-knob labels; this artifact documents the disagreement. The knees are compensating fits for the ramp shape itself (the implied weight attributes any excess over kernel_step to KV pressure). See the De-fit log in profiling/docs/prediction_construction.md."
+}

@@ -5,6 +5,7 @@
   "tp": 4,
   "engine": "vllm",
   "available_kv_blocks": 76110,
+  "max_num_batched_tokens": 2048,
   "bench_dir": "3090_gpt-oss-20b_tp4_vllm",
   "backend": "rtx3090-tp4-vllm-analytic-roofline",
   "calibration_status": "3090_tp4_vllm_analytic_roofline_firstcut",

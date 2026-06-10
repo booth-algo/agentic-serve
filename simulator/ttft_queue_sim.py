@@ -105,21 +105,25 @@ LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
 #
 # 1. NEW (serving per-(re)prefilled-token, 0.0310 ms/tok measured at c1): SPLIT into a DERIVED,
 #    tensor-parallel-aware GEMM roofline (``_prefill_gemm_per_tok`` = 2·(params/tp)/tok at
-#    util_flops=0.65 → 0.02498 ms/tok on tp1) PLUS a small per-token off-GPU dispatch residual
-#    (0.00602 ms/tok). NEW is 1.24× the realistic roofline — NOT "7×" (the retired comment
-#    compared to a util=1 / large-K kernel 0.0042; corrected by the de-fit audit). The residual
-#    is framework dispatch (ATen/CUDA-library/launch, per TaxBreak ISPASS'26), a backed-out
-#    remainder PENDING the host-vs-device stage-split microbench. The GEMM part is now fit-free
-#    and tp-scales; see profiling/docs/prefill_law_defit_trace.md.
+#    util_flops=0.65 → 0.02498 ms/tok on tp1) PLUS a small per-new-token HOST serving-stack term
+#    (0.005745 ms/tok). DE-FIT 2026-06-05: this term was a backed-out remainder (fitted 0.0310 −
+#    roofline) mis-labelled "off-GPU framework dispatch"; the c1 live-server stage-split microbench
+#    (serving_stage_split.py → profile_data/results/serving_stage_split_H100.csv) MEASURED it directly
+#    as frontend.new = tokenize + chat-template/parse + ZMQ-IPC per new token = 5.745 ms/1k. It is NOT
+#    GPU framework dispatch: the GPU forward window is roofline-clean (prefill_span.new 22.7 ≈ the
+#    util-ramped GEMM, no above-roofline excess). The GEMM part is fit-free + tp-scales; this host term
+#    does NOT shard with tp. See profiling/docs/prefill_stage_split_results.md + prefill_law_defit_trace.md.
 # 2. FA3 (pipeline attention kernel, 8.31e-7 ms/token^2): from fa3_prefill_H100.csv
 #    (FA3(8192)=27.9ms / (8192²/2)). Adds the SUPER-LINEAR attention growth — negligible for a
 #    HIT (Q=new small), the quadratic re-encode for a MISS. Extra physical grounding at ~no
 #    accuracy cost (the serving re-prefill is ~linear; FA3 is small vs chunked+host overhead).
 # 3. HOST (re-tokenize the re-sent cached context, 0.006103 ms/1k total): the dominant HIT
-#    cost. Batch split measured on this H100 (cached_prefill_batch_ttft_H100.csv:
-#    TTFT(16,P)/TTFT(1,P)≈6.6-7.5) → ~57% amortized once per step + ~43% per request.
-# All three are MEASURED (c1 + controlled serving sweeps + the pipeline FA3 grid) — held out
-# from the multi-turn data we report.
+#    cost. The SUM is measured; the shared/per-request PARTITION is a within-measured-band
+#    [0.40,0.54] engineering choice (50/50; measured point estimate 0.5236 was gate-rejected —
+#    see the PREFILL_HOST_* block below).
+# All three RATES are MEASURED (c1 + controlled serving sweeps + the pipeline FA3 grid) — held out
+# from the multi-turn data we report; the HOST shared/per-request partition alone is a
+# within-band choice, not a measurement.
 PREFILL_FLOOR_MS = 26.0                           # DE-FITTED 2026-06-03: measured min pure-prefill TTFT (c1 turn-0, cached~=0) = 26.07 ms across the synth profiles (chat-singleturn new=0/cached=0 min 27.4). Replaces the fitted c1 regression intercept 22.5 — the linear law extrapolated ~4 ms BELOW the real floor. Gate: TTFT 33.01->32.89% (improves; the measured anchor is consistent with the data). See profiling/docs/prefill_law_defit_trace.md. NOTE: 26.0 is the H100-TP1 floor; it is a FALLBACK only — the per-config measured floor (below) supersedes it when present (a single tp1 constant wrongly imposed 26 on tp2/tp4, whose real floors are lower: H100x2=14, the dominant tp2 low-conc over-prediction).
 
 # Per-config MEASURED prefill floor (ms), keyed by gpu_key slug — the SAME measured-anchor method
@@ -144,31 +148,63 @@ def _prefill_floor_for(gpu_key: str | None) -> float:
         except Exception:
             _PREFILL_FLOOR_CACHE = {}
     return _PREFILL_FLOOR_CACHE.get(_gpu_slug(gpu_key), PREFILL_FLOOR_MS)
-# NEW = DERIVED tp-aware GEMM roofline (``_prefill_gemm_per_tok``, below) + this off-GPU dispatch
-# residual. On tp1 their sum reproduces the retired fitted 0.0310 rate to 5-digit rounding
-# (~2e-6 ms/tok; TTFT/E2EL gates unchanged). On tp2 the GEMM part halves → tp2 prefill is no
-# longer tp1-anchored (TTFT 43.3→31.7% cell-MAPE).
-PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN = 0.00602
+# NEW = DERIVED tp-aware GEMM roofline (``_prefill_gemm_per_tok``, below) + this per-new-token HOST
+# serving-stack term. DE-FIT 2026-06-05: MEASURED = frontend.new 5.745 ms/1k from the c1 live-server
+# stage-split (serving_stage_split_H100.csv), replacing the backed-out remainder (fitted 0.0310 −
+# roofline = 0.00602) that was mis-labelled GPU "dispatch". Name retained for diff-minimality; it is a
+# HOST term (tokenize + parse + ZMQ-IPC per new token) and does NOT shard with tp.
+PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN = 0.005745   # MEASURED frontend.new (host serving-stack / new tok)
 PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel, ms per token^2
-# DE-FITTED 2026-06-03 via a LIVE vLLM-server concurrency sweep (live_split_probe.py). The cached host cost
-# is per-request serving-stack work (HTTP body parse + chat-template + tokenize + ZMQ IPC) that PARTLY
-# amortizes across a batch: the sweep's per-added-request B-slope (≈3.5 ms/1k) vs the c1 rate (5.89 ms/1k,
-# which reproduces the fitted 6.103) implies ~40-54% is shared (the amortized remainder rises with prefix
-# length). Within that measured range 50/50 maximizes the gate (TTFT 32.89→32.05, E2EL flat). Replaces the
-# imported 57/43; the offline batch-CSV's 12/88 was wrong (lacked the serving stack + regressed). Sum kept at
-# the benchmark-true 6.103e-3 (live-validated at 5.89). See profiling/docs/prefill_stage_split_results.md.
-PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.0030515    # host serving-stack, amortized once per step (0.50×6.103e-3, live-measured split)
-PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.0030515    # host serving-stack, per request, summed (0.50×6.103e-3, live-measured split)
+# MEASURED SPLIT (de-fit 2026-06-10; band live-measured 2026-06-03 via the vLLM-server concurrency sweep
+# live_split_probe.py, commit 9dce1dc). The cached host cost is per-request serving-stack work (HTTP body
+# parse + chat-template + tokenize + ZMQ IPC) that PARTLY amortizes across a batch: the B-sweep's
+# per-added-request slope (prefill_live_split_H100.csv) vs the c1 rate (5.887 ms/1k from
+# prefill_live_ttft_H100.csv — reproduces the fitted 6.103) bounds the shared fraction to [0.40, 0.54]
+# (P=8000 → 0.402, P=16000 → 0.546; P=2000 excluded: a fixed ~12.5 ms/req cost misattributed as
+# per-token). Shipped values = the measured POINT ESTIMATE of that band, shared fraction 0.5236 (pooled
+# OLS over the band planes; regenerate: python3 -m profiling.process.build_host_split →
+# profile_data/kernels/prefill_host_split_H100.json, which pins these literals via test_ttft_queue_sim).
+# Gate history: an initial 2026-06-09 worktree gate REJECTED the split by +0.44pt H100 TTFT — but that
+# gate ran with trajectory replay OFF (the per-GPU realized pools are gitignored and were absent from the
+# fresh worktree, i.e. a non-production cohort). Re-gated 2026-06-10 under the production replay-ON
+# config: H100 TTFT-cell 18.20→18.07, E2EL 11.33→11.20 (improves), A100 +0.12/+0.10 (within ±0.3),
+# H100x2 advisory 34.71→33.06 → ADOPTED. Replaces the gate-tuned 50/50 (and the earlier imported 57/43;
+# the offline batch-CSV's 12/88 was wrong — lacked the serving stack). SUM de-fit (R2 CLOSED
+# 2026-06-10, ttft_pricing_defit_plan.md Item 1): the sum is now the LIVE regenerable measurement
+# 5.8872e-3 (build_host_split's own c1 lstsq over prefill_live_ttft_H100.csv), replacing the
+# benchmark-fitted 6.103e-3 (the 760d9bd c1 benchmark-regression coefficient — audit-v2 R2).
+# Gate (replay-ON): H100 TTFT +0.06 / E2EL −0.10, A100 +0.16/+0.10, TPOT byte-identical, H100x2
+# advisory TTFT 33.06→31.76 → PASS. Workload caveat (documented, the future refinement): the
+# benchmark fit exceeded the probe on all three regression params (floor/new/cached) — real
+# chat-templated prompts exercise heavier host paths than the probe's synthetic text; re-probe
+# with replayed benchmark prompts to close that gap. The artifact pins these literals.
+PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.0030824476411757708  # MEASURED 0.5236×5.8872e-3 — amortized once per step
+PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002804790423340364   # MEASURED 0.4764×5.8872e-3 — per request, summed
 
-# Prefill GEMM efficiency is BATCH-dependent (measured 2026-06-04 from GT turn-0 cohorts). A small prefill
-# (a single/low-conc request, or a cache-hit's few new tokens) runs at the small-batch util_flops (~0.65),
-# but a deep turn-0 cohort fills the chunked-prefill budget → compute-bound, util→1. H100 GT cohort rate
-# ~15.5 ms/1k ≈ its util-1 roofline 16.2. util ramps util_flops→UTIL_SAT over the per-step batch from
-# long_prefill_token_threshold to max_num_batched_tokens (so only budget-filling steps saturate).
-PREFILL_GEMM_UTIL_SAT = 1.0                      # compute-bound util a budget-filling prefill step reaches
-# Per-token tensor-parallel all-reduce, charged per EXTRA rank (tp>1). Microbench tp2: ttft.new 18.5 =
-# GEMM/2 (12.65) + 5.85; the GEMM halves with tp but this NVLink comm is added back. tp1 → 0.
-PREFILL_TP_COMM_MS_PER_TOKEN = 0.00585
+# COMPENSATING FIT, RETAINED ON THE GATE (audit-v2 R1/S6; measurement built and adoption
+# REJECTED 2026-06-10 — ttft_pricing_defit_plan.md Item 2). The true per-step prefill-GEMM
+# utilization IS measured: prefill_util_sweep.py (h100 GPU 6, CUDA events at exact full-budget
+# chunk sizes, zero-prefix GEMM intercepts via OLS against the sim's own FA3 regressor — the
+# slopes independently re-measure FA3 ≈ 8.9e-7 vs production 8.31e-7) →
+# profile_data/kernels/prefill_gemm_util_H100.json: util_sim 0.640 (m=512) → 0.744 (2048) →
+# 0.754 (8192). It confirms util_flops≈0.65 at small m and REFUTES saturation at 1.0 (the old
+# "15.5 ms/1k GT cohort" anchor was a shared-prefix double-count — De-fit log 2026-06-10).
+# WIRING THE MEASURED CURVE FAILED THE GATE: H100 TTFT-cell 18.13→21.28 (+3.15), H100x2
+# advisory 31.76→34.88, while A100 IMPROVED (TTFT −0.38, E2EL −1.79) and TPOT stayed
+# byte-identical — i.e. the util→1.0 ramp under-prices saturated steps to compensate a
+# structural error in the H100 deep-cohort queue interaction (the audit-v2 S7–S10 cluster).
+# Per-config adoption would be metric cherry-picking; the ramp+cap stays until the structural
+# successor (saturated-step/queue re-derivation) lands. NOT a measurement — a tuned cap.
+PREFILL_GEMM_UTIL_SAT = 1.0                      # compensating-fit cap (measured plateau: 0.754)
+# MEASURED like-for-like (G3 de-fit 2026-06-10, ttft_pricing_defit_plan.md Item 3): the tp1/tp2
+# stage-split pair on the SAME multiprocess api_server stack (serving_stage_split.py
+# --tensor-parallel-size {1,2}, h100 GPUs 6+7) → comm = prefill_span.new(tp2) − span.new(tp1)/2 =
+# 14.645 − 22.733/2 = 3.279 ms/1k (build_tp_comm.py → prefill_tp_comm_H100.json, which pins this
+# literal). Lands at the top of the NCCL all-reduce physics band (~1–3 ms/1k) — the retired 5.85
+# was a backed-out remainder from an instrumentation-INCONSISTENT pair (tp2 multiprocess vs tp1
+# in-process) that absorbed ~2.5 ms/1k of host IPC under a comm label (audit-v2 G3, confirmed).
+# tp>1 only; tp1 → 0 (tp1 predictions byte-identical by construction).
+PREFILL_TP_COMM_MS_PER_TOKEN = 0.003278887802709865
 
 
 def _prefill_gemm_per_tok(p: RooflineParams) -> float:
@@ -180,12 +216,15 @@ def _prefill_gemm_per_tok(p: RooflineParams) -> float:
 
 
 def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> float:
-    """Batch-aware prefill GEMM rate: util ramps util_flops→PREFILL_GEMM_UTIL_SAT with the per-step batch
-    (a step that fills the chunked-prefill budget is compute-bound, util≈1; a small cache-hit prefill is
-    not), plus the per-extra-rank tensor-parallel all-reduce. Ramps over [long_prefill_threshold,
-    max_num_batched_tokens] so a single/low request (or a small hit) stays at util_flops and only the deep
-    turn-0 cohort that saturates the batch reaches util_sat. Reduces to ``_prefill_gemm_per_tok`` at small
-    batch, tp=1. Measured anchors, not fits — see the PREFILL_GEMM_* constants."""
+    """Batch-aware prefill GEMM rate: util ramps util_flops→PREFILL_GEMM_UTIL_SAT with the
+    per-step batch over [long_prefill_threshold, max_num_batched_tokens], plus the
+    per-extra-rank tensor-parallel all-reduce. Reduces to ``_prefill_gemm_per_tok`` at small
+    batch, tp=1. PROVENANCE (audit-v2 R1/S6, 2026-06-10): the ramp endpoints are engine config
+    (1310/8192, verified); the ramp SHAPE and the 1.0 cap are a COMPENSATING FIT retained on
+    the gate — the measured per-step curve (prefill_gemm_util_H100.json: 0.640→0.754, plateau
+    by m≈2048) was wired and gate-REJECTED (H100 TTFT +3.15pt; A100 improved; see the De-fit
+    log). TP_COMM is a backed-out remainder (audit-v2 G3, pending its like-for-like
+    measurement)."""
     tp = max(1, int(getattr(p, "tensor_parallel", 1)))
     lo, hi = float(LONG_PREFILL_TOKEN_THRESHOLD), float(MAX_NUM_BATCHED_TOKENS)
     frac = 0.0 if hi <= lo else min(1.0, max(0.0, (batch_tokens - lo) / (hi - lo)))

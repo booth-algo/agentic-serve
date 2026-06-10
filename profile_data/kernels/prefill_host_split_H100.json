@@ -1,0 +1,74 @@
+{
+  "schema": "prefill_host_split.v1",
+  "inputs": {
+    "c1_csv": "profile_data/results/prefill_live_ttft_H100.csv",
+    "bsweep_csv": "profile_data/results/prefill_live_split_H100.csv",
+    "host_sum_ms_per_tok": 0.006103
+  },
+  "c1_fit": {
+    "floor_ms": 16.0297383155155,
+    "new_ms_per_tok": 0.029397398205819443,
+    "c1_cached_ms_per_tok": 0.005887238064516135,
+    "n_rows": 20
+  },
+  "per_plane_endpoint": {
+    "2000": {
+      "b_slope_ms_per_req": 11.975266666666666,
+      "perreq_ms_per_tok": 0.005987633333333333,
+      "shared_frac": -0.017053033649565785
+    },
+    "8000": {
+      "b_slope_ms_per_req": 28.1798,
+      "perreq_ms_per_tok": 0.003522475,
+      "shared_frac": 0.40167614059454415
+    },
+    "16000": {
+      "b_slope_ms_per_req": 42.768,
+      "perreq_ms_per_tok": 0.002673,
+      "shared_frac": 0.5459670611740939
+    }
+  },
+  "pooled_fit": {
+    "intercept_ms_per_plane": {
+      "8000": 84.3289949999999,
+      "16000": 52.44818999996961
+    },
+    "perreq_ms_per_tok": 0.002804790423340364,
+    "n_rows": 10,
+    "planes": [
+      8000,
+      16000
+    ]
+  },
+  "shared_frac": 0.5235812799476308,
+  "band": {
+    "lo": 0.40167614059454415,
+    "hi": 0.5459670611740939,
+    "planes": [
+      8000,
+      16000
+    ]
+  },
+  "constants": {
+    "PREFILL_HOST_SHARED_MS_PER_TOKEN": 0.0030824476411757708,
+    "PREFILL_HOST_PERREQ_MS_PER_TOKEN": 0.002804790423340364,
+    "sum_ms_per_tok": 0.005887238064516135
+  },
+  "benchmark_sum_reference": {
+    "host_sum_ms_per_tok": 0.006103,
+    "PREFILL_HOST_SHARED_MS_PER_TOKEN": 0.003195416551520391,
+    "PREFILL_HOST_PERREQ_MS_PER_TOKEN": 0.002907583448479609,
+    "gap_vs_live_sum_ms_per_tok": 0.00021576193548386493
+  },
+  "alternatives": {
+    "endpoint_mean": 0.473821600884319,
+    "denominator_host_sum": 0.5404243120857997
+  },
+  "diagnostic_fixed_cost_refit": {
+    "fixed_ms_per_req": 12.458045698810885,
+    "perreq_ms_per_tok": 0.0018704369959721134
+  },
+  "excluded": {
+    "P=2000": "fixed per-request cost misattributed as per-token (shared_frac ~ -0.02); excluded by the documented band"
+  }
+}

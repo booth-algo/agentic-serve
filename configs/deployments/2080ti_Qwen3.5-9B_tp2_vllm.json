@@ -5,6 +5,7 @@
   "tp": 2,
   "engine": "vllm",
   "available_kv_blocks": 1,
+  "max_num_batched_tokens": 2048,
   "bench_dir": "2080ti_Qwen3.5-9B_tp2_vllm",
   "backend": "rtx2080ti-tp2-vllm-analytic-roofline",
   "calibration_status": "2080ti_tp2_vllm_analytic_roofline_firstcut",

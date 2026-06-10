@@ -33,6 +33,7 @@ if str(REPO_ROOT) not in sys.path:
 import simulator.kernel_step_cost as kernel_step_cost  # noqa: E402
 import simulator.kernel_tpot as kernel_tpot  # noqa: E402
 from simulator.closed_form_tpot import RooflineParams  # noqa: E402
+from simulator.cohort_scale import cohort_scale_mean  # noqa: E402
 from simulator.kernel_step_cost import load_grid  # noqa: E402
 from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot  # noqa: E402
 from simulator.ttft_queue_sim import _prefill_floor_for, predict_cell_ttft_qsim  # noqa: E402
@@ -130,8 +131,18 @@ def build_row(profile: str, conc: int, params: RooflineParams, cfg: Deployment,
     # Headline predictions: kernel-composed TPOT + queue-sim TTFT (the active decode grid + KV pool
     # are set per-config in main()). E2EL composes on the kernel TPOT. ``shared_prefix_tokens`` lets
     # the queue sim dedup the cross-session APC prefix instead of re-prefilling it per session.
+    # ``cohort_scale_mean`` (qbar) = trapezoid mean of the cell's MEASURED context-scale quantiles
+    # (one value per cell; profiles without a spec -> 1.0): qbar sizes the distribution-integrated
+    # overflow mass z = pressure*qbar once the pool is physically full (pressure >= 1) — the round-2
+    # chunk-quantized eviction-drain weight (kernel_tpot._overflow_weight; predict_cell_tpot also
+    # tracks the per-turn eviction-development state). The quantile pools are profile-level workload
+    # spreads (Llama-derived realized artifacts) — resolved with the same Llama-only gpu_key gate as
+    # the replay cohort below.
+    qbar_gpu_key = cfg.gpu_key if cfg.model == "Llama-3.1-8B" else None
+    qbar = cohort_scale_mean(profile, float(conc), qbar_gpu_key)
     kin = [KernelTurnInput(t["cached_context_tokens"], t["new_prefill_tokens"],
-                           t["output_tokens"], t["scheduled_requests"]) for t in turns]
+                           t["output_tokens"], t["scheduled_requests"],
+                           cohort_scale_mean=qbar) for t in turns]
     tpot_pred = predict_cell_tpot(kin, params)
     # Two INDEPENDENT per-config inputs for the TTFT sim:
     #  - cohort_gpu_key: the trajectory-REPLAY cohort. Llama-only (the pools are Llama-derived). Kept
