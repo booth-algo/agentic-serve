@@ -5,6 +5,7 @@
   "tp": 4,
   "engine": "vllm",
   "available_kv_blocks": 29398,
+  "max_num_batched_tokens": 8192,
   "bench_dir": "h100_Llama-3.1-70B_tp4_vllm",
   "backend": "h100-tp4-vllm-analytic-roofline",
   "calibration_status": "h100_tp4_vllm_analytic_roofline_firstcut",

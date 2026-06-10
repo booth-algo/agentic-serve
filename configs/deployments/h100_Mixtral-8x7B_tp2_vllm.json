@@ -5,6 +5,7 @@
   "tp": 2,
   "engine": "vllm",
   "available_kv_blocks": 25850,
+  "max_num_batched_tokens": 8192,
   "bench_dir": "h100_Mixtral-8x7B_tp2_vllm",
   "backend": "h100-tp2-vllm-analytic-roofline",
   "calibration_status": "h100_tp2_vllm_analytic_roofline_firstcut",

@@ -169,19 +169,30 @@ PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel,
 # fresh worktree, i.e. a non-production cohort). Re-gated 2026-06-10 under the production replay-ON
 # config: H100 TTFT-cell 18.20→18.07, E2EL 11.33→11.20 (improves), A100 +0.12/+0.10 (within ±0.3),
 # H100x2 advisory 34.71→33.06 → ADOPTED. Replaces the gate-tuned 50/50 (and the earlier imported 57/43;
-# the offline batch-CSV's 12/88 was wrong — lacked the serving stack). Sum kept EXACTLY at the
-# benchmark-true 6.103e-3 (live-validated at 5.89). See prediction_construction.md De-fit log.
+# the offline batch-CSV's 12/88 was wrong — lacked the serving stack). HONESTY NOTE on the SUM
+# (audit-v2 R2): 6.103e-3 is NOT itself a measurement — it is the cached coefficient of the c1
+# BENCHMARK regression (commit 760d9bd), i.e. fitted to cells that sit inside the scored validation
+# payload. The regenerable live measurement (build_host_split's own lstsq over prefill_live_ttft_H100
+# .csv) gives 5.8872e-3 (−3.5%); the stage-split gave 5.174–5.989. Only the PARTITION (0.5236) is the
+# de-fit measurement; the sum remains an open RED item — candidate de-fit: gate 5.8872e-3 through.
+# See prediction_construction.md De-fit log + fitted_constants_audit_v2.md.
 PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.003195416551520391   # MEASURED 0.5236×6.103e-3 — amortized once per step
 PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002907583448479609   # MEASURED 0.4764×6.103e-3 — per request, summed
 
-# Prefill GEMM efficiency is BATCH-dependent (measured 2026-06-04 from GT turn-0 cohorts). A small prefill
-# (a single/low-conc request, or a cache-hit's few new tokens) runs at the small-batch util_flops (~0.65),
-# but a deep turn-0 cohort fills the chunked-prefill budget → compute-bound, util→1. H100 GT cohort rate
-# ~15.5 ms/1k ≈ its util-1 roofline 16.2. util ramps util_flops→UTIL_SAT over the per-step batch from
-# long_prefill_token_threshold to max_num_batched_tokens (so only budget-filling steps saturate).
-PREFILL_GEMM_UTIL_SAT = 1.0                      # compute-bound util a budget-filling prefill step reaches
-# Per-token tensor-parallel all-reduce, charged per EXTRA rank (tp>1). Microbench tp2: ttft.new 18.5 =
-# GEMM/2 (12.65) + 5.85; the GEMM halves with tp but this NVLink comm is added back. tp1 → 0.
+# VALIDATION-ANCHORED CAP, NOT A MEASUREMENT (audit-v2 R1, fitted_constants_audit_v2.md): the upper
+# util the batch ramp reaches. The previous "measured 15.5 ms/1k GT cohort" claim fails verification:
+# that anchor exists nowhere outside the comment, 15.5 ms/1k is BELOW the util-1 roofline (16.24 →
+# implied util 1.05 > 1, impossible), and GT turn-0 cohorts are inside the scored validation set. The
+# repo's only prefill-GEMM microbench (profile_data/kernels/prefill_gemm_H100.csv) shows util
+# PLATEAUING at 0.655–0.672 across the ramp domain — no observed ramp to 1.0. 1.0 is the physics cap
+# nearest a validation-set read-off; pending de-fit: measure util vs per-step batch tokens over
+# [long_prefill_token_threshold, max_num_batched_tokens] on a live server.
+PREFILL_GEMM_UTIL_SAT = 1.0                      # tuned cap (physics bound), pending measurement
+# BACKED-OUT REMAINDER, NOT a comm measurement (audit-v2 G3): tp2 ttft.new 18.5 − GEMM/2 (12.65) =
+# 5.85 — but the two anchors are instrumentation-inconsistent (tp2 multiprocess vs tp1 in-process;
+# like-for-like gives ~4.56, a 27% band) and physics puts the NVLink all-reduce itself at ~1–3 ms/1k,
+# so this term plausibly absorbs ~2.5 ms/1k of multiprocess ZMQ-IPC host overhead under a comm label.
+# tp>1 (advisory configs) only; tp1 → 0. Pending de-fit: a like-for-like multiprocess tp1/tp2 pair.
 PREFILL_TP_COMM_MS_PER_TOKEN = 0.00585
 
 
@@ -199,7 +210,9 @@ def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> floa
     not), plus the per-extra-rank tensor-parallel all-reduce. Ramps over [long_prefill_threshold,
     max_num_batched_tokens] so a single/low request (or a small hit) stays at util_flops and only the deep
     turn-0 cohort that saturates the batch reaches util_sat. Reduces to ``_prefill_gemm_per_tok`` at small
-    batch, tp=1. Measured anchors, not fits — see the PREFILL_GEMM_* constants."""
+    batch, tp=1. Ramp ENDPOINTS are engine config (1310/8192, verified); the saturation util it
+    ramps TO is a validation-anchored cap, not a measurement — see PREFILL_GEMM_UTIL_SAT (audit-v2
+    R1/S6) and PREFILL_TP_COMM (G3)."""
     tp = max(1, int(getattr(p, "tensor_parallel", 1)))
     lo, hi = float(LONG_PREFILL_TOKEN_THRESHOLD), float(MAX_NUM_BATCHED_TOKENS)
     frac = 0.0 if hi <= lo else min(1.0, max(0.0, (batch_tokens - lo) / (hi - lo)))

@@ -469,8 +469,10 @@ def test_no_fitted_constants():
     # benchmark ran max_model_len=32768 (server metadata) -> 1310. Config-derived, NOT a fit.
     assert mod.MAX_MODEL_LEN == 32768
     assert mod.LONG_PREFILL_TOKEN_THRESHOLD == int(32768 * 0.04) == 1310
-    # Prefill cost = measured-serving anchors + pipeline FA3 kernel (all held out from the
-    # multi-turn data we report). Asserted to value so a silent retune is caught.
+    # Prefill cost anchors, asserted to value so a silent retune is caught. Provenance is
+    # PER-CONSTANT (see each pin) — audit-v2 corrected the old blanket "all held out from the
+    # multi-turn data" claim: the host SUM and the GEMM util cap are anchored on cells/cohorts
+    # that sit INSIDE the scored validation payload (fitted_constants_audit_v2.md R1/R2).
     assert mod.PREFILL_FLOOR_MS == 26.0  # DE-FITTED 2026-06-03: measured min pure-prefill TTFT (c1 turn-0, cached≈0 ≈26.07 ms), replaces the fitted regression intercept 22.5
     # DE-FIT 2026-06-05: MEASURED host serving-stack per new token (frontend.new = tokenize+parse+IPC),
     # = 5.745 ms/1k from the c1 live-server stage-split (serving_stage_split_H100.csv). Replaces the
@@ -490,13 +492,17 @@ def test_no_fitted_constants():
     assert mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN == _split_art["constants"]["PREFILL_HOST_PERREQ_MS_PER_TOKEN"]
     assert round(_split_art["shared_frac"], 4) == 0.5236              # the measured point estimate
     assert 0.40 < _split_art["band"]["lo"] < _split_art["shared_frac"] < _split_art["band"]["hi"] < 0.55
+    # The SUM is NOT itself measured (audit-v2 R2): 6.103e-3 is the c1 BENCHMARK regression
+    # coefficient (760d9bd, fitted to scored cells); the regenerable live lstsq gives 5.8872e-3.
+    # Pinned EXACT so the open red item can't drift silently while it awaits its own de-fit gate.
     assert (mod.PREFILL_HOST_SHARED_MS_PER_TOKEN
-            + mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN) == 0.006103       # measured sum, EXACT
-    # Batch-aware prefill-GEMM util ramp (measured 2026-06-04 from GT turn-0 cohorts): a budget-filling
-    # prefill step is compute-bound (util->1), and the per-extra-rank tensor-parallel all-reduce. Measured
-    # anchors, NOT TTFT fits.
-    assert mod.PREFILL_GEMM_UTIL_SAT == 1.0                # compute-bound util a budget-filling step reaches
-    assert mod.PREFILL_TP_COMM_MS_PER_TOKEN == 0.00585     # measured tp2 NVLink all-reduce per token
+            + mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN) == 0.006103       # benchmark-fitted sum (R2)
+    # Prefill-GEMM util ramp: endpoints are engine config; the SATURATION CAP 1.0 is a
+    # validation-anchored tuned cap, NOT a measurement (audit-v2 R1 — the claimed GT-cohort anchor
+    # fails verification and the prefill_gemm_H100.csv microbench plateaus at util 0.655–0.672);
+    # TP_COMM is a backed-out remainder, not a comm measurement (audit-v2 G3).
+    assert mod.PREFILL_GEMM_UTIL_SAT == 1.0                # tuned cap (physics bound), pending measurement
+    assert mod.PREFILL_TP_COMM_MS_PER_TOKEN == 0.00585     # backed-out tp2 remainder, pending measurement
     # Public uppercase numeric module globals: the four config-derived vLLM values + the
     # three measured prefill-law coefficients. Private (underscore-prefixed) names — the
     # event-kind enum ints and _GRID_U_MAX=1024 — are physics/structure, excluded.

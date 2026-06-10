@@ -57,6 +57,19 @@ SKIP_BENCH_DIRS = {
 SKIP_GPU_TOKENS = {"h100-2"}  # redundant 2nd-h100 host (only Llama-3.1-8B tp1; == H100)
 
 
+def vllm_max_num_batched_tokens(total_memory_bytes: float, gpu_name: str) -> int:
+    """The vLLM OpenAI-server default chunked-prefill budget (ENGINE CONFIG, not a model
+    choice): 8192 for >=70GiB non-A100 devices, else 2048 — vllm/engine/arg_utils.py
+    get_batch_defaults (the A100 carve-out cites vLLM PR #17885). Benchmarks ran the
+    OpenAI API server with max_num_batched_tokens unset (server metadata: null), so the
+    resolved default IS the engine value. Emitted into every generated vLLM deployment so
+    regeneration preserves the key (audit-v2 item S14: the 2048 pins were originally
+    hand-added and a regeneration without this function silently reverted them to the
+    loader's 8192 default, quadrupling the overflow budget on small GPUs)."""
+    return 8192 if (total_memory_bytes >= 70 * 1024**3
+                    and "a100" not in gpu_name.lower()) else 2048
+
+
 def parse_dir(name: str) -> tuple[str, str, int, str] | None:
     """``<gpu>_<model...>_tp<N>_<engine>`` -> (gpu_token, model, tp, engine)."""
     parts = name.split("_")
@@ -168,6 +181,10 @@ def main() -> None:
             "tp": tp,
             "engine": engine,
             "available_kv_blocks": kv_blocks,
+            # vLLM-only: sglang's chunked_prefill_size follows a different memory-tier rule
+            # (audit-v2 G8, unresolved) — its key stays absent rather than wrong.
+            **({"max_num_batched_tokens": vllm_max_num_batched_tokens(total_mem, gpu_name)}
+               if engine == "vllm" else {}),
             "bench_dir": d.name,
             "backend": f"{disp.lower()}-tp{tp}-{engine}-analytic-roofline",
             "calibration_status": f"{gpu_token}_tp{tp}_{engine}_analytic_roofline_firstcut",

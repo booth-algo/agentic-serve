@@ -5,6 +5,7 @@
   "tp": 1,
   "engine": "vllm",
   "available_kv_blocks": 17401,
+  "max_num_batched_tokens": 8192,
   "bench_dir": "h100_Qwen3.5-27B_tp1_vllm",
   "backend": "h100-tp1-vllm-analytic-roofline",
   "calibration_status": "h100_tp1_vllm_analytic_roofline_firstcut",

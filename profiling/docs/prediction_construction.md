@@ -84,21 +84,23 @@ Per engine step (`_price_step`) — a mixed prefill+decode step:
 |---|---|---|
 | decode | `decode_step_ms(decode_batch, mean_running_ctx)` | 🔵 |
 | prefill NEW | `(gemm_per_tok_loaded(total_chunk) + PREFILL_NEW_DISPATCH_RESIDUAL)·total_chunk` | 🟢 + 🔵 `0.005745` (measured host serving-stack/new tok; de-fit 2026-06-05) |
-| └ `gemm_per_tok` | `2·(n_params/tp)/(peak_flops·util-ramp)` + `PREFILL_TP_COMM·(tp>1)` (util ramps `util_flops→PREFILL_GEMM_UTIL_SAT=1.0` over the chunk budget) | 🟢; 🔵 `TP_COMM=0.00585` |
+| └ `gemm_per_tok` | `2·(n_params/tp)/(peak_flops·util-ramp)` + `PREFILL_TP_COMM·(tp>1)` (util ramps `util_flops→PREFILL_GEMM_UTIL_SAT=1.0` over the chunk budget) | 🟢 GEMM + ⚙️ ramp endpoints; 🔴 `UTIL_SAT=1.0` (validation-anchored cap, not measured — audit-v2 R1/S6); 🔴 `TP_COMM=0.00585` (backed-out remainder, not a comm measurement — audit-v2 G3; tp>1 advisory only) |
 | prefill FA3 | `PREFILL_FA3_MS_PER_TOKEN2 · M·(R + 0.5·M)·frac` (super-linear attn; M=tokens (re)prefilled, R=resident prefix) | 🔵 `8.31e-7` |
-| host per-req | `PREFILL_HOST_PERREQ_MS_PER_TOKEN · cached · frac` (re-tokenize cached context, summed over concurrent prefills) | 🔵 `0.0029076` = 0.4764×6.103e-3 (measured split, de-fit 2026-06-10) |
-| host shared | `PREFILL_HOST_SHARED_MS_PER_TOKEN · mean_cached` (amortized once/step) | 🔵 `0.0031954` = 0.5236×6.103e-3 (measured split, de-fit 2026-06-10) |
+| host per-req | `PREFILL_HOST_PERREQ_MS_PER_TOKEN · cached · frac` (re-tokenize cached context, summed over concurrent prefills) | 🔵 partition 0.4764 (measured split, de-fit 2026-06-10) × 🔴 sum 6.103e-3 (benchmark-fitted — audit-v2 R2) |
+| host shared | `PREFILL_HOST_SHARED_MS_PER_TOKEN · mean_cached` (amortized once/step) | 🔵 partition 0.5236 (measured split, de-fit 2026-06-10) × 🔴 sum 6.103e-3 (audit-v2 R2) |
 | step cost | `step_ms = max(decode_ms + scheduler_overhead, prefill_ms)` | 🔵 |
 | floor (once per req, at first token) | `floor_residual = max(0, prefill_floor − scheduler_overhead)` added to `first_token_epoch` | 🔵 (PR #73: per-config; H100=25.86, H100x2=14.01) |
 
 → **`TTFT[turn] = first_token_epoch − arrival_epoch`** = queue-wait + prefill service + per-request floor.
 A turn no session reaches falls back to the forward static predictor (`_fallback_ttft`).
 
-No 🔴 rows remain in the TTFT step pricing: the **prefill host-split partition** is now the measured
-point estimate (shared fraction 0.5236 of the measured sum 6.103e-3 — pooled OLS of the live B-sweep
-band [0.40,0.54]; adopted 2026-06-10 on the production replay-ON re-gate after an initial replay-OFF
-worktree gate had rejected it — see the De-fit log). (`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit
-2026-06-05 and is 🔵.)
+The **prefill host-split partition** is the measured point estimate (shared fraction 0.5236, pooled
+OLS of the live B-sweep band [0.40,0.54]; adopted 2026-06-10 on the production replay-ON re-gate —
+see the De-fit log). **Audit v2 (2026-06-10, `fitted_constants_audit_v2.md`) corrected an earlier
+"no 🔴 rows remain" claim here:** the host **sum** 6.103e-3 is still the c1 benchmark-regression
+coefficient (fitted to scored cells; the regenerable live measurement gives 5.8872e-3 — open R2),
+and `PREFILL_GEMM_UTIL_SAT`/`TP_COMM` are validation-anchored/backed-out, not measured (R1/G3).
+(`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit 2026-06-05 and is genuinely 🔵 — regenerates exactly.)
 
 ---
 
@@ -107,7 +109,15 @@ worktree gate had rejected it — see the De-fit log). (`PREFILL_NEW_DISPATCH_RE
 
 ---
 
-## Fitted-constant debt (7 found 2026-06-05, workflow `wpa6sviup`; **4 de-fit, 3 retired (note below), 0 remaining**)
+## Fitted-constant debt — audit v1 (7 found 2026-06-05, workflow `wpa6sviup`; **4 de-fit, 3 retired (note below), 0 remaining**)
+
+**Audit v2 (2026-06-10, post-restructure — `fitted_constants_audit_v2.md`) found NEW debt beyond
+these 7:** 2 RED (`PREFILL_GEMM_UTIL_SAT=1.0` validation-anchored cap; the host SUM 6.103e-3
+benchmark-fitted — both honestly relabeled in code/tests pending their own de-fit gates), 9 GRAY
+(incl. `util_bw=0.93` matching no documented computation, `TP_COMM` backed-out, `SAT_SUSTAIN 9/24`
+unpinned anchors), and **14 STRUCTURAL** — discrete modeling rules adjudicated by the same gate
+suite they pass ("the 9-gate suite is the new fitting surface"). The v1 table below remains the
+record of the original 7 only.
 
 | Constant | Module | Value | Status / issue |
 |---|---|---|---|

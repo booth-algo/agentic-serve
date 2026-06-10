@@ -1,14 +1,13 @@
 {
-  "gpu_key": "H100x2",
+  "gpu_key": "H100x2 (sglang)",
   "gpu": "H100",
-  "model": "Qwen3.5-27B",
+  "model": "gpt-oss-20b",
   "tp": 2,
-  "engine": "vllm",
-  "available_kv_blocks": 87791,
-  "max_num_batched_tokens": 8192,
-  "bench_dir": "h100_Qwen3.5-27B_tp2_vllm",
-  "backend": "h100-tp2-vllm-analytic-roofline",
-  "calibration_status": "h100_tp2_vllm_analytic_roofline_firstcut",
+  "engine": "sglang",
+  "available_kv_blocks": 170208,
+  "bench_dir": "h100_gpt-oss-20b_tp2_sglang",
+  "backend": "h100-tp2-sglang-analytic-roofline",
+  "calibration_status": "h100_tp2_sglang_analytic_roofline_firstcut",
   "ground_truth": true,
   "data": {
     "decode_grid": {
@@ -17,9 +16,9 @@
     },
     "kv_pool": {
       "status": "derived",
-      "value": 87791,
+      "value": 170208,
       "source": "configs/kv_pool.py",
-      "note": "80GiB util 0.9, weights 55.6GB/tp2, reserve 3.5GB"
+      "note": "80GiB util 0.9, weights 13.8GB/tp2, reserve 3.5GB"
     },
     "saturated_ceiling": {
       "status": "inherited",
@@ -57,7 +56,7 @@
     },
     "ground_truth": {
       "status": "measured",
-      "path": "h100_Qwen3.5-27B_tp2_vllm",
+      "path": "h100_gpt-oss-20b_tp2_sglang",
       "source": "/mnt/100g"
     }
   }

@@ -4,7 +4,7 @@
   "model": "gpt-oss-120b",
   "tp": 4,
   "engine": "vllm",
-  "available_kv_blocks": 11461,
+  "available_kv_blocks": 15830,
   "max_num_batched_tokens": 2048,
   "bench_dir": "3090_gpt-oss-120b_tp4_vllm",
   "backend": "rtx3090-tp4-vllm-analytic-roofline",
@@ -17,9 +17,9 @@
     },
     "kv_pool": {
       "status": "derived",
-      "value": 11461,
+      "value": 15830,
       "source": "configs/kv_pool.py",
-      "note": "24GiB util 0.9, weights 65.3GB/tp4, reserve 3.5GB"
+      "note": "24GiB util 0.95, weights 65.3GB/tp4, reserve 3.5GB"
     },
     "saturated_ceiling": {
       "status": "inherited",
