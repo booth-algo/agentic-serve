@@ -17,12 +17,30 @@ Why this exists:
 Grid coverage (large sweep):
   B ∈ {1, 2, 4, 8, 16, 32, 64, 128, 256}
   T ∈ {512, 1024, 2048, 4096, 8192, 16384}
-The grid is *triangular*: high-B × high-T cells are absent (they OOM on a single
-H100). For queries whose bilinear corners fall in that region we fill the
-missing corner from the analytic decode roofline ``fixed_floor + B·T·kv_bpt/bw``,
-which matches the measured grid at the coverage boundary (~19 ms at B=128,
-T=2048) and extends it physically into the OOM region. ``fixed_floor`` is the
-measured small-batch step time (grid value at B=1, T=512).
+The grid is *triangular*: high-B × high-T cells are absent because the sweep's
+KV-footprint cap (B·(T+128) ≤ 500k tokens) skipped them — NOT because they OOM
+(audit-v2 S12: the old "OOM" label here was wrong). ``load_grid`` additionally
+drops 7 interior rows flagged ``validation_status='check'`` by the trace
+tooling; a 2026-06-10 event-timed re-measurement (GPU 6, ``decode_steps.py``;
+``decode_profile_H100_2026-06-10_s12recheck.csv``) shows those dropped values
+sat in non-monotone dips absent from the re-measured surface, so dropping them
+stays correct (see the L3 de-fit entry). For queries whose bilinear corners fall
+in an absent region we fill the missing corner from the analytic decode
+roofline ``fixed_floor + B·T·kv_bpt/bw``, which matches the measured grid at
+the coverage boundary (~19 ms at B=128, T=2048) and extends it physically
+beyond the cap. ``fixed_floor`` is the measured small-batch step time (the min
+over the B=1 row — see ``load_grid``).
+
+Per-deployment grids (e.g. tp2): ``build_simulator_rows`` swaps ``_default_grid``
+to the CSV named by the deployment's ``data.decode_grid`` manifest entry. Dated
+raw run CSVs are append-only; ``profiling/process/build_decode_grid.py`` merges
+them (newest run wins per cell) into the grid artifact a deployment points at.
+The 2026-06-10 H100x2 merged grid (54 cells, dense B×T rectangle + T=24576 tail
+up to the real 998,656-token KV pool) removes the analytic fill from every
+reachable tp2 decode state — the fill's linear-in-``b·ctx`` pricing over-priced
+the previously unmeasured region by a median 1.08× (1.10–1.24× where
+B·T ≥ 200k; measured marginal KV cost at T=16384 is ~11–17 ms per 1M tokens vs
+the fill's 21.0 — the real kernel is SUB-linear in ``b·ctx``).
 """
 
 from __future__ import annotations
@@ -168,8 +186,11 @@ def _bracket_index(axis: list[float], value: float) -> int:
 
 
 def load_grid(path: Path = DEFAULT_CSV) -> DecodeStepGrid:
-    """Parse the wide-summary CSV into a DecodeStepGrid. Rows with a zero /
-    non-``ok`` decode_step_ms are treated as absent (OOM cells).
+    """Parse a decode-grid CSV into a DecodeStepGrid. Rows with a zero
+    decode_step_ms or a non-``ok`` ``validation_status`` (e.g. the tp1 trace
+    sweep's 7 ``'check'`` rows — measured but flagged by the off-repo bucketing
+    cross-check; re-measured 2026-06-10, drop retained — audit-v2 S12) are
+    treated as absent cells and later analytic-filled by ``lookup``.
     """
     cells: dict[tuple[float, float], float] = {}
     with path.open() as f:
