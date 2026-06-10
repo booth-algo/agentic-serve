@@ -7,16 +7,13 @@
   "available_kv_blocks": 133122,
   "max_num_batched_tokens": 8192,
   "bench_dir": "h100_Llama-3.1-8B_tp4_vllm",
-  "backend": "kernel-tp4-decode-measured-kv",
-  "calibration_status": "tp4_decode_grid_measured_kv_tp1_prefill",
+  "backend": "h100-tp4-vllm-analytic-roofline",
+  "calibration_status": "h100_tp4_vllm_analytic_roofline_firstcut",
   "ground_truth": true,
   "data": {
     "decode_grid": {
-      "status": "measured",
-      "path": "profile_data/results/decode_profile_H100x4_merged_2026-06-10.csv",
-      "source": "build_decode_grid.py merge of the 2026-06-10 pre-registered tp4 lattice run + 4-cell warm-up re-measure (96 cells, B 1..320 x T 512..24576 capped at the real 2,129,952-token KV pool; newest run wins per cell); md5 81552f697d0a4c9d6a68ec14d2e442ff",
-      "date": "2026-06-10",
-      "note": "WIRED by round-1 workflow directive (2026-06-10, lane L8) with the gate evidence on record: the measured grid moves H100x4 TPOT cell-MAPE 37.10 -> 64.80 (TTFT unchanged 39.45) because at conc>=120 GT serving TPOT sits BELOW the isolated kernel wall at the pipeline's queried (b_eff, ctx) (chat c320 meas 6.56 ms vs 11.5 ms at B=320 T=1024) -- the over-prediction lives in the shared b_eff/regime mapping (S10/S8/util-cap successor cluster) and/or the decode_steps walls-vs-trace host-gap offset, not the decode price. The grid improves the kernel-bound chat/osworld c5-c80 band. Adopt-vs-revert decision belongs to round 2 / the successor lane."
+      "status": "missing",
+      "note": "KEPT analytic BY MEASUREMENT, round-2 per-cell verdict (2026-06-10, lane L8): a 96-cell tp4 decode_steps lattice exists (decode_profile_H100x4_merged_2026-06-10.csv, md5 81552f697d0a4c9d6a68ec14d2e442ff, B<=320 x T<=24576 capped at the real 2,129,952-token pool; regenerable via build_decode_grid.py) and shows the analytic roofline UNDER-prices the isolated tp4 kernel (median 0.79x, worst 0.55x at high-B short-T) -- but wiring it moves TPOT cell-MAPE 37.10 -> 64.80. Per-cell (44 GT cells): only 6 improve (chat c5-c80 / osworld c5, sum -21.0pt) vs 38 degrade (sum +1240pt), INCLUDING all four conc=1 cells (swebench c1 +20.7, terminalbench c1 +14.5) -- GT serving TPOT sits at/below the analytic price almost everywhere while the measured wall is strictly above analytic in 95/96 lattice cells, so any full wiring is monotonically harmful outside the narrow chat band; at conc>=120 GT sits BELOW the isolated kernel wall itself (chat c320 meas 6.56 ms vs 11.5 ms at B=320 T=1024), so NO decode price >= the measured kernel can fit those cells. The over-prediction lives in the shared b_eff/regime mapping (S10/S8/util-cap successor cluster) and/or the decode_steps walls-vs-trace host-gap that grows with B (S12: walls +12-35% above trace) -- not in the decode price this config owns. Partial/banded wiring would select grid domain by validation outcome (compensating fit) -- refused. Adoption refused; artifacts retained for the successor."
     },
     "kv_pool": {
       "status": "derived",
