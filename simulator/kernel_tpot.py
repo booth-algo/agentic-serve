@@ -98,12 +98,31 @@ OUT_KNEE_HI = 86.0  # long-output ceiling cluster (measured anchor output)
 # output tokens finishes before that happens, so its ITL stays near the
 # unsaturated kernel step even when instantaneous pressure > 1 (the high-c early
 # turns: full cohort scheduled but tiny context + tiny output). So the
-# saturation weight is scaled down for short-output turns. Anchors (MEASURED): the
-# p5 output of saturated turns (tpot_meas > 100 ms across the H100 run) is 9 tok —
-# below it sustained saturation is essentially never measured; SAT_SUSTAIN_HI=24
-# is just above the 22-tok min turn-median plateau output.
-SAT_SUSTAIN_LO = 9.0   # measured p5 output of saturated turns — below it, ~no saturation
-SAT_SUSTAIN_HI = 24.0  # full saturation by here (just above the 22-tok plateau min)
+# saturation weight is scaled down for short-output turns.
+#
+# Anchors (MEASURED; regenerable since 2026-06-10 by
+# `python3 -m profiling.process.build_sat_sustain` ->
+# profile_data/kernels/sat_sustain_H100_llama31_8b.json; pinned by
+# test_kernel_tpot.test_sat_sustain_anchors_pinned_to_builder_artifact):
+# saturated rows = measured tpot > 100 ms across the H100 headline run.
+# HONEST CAVEAT (audit-v2 G1) — the two candidate populations DISAGREE:
+#   * per-request rows (n=45450 saturated): p5 output = 9.0  -> the LO below
+#   * turn-median rows (n=301 saturated):   p5 output = 24.0 -> equals the HI
+# The population the predictor actually consumes is the TURN-MEDIAN one
+# (build_simulator_rows.build_turns medians feed predict_cell_tpot; this
+# smoothstep's `out` argument IS a turn median), so on the canonical population
+# the [9, 24] band has no measured support below 21.5 and LO=9 stands only on
+# the per-request read. Values kept unchanged this round (2026-06-10 parallel
+# de-fit byte-identity contract); any retune starts from the artifact's
+# turn-median numbers.
+# SAT_SUSTAIN_HI (audit-v2 G2): the historical "+2" story (min turn-median
+# plateau output 21.5 ≈ 22 tok, plus an underived +2 hand margin) is
+# superseded by an exact derivation the builder found: 24.0 IS the p5 of
+# turn-median plateau outputs — the same quantile as LO, on the canonical
+# population. Both readings land on 24. sustain_mid = (LO+HI)/2 = 16.5 (the
+# development clock in predict_cell_tpot) inherits these anchors.
+SAT_SUSTAIN_LO = 9.0   # p5 output of saturated PER-REQUEST rows (turn-median p5 is 24.0 — see caveat)
+SAT_SUSTAIN_HI = 24.0  # p5 output of saturated TURN-MEDIAN rows (== min plateau 21.5≈22 + the legacy +2)
 
 # --- saturated-ITL ceiling: measured anchors, interpolated --------------------
 # The ceiling the amplifier pulls toward at saturation is read from MEASURED

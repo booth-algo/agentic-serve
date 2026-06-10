@@ -21,6 +21,8 @@ from simulator.cohort_scale import cohort_scale_mean, trapezoid_mean
 from simulator.kernel_tpot import (
     OUT_KNEE_HI,
     OUT_KNEE_LO,
+    SAT_SUSTAIN_HI,
+    SAT_SUSTAIN_LO,
     KernelTurnInput,
     _overflow_weight,
     _smoothstep,
@@ -49,6 +51,42 @@ def test_smoothstep_endpoints_and_midpoint() -> None:
     assert _smoothstep(100.0, 9.0, 24.0) == 1.0
     mid = _smoothstep((9.0 + 24.0) / 2, 9.0, 24.0)
     assert abs(mid - 0.5) < 1e-9
+
+
+# ------------------------------------------------------------ SAT_SUSTAIN anchors (G1/G2)
+def test_sat_sustain_anchors_pinned_to_builder_artifact() -> None:
+    """SAT_SUSTAIN_LO/HI are pinned to the regenerable builder artifact (audit-v2
+    G1/G2, 2026-06-10): no longer duplicated literals. The artifact records the
+    POPULATION DISAGREEMENT honestly — per-request p5 = 9.0 (the production LO)
+    vs turn-median p5 = 24.0 (= the production HI, and the population the
+    predictor actually consumes). Production values byte-identical this round."""
+    art = json.loads((KERNELS_DIR / "sat_sustain_H100_llama31_8b.json").read_text())
+    # production constants <-> artifact pins
+    assert SAT_SUSTAIN_LO == art["production"]["SAT_SUSTAIN_LO"] == 9.0
+    assert SAT_SUSTAIN_HI == art["production"]["SAT_SUSTAIN_HI"] == 24.0
+    # the measured anchor reads, per population (the G1 disagreement, committed)
+    assert art["per_request"]["p5_output"] == 9.0
+    assert art["per_request"]["n_saturated"] == 45450
+    assert art["turn_median"]["p5_output"] == 24.0
+    assert art["turn_median"]["min_plateau_output"] == 21.5  # the "22-tok" G2 anchor
+    # the pre-registered canonical population is the one predict_cell_tpot consumes
+    assert art["population_preregistered"] == "turn_median"
+    # the development clock midpoint inherits the anchors (no extra constant)
+    assert 0.5 * (SAT_SUSTAIN_LO + SAT_SUSTAIN_HI) == 16.5
+
+
+@pytest.mark.skipif(
+    not Path("/mnt/100g/agent-bench/results/synthetic_distributional").exists(),
+    reason="bench data mount not available")
+def test_sat_sustain_artifact_regenerates_from_ground_truth() -> None:
+    """The committed artifact is exactly what the builder produces from GT —
+    regeneration parity (the G1/G2 'no builder pins it' gap, closed)."""
+    from profiling.process.build_sat_sustain import BENCH_DIR, build
+    from profiling.process.build_simulator_rows import BENCH_BASE as _BB
+
+    regenerated = build(_BB / BENCH_DIR)
+    committed = json.loads((KERNELS_DIR / "sat_sustain_H100_llama31_8b.json").read_text())
+    assert regenerated == committed
 
 
 # ------------------------------------------------------------ tuned knees: GONE
