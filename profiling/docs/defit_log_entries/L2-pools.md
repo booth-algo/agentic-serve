@@ -73,3 +73,38 @@ labels (measured saturated-turn p5/plateau anchors; measured output-cluster labe
 
 **Behavior change: none** outside the new S13 warning path — D1–D4 are
 comment/docstring edits only; all knee literals byte-identical.
+
+## Verification record (2026-06-10, finalize pass on c5e3c4d)
+
+**1. Replay-ON byte-identity (pools present).** Two independent gate runs in this
+worktree, both under `RAMP_TPOT_REQUIRE_POOLS=1` (any absent per-GPU pool would have
+raised `FileNotFoundError`):
+
+```
+RAMP_TPOT_REQUIRE_POOLS=1 python3 -m profiling.process.gate_scoped_rows \
+  --out /tmp/l2_{a,b}.predictions.json --metrics-out /tmp/l2_{a,b}.metrics.json
+```
+
+Both exited 0 with **0 bytes of stderr** (no `PER-GPU REPLAY POOL MISSING` banner →
+replay ON). Outputs byte-identical across runs:
+`sha256(metrics) = 522da1df…d4aaea` (A == B),
+`sha256(predictions) = 3ed78d0b…b747f` (A == B, 2,704,803 bytes each).
+H100x2 `tpot_cell` 28.7486 matches the campaign doc's ~28.7 baseline; gate cells:
+H100 ttft/e2el/tpot 18.1328/10.7586/14.3182, A100 22.2221/15.8638/14.3417,
+H100x2 29.0163/21.8316/28.7486.
+
+**2. Fresh-clone behavior.** `git clone --branch pin-replay-pools` into a clean temp
+dir (no setup symlinks): all **78** `*_realized_*.json` files present as regular
+files (0 symlinks), 19.9MB total, each carrying `_committed_note`; the resolver
+returns the per-GPU file (`chat_multiturn_realized_h100.json`) directly. With one
+pool removed in the clone, `_resolve_dist_path` emitted exactly one `!`-framed
+stderr banner across two calls (warn-once verified) naming the missing file,
+declaring replay gates INVALID, and giving the restore/regenerate commands; under
+`RAMP_TPOT_REQUIRE_POOLS=1` the same call raised `FileNotFoundError`.
+
+**3. Content + claims re-verified independently.** All 78 committed files
+parsed-content-identical to the builder outputs in the main checkout (modulo the
+added `_committed_note`); totals re-measured at 19.9MB / largest 0.51MB; knee
+literals re-confirmed unchanged (`DEF_LO/DEF_HI/DEF_SAT = -0.12/0.22/1.0`) and the
+docstring's 9/24, 28/86 match the live `kernel_tpot` imports. Test suite:
+**151 passed, 1 skipped**.
