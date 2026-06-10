@@ -237,6 +237,7 @@ Replay-ON, 0 warnings → `/tmp/l4_r1_util.metrics.json`. Deltas vs the landed s
 | H100x2 (advisory) | 29.0163 → 31.7404 (+2.72) | 21.8316 → 23.7673 (+1.94) | identical |
 
 Verdict: virtually unchanged from the original R1/S6 rejection (+3.15 then, +3.15 now) —
+(see also the Round-2 re-verification below)
 expected, because the landed S7-only state is prediction-byte-identical: with the S8 freeze
 retained, eviction stays hidden from hit accounting, so the structural successor the util cap
 is waiting for has NOT materially landed. `PREFILL_GEMM_UTIL_SAT = 1.0` (the last RED
@@ -245,3 +246,25 @@ cap) and the S8-unfreeze gate numbers above jointly localize the remaining struc
 H100/H100x2 deep-cohort TTFT needs the re-prefill volume→TTFT amplification re-derived
 (pricing/queue interaction), after which BOTH compensators should retire TOGETHER — on A100
 every engine-faithful change improves the gate already.
+
+## 2026-06-10 — ROUND 2: re-verification of the landed state (no code changes; none justified)
+
+Gate re-run at the landed worktree state (replay-ON, 0 warnings, 132 rows):
+`/tmp/l4_r2.{predictions,metrics}.json` — predictions BYTE-IDENTICAL (`cmp`) to the pinned
+baseline `/tmp/l4_base.predictions.json`, metrics JSON equal. All binding gates pass at
+delta 0. Full pytest: 365 passed, 1 skipped, 15 subtests.
+
+**Remaining-fix audit — outcome: NONE justified.** (1) S7 landed in round 1. (2) S8 unfreeze
+remains gate-rejected; its regression is localized OUTSIDE the eviction cluster (volume→TTFT
+amplification in the pinned PREFILL_* pricing/queue interaction, S10 territory) and the traces
+provide no replacement mechanism — re-attempting without new evidence would be a knob. (3) S9
+herd_pending: the trace-validated `live+lru+partial` counterfactual in
+`compare_eviction_semantics.py` KEPT herd protection inside `grow_to` (herd_pending − in_flight),
+so dropping it was never the validated combination; the documented honest stop-point stands.
+
+**PRIZE re-check (round 2):** measured util curve module-patched in
+(`/tmp/l4_r2_util_regate.py` → `/tmp/l4_r2_util.metrics.json`, replay-ON, 0 warnings) —
+metrics IDENTICAL to round 1's util re-gate. Deltas vs landed state: H100 ttft_cell **+3.1469
+(FAIL)**, e2el +0.0814, tpot 0; A100 ttft −0.3837, e2el −1.7873 (improves), tpot 0; H100x2
+(advisory) ttft +2.7241, e2el +1.9357, tpot 0. `PREFILL_GEMM_UTIL_SAT = 1.0` does NOT retire;
+verdict and localization unchanged from round 1.
