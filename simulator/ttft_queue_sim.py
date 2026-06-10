@@ -6,17 +6,20 @@ wait** a request sees before its first token (client_queue_wait ~= 0, so all ser
 queueing is folded into the measured ``ttft_ms``). The per-turn TTFT is a
 *saturate-ramp-RECOVER* curve that emerges from the cohort's trajectory.
 
-THE CLIMB MECHANISM (measured + traced against /root/vllm v1 scheduler): a multi-turn
-session's KV **persists across its turns** (prefix reuse), growing each turn. Under load
-the cohort's cumulative KV vastly exceeds the pool, so the scheduler **evicts** whole
-sessions (RECOMPUTE — frees their blocks); an evicted session's next turn is a cache
-**MISS** and must **re-prefill its entire context** (cached+new), not just the new tokens.
-That full re-prefill congests the chunked-prefill token budget and head-of-line-blocks new
-arrivals' first token. Because cached context grows every turn, the re-prefill cost
-compounds — TTFT climbs unboundedly for full-staying cohorts (swebench/terminal, flat
-survival) and saturates/recovers as the cohort drains (osworld). A turn whose session KV
-is still **resident** is a cache HIT and prefills only its new tokens (cheap) — so the
-hit/miss fraction self-adjusts to KV pressure and sets the magnitude.
+THE CLIMB MECHANISM (measured + traced against /root/vllm v1 scheduler + the L4
+engine-trace oracles, 2026-06-10): a multi-turn session's KV **persists across its turns**
+(prefix reuse), growing each turn. Under load the cohort's cumulative KV vastly exceeds
+the pool, so the engine's free-queue recycling **trims** resident prefixes from their
+TAIL, LRU-OLDEST first (vllm/v1/core/block_pool.py: tail-first frees + popleft eviction;
+whole-prefix loss only emerges when the herd working set exceeds the whole pool). A
+trimmed session's next turn must **re-prefill the lost tail of its context**, not just the
+new tokens. That re-prefill congests the chunked-prefill token budget and
+head-of-line-blocks new arrivals' first token. Because cached context grows every turn,
+the re-prefill cost compounds — TTFT climbs unboundedly for full-staying cohorts
+(swebench/terminal, flat survival) and saturates/recovers as the cohort drains (osworld).
+A turn whose session KV is still **resident** is a cache HIT and prefills only its new
+tokens (cheap) — so the hit/miss fraction self-adjusts to KV pressure and sets the
+magnitude.
 
 MODEL (fit-free — NO new fitted constants):
 
@@ -31,19 +34,35 @@ MODEL (fit-free — NO new fitted constants):
 * Shared GPU continuous-batching steps; admission gated by KV blocks
   (``PrefixLRUCache(available_kv_blocks=27250, 16)``) + ``max_num_seqs`` + ``MAX_NUM_BATCHED_TOKENS``
   (vLLM serving defaults, documented config — not MAPE knobs).
-* **Block-level prefix cache (``PrefixLRUCache``) with two-tier eviction.** A session's cached
-  PREFIX persists across turns AND across eviction. Tier 1 reclaims FREE residents (departed/dead
-  sessions' blocks — the LRU buffer that shields active sessions). Tier 2, only under GENUINE
-  over-subscription (the cohort KV exceeds the pool so tier 1 can't satisfy admission), PREEMPTS
-  idle herd residents by ``preempt_policy`` (``'tail'`` = most-recently-used first, vLLM v1
-  RECOMPUTE tail-preempt ≫ ``'lru'``), evicting WHOLE sessions so the overflow concentrates on a
-  full-miss minority (median stays a hit). In-flight KV (a req prefilling/decoding THIS step) is
-  never evicted. Without tier 2 the sim DEADLOCKS at high concurrency (whole herd protected → no
-  admission → silent fallback to the static formula); without whole-session eviction the trim
-  spreads thin and every session becomes a partial miss (osworld 2× over-count). A turn's hit/miss
-  is FROZEN at barrier release (``resident_at_barrier``) so a peer's in-pass eviction can't cascade
-  it into a spurious miss. Light over-subscription → cheap hits → TTFT RECOVERS; heavy → full
-  re-prefills → the PEAK.
+* **Block-level prefix cache (``PrefixLRUCache``) with ENGINE-FAITHFUL two-tier eviction
+  (re-derived 2026-06-10 against the vLLM v1 engine-trace oracles — full evidence in
+  profiling/docs/defit_log_entries/L4-queue.md).** A session's cached PREFIX persists across
+  turns AND across eviction. Tier 1 reclaims FREE residents (departed/dead sessions' blocks —
+  the LRU buffer that shields active sessions). Tier 2, only under GENUINE over-subscription
+  (the cohort KV exceeds the pool so tier 1 can't satisfy admission), trims idle herd
+  residents' prefixes PARTIALLY in global-recency LRU order (oldest-touched first). That is
+  the real engine's semantics: a BlockPool replica (block-hash prefix cache, single LRU free
+  queue, tail-first frees, popleft eviction) reproduces the traces' live computed_tokens
+  EXACTLY on 92.7-100% of lookups; flipping ONLY the order to MRU-newest degrades exactness
+  to 80.9-93.3% and grows absolute token error 3.2-26x. In all four archived serving traces
+  100% of turn>0 prefix losses are PARTIAL (tail-trim, head survives; zero whole-session
+  misses in 602 lossy lookups) — the retired tier-2 whole-session MRU preemption (audit-v2
+  S7) was a victim-selection primitive the engine does not have. In-flight KV (a req
+  prefilling/decoding THIS step) is never evicted. Without tier 2 the sim DEADLOCKS at high
+  concurrency (whole herd protected → no admission → silent fallback to the static formula).
+  A turn's hit/miss is FROZEN at barrier release (``resident_at_barrier``) — a COMPENSATING
+  RULE, RETAINED ON THE GATE (audit-v2 S8, adjudicated 2026-06-10): the engine computes hits
+  LIVE at scheduling (erosion is real even within one scheduling step), and the freeze
+  over-credits 20.2-85.4% of its frozen prefix credit under pressure (frozen rule variants
+  under-count re-prefill tokens 42-54% vs engine truth; live+lru+partial lands within
+  1.3-12.6%). UNFREEZING WAS BUILT AND GATE-REJECTED (2026-06-10, together with the S7
+  partial-LRU landing): H100 ttft_cell 18.13→21.60 (+3.47), H100x2 advisory 29.02→33.91,
+  while A100 IMPROVED (TTFT −1.22, E2EL −1.15) and TPOT stayed byte-identical — i.e. the
+  freeze is compensating an over-amplification of re-prefill volume into TTFT that lives
+  OUTSIDE the eviction cluster (volume is now trace-faithful; the overshoot is the
+  pricing/queue-amplifier interaction), so per the no-cherry-picking precedent it stays
+  until that structural successor lands. Light over-subscription → cheap hits → TTFT
+  RECOVERS; heavy → deep re-prefills → the PEAK.
 * Barrier round-robin (matches the harness ``run_multi_turn_benchmark``: all sessions' turn-N
   requests dispatched together, ``asyncio.gather`` between turns): turn ``t``'s ENTIRE herd of
   surviving sessions arrives at the SAME epoch; turn ``t+1`` is released only after EVERY
@@ -271,10 +290,14 @@ class PrefixLRUCache:
     This is what makes the measured saturate-ramp-RECOVER emerge with the right magnitude: a
     MILDLY over-subscribed cohort (the drained tail) reuses few blocks per turn, so sessions
     keep almost all their prefix → cheap hits → TTFT recovers; a HEAVILY over-subscribed one
-    (the peak) churns the whole pool → full re-prefills → TTFT peaks. Replacing the previous
-    free-on-evict pool (which reset a victim to 0 blocks → full-re-prefill cascade) with this
-    retention model is the fix for the osworld over-prediction. Capacity and block size are
-    vLLM config (``available_kv_blocks`` / ``cache_block_size``); NO fitted constants."""
+    (the peak) churns the whole pool → deep re-prefills → TTFT peaks. Partial tail-trim in
+    LRU-oldest order is the TRACE-VALIDATED engine behaviour on BOTH tiers (S7 re-derivation
+    2026-06-10: 100% of turn>0 prefix losses in the archived serving traces are partial;
+    LRU-oldest replica exact on 92.7-100% of live lookups, MRU falsified at 3.2-26x the token
+    error — see defit_log_entries/L4-queue.md). Whole-prefix loss still EMERGES under extreme
+    pressure (herd working set > whole pool recycles every block before reuse), it is just no
+    longer a victim-selection primitive. Capacity and block size are vLLM config
+    (``available_kv_blocks`` / ``cache_block_size``); NO fitted constants."""
 
     def __init__(self, capacity_blocks: int, block_size: int = 16) -> None:
         self.capacity = int(capacity_blocks)
@@ -303,9 +326,12 @@ class PrefixLRUCache:
 
     def _trim_tail(self, sids: list[int], need: int, whole: bool = False) -> None:
         """Free blocks by evicting ``sids`` (in the given order) until ``need`` blocks are free.
-        ``whole=True`` evicts each victim's ENTIRE resident prefix (concentrating the overflow
-        onto a minority of full-miss sessions, so the MEDIAN session stays a full hit — the
-        measured osworld saturate-recover); ``whole=False`` trims only the marginal tail."""
+        ``whole=False`` (the production path) trims only the marginal tail — the engine's
+        block-granular free-queue recycling (S7: 100% of natural-load prefix losses in the
+        archived serving traces are PARTIAL tail-trims). ``whole=True`` evicts each victim's
+        ENTIRE resident prefix; it is RETIRED from production (trace-falsified: zero
+        whole-session misses in 602 lossy lookups) and kept only as the adjudication tool's
+        counterfactual seam (compare_eviction_semantics.py)."""
         for v in sids:
             if self.free() >= need:
                 break
@@ -316,20 +342,29 @@ class PrefixLRUCache:
                 del self.cached[v]
 
     def _evict(
-        self, need: int, hard_protect: set[int], soft_protect: set[int], policy: str = "tail"
+        self, need: int, hard_protect: set[int], soft_protect: set[int], policy: str = "lru"
     ) -> bool:
         """Free ``need`` physical blocks in two tiers:
 
         1. **Reclaim free residents** — sessions in NEITHER protect set (departed/dead
            sessions' residual prefix), trimmed LRU-oldest-first. This is the rotation buffer.
-        2. **Preempt under genuine over-subscription** — if the cohort's persistent KV fills
-           the pool so tier 1 can't satisfy ``need``, evict ``soft_protect`` (herd members not
-           in-flight = idle resident hits-to-be) by ``policy``: ``'tail'`` = most-recently-used
-           first (vLLM v1 RECOMPUTE tail-preempt), ``'lru'`` = oldest-first (prefix-cache LRU).
-           A preempted session re-prefills its trimmed tail on its turn (a MISS) — the climb.
+        2. **Trim under genuine over-subscription** — if the cohort's persistent KV fills
+           the pool so tier 1 can't satisfy ``need``, PARTIALLY trim ``soft_protect`` (herd
+           members not in-flight = idle resident hits-to-be) in global-recency LRU order,
+           oldest-touched first. A trimmed session re-prefills its lost tail on its turn (a
+           partial MISS) — the climb.
+
+        ENGINE-FAITHFUL (S7 re-derivation 2026-06-10, defit_log_entries/L4-queue.md): vLLM v1
+        evicts free-queue blocks LRU-OLDEST block-by-block (block_pool.py popleft; tail-first
+        frees), so victims lose their prefix TAIL partially and oldest-touched sessions lose
+        first. The trace replica validated this exactly (92.7-100% of live lookups; MRU order
+        falsified at 3.2-26x the token error; 100% of natural-load prefix losses are partial).
+        The retired rule here — ``'tail'`` (MRU-first) victims trimmed WHOLE — had no engine
+        analog; ``policy='tail'`` is retained ONLY as the adjudication tool's falsification
+        seam (compare_eviction_semantics.py counterfactuals), never the production path.
 
         ``hard_protect`` (a req in-flight THIS step, KV pinned) is never evicted. Returns True
-        once ``need`` is free, False only if even preempting every idle resident is not enough
+        once ``need`` is free, False only if even trimming every idle resident is not enough
         (a single over-large head behind pinned in-flight KV — deferred, retried on completion)."""
         if need <= self.free():
             return True
@@ -341,16 +376,17 @@ class PrefixLRUCache:
         self._trim_tail(free_residents, need)
         if self.free() >= need:
             return True
-        # tier 2: genuine over-subscription -> preempt idle herd residents (vLLM RECOMPUTE),
-        # evicting WHOLE sessions (concentrate the overflow on a full-miss minority) so the
-        # median session stays a hit — without this the trim spreads thin and every session
-        # becomes a partial miss (osworld ~2x over-count).
+        # tier 2: genuine over-subscription -> PARTIAL tail-trims of idle herd residents in
+        # LRU-oldest order — the engine's free-queue recycling (S7: whole-session MRU
+        # preemption falsified against the trace oracles; whole-prefix loss only EMERGES when
+        # the herd working set exceeds the whole pool). The freed amount is exactly ``need``:
+        # the engine never frees more than the allocation requires.
         soft = [
             s for s in self.cached
             if s in soft_protect and s not in hard_protect and self.cached[s] > 0
         ]
         soft.sort(key=lambda s: (self.recency.get(s, -1), s), reverse=(policy == "tail"))
-        self._trim_tail(soft, need, whole=True)
+        self._trim_tail(soft, need)
         return self.free() >= need
 
     def grow_to(
@@ -359,11 +395,12 @@ class PrefixLRUCache:
         target_blocks: int,
         hard_protect: set[int],
         soft_protect: set[int],
-        policy: str = "tail",
+        policy: str = "lru",
     ) -> bool:
         """Make ``sid`` resident up to ``target_blocks``, RECLAIMING its surviving prefix and
-        allocating only the delta (reclaiming free residents, then preempting idle herd
-        residents under over-subscription — see ``_evict``). Touches ``sid`` (MRU). Returns
+        allocating only the delta (reclaiming free residents, then partially trimming idle
+        herd residents LRU-oldest under over-subscription — see ``_evict``). Touches ``sid``
+        (MRU). Returns
         False (HOL block) only if the delta cannot be freed even after preemption. Context only
         grows, so a target below the current residency just keeps the larger residency."""
         cur = self.cached.get(sid, 0)
@@ -437,9 +474,15 @@ class _ServerState:
     step_scheduled: bool = False
     # --- barrier round-robin state (matches the benchmark harness, see _release_herd) ---
     current_turn: int = 0       # turn_index of the herd currently in flight
+    # Tier-2 victim order: 'lru' (oldest-touched first, partial trims) is the ENGINE-FAITHFUL
+    # production value (S7 re-derivation 2026-06-10); 'tail' (MRU-first) is retained only as
+    # the adjudication tool's falsification seam.
     herd_remaining: int = 0     # requests of the current herd not yet departed; 0 -> barrier
-    preempt_policy: str = "tail"  # over-subscription victim: 'tail' (vLLM RECOMPUTE) or 'lru'
-    resident_at_barrier: dict[int, int] = field(default_factory=dict)  # sid -> resident blocks at herd release (hit/miss frozen here)
+    preempt_policy: str = "lru"
+    # sid -> resident blocks at herd release: the S8 hit/miss FREEZE — a compensating rule
+    # RETAINED ON THE GATE (engine truth is LIVE lookups; unfreeze gate-rejected 2026-06-10,
+    # H100 +3.47pt — see the module docstring and defit_log_entries/L4-queue.md).
+    resident_at_barrier: dict[int, int] = field(default_factory=dict)
     # --- shared cross-session APC prefix (prefix_aware_synthetic workloads) ---
     # ``shared_prefix_tokens`` (S) is the profile-constant prefix that EVERY session's prompt
     # carries at the FRONT of its context (system-prompt-level, generated from a per-PROFILE label
@@ -600,14 +643,15 @@ def _running_ctx_mean(state: _ServerState) -> float:
 
 def _schedule(state: _ServerState) -> None:
     """Admission for the current herd. The hit/miss decision is made from the block-level
-    prefix cache: the session's SURVIVING resident prefix is a HIT (re-prefill only the
-    evicted tail + new tokens); a fully-evicted session is a full MISS. Reserve the full
-    context blocks, RECLAIMING the surviving prefix and evicting ONLY non-herd cache — dead
-    sessions or sessions that already completed THIS round — never a herd member still
-    awaiting its turn (a hit-to-be), which is what kept the cohort from cascading to 100%
-    miss. A head that can't get blocks yet is DEFERRED (skipped, stays waiting) and retried
-    once a completion frees blocks — so hits run while misses wait, and the resident set
-    ROTATES (the saturate-ramp-RECOVER). Also gated by the per-step token budget + max_seqs."""
+    prefix cache: the session's SURVIVING resident prefix (per the barrier snapshot — the
+    retained S8 freeze, see below) is a HIT (re-prefill only the evicted tail + new tokens);
+    a fully-evicted session is a full MISS. Reserve the full context blocks, RECLAIMING the
+    surviving prefix and evicting free residents first (dead sessions or sessions that
+    already completed THIS round), then — only under genuine over-subscription — partially
+    trimming idle herd residents LRU-oldest (see ``_evict``). A head that can't get blocks
+    yet is DEFERRED (skipped, stays waiting) and retried once a completion frees blocks — so
+    hits run while misses wait, and the resident set ROTATES (the saturate-ramp-RECOVER).
+    Also gated by the per-step token budget + max_seqs."""
     if not state.waiting:
         return
     decode_slots = len(state.running)
@@ -628,8 +672,19 @@ def _schedule(state: _ServerState) -> None:
         # Block-level prefix-cache hit: the surviving resident prefix covers up to
         # ``cached_blocks * block_size`` tokens of this turn's cached context; only the
         # EVICTED tail of that prefix plus the new tokens must be (re-)prefilled. Resident
-        # blocks are read from the BARRIER SNAPSHOT (frozen at herd release), not live, so a
-        # peer's in-pass eviction can't cascade this session into a spurious MISS.
+        # blocks are read from the BARRIER SNAPSHOT (frozen at herd release), not live —
+        # a COMPENSATING RULE, RETAINED ON THE GATE (audit-v2 S8, adjudicated against the
+        # engine-trace oracles 2026-06-10, defit_log_entries/L4-queue.md): vLLM computes
+        # hits LIVE at scheduling, and live erosion is real even WITHIN one scheduling step
+        # (trace pool060 step 287: five same-step lookups descend 353/313/273/233/193 blocks
+        # as each peer's allocation eats the next prefix); the freeze over-credits
+        # 20.2-85.4% of its frozen prefix credit under pressure (frozen variants
+        # under-count re-prefill 42-54% vs engine truth). The LIVE lookup was implemented
+        # and GATE-REJECTED (H100 ttft_cell 18.13→21.60, H100x2 29.02→33.91, A100 IMPROVED
+        # −1.22): with re-prefill VOLUME now trace-faithful, the freeze is compensating the
+        # volume→TTFT over-amplification elsewhere (pricing/queue interaction), not
+        # eviction semantics — it stays until that structural successor lands (the util-cap
+        # precedent), NOT because the engine freezes anything.
         snap_blocks = state.resident_at_barrier.get(sid, cache.cached_blocks(sid))
         resident_prefix = min(head.cached, snap_blocks * cache.block_size)
         # Shared cross-session APC prefix: once primed (some session has prefilled it), the front
@@ -656,12 +711,13 @@ def _schedule(state: _ServerState) -> None:
         head.resident_prefix = resident_credit           # HIT prefix attended each prefill step
         head.prefill_total = max(1.0, head.remaining_prefill)  # to spread the cached-attn cost across chunks
         target_blocks = cache.tokens_to_blocks(head.kv_tokens)
-        # Reserve the full context: reclaim the surviving prefix, then free residents, then (only
-        # under genuine over-subscription) PREEMPT an idle herd resident (``herd_pending`` minus
-        # in-flight) per ``preempt_policy`` — vLLM RECOMPUTE. The preempted session re-prefills
-        # its trimmed tail on its turn (a MISS). In-flight KV is never evicted. If even that can't
-        # free the delta (one over-large head behind pinned in-flight KV), DEFER and retry on a
-        # completion — never a hard stall.
+        # Reserve the full context: reclaim the surviving prefix, then free residents, then
+        # (only under genuine over-subscription) PARTIALLY trim idle herd residents
+        # (``herd_pending`` minus in-flight) LRU-oldest — the engine's free-queue recycling
+        # (S7). A trimmed session re-prefills its lost tail on its turn (a partial MISS).
+        # In-flight KV is never evicted. If even that can't free the delta (one over-large
+        # head behind pinned in-flight KV), DEFER and retry on a completion — never a hard
+        # stall.
         if not cache.grow_to(sid, target_blocks, in_flight, state.herd_pending, state.preempt_policy):
             deferred.append(head)
             continue
@@ -859,13 +915,22 @@ def _release_herd(state: _ServerState, turn_idx: int) -> None:
     state.current_turn = turn_idx
     state.herd_remaining = len(herd)
     # Freeze each herd member's resident prefix AT release: this turn's hit/miss is decided
-    # against what was cache-resident when the herd was scheduled, so admitting one member can
-    # NOT retroactively turn a peer's resident hit into a MISS (the cascade that over-counted
-    # osworld ~2x the physical working-set overflow). Physical eviction still runs live below.
+    # against what was cache-resident when the herd was scheduled. RETAINED COMPENSATING
+    # RULE (audit-v2 S8): the engine decides hits LIVE at scheduling — the trace-adjudicated
+    # unfreeze was gate-rejected 2026-06-10 (see the S8 comment in ``_schedule`` and
+    # defit_log_entries/L4-queue.md). Physical eviction still runs live below; cross-turn
+    # eviction IS visible (the snapshot is re-taken at every barrier) — only MID-TURN
+    # erosion is hidden from hit accounting.
     state.resident_at_barrier = {s.session_id: state.cache.cached_blocks(s.session_id) for s in herd}
-    # Every herd member is evict-PROTECTED until it departs: a re-prefilling miss must not
-    # trim a herd member still awaiting its turn (that member is a hit-to-be). Only dead /
-    # already-completed-this-round sessions are evictable.
+    # Herd members still awaiting their turn are TIER-2 victims only: free residents (dead /
+    # completed-this-round sessions) are reclaimed first, and only genuine over-subscription
+    # partially trims an idle herd member's prefix (LRU-oldest — see ``_evict``). This tier
+    # structure is the counterfactual-validated combination (within 1.3-12.6% of engine
+    # re-prefill truth when paired with live lookups); the engine itself draws NO herd
+    # distinction (S9: waiting herd members supplied 43.0-69.6% of evicted blocks in the
+    # pressure traces, and just-finished sessions' blocks are evicted LAST, not first) — the
+    # residual session-granular tier ordering is the documented honest stop-point of this
+    # cache model.
     state.herd_pending = {s.session_id for s in herd}
     for s in herd:
         state.push(state.clock, _ARRIVAL, (s.session_id, turn_idx))
@@ -888,7 +953,7 @@ def _advance_herd(state: _ServerState) -> None:
 
 def _run_sim(
     sessions: list[Session], params: RooflineParams, max_events: int,
-    preempt_policy: str = "tail",
+    preempt_policy: str = "lru",
     shared_prefix_tokens: float = 0.0,
     prefill_floor_ms: float | None = None,
 ) -> dict[tuple[int, int], float]:
@@ -1020,7 +1085,7 @@ def predict_cell_ttft_qsim(
     *,
     oracle: bool = False,
     max_events: int = 4_000_000,
-    preempt_policy: str = "tail",
+    preempt_policy: str = "lru",
     shared_prefix_tokens: float = 0.0,
     oracle_bench_root: "Path | str | None" = None,
     gpu_key: str | None = None,
@@ -1035,7 +1100,9 @@ def predict_cell_ttft_qsim(
     to ``turns`` order; ``[]`` for empty; a turn_index reached by no session falls back to the
     forward static predictor. Forward by default (cohort from ``forward_survival``);
     ``oracle=True`` overlays measured ``session_timelines`` (validation only). ``preempt_policy``
-    selects the over-subscription victim: ``'tail'`` (vLLM RECOMPUTE, MRU-first) or ``'lru'``.
+    orders tier-2 partial trims: ``'lru'`` (oldest-first — ENGINE-FAITHFUL, the production
+    default since the S7 re-derivation 2026-06-10) or ``'tail'`` (MRU-first; trace-falsified,
+    kept only as the adjudication falsification seam).
 
     ``shared_prefix_tokens`` (S) models a profile-constant cross-session APC prefix (the
     ``prefix_aware_synthetic`` workloads): the front S tokens of every session's context are an
