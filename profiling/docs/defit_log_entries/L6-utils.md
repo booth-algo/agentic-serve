@@ -188,3 +188,43 @@ Diagnostics worth recording:
   vllm 0.19.0 PASS, `/data/models/Llama-3.1-8B-Instruct` (30G) PASS, 1879G free PASS.
 - Known gap recorded in the runbook: the serving-wall capture harness was never
   committed; the runbook pins the exact JSONL field contract the builder consumes.
+
+## Candidate gate (2026-06-10, run in-lane — supersedes "rewiring deferred to integration")
+
+After the re-derivation commit the lane was directed to gate the candidate IN-LANE
+instead of deferring: wire `util_bw = 0.8111`, run the replay-ON gate, adopt on pass /
+keep 0.93 + document on fail. Setup: the ONLY change was `configs/gpus/H100.json`
+`util_bw 0.93 → 0.8111` (flows to the H100 and H100x2 deployments via `configs/loader`;
+the A100 placeholder was NOT touched — its measurement is the deferred G7).
+`gate_scoped_rows` → `/tmp/l6_cand.*` vs the pre-edit baseline `/tmp/l6_base.*`
+(both replay-ON: realized pools symlinked, no warning, A100 rows byte-identical).
+
+| binding metric | base | candidate | delta | ±0.3 |
+|---|---|---|---|---|
+| H100 tpot_cell | 14.3182 | 14.9887 | **+0.6705** | **FAIL** |
+| H100 ttft_cell | 18.1328 | 18.1415 | +0.0087 | ok |
+| H100 e2el_cell | 10.7586 | 10.9928 | +0.2342 | ok |
+| H100 tpot chat | 5.4631 | 6.2323 | **+0.7692** | **FAIL** |
+| H100 swe-plateau | 8.8219 | 8.7732 | −0.0487 | ok |
+| A100 tpot/ttft/e2el/chat | — | — | +0.0000 | ok |
+
+Diagnostics (non-binding): H100x2 tpot_cell 28.7486 → 31.0120 (+2.2634), H100x2
+e2el_cell +0.8062, H100 tpot osworld +1.3389, H100 tpot_turn_overall +0.7268.
+
+**Verdict: FAIL** (one-sided ≤ +0.3 and two-sided ±0.3 alike) — **candidate REJECTED,
+0.93 kept** (the established honest fallback: pinned-with-measured-disagreement).
+
+Reading: replacing 0.93 with the honestly-measured 0.8111 raises every analytic decode
+price by ~14.7% and moves predictions AWAY from measurement everywhere TPOT is
+analytic-fill-priced (grid-covered cells don't move). I.e. 0.93 is not just a pinned
+constant with bad provenance — it is doing COMPENSATING-FIT work for the host-overhead
+term the decode pricing does not carry (consistent with the net-of-sched util 1.25 > 1
+diagnostic above). Retiring it is only possible as a PAIRED change (measured util + an
+explicit host floor in decode pricing), which touches L3-owned pricing files — out of
+this lane's scope; recorded here for integration.
+
+Final state: `configs/gpus/*.json` and `closed_form_tpot.py` defaults unchanged at
+0.93/0.65/5.7; provenance comments in `configs/gpus/H100.json`,
+`closed_form_tpot.py:69`, and `roofline_params_H100_llama31_8b.json`
+`_notes.util_provenance.values_kept` now record the gate numbers and the rejection.
+pytest after revert: 145 passed, 1 skipped.

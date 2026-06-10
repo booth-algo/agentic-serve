@@ -66,7 +66,7 @@ class RooflineParams:
     peak_bw_bytes_per_s: float = 3.35e12
     kv_bytes_per_token: float = 131072.0
     util_flops: float = 0.65  # PINNED; pre-registered re-derivation over the 4 serving-wall traces gives 0.5886 (n=7, thin; submit-wall convention unreliable under AsyncScheduler) — see profile_data/kernels/roofline_utils_H100.json + defit_log_entries/L6-utils.md. R1 curve (prefill_gemm_util_H100.json) is the authoritative prefill source.
-    util_bw: float = 0.93     # PINNED; does NOT reproduce from any documented computation (audit-v2 G4). Pre-registered recipe over the 4 serving-wall traces gives 0.8111 (62 steady-state decode steps, byte-quartile-stable) — profile_data/kernels/roofline_utils_H100.json. Rewiring deferred to integration (gate H100 ±0.3).
+    util_bw: float = 0.93     # PINNED; does NOT reproduce from any documented computation (audit-v2 G4). Pre-registered recipe over the 4 serving-wall traces gives 0.8111 (62 steady-state decode steps, byte-quartile-stable) — profile_data/kernels/roofline_utils_H100.json. Candidate 0.8111 was wired and gated 2026-06-10 (replay-ON) and REJECTED: H100 tpot_cell +0.67pt, chat +0.77pt vs baseline (see defit_log_entries/L6-utils.md). Kept as pinned-with-measured-disagreement — 0.93 compensates host overhead the decode pricing carries no separate term for.
     bytes_per_param: float = 2.0
     available_kv_blocks: int = 27_250          # empirical H100 (max free_kv_blocks across 4 vLLM engine traces 2026-05-27; ~1.5% less than spec-derived 27651)
     cache_block_size: int = 16                 # vLLM v1 default
