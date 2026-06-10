@@ -1,5 +1,15 @@
 # Fitted-constant audit — tp1 headline TTFT / TPOT / E2EL flow
 
+> **2026-06-10 — SUPERSEDED for open items by `fitted_constants_audit_v2.md`.** The v2 final
+> report re-verified this audit's closures against on-disk artifacts (6 of 7 confirmed; the host
+> cached-token sum 6.103e-3 reopened as v2 R2) and re-classified the remaining debt (2 RED, 9 GRAY,
+> 14 STRUCTURAL, 9 dead-path). Treat anything still listed as open/`de-fit needed` below as
+> historical — v2 is the active worklist. Values quoted in the body reflect the 2026-06-02 tree
+> and some have since moved (e.g. `SAT_SUSTAIN_LO` 10.0 → 9.0, `OUT_KNEE_HI` 80 → 86 demoted to a
+> ceiling-cluster label, the tuned knees `P_LO`/`P_HI_*` deleted in `aea241e`). Also note
+> `kernel_tpot_hint.py` and `session_regime_classifier.py` (named out-of-scope below) were retired
+> to `simulator/_legacy/` on 2026-06-10 (v2 items D5–D9).
+
 **Date:** 2026-06-02. **Scope:** the constants actually wired into the dashboard headline
 (`build_simulator_rows.py` → `predict_cell_tpot` for TPOT, `predict_cell_ttft_qsim` for TTFT,
 `e2el = ttft + output·tpot` for E2EL). Comparison-only modules (`kernel_tpot_hint.py`,
@@ -199,8 +209,13 @@ Comment ([kernel_tpot.py:56](../../simulator/kernel_tpot.py#L56)) is explicit: *
 - **SPEC-DERIVED:** `n_params=8.03e9`, `peak_flops=989e12`, `peak_bw=3.35e12`,
   `kv_bytes_per_token=131072` (= 2·32·8·128·2), `bytes_per_param=2.0`, `kv_heads=8`.
 - **VLLM-CONFIG:** `MAX_NUM_SEQS=1024`, `MAX_NUM_BATCHED_TOKENS=8192`,
-  `LONG_PREFILL_TOKEN_THRESHOLD=1310` (=32768·0.04), `cache_block_size=16`, `tensor_parallel`,
-  `preempt_policy='tail'`.
+  `LONG_PREFILL_TOKEN_THRESHOLD=1310` (=32768·0.04), `cache_block_size=16`, `tensor_parallel`.
+- **MODEL-CHOICE (relabeled 2026-06-10, audit-v2 S7 — was misfiled under VLLM-CONFIG above):**
+  `preempt_policy='tail'`. vLLM's tail/LIFO preemption is a semantics for RUNNING requests; the
+  sim applies this policy to IDLE sessions' cached blocks, which the real engine evicts as
+  free-queue prefix blocks, LRU-OLDEST block-by-block (`vllm/.../block_pool.py`) — so engine
+  semantics do not transfer and 'tail' is a simulator modeling choice, not engine config. The
+  engine-faithful combination would be the sim's non-default `'lru'`+partial.
 - **STRUCTURAL:** 0.5 decode midpoint, Hermite smoothstep `3u²−2u³`, FA3 triangular-FLOP 0.5,
   `(k+0.5)/C` quantile draw, the e2el composition, `max(1,·)` guards.
 - **Verified vestigial / retired (not in headline):** `_prefill_pass_ms`, `_GRID_U_MAX=1024`

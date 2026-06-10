@@ -1,5 +1,14 @@
 """Session-level multiturn TPOT regime classifier (pure-workload, forward-applicable).
 
+RETIRED 2026-06-10 (de-fit campaign lane L7; audit-v2 items D5-D8): moved to
+``simulator/_legacy/``. Never reachable from any production entrypoint
+(``build_simulator_rows`` / ``validate_*`` / ``gate_scoped_rows`` / dashboards);
+the only consumer chain is ``simulator/_legacy/kernel_tpot_hint.py`` ->
+``profiling/process/_legacy/augment_simulator_predictions_with_kernel.py``, an
+opt-in dashboard diagnostic. Kept (not deleted) so that diagnostic still runs.
+All thresholds below are FITTED/read-off on the same 44 in-sample H100 cells
+(no builder regenerates any anchor; audit-v2 D6) — treat as diagnostic-only.
+
 Given a multiturn cell's per-turn WORKLOAD trajectory (token counts + scheduled
 cohort size per turn -- no engine telemetry), classify the cell into one of three
 ITL regimes and, for SATURATE, predict the turn index at which measured ITL jumps:
@@ -97,6 +106,17 @@ FITTED CONSTANTS (flagged; tuned on the 44 H100 cells, all GLOBAL not per-profil
   PREFILL_HEAVY_RATIO=3.0 / PREFILL_HEAVY_PEAK=0.30  lower gate for prefill-dominated cells
   CONTEXT_BUDGET=150.0   cohort*turn budget consumed before the decode batch collapses
   JUMP_FLOOR=2           structural earliest jump turn
+
+  --- ramp-window hint constants (added later; same 44-cell in-sample tuning surface) ---
+  PRESSURE_ONSET=0.85    FITTED eviction-onset read-off (see provenance correction at the constant)
+  SAT_FULL=2.0           FITTED; equals the retired tuned kernel P_HI_LONG, not a measurement
+  RAMP_WIDTH_MAX=7       in-sample read-off: widest coding-family rise (~6-7 turns)
+  CONF_COHORT_LO=40 / CONF_COHORT_HI=160   confidence-ramp endpoints (timing-MAE read-off)
+  CONF_FLOOR=0.2         FITTED residual trust at low cohort
+  0.4 confidence cap     FITTED (was unflagged until audit-v2 D7): clamp for sub-pool-full
+                         (peak<1) windows, inline in classify_session
+  +2 onset pull          FITTED (was unflagged until audit-v2 D7): prefill-heavy onset pulled
+                         to first_turn+2, inline in classify_session
 """
 
 from __future__ import annotations
@@ -122,22 +142,33 @@ PREFILL_HEAVY_PEAK = 0.30   # FITTED. lowered perturbation gate for prefill-heav
 CONTEXT_BUDGET = 150.0      # LEGACY (unused for live jump_turn; kept for reference).
 JUMP_FLOOR = 2              # structural earliest jump turn
 
-# --- ramp-window hint (the jump IS the KV-pool eviction crossing) -------------
-# The saturation jump is the turn KV pressure crosses into eviction, not a fixed
-# cohort*turn budget. Measured (workflow wf_9a938421): the first turn pressure
-# >= PRESSURE_ONSET tracks the true jump with MAE 0.88 turns across ALL
-# concurrency bands, vs 3.76 for the old CONTEXT_BUDGET law (which was only
-# accurate at high-c by a clamping artifact). No new fitted constant: PRESSURE_ONSET
-# is the eviction onset of the SAME pressure the classifier already computes, and
-# the sibling of the kernel amplifier onset (kernel P_LO=0.8).
-PRESSURE_ONSET = 0.85   # FLAG fitted-but-physical: KV-pool eviction onset (~85% committed).
-SAT_FULL = 2.0          # FLAG fitted-but-physical: pressure at which the amplifier is fully saturated.
+# --- ramp-window hint (the jump is modeled as a KV-pressure crossing) ---------
+# The saturation jump is modeled as the first turn pressure >= PRESSURE_ONSET,
+# not a fixed cohort*turn budget. On the 44 in-sample H100 cells this crossing
+# tracked the true jump with MAE 0.88 turns vs 3.76 for the old CONTEXT_BUDGET
+# law (only accurate at high-c by a clamping artifact). The cited validation
+# workflow wf_9a938421 left no artifact, so those numbers are unverifiable today.
+#
+# PROVENANCE CORRECTION (2026-06-10, audit-v2 D5): the original comment here
+# claimed "no new fitted constant ... sibling of the kernel amplifier onset
+# (kernel P_LO=0.8)". That was false at introduction: 0.85 never equaled the
+# kernel's P_LO (0.8, later 0.88), and P_LO itself was DELETED from kernel_tpot
+# when the tuned knees were retired (commit aea241e). The measured eviction-onset
+# artifact (profile_data/kernels/ramp_knees_h100_llama31_8b.json) puts the knee
+# at P_LO=0.4456 — roughly 2x BELOW this value. PRESSURE_ONSET is therefore a
+# FITTED in-sample threshold, frozen for this legacy diagnostic.
+PRESSURE_ONSET = 0.85   # FITTED (44-cell in-sample read-off; see provenance correction above).
+SAT_FULL = 2.0          # FITTED: equals the RETIRED tuned kernel P_HI_LONG=2.0, not a measurement.
 # Ramp WIDTH is the number of turns pressure takes to climb ONSET -> SAT_FULL:
 # slow climb (low-c coding) -> wide multi-turn step; fast climb (high-c) -> sharp
 # jump. This is the STEPPING motion (a ramp), not a discrete jump. Bounded:
-RAMP_WIDTH_MAX = 7      # measured widest coding-family rise (~6-7 turns)
+RAMP_WIDTH_MAX = 7      # in-sample read-off: widest coding-family rise (~6-7 turns)
 RAMP_WIDTH_MIN = 0      # near-instant jump limit
-OUT_KNEE_HI = 80.0      # REUSED from kernel_tpot: long-output threshold (prefill-lead gate)
+# OUT_KNEE_HI: FROZEN SNAPSHOT (audit-v2 D8) of kernel_tpot's former OUT_KNEE_HI=80.0
+# long-output threshold. NOT "reused" live: the kernel value has since moved to 86.0
+# and was demoted to a non-formula ceiling-cluster label there. This module is
+# deliberately standalone (pure-workload) — do not re-import from kernel_tpot.
+OUT_KNEE_HI = 80.0      # frozen snapshot of a retired kernel constant (prefill-lead gate)
 # Confidence is keyed to where the jump physics is trustworthy: jump timing MAE
 # falls ~18 -> 1.8 turns over cohort [40,160] (high-c reliable, low/mid-c noisy).
 # The hint only scales MAGNITUDE; it never changes the class.
@@ -290,6 +321,8 @@ def classify_session(turns: list[dict]) -> dict:
         # Prefill-heavy long-output cells (osworld) tip the pool ~turn 2, ahead of
         # the pressure crossing — pull the onset to the structural floor so the
         # early t2->t4 ramp is covered.
+        # FITTED (audit-v2 D7): the +2 pull is a 44-cell in-sample read-off; it was
+        # missing from this module's fitted inventory until 2026-06-10.
         if ratio >= PREFILL_HEAVY_RATIO and med_out >= OUT_KNEE_HI:
             onset = max(JUMP_FLOOR, min(onset, first_turn + 2))
         jump_start = int(onset)
@@ -301,6 +334,9 @@ def classify_session(turns: list[dict]) -> dict:
             float(max_sched), CONF_COHORT_LO, CONF_COHORT_HI
         )
         if peak < 1.0:
+            # FITTED (audit-v2 D7): the 0.4 confidence cap for sub-pool-full windows
+            # is a 44-cell in-sample read-off; it was missing from this module's
+            # fitted inventory until 2026-06-10.
             confidence = min(confidence, 0.4)
     elif emit_window:
         # Loads-but-never-crosses (low-pressure slow-creep): no-op window.

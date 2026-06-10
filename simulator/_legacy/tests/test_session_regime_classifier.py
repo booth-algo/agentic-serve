@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from simulator.session_regime_classifier import (
+from simulator._legacy.session_regime_classifier import (
     JUMP_FLOOR,
     PRESSURE_ONSET,
     _pcross,
@@ -55,7 +55,7 @@ def test_smoothstep_degenerate_window() -> None:
 def test_pcross_returns_first_crossing_turn_index() -> None:
     ts = _saturate_cell()
     # pressures rise with context; the first crossing exists and is an int.
-    from simulator.session_regime_classifier import _pressure
+    from simulator._legacy.session_regime_classifier import _pressure
 
     pcs = [_pressure(t) for t in ts]
     assert _pcross(pcs, ts, PRESSURE_ONSET) is not None

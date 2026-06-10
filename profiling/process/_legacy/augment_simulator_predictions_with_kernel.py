@@ -34,7 +34,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from simulator.closed_form_tpot import RooflineParams  # noqa: E402
 from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot  # noqa: E402
-from simulator.kernel_tpot_hint import predict_cell_tpot_hinted  # noqa: E402
+from simulator._legacy.kernel_tpot_hint import predict_cell_tpot_hinted  # noqa: E402  (retired 2026-06-10, audit-v2 D9)
 from simulator.ramp_tpot import PROFILE_DIST, predict_cell_tpot_ramp  # noqa: E402
 
 
