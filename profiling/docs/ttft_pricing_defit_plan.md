@@ -133,5 +133,17 @@ byte-identical, H100x2 advisory TTFT 33.06→31.76 / E2EL 25.04→24.01 → **PA
 was WRONG — the gap is real but small enough that the honest value holds tp1 within noise and
 helps tp2. 187 tests + 12 subtests green.
 
-**Items 2 (R1/S6) and 3 (G3):** _pending — Item 2 Phase A is offline and next; Phases B/C and
-Item 3 need the H100 host (GPU check first)._
+**Item 2 (R1/S6) — EXECUTED 2026-06-10: measurement built; adoption gate-REJECTED →
+resolved-as-compensating-fit.** Phase A debunked the "15.5 ms/1k" anchor (single cell, shared-prefix
+double-counted denominator; microbench re-derived to 0.754–0.773 in the sim convention). Phase B
+measured the per-step curve in-engine (h100 GPU 6 per `h100_setup.md`; 282 full-step CUDA-event
+samples; FA3-regressor OLS → zero-prefix GEMM intercepts): **util_sim 0.640→0.754, plateau by
+m≈2048; FA3 slope cross-check 8.9e-7 ≈ production 8.31e-7**. Artifact
+`prefill_gemm_util_H100.json` + builder `build_prefill_gemm_util.py` (deterministic). Phase C wired
+the measured lookup → gate REJECT (H100 TTFT +3.15pt, H100x2 advisory +3.1; A100 IMPROVED −0.38/
+−1.79; TPOT byte-identical) → pre-registered fallback taken: ramp+cap retained with the
+compensating-fit label (the cap under-prices saturated H100 steps to offset the S7–S10 deep-cohort
+queue error); both-ways test pins (cap + measured plateau + FA3 cross-check); revert byte-identical.
+Successor: S7–S10 re-derivation, then re-gate this measured curve.
+
+**Item 3 (G3):** _pending — needs the tp1/tp2 like-for-like pair on the H100 host (2 GPUs)._

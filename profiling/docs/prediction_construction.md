@@ -97,10 +97,12 @@ A turn no session reaches falls back to the forward static predictor (`_fallback
 The **host term is now measured both ways**: partition 0.5236 (pooled OLS of the live B-sweep
 band, adopted 2026-06-10) × sum 5.8872e-3 (the live c1 lstsq, R2 de-fit 2026-06-10 — replaced the
 benchmark-fitted 6.103e-3; see the De-fit log). Remaining 🔴 in this table per audit v2
-(`fitted_constants_audit_v2.md`): `PREFILL_GEMM_UTIL_SAT` (validation-anchored cap, R1) and
-`TP_COMM` (backed-out remainder, G3) — both honestly labeled, de-fit plan in
-`ttft_pricing_defit_plan.md` Items 2–3. (`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit 2026-06-05
-and is genuinely 🔵 — regenerates exactly.)
+(`fitted_constants_audit_v2.md`): `PREFILL_GEMM_UTIL_SAT` — now a MEASURED-AND-DOCUMENTED
+compensating fit (the real per-step curve, plateau 0.754 in `prefill_gemm_util_H100.json`, was
+gate-rejected 2026-06-10; the cap offsets the S7–S10 deep-cohort queue error — De-fit log) — and
+`TP_COMM` (backed-out remainder, G3, plan Item 3 pending). Bonus: the FA3 coefficient gained an
+independent cross-check (sweep slopes ≈8.9e-7 vs 8.31e-7, test-pinned).
+(`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit 2026-06-05 and is genuinely 🔵 — regenerates exactly.)
 
 ---
 
@@ -112,7 +114,8 @@ and is genuinely 🔵 — regenerates exactly.)
 ## Fitted-constant debt — audit v1 (7 found 2026-06-05, workflow `wpa6sviup`; **4 de-fit, 3 retired (note below), 0 remaining**)
 
 **Audit v2 (2026-06-10, post-restructure — `fitted_constants_audit_v2.md`) found NEW debt beyond
-these 7:** 2 RED (`PREFILL_GEMM_UTIL_SAT=1.0` validation-anchored cap — open, plan Item 2; the host
+these 7:** 2 RED (`PREFILL_GEMM_UTIL_SAT=1.0` — measurement built 2026-06-10, adoption
+gate-rejected → resolved-as-compensating-fit, successor = the S7–S10 re-derivation; the host
 SUM 6.103e-3 benchmark-fitted — **✅ DE-FIT 2026-06-10**, replaced by the live 5.8872e-3, see the
 De-fit log), 9 GRAY
 (incl. `util_bw=0.93` matching no documented computation, `TP_COMM` backed-out, `SAT_SUSTAIN 9/24`
@@ -151,6 +154,29 @@ retirement.)
 `.omc/specs/deep-dive-whether-there-are-fitted.md`.
 
 ### De-fit log
+- **2026-06-10 — prefill-GEMM util cap: measurement built, adoption gate-rejected → resolved-as-compensating-fit** (`ttft_queue_sim`; audit-v2 R1/S6; `ttft_pricing_defit_plan.md` Item 2).
+  Phase A debunked the cap's anchor: the "15.5 ms/1k GT cohort ≈ util-1 roofline" claim traces to ONE
+  cell (osworld c5 turn-0) whose token denominator double-counts the 1024-token shared APC prefix
+  (implied util 1.05 > 1 — impossible); dedup-corrected GT gives a ~0.62 gross floor, and the offline
+  microbench re-derives to 0.754–0.773 in the sim's FLOPs convention (its 0.655–0.672 was the
+  executed-GEMM convention). Phase B measured the real per-step curve in-engine
+  (`prefill_util_sweep.py`, h100 GPU 6 per `h100_setup.md`; CUDA events on `execute_model` with
+  per-step token counts read from SchedulerOutput; budgets 512–8192, 282 full-step samples):
+  per-step device time OLS-decomposed against the sim's own FA3 regressor `M·(R+0.5·M)` —
+  **zero-prefix GEMM intercepts → util_sim 0.640 (512) → 0.708 (1310) → 0.744 (2048) → 0.752 (4096)
+  → 0.754 (8192)**, R² 0.987–0.998 (`build_prefill_gemm_util` →
+  `prefill_gemm_util_H100.json`). The curve CONFIRMS `util_flops≈0.65` at small m, saturates at
+  **0.754 by m≈2048** (not 1.0 by 8192), and the regression slopes independently re-measure
+  **FA3 ≈ 8.9e-7** vs the production 8.31e-7 (~7% — cross-check pinned in tests). Phase C wired the
+  measured lookup and **the gate REJECTED it**: H100 TTFT-cell 18.13→21.28 (+3.15), H100x2 advisory
+  31.76→34.88 — while **A100 improved** (TTFT −0.38, E2EL −1.79) and TPOT stayed byte-identical.
+  Interpretation: the `util→1.0` ramp under-prices saturated H100 steps to compensate a structural
+  error in the deep-cohort queue interaction (the audit-v2 S7–S10 cluster); A100 (budget 2048, no
+  deep saturated steps) has no such compensation to lose, so the honest curve helps there.
+  Per-config adoption would be cherry-picking → **ramp+cap retained with the compensating-fit label**;
+  the measurement, builder, sweep tooling, and both-ways test pins stay as the permanent record.
+  Revert verified byte-identical to HEAD. Successor filed: re-derive the saturated-step/queue
+  interaction (S7–S10), then re-gate the measured curve.
 - **2026-06-10 — host cached SUM 6.103e-3 → 5.8872e-3 (LIVE measurement): audit-v2 R2 CLOSED** (`ttft_queue_sim`; `ttft_pricing_defit_plan.md` Item 1).
   The sum both host constants scale was the `760d9bd` c1 **benchmark-regression** coefficient
   (`prefill ≈ 22.5 + 0.0310·new + 0.006103·cached`, lstsq over the benchmark's own c1 cells — i.e.

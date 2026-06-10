@@ -181,15 +181,21 @@ PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel,
 PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.0030824476411757708  # MEASURED 0.5236×5.8872e-3 — amortized once per step
 PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002804790423340364   # MEASURED 0.4764×5.8872e-3 — per request, summed
 
-# VALIDATION-ANCHORED CAP, NOT A MEASUREMENT (audit-v2 R1, fitted_constants_audit_v2.md): the upper
-# util the batch ramp reaches. The previous "measured 15.5 ms/1k GT cohort" claim fails verification:
-# that anchor exists nowhere outside the comment, 15.5 ms/1k is BELOW the util-1 roofline (16.24 →
-# implied util 1.05 > 1, impossible), and GT turn-0 cohorts are inside the scored validation set. The
-# repo's only prefill-GEMM microbench (profile_data/kernels/prefill_gemm_H100.csv) shows util
-# PLATEAUING at 0.655–0.672 across the ramp domain — no observed ramp to 1.0. 1.0 is the physics cap
-# nearest a validation-set read-off; pending de-fit: measure util vs per-step batch tokens over
-# [long_prefill_token_threshold, max_num_batched_tokens] on a live server.
-PREFILL_GEMM_UTIL_SAT = 1.0                      # tuned cap (physics bound), pending measurement
+# COMPENSATING FIT, RETAINED ON THE GATE (audit-v2 R1/S6; measurement built and adoption
+# REJECTED 2026-06-10 — ttft_pricing_defit_plan.md Item 2). The true per-step prefill-GEMM
+# utilization IS measured: prefill_util_sweep.py (h100 GPU 6, CUDA events at exact full-budget
+# chunk sizes, zero-prefix GEMM intercepts via OLS against the sim's own FA3 regressor — the
+# slopes independently re-measure FA3 ≈ 8.9e-7 vs production 8.31e-7) →
+# profile_data/kernels/prefill_gemm_util_H100.json: util_sim 0.640 (m=512) → 0.744 (2048) →
+# 0.754 (8192). It confirms util_flops≈0.65 at small m and REFUTES saturation at 1.0 (the old
+# "15.5 ms/1k GT cohort" anchor was a shared-prefix double-count — De-fit log 2026-06-10).
+# WIRING THE MEASURED CURVE FAILED THE GATE: H100 TTFT-cell 18.13→21.28 (+3.15), H100x2
+# advisory 31.76→34.88, while A100 IMPROVED (TTFT −0.38, E2EL −1.79) and TPOT stayed
+# byte-identical — i.e. the util→1.0 ramp under-prices saturated steps to compensate a
+# structural error in the H100 deep-cohort queue interaction (the audit-v2 S7–S10 cluster).
+# Per-config adoption would be metric cherry-picking; the ramp+cap stays until the structural
+# successor (saturated-step/queue re-derivation) lands. NOT a measurement — a tuned cap.
+PREFILL_GEMM_UTIL_SAT = 1.0                      # compensating-fit cap (measured plateau: 0.754)
 # BACKED-OUT REMAINDER, NOT a comm measurement (audit-v2 G3): tp2 ttft.new 18.5 − GEMM/2 (12.65) =
 # 5.85 — but the two anchors are instrumentation-inconsistent (tp2 multiprocess vs tp1 in-process;
 # like-for-like gives ~4.56, a 27% band) and physics puts the NVLink all-reduce itself at ~1–3 ms/1k,
@@ -207,14 +213,15 @@ def _prefill_gemm_per_tok(p: RooflineParams) -> float:
 
 
 def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> float:
-    """Batch-aware prefill GEMM rate: util ramps util_flops→PREFILL_GEMM_UTIL_SAT with the per-step batch
-    (a step that fills the chunked-prefill budget is compute-bound, util≈1; a small cache-hit prefill is
-    not), plus the per-extra-rank tensor-parallel all-reduce. Ramps over [long_prefill_threshold,
-    max_num_batched_tokens] so a single/low request (or a small hit) stays at util_flops and only the deep
-    turn-0 cohort that saturates the batch reaches util_sat. Reduces to ``_prefill_gemm_per_tok`` at small
-    batch, tp=1. Ramp ENDPOINTS are engine config (1310/8192, verified); the saturation util it
-    ramps TO is a validation-anchored cap, not a measurement — see PREFILL_GEMM_UTIL_SAT (audit-v2
-    R1/S6) and PREFILL_TP_COMM (G3)."""
+    """Batch-aware prefill GEMM rate: util ramps util_flops→PREFILL_GEMM_UTIL_SAT with the
+    per-step batch over [long_prefill_threshold, max_num_batched_tokens], plus the
+    per-extra-rank tensor-parallel all-reduce. Reduces to ``_prefill_gemm_per_tok`` at small
+    batch, tp=1. PROVENANCE (audit-v2 R1/S6, 2026-06-10): the ramp endpoints are engine config
+    (1310/8192, verified); the ramp SHAPE and the 1.0 cap are a COMPENSATING FIT retained on
+    the gate — the measured per-step curve (prefill_gemm_util_H100.json: 0.640→0.754, plateau
+    by m≈2048) was wired and gate-REJECTED (H100 TTFT +3.15pt; A100 improved; see the De-fit
+    log). TP_COMM is a backed-out remainder (audit-v2 G3, pending its like-for-like
+    measurement)."""
     tp = max(1, int(getattr(p, "tensor_parallel", 1)))
     lo, hi = float(LONG_PREFILL_TOKEN_THRESHOLD), float(MAX_NUM_BATCHED_TOKENS)
     frac = 0.0 if hi <= lo else min(1.0, max(0.0, (batch_tokens - lo) / (hi - lo)))

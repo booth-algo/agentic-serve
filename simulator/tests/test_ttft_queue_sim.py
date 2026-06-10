@@ -498,11 +498,23 @@ def test_no_fitted_constants():
     assert (mod.PREFILL_HOST_SHARED_MS_PER_TOKEN
             + mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN) == _split_art["constants"]["sum_ms_per_tok"]
     assert _split_art["benchmark_sum_reference"]["host_sum_ms_per_tok"] == 0.006103  # retired fit
-    # Prefill-GEMM util ramp: endpoints are engine config; the SATURATION CAP 1.0 is a
-    # validation-anchored tuned cap, NOT a measurement (audit-v2 R1 — the claimed GT-cohort anchor
-    # fails verification and the prefill_gemm_H100.csv microbench plateaus at util 0.655–0.672);
-    # TP_COMM is a backed-out remainder, not a comm measurement (audit-v2 G3).
-    assert mod.PREFILL_GEMM_UTIL_SAT == 1.0                # tuned cap (physics bound), pending measurement
+    # Prefill-GEMM util cap: COMPENSATING FIT retained on the gate (audit-v2 R1/S6, 2026-06-10).
+    # The measured per-step curve EXISTS (prefill_util_sweep.py -> prefill_gemm_util_H100.json:
+    # zero-prefix GEMM intercepts, plateau 0.754 by m~2048) and was gate-REJECTED when wired
+    # (H100 TTFT +3.15pt; A100 improved; TPOT byte-identical) -> the 1.0 cap under-prices
+    # saturated steps to offset the S7-S10 deep-cohort queue interaction. Pinned BOTH ways
+    # (knee precedent): the retained cap AND the measured plateau, so neither drifts silently.
+    assert mod.PREFILL_GEMM_UTIL_SAT == 1.0                # compensating-fit cap (measured: 0.754)
+    _util_art = json.loads((Path(__file__).resolve().parents[2]
+                            / "profile_data/kernels/prefill_gemm_util_H100.json").read_text())
+    _util_anchors = sorted((a["m_tokens"], a["util_sim"]) for a in _util_art["anchors"])
+    assert _util_anchors[0] == (512, 0.6397)               # confirms util_flops~0.65 at small m
+    assert _util_anchors[-1] == (8192, 0.7541)             # the measured plateau the cap overrides
+    # The sweep's OLS slopes independently re-measure the FA3 coefficient (~8.9e-7): must stay
+    # within 15% of the production constant — a drift in either trips this cross-check.
+    _fa3 = [a["fa3_slope_ms_per_tok2"] for a in _util_art["anchors"] if a["m_tokens"] >= 4096]
+    assert all(abs(s - mod.PREFILL_FA3_MS_PER_TOKEN2) / mod.PREFILL_FA3_MS_PER_TOKEN2 < 0.15
+               for s in _fa3)
     assert mod.PREFILL_TP_COMM_MS_PER_TOKEN == 0.00585     # backed-out tp2 remainder, pending measurement
     # Public uppercase numeric module globals: the four config-derived vLLM values + the
     # three measured prefill-law coefficients. Private (underscore-prefixed) names — the
