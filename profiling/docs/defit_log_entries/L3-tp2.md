@@ -36,10 +36,10 @@ Merged into `prediction_construction.md`'s De-fit log by the integration phase. 
   `superseded_ms`/`drift_pct` provenance; tests `profiling/tests/test_build_decode_grid.py`)
   → `decode_profile_H100x2_merged_2026-06-10.csv` (54 cells, floor 4.40 ms). Raw CSVs stay
   append-only.
-  **INTEGRATION ACTION (config not touched per lane ownership):** repoint
+  **WIRED IN (Round 1; the orchestrator allowed the H100x2 `decode_grid` manifest entry):**
   `configs/deployments/h100x2_llama31-8b_tp2.json` `data.decode_grid.path` →
-  `profile_data/results/decode_profile_H100x2_merged_2026-06-10.csv` (one line; the lane
-  contract forbade L3 from editing configs).
+  `profile_data/results/decode_profile_H100x2_merged_2026-06-10.csv` (that one entry only;
+  source/date provenance added).
   **Gate (replay-ON; lane baseline captured pre-edit; candidate = merged grid via
   module-attribute patch, no source/config edits): PASS, success target EXCEEDED** —
   H100x2 TPOT cell-MAPE **28.7486 → 23.1829 (−5.57 pt**; target ≥3 pt from ~28.7**)**,
@@ -69,11 +69,53 @@ Merged into `prediction_construction.md`'s De-fit log by the integration phase. 
   grid with `decode_steps` walls is a methodology change out of L3 scope (tp1 contract:
   byte-identical-or-better). Docstrings fixed (module + `load_grid`); no behavior change,
   tp1 predictions byte-identical by construction.
-- **2026-06-10 — G5 evidence logged (no adoption): per-config launch-floor residuals from the
-  measured grids.** With the merged tp2 grid the H100x2 measured floor is **4.40 ms** (was
-  4.68; the warm-up-outlier-robust row-min). Same derivation as `default_launch_floor_ms`
-  (floor − weight-read/tp − min-KV-read): H100x2 residual ≈ **1.80 ms** vs H100 tp1's 1.37 ms
-  (audit G5 estimated ~2.09 from the old 4.68 floor; the re-measured floor narrows but does
-  NOT close the gap — "config-independent" stays contradicted). Changing
-  `default_launch_floor_ms`/`analytic_grid` would move ~80 analytic-only advisory configs —
-  out of this lane's gated scope; left for a dedicated de-fit with its own gate.
+- **2026-06-10 — G5 ADOPTED (Round 1, per the orchestrated implementation instruction —
+  supersedes the same-day "evidence logged, no adoption" stop-point): per-config launch-floor
+  residuals from the measured grids.** With the merged tp2 grid the H100x2 measured floor is
+  **4.40 ms** (was 4.68; the warm-up-outlier-robust row-min). Same derivation as
+  `default_launch_floor_ms` (floor − weight-read/tp − min-KV-read, each grid evaluated with
+  the params of the config it was measured on; A100 params read from
+  `roofline_params_A100_llama31_8b.json` at runtime so a future util re-anchor flows
+  through): **H100 tp1 1.3697 / H100x2 tp2 1.8163 / A100 tp1 2.0643 ms** — audit G5's
+  "config-independent" single residual stays contradicted (the audit's ~2.09 H100x2 estimate
+  came from the old 4.68 floor; ~2.06 A100 confirmed exactly). `kernel_step_cost` now carries
+  the class table (`_launch_floor_classes`) and `analytic_grid()` (no explicit floor)
+  resolves PER QUERY to the nearest measured class (`launch_floor_for`): tp regime first
+  (the tp collective launch is part of the floor), then nearest log peak-HBM-bandwidth (GPU
+  generation). Affects ONLY analytic-only (uncalibrated, advisory) configs — the three gated
+  configs all use measured grids and never touch the analytic launch floor, so the gate is
+  structurally unmoved by this item; explicit `analytic_grid(floor)` stays available and
+  byte-identical for pinning.
+- **2026-06-10 — Round 1 IMPLEMENTED in `kernel_step_cost.py`: merged tp2 grid wired in +
+  beyond-hull analytic fill made SUB-linear (measured-scaling extrapolation, no free
+  parameters). Gate PASS, H100x2 TPOT cell-MAPE 28.7486 → 21.5336 (−7.22 pt; target ≥3).**
+  Mechanism: absent grid cells are now split. INTERIOR holes (bracketed by measurements in
+  either axis — the S12 dropped 'check' rows and sweep gaps) keep the linear analytic fill,
+  which the S12 re-measurement validated. Cells BEYOND the measured hull (past the row's
+  last T *and* the column's last B) and queries past the outer axes use the grid's OWN
+  measured scaling: per-axis power law with exponent = log-log slope of the last two
+  measured cells, clamped to [0,1] (monotonicity), CAPPED at the linear roofline increment
+  above the measured edge (`v_edge + Δ(B·T·kv/bw)`; the power law scales the whole step
+  time, but the fixed launch/weight share must not grow with B·T), max of the row/col
+  extrapolants. Every number is a measured-cell ratio or the roofline — nothing tuned.
+  **Pre-registered hold-out validation** (old 19-cell grid extrapolated to the 35 newly
+  measured cells, H100x2 params): linear fill median **1.084×** / B·T≥200k median 1.098× /
+  worst 1.241× → sub-linear median **1.067×** / 1.049× / worst **1.111×**, min 0.925 (linear
+  0.930 — no new under-pricing). The max combination is the only variant improving every
+  statistic without under-pricing (geo/min: 0.85/0.77 worst); the roofline cap bounds
+  reachable tp1-state movement (KV pool 436k tokens) to ≲11%.
+  **Gate (replay-ON, baseline re-captured pre-edit in this worktree and matching the
+  measure-phase numbers):** H100x2 TPOT cell **28.7486 → 21.5336** (grid swap alone gave
+  23.18 — the sub-linear fill adds another −1.65 pt), e2el_cell 21.83 → **18.55**,
+  turn-overall 29.25 → 22.35, TTFT unchanged (29.0163); per-profile TPOT chat 17.24 → 9.80,
+  swebench 31.41 → 26.24, osworld 25.16 → 17.21, terminalbench 42.03 → 34.41 (plateau
+  osworld +2.3 / terminalbench +1.3 are the known S3 ×z over-fire region, advisory).
+  Binding H100/A100 gates all PASS: H100 tpot_cell 14.3182 → 14.4697 (+0.15 ≤ +0.3; its
+  beyond-hull corners are re-filled by the same measured-scaling rule — NOT byte-identical;
+  honest note: chat −0.04, ttft −0.002, swe-plateau −0.007 improve, e2el +0.02), A100
+  tpot_cell 14.3417 → 14.3728 (+0.03), ttft +0.0001, e2el +0.002, chat +0.05. S12
+  leftovers fixed in the same pass (the dataclass "(B=1, T=min)" floor comment, the
+  remaining "OOM" wording in `_analytic`/`_decode_roofline_full`/`lookup`/test names).
+  Tests: 199 passed + 12 subtests (new pins: merged-grid load, sub-linear ≤ linear
+  beyond-hull, interior-holes-keep-analytic, roofline-increment cap, hold-out regression,
+  launch-floor classes/resolution/analytic-grid dynamics).
