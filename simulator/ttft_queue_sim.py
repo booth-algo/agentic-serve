@@ -196,12 +196,15 @@ PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002804790423340364   # MEASURED 0.4764×5.8
 # Per-config adoption would be metric cherry-picking; the ramp+cap stays until the structural
 # successor (saturated-step/queue re-derivation) lands. NOT a measurement — a tuned cap.
 PREFILL_GEMM_UTIL_SAT = 1.0                      # compensating-fit cap (measured plateau: 0.754)
-# BACKED-OUT REMAINDER, NOT a comm measurement (audit-v2 G3): tp2 ttft.new 18.5 − GEMM/2 (12.65) =
-# 5.85 — but the two anchors are instrumentation-inconsistent (tp2 multiprocess vs tp1 in-process;
-# like-for-like gives ~4.56, a 27% band) and physics puts the NVLink all-reduce itself at ~1–3 ms/1k,
-# so this term plausibly absorbs ~2.5 ms/1k of multiprocess ZMQ-IPC host overhead under a comm label.
-# tp>1 (advisory configs) only; tp1 → 0. Pending de-fit: a like-for-like multiprocess tp1/tp2 pair.
-PREFILL_TP_COMM_MS_PER_TOKEN = 0.00585
+# MEASURED like-for-like (G3 de-fit 2026-06-10, ttft_pricing_defit_plan.md Item 3): the tp1/tp2
+# stage-split pair on the SAME multiprocess api_server stack (serving_stage_split.py
+# --tensor-parallel-size {1,2}, h100 GPUs 6+7) → comm = prefill_span.new(tp2) − span.new(tp1)/2 =
+# 14.645 − 22.733/2 = 3.279 ms/1k (build_tp_comm.py → prefill_tp_comm_H100.json, which pins this
+# literal). Lands at the top of the NCCL all-reduce physics band (~1–3 ms/1k) — the retired 5.85
+# was a backed-out remainder from an instrumentation-INCONSISTENT pair (tp2 multiprocess vs tp1
+# in-process) that absorbed ~2.5 ms/1k of host IPC under a comm label (audit-v2 G3, confirmed).
+# tp>1 only; tp1 → 0 (tp1 predictions byte-identical by construction).
+PREFILL_TP_COMM_MS_PER_TOKEN = 0.003278887802709865
 
 
 def _prefill_gemm_per_tok(p: RooflineParams) -> float:

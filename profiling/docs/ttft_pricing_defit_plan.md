@@ -146,4 +146,17 @@ compensating-fit label (the cap under-prices saturated H100 steps to offset the 
 queue error); both-ways test pins (cap + measured plateau + FA3 cross-check); revert byte-identical.
 Successor: S7–S10 re-derivation, then re-gate this measured curve.
 
-**Item 3 (G3):** _pending — needs the tp1/tp2 like-for-like pair on the H100 host (2 GPUs)._
+**Item 3 (G3) — EXECUTED 2026-06-10: ADOPTED.** `serving_stage_split.py` gained
+`--tensor-parallel-size`; the tp2 leg ran on h100 GPUs 6+7 (same script/stack as the existing
+2026-06-05 tp1 leg → like-for-like by construction). `prefill_span.new`: tp1 22.733 / tp2 14.645
+ms/1k → **comm = 3.279 ms/1k** (`build_tp_comm.py` → `prefill_tp_comm_H100.json`), top of the NCCL
+physics band — the retired 5.85 over-absorbed ~2.5 ms/1k of host IPC exactly as audit-v2 G3
+hypothesized. Gate: tp1 **byte-identical** (binding ✓), H100x2 TTFT 31.76→**29.02** /
+E2EL 24.01→**21.83** (hybrid ≤+0.5 ✓, improves well past it). Artifact-pinned.
+
+**Plan complete (all 3 items executed 2026-06-10):** R2 adopted, R1/S6 resolved-as-compensating-fit
+with the measurement permanent, G3 adopted. Net production effect vs the plan's starting baseline:
+H100 TTFT 18.07→18.13 (+0.06), A100 22.06→22.22 (+0.16), **H100x2 TTFT 33.06→29.02 (−4.04) /
+E2EL 25.04→21.83 (−3.21)**; TPOT byte-identical everywhere. Successor work named: the S7–S10
+saturated-step/queue re-derivation (unlocks re-gating the measured util curve), and re-probing the
+host sum with replayed benchmark prompts.

@@ -515,7 +515,13 @@ def test_no_fitted_constants():
     _fa3 = [a["fa3_slope_ms_per_tok2"] for a in _util_art["anchors"] if a["m_tokens"] >= 4096]
     assert all(abs(s - mod.PREFILL_FA3_MS_PER_TOKEN2) / mod.PREFILL_FA3_MS_PER_TOKEN2 < 0.15
                for s in _fa3)
-    assert mod.PREFILL_TP_COMM_MS_PER_TOKEN == 0.00585     # backed-out tp2 remainder, pending measurement
+    # TP comm — MEASURED like-for-like (G3 de-fit 2026-06-10): same-stack tp1/tp2 stage-split pair,
+    # comm = span.new(tp2) − span.new(tp1)/2 = 3.279 ms/1k, top of the NCCL physics band (retired
+    # backed-out remainder: 5.85). Pinned to the regenerable artifact.
+    _tpc_art = json.loads((Path(__file__).resolve().parents[2]
+                           / "profile_data/kernels/prefill_tp_comm_H100.json").read_text())
+    assert mod.PREFILL_TP_COMM_MS_PER_TOKEN == _tpc_art["constants"]["PREFILL_TP_COMM_MS_PER_TOKEN"]
+    assert _tpc_art["retired_backed_out_remainder"] == 0.00585
     # Public uppercase numeric module globals: the four config-derived vLLM values + the
     # three measured prefill-law coefficients. Private (underscore-prefixed) names — the
     # event-kind enum ints and _GRID_U_MAX=1024 — are physics/structure, excluded.

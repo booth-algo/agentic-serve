@@ -316,12 +316,13 @@ def wait_health(port, timeout=420):
     return False
 
 
-def launch_server(model, port, gpu_mem, max_model_len, api_key, hash_algo, log_path):
+def launch_server(model, port, gpu_mem, max_model_len, api_key, hash_algo, log_path, tp=1):
     cmd = [sys.executable, "-m", "vllm.entrypoints.openai.api_server",
            "--model", model, "--served-model-name", "llama",
            "--host", "127.0.0.1", "--port", str(port),
            "--dtype", "bfloat16", "--gpu-memory-utilization", str(gpu_mem),
            "--max-model-len", str(max_model_len),
+           "--tensor-parallel-size", str(tp),
            "--enable-prefix-caching", "--enable-chunked-prefill",
            "--api-key", api_key,
            # keep request logging quiet but STATS ON (do NOT add --disable-log-stats).
@@ -466,6 +467,9 @@ def main():
     ap.add_argument("--api-key", default="test")
     ap.add_argument("--gpu-mem", type=float, default=0.90)
     ap.add_argument("--max-model-len", type=int, default=32768)
+    ap.add_argument("--tensor-parallel-size", type=int, default=1,
+                    help="tp for the launched server (G3 like-for-like pair: run tp1 AND tp2 "
+                         "with THIS same script/stack; needs tp GPUs in CUDA_VISIBLE_DEVICES)")
     ap.add_argument("--hash", default="sha256", choices=["sha256", "builtin", ""],
                     help="prefix_caching_hash_algo for the launched server (block-hash attribution)")
     ap.add_argument("--news", default="8,128,512,1024,2048", help="fresh-token counts to sweep")
@@ -492,7 +496,7 @@ def main():
     proc = None
     if not a.no_launch:
         proc = launch_server(a.model, a.port, a.gpu_mem, a.max_model_len, a.api_key,
-                             a.hash or None, a.server_log)
+                             a.hash or None, a.server_log, tp=a.tensor_parallel_size)
     try:
         if not wait_health(a.port):
             print(f"SERVER DID NOT BECOME HEALTHY -- see {a.server_log}", flush=True)

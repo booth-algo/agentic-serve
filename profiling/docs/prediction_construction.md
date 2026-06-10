@@ -84,7 +84,7 @@ Per engine step (`_price_step`) — a mixed prefill+decode step:
 |---|---|---|
 | decode | `decode_step_ms(decode_batch, mean_running_ctx)` | 🔵 |
 | prefill NEW | `(gemm_per_tok_loaded(total_chunk) + PREFILL_NEW_DISPATCH_RESIDUAL)·total_chunk` | 🟢 + 🔵 `0.005745` (measured host serving-stack/new tok; de-fit 2026-06-05) |
-| └ `gemm_per_tok` | `2·(n_params/tp)/(peak_flops·util-ramp)` + `PREFILL_TP_COMM·(tp>1)` (util ramps `util_flops→PREFILL_GEMM_UTIL_SAT=1.0` over the chunk budget) | 🟢 GEMM + ⚙️ ramp endpoints; 🔴 `UTIL_SAT=1.0` (validation-anchored cap, not measured — audit-v2 R1/S6); 🔴 `TP_COMM=0.00585` (backed-out remainder, not a comm measurement — audit-v2 G3; tp>1 advisory only) |
+| └ `gemm_per_tok` | `2·(n_params/tp)/(peak_flops·util-ramp)` + `PREFILL_TP_COMM·(tp>1)` (util ramps `util_flops→PREFILL_GEMM_UTIL_SAT=1.0` over the chunk budget) | 🟢 GEMM + ⚙️ ramp endpoints; 🔴 `UTIL_SAT=1.0` (compensating fit — the measured curve, plateau 0.754, was gate-rejected 2026-06-10; see De-fit log); 🔵 `TP_COMM=0.0032789` (measured like-for-like tp1/tp2 pair, de-fit 2026-06-10 — was the backed-out 0.00585) |
 | prefill FA3 | `PREFILL_FA3_MS_PER_TOKEN2 · M·(R + 0.5·M)·frac` (super-linear attn; M=tokens (re)prefilled, R=resident prefix) | 🔵 `8.31e-7` |
 | host per-req | `PREFILL_HOST_PERREQ_MS_PER_TOKEN · cached · frac` (re-tokenize cached context, summed over concurrent prefills) | 🔵 partition 0.4764 × 🔵 sum 5.8872e-3 (both measured; sum de-fit 2026-06-10, R2 closed) |
 | host shared | `PREFILL_HOST_SHARED_MS_PER_TOKEN · mean_cached` (amortized once/step) | 🔵 partition 0.5236 × 🔵 sum 5.8872e-3 (R2 closed — see De-fit log) |
@@ -100,7 +100,8 @@ benchmark-fitted 6.103e-3; see the De-fit log). Remaining 🔴 in this table per
 (`fitted_constants_audit_v2.md`): `PREFILL_GEMM_UTIL_SAT` — now a MEASURED-AND-DOCUMENTED
 compensating fit (the real per-step curve, plateau 0.754 in `prefill_gemm_util_H100.json`, was
 gate-rejected 2026-06-10; the cap offsets the S7–S10 deep-cohort queue error — De-fit log) — and
-`TP_COMM` (backed-out remainder, G3, plan Item 3 pending). Bonus: the FA3 coefficient gained an
+`TP_COMM` is now MEASURED (G3 de-fit 2026-06-10: like-for-like pair → 3.279 ms/1k, top of the
+NCCL physics band; H100x2 TTFT improved 31.76→29.02). Bonus: the FA3 coefficient gained an
 independent cross-check (sweep slopes ≈8.9e-7 vs 8.31e-7, test-pinned).
 (`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit 2026-06-05 and is genuinely 🔵 — regenerates exactly.)
 
@@ -154,6 +155,17 @@ retirement.)
 `.omc/specs/deep-dive-whether-there-are-fitted.md`.
 
 ### De-fit log
+- **2026-06-10 — `PREFILL_TP_COMM` 5.85 → 3.279 ms/1k (like-for-like measurement): audit-v2 G3 CLOSED** (`ttft_queue_sim`; `ttft_pricing_defit_plan.md` Item 3).
+  The retired 5.85 was a backed-out remainder (tp2 ttft.new 18.5 − GEMM/2 12.65) from an
+  instrumentation-INCONSISTENT pair (tp2 multiprocess api_server vs tp1 in-process LLM). Measured
+  like-for-like: `serving_stage_split.py` gained `--tensor-parallel-size` and the tp2 leg ran on h100
+  GPUs 6+7 (same script/stack as the 2026-06-05 tp1 leg) → `prefill_span.new`: tp1 **22.733**, tp2
+  **14.645 ms/1k** → `comm = 14.645 − 22.733/2 = 3.279 ms/1k` (`build_tp_comm.py` →
+  `prefill_tp_comm_H100.json`, deterministic, pins the literal). Lands at the top of the NCCL
+  all-reduce physics band (~1–3 ms/1k) — confirming the audit's hypothesis that the old remainder
+  absorbed ~2.5 ms/1k of host IPC under a comm label. **Gate: PASS** — H100/A100 **byte-identical**
+  (the term is ×(tp−1)), H100x2 TTFT-cell 31.76→**29.02** (−2.74), E2EL 24.01→**21.83** (−2.17):
+  the honest physics value substantially improves the config it prices. 187 tests + 12 subtests green.
 - **2026-06-10 — prefill-GEMM util cap: measurement built, adoption gate-rejected → resolved-as-compensating-fit** (`ttft_queue_sim`; audit-v2 R1/S6; `ttft_pricing_defit_plan.md` Item 2).
   Phase A debunked the cap's anchor: the "15.5 ms/1k GT cohort ≈ util-1 roofline" claim traces to ONE
   cell (osworld c5 turn-0) whose token denominator double-counts the 1024-token shared APC prefix
