@@ -13,7 +13,7 @@
   "data": {
     "decode_grid": {
       "status": "missing",
-      "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
+      "note": "KEPT analytic BY MEASUREMENT (2026-06-10, lane L8): a 96-cell tp4 decode_steps lattice exists (decode_profile_H100x4_merged_2026-06-10.csv, B<=320 x T<=24576 capped at the real 2,129,952-token pool; regenerable via build_decode_grid.py) and shows the analytic roofline UNDER-prices the isolated tp4 kernel (median 0.79x, worst 0.55x at high-B short-T) -- but wiring it in moves TPOT cell-MAPE 37.10 -> 64.80: GT serving TPOT at conc>=120 sits BELOW the isolated kernel wall at the pipeline's queried (b_eff, ctx) (chat c320 meas 6.56 ms vs 11.5 ms measured at B=320 T=1024), so the high-conc over-prediction lives in the shared b_eff/regime mapping (S10/S8/util-cap successor cluster) and/or the decode_steps walls-vs-trace host-gap offset that grows with B -- not in the decode price. The grid only helps the kernel-bound chat/osworld c5-c80 band. Adoption refused; artifacts retained for the successor."
     },
     "kv_pool": {
       "status": "derived",
