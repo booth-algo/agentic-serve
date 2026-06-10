@@ -139,6 +139,37 @@ Every cell improves or stays flat; nothing regresses. The biggest residuals left
 
 pytest: full suite green (389 passed, 1 skipped, 15 subtests).
 
+### Signed-bias verification (post-commit re-gate on `1c860f6`)
+
+Re-ran the SAME scoped builds on the committed state (`/tmp/cons_after.*`,
+`/tmp/cons_trio_after.*`): the binding trio predictions are **byte-identical** to
+`/tmp/cons_trio_base.predictions.json` (`cmp` clean), and the consumer predictions are
+byte-identical to the lane's own post-edit artifact (fully reproducible build). The MAPE drop is
+a genuine sign collapse, not cancellation luck — median signed cell error (100·(pred−meas)/meas,
+before → after; over/under cell counts in parens):
+
+| config | tpot bias % | ttft bias % | e2el bias % |
+|---|---|---|---|
+| RTX2080Ti | +232.6 → **−4.8** (44/0→15/29) | +244,657.7 → **+7.1** (44/0→23/21) | +175,589.9 → **−0.8** (44/0→22/22) |
+| RTX2080Tix2 | −42.2 → **−7.5** (mean +152.6→−9.9) | +716,457.5 → **−41.1** (41/0→5/36) | +360,326.4 → **−34.0** (41/0→3/38) |
+| RTX2080Tix4 | −33.2 → **−69.6** (5/11→0/16) | +5.2 → **−37.7** (8/8→1/15) | −27.3 → **−60.5** (5/11→0/16) |
+| RTX3090 | +48.5 → **−5.6** (40/2→9/33) | +119.7 → **+11.6** (42/0→29/13) | +97.5 → **+1.2** (42/0→23/19) |
+| RTX3090x2 | −54.6 → **−6.2** | −44.1 → −44.1 (unchanged) | −50.1 → **−32.1** |
+| RTX3090x4 | −68.1 → **−43.8** | −51.6 → −51.6 (unchanged) | −62.1 → **−55.9** |
+
+* The catastrophic all-cells-OVER signatures (2080Ti tp1/tp2 TTFT/E2EL, 3090 tp1) collapse to
+  near-zero or balanced over/under — confirming the pool-sentinel mechanism, and re-confirming
+  the user-recollection "UNDER-predicting TTFT" had the **wrong sign** for those configs.
+* **Honest exposure, not a regression:** RTX2080Tix4 improves on all three cell MAPEs
+  (75.0→57.1 / 127.2→43.6 / 78.6→53.0) but its signed bias moves AWAY from 0 into systematic
+  UNDER (all 16 cells). Removing the compensating over-pricing (sentinel/H100-ceiling paths)
+  exposes the unpriced tp-collective decode term + H100-inherited prefill law (successors 1
+  and 4). No lever regresses its config's gate metric, so nothing is reverted; the residual is
+  named, not re-hidden.
+* 3090x2/x4 TTFT is bias-flat at −44/−52% UNDER — the only genuinely under-predicting configs,
+  untouched by the pool fix because their pools were never sentinels; that under-bias is the
+  consumer prefill-law successor (4), requiring measured prefill grids on the hosts.
+
 ## NOT fixable offline — named successors
 
 1. **tp≥2 decode collective term (the real tp4/x2 under-bias).** `_decode_roofline_full`
