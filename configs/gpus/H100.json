@@ -6,5 +6,5 @@
   "util_bw": 0.93,
   "scheduler_overhead_ms_per_step": 5.7,
   "total_memory_bytes": 85899345920,
-  "_notes": "H100 SXM (3.35 TB/s HBM3, 989 TFLOPS BF16 dense, 80 GiB). util_flops/util_bw are single-anchor measured (vllm_engine_step_trace_swe_c40); scheduler_overhead from 99 quiet decode steps. RooflineParams dataclass defaults. total_memory_bytes (80 GiB) is read by configs/kv_pool.py only (not a RooflineParams field)."
+  "_notes": "H100 SXM (3.35 TB/s HBM3, 989 TFLOPS BF16 dense, 80 GiB). util_flops/util_bw/scheduler_overhead are PINNED values whose original single-anchor story is NOT reproducible (audit-v2 G4); the pre-registered re-derivation over the 4 serving-wall traces gives 0.5886/0.8111/4.5574 — see profile_data/kernels/roofline_utils_H100.json (builder profiling/process/build_roofline_utils.py, recipe defit_log_entries/L6-utils.md). util_bw=0.8111 was wired as a candidate and GATED 2026-06-10 (replay-ON gate_scoped_rows): H100 tpot_cell +0.67pt, chat +0.77pt (H100x2 tpot_cell +2.26pt) vs baseline -> FAIL (±0.3); candidate rejected, 0.93 kept as pinned-with-measured-disagreement (it compensates host overhead the decode pricing does not model separately). RooflineParams dataclass defaults. total_memory_bytes (80 GiB) is read by configs/kv_pool.py only (not a RooflineParams field)."
 }

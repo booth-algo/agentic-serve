@@ -65,13 +65,13 @@ class RooflineParams:
     peak_flops_per_s: float = 989e12
     peak_bw_bytes_per_s: float = 3.35e12
     kv_bytes_per_token: float = 131072.0
-    util_flops: float = 0.65
-    util_bw: float = 0.93
+    util_flops: float = 0.65  # PINNED; pre-registered re-derivation over the 4 serving-wall traces gives 0.5886 (n=7, thin; submit-wall convention unreliable under AsyncScheduler) — see profile_data/kernels/roofline_utils_H100.json + defit_log_entries/L6-utils.md. R1 curve (prefill_gemm_util_H100.json) is the authoritative prefill source.
+    util_bw: float = 0.93     # PINNED; does NOT reproduce from any documented computation (audit-v2 G4). Pre-registered recipe over the 4 serving-wall traces gives 0.8111 (62 steady-state decode steps, byte-quartile-stable) — profile_data/kernels/roofline_utils_H100.json. Candidate 0.8111 was wired and gated 2026-06-10 (replay-ON) and REJECTED: H100 tpot_cell +0.67pt, chat +0.77pt vs baseline (see defit_log_entries/L6-utils.md). Kept as pinned-with-measured-disagreement — 0.93 compensates host overhead the decode pricing carries no separate term for.
     bytes_per_param: float = 2.0
     available_kv_blocks: int = 27_250          # empirical H100 (max free_kv_blocks across 4 vLLM engine traces 2026-05-27; ~1.5% less than spec-derived 27651)
     cache_block_size: int = 16                 # vLLM v1 default
     max_num_batched_tokens: int = 8192         # ENGINE CONFIG, not a fit: vLLM OPENAI_API_SERVER resolved default for >=70GiB non-A100 devices (vllm/engine/arg_utils.py _set_default_args; A100-named devices resolve 2048 — set per-deployment JSON). Benchmark servers launched with the flag unset (server metadata: null), so the resolved default is what ran. Consumed by kernel_tpot._overflow_weight as the chunked-prefill per-step token budget.
-    scheduler_overhead_ms_per_step: float = 5.7  # per-step Python/dispatcher cost. Calibrated from 99 lowest-work decode steps in swe_c40 trace (mean engine_step_wall=6.61ms minus mean model_submit_wall=0.93ms = 5.68ms). Single-anchor discipline, not a fit.
+    scheduler_overhead_ms_per_step: float = 5.7  # PINNED; per-step Python/dispatcher cost, originally mean over 99 lowest-work decode steps of swe_c40. Pre-registered re-derivation (median over 2666 batch-1 decode steps, all 4 traces) gives 4.5574 — roofline_utils_H100.json; 5.7 sits at the top of the per-trace range, not the center.
     tensor_parallel: int = 1                   # TP degree: shards KV (by head) + weights across GPUs. tp=1 = single-GPU (unchanged).
     kv_heads: int = 8                          # GQA KV heads (Llama-3.1-8B); caps KV sharding at min(tp, kv_heads).
 
