@@ -5,6 +5,7 @@
   "tp": 4,
   "engine": "vllm",
   "available_kv_blocks": 215001,
+  "max_num_batched_tokens": 2048,
   "bench_dir": "a100_Qwen3.5-9B_tp4_vllm",
   "backend": "a100-tp4-vllm-analytic-roofline",
   "calibration_status": "a100_tp4_vllm_analytic_roofline_firstcut",

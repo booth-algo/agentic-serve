@@ -5,6 +5,7 @@
   "tp": 1,
   "engine": "vllm",
   "available_kv_blocks": 1,
+  "max_num_batched_tokens": 2048,
   "bench_dir": "2080ti_Llama-3.1-8B_tp1_vllm",
   "backend": "rtx2080ti-tp1-vllm-analytic-roofline",
   "calibration_status": "2080ti_tp1_vllm_analytic_roofline_firstcut",

@@ -1,8 +1,8 @@
 # How TPOT / TTFT / E2EL predictions are constructed (from scratch)
 
 _Reference for the simulator's per-turn prediction pipeline, the constants it rests on, and their
-provenance. Grounded in `simulator/{kernel_tpot,kernel_step_cost,closed_form_tpot,ttft_queue_sim}.py`.
-Last verified 2026-06-05._
+provenance. Grounded in `simulator/{kernel_tpot,kernel_step_cost,closed_form_tpot,ttft_queue_sim,cohort_scale}.py`.
+Last verified 2026-06-10._
 
 **Provenance legend:** 🟢 physics-derived · 🔵 trace-measured (cited artifact) · ⚙️ vLLM/engine default · 🔴 fitted-unexplained
 
@@ -39,22 +39,30 @@ A **measured unsaturated decode-kernel step, ramped toward a measured saturation
 | 5 | `pressure = scheduled · per_session_blocks / available_kv_blocks` | 🟢 |
 | 6 | `kernel_step = decode_step_ms(b_eff, ctx)` — measured grid (bilinear) where covered 🔵; beyond the grid edge / OOM corners the analytic roofline `max(fixed_floor + b·ctx·kv_bytes/(kv_shards·bw·util_bw), 2·(n_params/tp)·b/(flops·util_flops))` | 🔵 grid; 🟢 roofline; 🔵 `fixed_floor`; 🟢 launch-floor `max(0.0,·)` guard (de-fit 2026-06-05; was `0.3`) |
 | 7 | `t_upper = max(kernel_step, saturated_ceiling_ms(median_output))` — measured plateau anchors, interpolated | 🔵 |
-| 8 | `p_hi = P_HI_SHORT + smoothstep(output, OUT_KNEE_LO, OUT_KNEE_HI)·(P_HI_LONG − P_HI_SHORT)` | 🔴 `P_HI_SHORT=1.22`, `P_HI_LONG=2.0` (honest tuned-knobs since 2026-06-09; the measured band disagrees & is gate-rejected — see De-fit log); 🔵 knees `28/86` |
+| 8 | `z = pressure · qbar` — distribution-integrated KV demand / pool. `qbar` = trapezoid mean of the MEASURED `context_scale_quantiles` (per-cell, `cohort_scale.cohort_scale_mean`; swe 1.1269, term 1.3463, osworld 0.9834, chat 1.0003 → onsets `1/qbar` = 0.887/0.743/1.017/1.000) | 🔵 quantile artifact; 🟢 trapezoid |
 | 9 | `sustain = smoothstep(output, SAT_SUSTAIN_LO=9, SAT_SUSTAIN_HI=24)` | 🔵 |
-| 10 | `weight = smoothstep(pressure, P_LO, p_hi) · sustain` | 🔴 `P_LO=0.88` (honest tuned-knob since 2026-06-09; measured onset ≈ 0.45, gate-rejected) |
+| 10 | `weight = clamp(n_evicted · chunk_steps / out [· z if chunk_steps ≥ 2], 0, 1) · sustain` — the chunk-quantized eviction-DRAIN fraction of the turn's decode steps (round 2): `n_evicted = (1−1/z)·sched` (LIFO sticky-prefix), `chunk_steps = ceil(ctx·qbar/(M − b_eff))` (per-victim chunked re-prefill steps; `M = max_num_batched_tokens` ⚙️ 8192 H100-class / 2048 A100, the vLLM device-rule resolved default), `out` = THIS turn's own output. Onset gate: `pressure ≥ 1` (pool physically full) AND `z > 1`, with firing-gate HYSTERESIS on the cell path (round 3: armed once a turn fills the pool, held while `z > 1` at effective pressure `max(pressure, 1)`, released at `z ≤ 1` — the backlog persists through block-quantization flicker of the raw pressure). Multi-chunk victims gain ×z (rotation amplification); a cell's first overflow turn is growth-damped (`w ≤ sched·chunk_steps/ctx`, single-chunk only; development + armed state tracked by `predict_cell_tpot`) | 🟢 derived; ⚙️ engine config; 🔵 quantile artifact (**no tuned numeric constant** — 2026-06-10 restructure rounds 2–3) |
 | 11 | **`TPOT = kernel_step + weight·(t_upper − kernel_step)`** | — |
 
-- At **low pressure** `weight≈0` → `TPOT = kernel_step` (the raw measured/analytic decode step).
-- At **high pressure** → `TPOT` rises to the measured saturation plateau `t_upper`.
-- The fitted constants (🔴) live entirely in the **ramp** (steps 8–10): `P_LO`, `P_HI_SHORT`, `P_HI_LONG` —
-  now honestly labelled compensating fits; the reproducible measurement of the real ramp band
-  (`build_ramp_knees` → `ramp_knees_*_llama31_8b.json`) disagrees with them and is gate-rejected,
-  meaning the smoothstep-in-pressure ramp *shape* is the model error (see De-fit log 2026-06-09).
+- At **pressure < 1 or z ≤ 1** (pool not physically full, or the distribution-summed demand fits)
+  `weight = 0` → `TPOT = kernel_step` (the raw measured/analytic decode step).
+- In overflow → the non-resident `(1−1/z)` fraction of the cohort (vLLM v1 preemption is LIFO
+  `running.pop()` + RECOMPUTE) re-prefills its full context in budget-sized chunks; each chunk occupies
+  one engine step's prefill budget, so the drain occupies `n_evicted·chunk_steps` of the turn's `out`
+  decode steps. `weight = 1` (every step's budget recompute-filled) is exactly the regime where
+  `t_upper` was anchored.
+- **The tuned ramp band is GONE** (2026-06-09 honest tuned-knobs `P_LO=0.88` / `P_HI_SHORT=1.22` /
+  `P_HI_LONG=2.0` + the `OUT_KNEE` interpolation → ELIMINATED 2026-06-10, audit item 6): onset is the
+  physical pool-full + distribution-overflow crossing; the long-output band-widening the output-binned
+  knee hand-coded now emerges from the turn's own `out` in the drain-fraction denominator. In z-units
+  the measured per-GPU onsets collapse to 0.964/1.188/0.963 (H100/H100x2/A100) vs 0.45/0.85/0.60 in raw
+  pressure — see the De-fit log 2026-06-10 (rounds 1–3; round 3 = firing-gate hysteresis, all 9
+  pre-registered binding gates PASS).
 - `decode_step_ms` is the same composition for all configs; `predict_cell_tpot` calls `predict_turn_tpot`
   per turn using the cell's **median output** as the ceiling output (so the plateau doesn't jitter).
 
 ### Why this over-prices tp=2 (context)
-tp=2's 2.29× KV pool keeps `pressure` below `P_LO` even at high concurrency, so `weight≈0` and TPOT = the
+tp=2's 2.29× KV pool keeps `z` below the overflow point even at high concurrency, so `weight≈0` and TPOT = the
 raw step-6 kernel. At high `b_eff` × high `ctx` that lands beyond the (sparse) tp2 grid edge, where the
 analytic roofline's `b·ctx` term grows **linearly** while the real kernel is **sub-linear** → ~1.25–1.30×
 over-price. On tp=1 the same regime is hidden because tp1 saturates first and is priced by the (correct)
@@ -96,17 +104,28 @@ The fitted constants (🔴) live in the **prefill host-split**: `PREFILL_NEW_DIS
 
 ---
 
-## Fitted-constant debt (7 found 2026-06-05, workflow `wpa6sviup`; **2 de-fit, 3 resolved-as-tuned, 2 remaining**)
+## Fitted-constant debt (7 found 2026-06-05, workflow `wpa6sviup`; **2 de-fit, 3 retired (note below), 2 remaining**)
 
 | Constant | Module | Value | Status / issue |
 |---|---|---|---|
 | ~~`PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN`~~ | ttft_queue_sim | 0.00602 → **0.005745** | ✅ **DE-FIT 2026-06-05** — measured (frontend.new); fit-pin dropped — see log |
 | `PREFILL_HOST_SHARED_MS_PER_TOKEN` | ttft_queue_sim | 0.0030515 | ⏳ sum (6.103e-3) measured; the 50/50 split was chosen to "maximize the gate" |
 | `PREFILL_HOST_PERREQ_MS_PER_TOKEN` | ttft_queue_sim | 0.0030515 | ⏳ same 50/50 partition |
-| `P_LO` | kernel_tpot | 0.88 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — measurement built (measured onset ≈ 0.45); adoption gate-rejected → honest tuned-knob label, false "measured" claim removed — see log |
-| `P_HI_SHORT` | kernel_tpot | 1.22 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — measured ≈ 1.69; gate-rejected (swe-plateau 8.7→10.4) — see log |
-| `P_HI_LONG` | kernel_tpot | 2.0 | ⚠️ **RESOLVED-AS-TUNED 2026-06-09** — measurement data-starved (2 cells, 1 profile; point est. 2.31 consistent) — see log |
 | ~~`0.3` launch-floor clamp~~ | kernel_step_cost | 0.3 → **0.0** | ✅ **DE-FIT 2026-06-05** — see log below |
+
+**Retired — the three `kernel_tpot` ramp knees (2026-06-10 ramp restructure, pre-registered
+binding gates 9/9 PASS):** `P_LO = 0.88`, `P_HI_SHORT = 1.22`, `P_HI_LONG = 2.0` (and the
+`OUT_KNEE` output-binned interpolation between them) are **deleted from the code**, not
+re-anchored. Onset is now the physical pool-full + distribution-overflow gate (`pressure ≥ 1`
+AND `z = pressure·qbar > 1`, qbar from the measured `context_scale_quantiles`, with firing-gate
+hysteresis on the cell path — the floor is the pool-full boundary 1.0, not a tuned number), and
+the transition width is the computed chunk-quantized eviction-drain duty
+`w = n_evicted·chunk_steps/out` (full saturation = the drain-fill point
+`n_evicted·chunk_steps ≥ out`; the long-output widening emerges from the turn's own `out` in
+the denominator) — **zero tuned numeric constants**. The measured-band artifacts
+(`ramp_knees_*`) remain the valid measured history, pinned by
+`test_ramp_knees_measured_band_remains_pinned_history`. See the De-fit log 2026-06-10
+(rounds 1–3) and `ramp_knee_adoption_plan.md` § Restructure outcome.
 
 (⚠️ resolved-as-tuned = the spec's sanctioned fallback: the constant remains a fit, but the false
 "measured" claim is gone, the real measurement exists as a regenerable artifact documenting the
@@ -116,6 +135,110 @@ disagreement, and a test pins both so neither drifts silently.)
 `.omc/specs/deep-dive-whether-there-are-fitted.md`.
 
 ### De-fit log
+- **2026-06-10 — ramp restructure ROUND 3 (final): firing-gate HYSTERESIS — all 9 pre-registered
+  binding gates PASS; the tuned ramp band is eliminated for good.** The round-2 single gate fail
+  (H100 swe-plateau 8.65→9.67) decomposed into three mechanisms (evaluator replication, bit-exact);
+  the dominant one (85 % of the overshoot) was **knife-edge gate flicker, not gate refusal**: at
+  H100 swe@40 t20–29 the block-quantized pressure (`ceil(ctx/16)` makes it jumpy) oscillates
+  0.96–1.05 around the P0b gate while z stays 1.08–1.18 > 1 and the measured ITL develops
+  monotonically 28→219 ms — the prediction oscillated 27↔132 ms across adjacent turns. Fix (zero
+  new constants — the floor is the pool-full boundary itself): `predict_cell_tpot` tracks an
+  **armed** state — arm when a turn physically fills the pool (`pressure ≥ 1` AND `z > 1`), hold
+  while the demand overflow persists (`z > 1`), price armed turns at the effective pressure
+  `max(pressure, 1.0)`, release at `z ≤ 1`. This is the SAME physical argument the development
+  clock already codified ("the backlog persists through pressure-gate flicker"), applied to the
+  firing gate. Standalone `predict_turn_tpot` keeps per-turn gating (`armed=False`); cells that
+  never reach pressure 1 never arm — the protected twin **A100 term@20 (pressure peak 0.965,
+  measured CLEAN) is preserved bit-exactly**. **Gate run (real `gate_scoped_rows` rebuild):
+  9/9 PASS** — H100 swe-plateau 9.674→**8.511** (beats baseline 8.652), tpot_cell 14.686→**14.556**,
+  e2el 21.387→**21.304**, chat 5.469 (all vs baseline 14.536/21.270/5.559); ttft +0.005; A100 and
+  H100x2 predictions **bit-identical to round 2** (no A100/H100x2 cell arms-then-dips). The only
+  changed predictions on the whole grid are the four swe@40 dip turns t24/25/26/28 (27 ms floor →
+  85–104 ms armed; meas 142–178). Rejected variants (measured, not shipped): latching `developed`
+  while z > 1 fails H100 tpot_cell (+0.03 over gate) by amplifying first-fire overshoot;
+  t0-developed init fixes A100 swe t0 but un-fixes the A100 term t0 wins (tpot_cell 14.38→15.25).
+  **Remaining honest residuals (documented, next-physics):** (a) first-fired-turn overshoot — the
+  fresh-crossing damping triggers on "previous turn z ≤ 1" but z crosses 1 one-to-two turns before
+  pressure does, so it is dead code at the first ARMED turn (swe@120 t8 pred 243 vs meas 142); its
+  magnitude would need recalibration (measured first-fire duty 0.50–0.65 vs the clip's 0.03–0.05) —
+  a re-derivation, not a knob, left out of scope; (b) shallow-z duty undershoot when armed
+  (w 0.35–0.49 vs implied 0.87–0.89 at swe@40 t27/29) and sub-pool-full saturation the gate cannot
+  reach (H100 term@80 t14–17, pressure 0.81–0.88) — both point at runtime effective pool < traced
+  `available_kv_blocks` and/or prefix-cache thrash (the documented out-of-core extension);
+  (c) H100x2 osworld plateau advisory regression (33.8→49.2, ×z rotation on tp2 marginal
+  overflows — known tp2 pool/fill caveat, non-binding). 141 tests green (hysteresis hold/disarm/
+  never-arm pinned in `test_kernel_tpot`).
+  Round 1's once-per-turn linear recompute-mass duty was falsified by the per-turn implied-duty
+  extraction (measured duty 0.6–0.9 across z ∈ [1.1, 2.0] at pressure ≥ 1, 2–3× the linear ramp) and
+  its z-only onset over-fired pools that were not physically full. Round-2 law
+  (`kernel_tpot._overflow_weight`, all inputs measured/engine/derived, zero tuned numeric constants):
+  (a) **onset gate** `pressure ≥ 1 AND z > 1` (P0b: vLLM v1 preempts only on allocation failure; the
+  measured spread `qbar` sizes the mass, not the onset); (b) **drain fraction**
+  `w = n_evicted·chunk_steps/out` with `n_evicted = (1−1/z)·sched` and
+  `chunk_steps = ceil(ctx·qbar/(M − b_eff))` — each victim's chunked re-prefill occupies whole engine
+  steps (the quantization IS the measured 2–4× steepening at small ctx/budget, e.g. H100 chat ×3.3);
+  (c) **rotation amplification ×z** for multi-chunk victims (standing overflow re-rotates the LIFO
+  victim queue; single-chunk victims de-synchronize — measured: A100 chat single-chunk drains sit on
+  the once-per-turn drain exactly); (d) **own-output amortization** (P1a: the cell-median de-swing
+  prices the ceiling only); (e) **fresh-crossing growth damping** — on a cell's first overflow turn
+  (tracked by `predict_cell_tpot`: previous turn overflowed AND its output ≥ the measured sustain
+  band's Hermite midpoint, (9+24)/2) single-chunk boundary waves land in the admission burst (TTFT
+  side) and only decode-growth evictions are ITL-visible (`w ≤ sched·chunk_steps/ctx`).
+  **Gates (vs the same reproduced baseline):** PASS H100 tpot_cell 14.54→14.69, ttft +0.005,
+  e2el 21.27→21.39, chat 5.56→**5.47**; A100 tpot_cell 15.37→**14.38**, ttft +0.03,
+  e2el 29.08→29.32, chat 19.99→**17.25**. FAIL **H100 swe-plateau 8.65→9.67 (+0.72,
+  gate +0.3)** — 100 % the swe@40 cell (plateau turns at raw pressure 0.97–1.0, z ≈ 1.1, measured
+  saturated): the P0b gate refuses to fire a pool that is not physically full, and the
+  observationally-TWIN cell A100 term@20 (pressure 0.87–0.96, z up to 1.30, measured CLEAN — the
+  round-1 mode-2 driver, now fixed: t18/19 preds 95.7/146.7→21.6/22.2 vs meas 28.2/29.9) REQUIRES the
+  gate; aggregate inputs cannot split the pair (per-cell realized qbar: swe@40 1.1023 vs term@20
+  1.2823 — no separation; sched≈capacity in both). Candidate physical fix recorded: per-(conc,cell)
+  realized quantile blocks cannot resolve it; co-residency/arrival data could.
+  **Round-1 failure modes closed:** H100 term@320 t0 94.2→22.4 (meas 16.1) and t2 186.6→63.4
+  (meas 66.3); A100 term@120 t0 175.4→42.8 (meas 35.2); H100 chat@320 t7-9 32/35/38→41/54/58
+  (meas 44/51/61); H100 osworld@200 drain t13 67.4→119.4 (meas 108); A100 chat@200 drain t15-17
+  57-61→125.8 (meas 108-114); A100 chat plateau 31.85→12.22. Advisory H100x2: tpot_cell 28.73→28.60,
+  swe-plateau 6.73→4.57, term-plateau 29.91→26.02, but osworld-plateau 33.83→49.16 (the ×z rotation
+  over-fires tp2's huge-pool marginal overflows — known tp2 pool/fill caveat, non-binding). Honest
+  residuals: osworld@200/@256 drains still −20/+15 % band (duty under the measured 0.65 at z≈1.4);
+  H100 term mid-conc cells +2–7 vs baseline (development dynamics deeper than the depth-1 state).
+  138 tests green; narrow-band w=0.9 crossings now found by bisection on the round-2 law: swe c120
+  3.6 %, swe c160 2.4 %, term c200 5.6 % (clamps at the pressure gate vs measured 0.9468).
+- **2026-06-10 — ramp RESTRUCTURE: distribution-overflow recompute-duty weight (audit item 6) —
+  knees ELIMINATED; pre-registered binding gates 7/10 PASS, 3 FAIL (adoption decision OPEN, round 1/3).**
+  The tuned ramp band (`P_LO=0.88`, `P_HI_SHORT=1.22`, `P_HI_LONG=2.0`, `OUT_KNEE` interpolation) was
+  replaced by the fully computed eviction-recompute duty cycle (`kernel_tpot._overflow_weight`):
+  `z = pressure·qbar` (qbar = trapezoid mean of the measured `context_scale_quantiles`;
+  `simulator/cohort_scale.py`; swe 1.1269 / term 1.3463 / osworld 0.9834 / chat 1.0003), onset at the
+  pool-overflow crossing `z = 1`, transition `w = clamp((z−1)·pool_tokens/(ceil_out·(M − b_eff)), 0, 1)`
+  with `M = max_num_batched_tokens` (vLLM device-rule engine config: 8192 H100-class / 2048 A100, new
+  optional deployment-JSON key + `RooflineParams` field). Kept untouched: decode grid, measured ceiling
+  anchors, sustain gate 9/24. New inputs: `KernelTurnInput.cohort_scale_mean` (defaulted 1.0 — all
+  existing constructors unchanged; `build_simulator_rows` sets it per cell). **Physics validation:** the
+  per-GPU measured onset medians collapse in z-units to 0.964/1.188/0.963 (H100/H100x2/A100; spread
+  0.225) vs 0.4456/0.8540/0.6048 in raw pressure (spread 0.408) — pinned in
+  `test_measured_onsets_collapse_in_z_units`; narrow-band H100x2 w=0.9 crossings predicted within 10%
+  with zero constants (pinned, bench-gated). **Gate run (A/B vs pristine-HEAD on identical data —
+  the doc's TPOT baselines reproduce exactly; the recorded TTFT baselines do NOT reproduce in this
+  environment (env-dependent per-GPU realized-dist files), so the reproduced baseline is authoritative):**
+  PASS: H100 ttft +0.005 / e2el +0.17 / swe-plateau 8.65→8.08; A100 tpot_cell 15.37→15.09 /
+  ttft ±0.00 / chat 19.99→**14.92** / swe-plateau +0.11. FAIL: **H100 tpot_cell 14.54→15.85 (+1.31)**,
+  **H100 chat 5.559→5.861 (+0.3025, over by 0.0025)**, **A100 e2el_cell 29.08→30.33 (+1.25)**.
+  Attribution (all three pre-documented in the design's risk list): (a) terminalbench low-conc/early
+  turns over-fire — the pooled qbar (1.3463) overstates the low-conc cohort spread (A100 term c20
+  +25.5pt; H100 term c320 t0 pred 94 vs meas 16 — a turn-0 cohort has no prior resident KV to
+  recompute), needs per-conc `by_concurrency` quantile blocks (resolver already supports them) and/or
+  a cached-prior-KV bound on the recompute mass; (b) osworld deep-saturation UNDER-prediction — the
+  computed band (full at z≈2.6 for out~86) is wider than measured (p_high ≈1.8–2.0), H100 osworld
+  plateau 11.85→28.14 — the requeue-stall escalation the static duty cycle omits; (c) chat c320
+  mid-cohort turns under-predict with onset moved 0.88→1.0. Improvements where the physics is right:
+  A100 chat −5.06pt (the computed late onset fixes the tuned 0.88 over-fire), H100x2 plateau
+  terminalbench 29.91→7.01, H100 plateau terminalbench 15.86→12.17. **Per the adoption-plan protocol a
+  binding-gate fail means production keeps tuned values; this branch keeps the restructure for rounds
+  2/3 with the failure modes documented above** (candidate fixes are all measured/derived: per-conc
+  quantile regeneration, recompute mass bounded by previously-resident cached KV, conc-dependent
+  requeue escalation). Artifacts unchanged (`ramp_knees_*` remain the measured history; pins moved to
+  `test_ramp_knees_measured_band_remains_pinned_history`). 134 tests green.
 - **2026-06-09 — ramp-knee corrected-floor follow-up: Phase-0 stop-point, ADOPTED = none** (gated
   re-attempt per `profiling/docs/ramp_knee_adoption_plan.md`; full numbers in its Execution record).
   Hypothesis: the gate-rejection below was floor misattribution — at low pressure the implied weight

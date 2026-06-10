@@ -5,6 +5,7 @@
   "tp": 1,
   "engine": "vllm",
   "available_kv_blocks": 8458,
+  "max_num_batched_tokens": 2048,
   "bench_dir": "a100_Llama-3.1-8B_tp1_vllm",
   "backend": "a100-measured-decode",
   "calibration_status": "a100_tp1_measured_decode_kv_roofline_ceiling_real_gt",

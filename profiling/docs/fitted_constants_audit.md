@@ -221,8 +221,30 @@ Comment ([kernel_tpot.py:56](../../simulator/kernel_tpot.py#L56)) is explicit: *
 3. **`SATURATED_TURN_OVERHEAD_MS` → modeled cohort-prefill wall** — offline, medium; finishes T_upper.
 4. **HOST terms** — host instrumentation; resolves the 4× discrepancy (may surface a real model error).
 5. **`PREFILL_NEW_MS_PER_TOKEN`** — the chunked-prefill microbench; biggest TTFT fit, needs GPU.
-6. **TPOT knees → eviction-watermark crossing** — restructures the amplifier ramp; removes `P_HI_SHORT`
-   + `OUT_KNEE_LO/HI` together; medium-high, offline.
+6. ~~**TPOT knees → eviction-watermark crossing**~~ — **RESOLVED 2026-06-10 (distribution-overflow
+   eviction-drain ramp; round 3 added firing-gate HYSTERESIS — all 9 pre-registered binding gates
+   PASS, H100 swe-plateau 8.51 vs baseline 8.65, see the
+   `prediction_construction.md` De-fit log).** The tuned ramp band `P_LO=0.88` / `P_HI_SHORT=1.22` / `P_HI_LONG=2.0` and the
+   `OUT_KNEE_LO/HI` upper-knee interpolation were ELIMINATED from `kernel_tpot`: the saturation weight is
+   now the computed chunk-quantized eviction-drain fraction
+   `w = clamp(n_evicted·chunk_steps/out [·z if multi-chunk], 0, 1)` with `n_evicted = (1−1/z)·sched`,
+   `chunk_steps = ceil(ctx·qbar/(M − b_eff))`, `z = pressure·qbar` (qbar = trapezoid mean of the
+   measured `context_scale_quantiles`, resolver `simulator/cohort_scale.py`) and
+   `M = max_num_batched_tokens` (vLLM device-rule engine config: 8192 H100-class / 2048 A100,
+   per-deployment JSON). Onset = the pool being PHYSICALLY full (`pressure ≥ 1` — vLLM v1 preempts
+   only on allocation failure) AND distribution overflow (`z > 1`); a cell's first overflow turn is
+   growth-damped (development state in `predict_cell_tpot`). The output-binned knee disappears because
+   the long-output widening emerges from the turn's own `out` in the drain-fraction denominator
+   (round-1's `z=1`-only onset and linear once-per-turn duty were falsified by the implied-duty
+   extraction and replaced in round 2). Round 3 closed the last gate fail: the firing gate gains
+   HYSTERESIS on the cell path (arm at `pressure ≥ 1` AND `z > 1`, hold at effective pressure
+   `max(pressure, 1)` while `z > 1`, release at `z ≤ 1` — the H100 swe@40 plateau was knife-edge
+   gate FLICKER of the block-quantized pressure, not sub-pool-full saturation; its observational
+   twin A100 term@20, pressure peak 0.965, never arms and stays bit-identical).
+   `OUT_KNEE_LO/HI` survive only as the measured ceiling-cluster
+   output labels (28/86 = the saturated-ceiling anchor outputs) for `ramp_tpot`/`build_ramp_knees`
+   diagnostics. See the 2026-06-10 De-fit log entries (rounds 1–3) in `prediction_construction.md`
+   for the gate numbers.
 
 Each change must be measure-gated: tp1 TPOT 15.91% / swe-plateau 8.83% / TTFT 33.0% / E2EL 19.6% must
 not regress (and ideally the de-fitted version is within noise of the fitted one — that's the proof the
