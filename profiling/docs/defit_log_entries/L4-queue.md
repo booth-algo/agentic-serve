@@ -161,3 +161,63 @@ context-size correlate with finish order; signs mixed) — the LRU-vs-MRU replic
 falsification supersedes them. Counterfactuals use the engine's admission order, not
 the sim's emergent queueing; production gate impact still requires the replay-ON gate
 after any sim edit (baseline pinned above).
+
+## 2026-06-10 — RE-DERIVATION ROUND 1: S7 LANDED (engine-faithful eviction), S8 freeze GATE-RETAINED
+
+### What changed in `simulator/ttft_queue_sim.py` (queue/eviction internals only; PREFILL_* pins untouched)
+
+**S7 LANDED — tier-2 partial LRU trims replace whole-session MRU preemption.** `_evict` tier 2
+now trims idle herd residents PARTIALLY (tail blocks, exactly `need`) in global-recency
+LRU-oldest order; `preempt_policy` default flipped `'tail'` → `'lru'` everywhere
+(`_ServerState`, `_run_sim`, `predict_cell_ttft_qsim`). `'tail'` (MRU-first) and
+`_trim_tail(whole=True)` survive ONLY as the adjudication tool's counterfactual/falsification
+seams (`compare_eviction_semantics.py`), never the production path. Evidence (previous entry):
+LRU-oldest replica exact on 92.7–100% of live lookups, MRU flip 80.9–93.3% with 3.2–26x token
+error; 100% of natural-load prefix losses partial (zero whole-session misses in 602 lossy
+lookups). Whole-prefix loss remains an EMERGENT outcome (`need` >= the victim's whole residual
+under extreme pressure), not a victim-selection primitive.
+
+**Gate (replay-ON, 0 warnings): S7-only is prediction-BYTE-IDENTICAL to the pinned baseline**
+(`cmp` equal on `/tmp/l4_base.predictions.json` vs `/tmp/l4_r1b.predictions.json`; all gate
+metrics equal to 4 decimals) — exactly the adjudication's prediction ("the freeze hides
+eviction from hit accounting; all frozen variants produced byte-identical re-prefill totals").
+NOT dead code: an over-subscribed swe c200 cell exercises 2380 tier-2 victim trims (81%
+partial). So the falsified rule retires at zero prediction risk.
+
+**S8 unfreeze BUILT AND GATE-REJECTED (the honest stop-point of this round).** Implemented the
+engine-true LIVE hit/miss at admission (`cache.cached_blocks(sid)` instead of
+`resident_at_barrier`) bundled with S7 — the trace-validated `live+lru+partial` combination
+(counterfactual within −1.3…−12.6% of engine re-prefill truth vs −42…−54% for the current
+rules). Replay-ON gate vs baseline (`/tmp/l4_r1.metrics.json`):
+
+| gpu | ttft_cell | e2el_cell | tpot_cell | chat |
+|---|---|---|---|---|
+| H100 | 18.1328 → 21.6005 (**+3.47, FAIL**) | 10.7586 → 10.4291 (−0.33) | identical | identical |
+| A100 | 22.2221 → 21.0000 (−1.22, improves) | 15.8638 → 14.7126 (−1.15, improves) | identical | identical |
+| H100x2 (advisory) | 29.0163 → 33.9071 (+4.89) | 21.8316 → 24.1462 (+2.31) | identical | identical |
+
+Per-cell: the regression is concentrated where the analysis predicted — swe/terminal (and
+osworld) high-conc cells flip from negative/near-zero signed error to large OVER-prediction
+(e.g. H100 terminal c160 signed mean +375 → +1818 ms; swe c80 −650 → +1118 ms). Reading: the
+re-prefill VOLUME is now trace-faithful, so the freeze was NOT compensating eviction semantics
+— it compensates the volume→TTFT over-amplification that lives outside the eviction cluster
+(pricing/queue-amplifier interaction, audit-v2 S10 territory / the pinned PREFILL_* cluster,
+out of this lane's scope and not derivable from these traces). Per the honesty rule ("the
+mechanism that should replace a compensating rule's compensation must come from the traces,
+not a knob") and the no-cherry-picking precedent (A100 improves, H100 regresses — same shape
+as the util-curve rejection), the freeze is RETAINED ON THE GATE and is now LABELLED as a
+compensating rule at every site (`_ServerState.resident_at_barrier`, `_schedule`,
+`_release_herd`, module docstring), pinned by
+`test_hit_miss_frozen_at_barrier_retained_compensating_rule` so it cannot drift silently.
+
+**S9 (herd tier structure) kept, residual divergence documented.** Tier 1 (free residents)
+before tier 2 (idle herd) is the counterfactual-VALIDATED combination; the engine itself draws
+no herd distinction (waiting herd members supplied 43.0–69.6% of evicted blocks; just-finished
+sessions' blocks are evicted LAST, not first). The session-granular tier ordering remains the
+documented honest stop-point of the cache model (it cannot represent block interleaving).
+
+**Tests** (`test_ttft_queue_sim.py`, sim-behavior only; constant-pin test untouched): added
+`test_tier2_trim_is_partial_lru_oldest`, `test_tier1_free_residents_still_reclaimed_before_herd`,
+`test_preempt_policy_default_is_engine_faithful_lru`,
+`test_hit_miss_frozen_at_barrier_retained_compensating_rule` (replaces nothing — the freeze had
+no behavior pin before). Full suite green.
