@@ -5,6 +5,7 @@
   "tp": 2,
   "engine": "sglang",
   "available_kv_blocks": 62732,
+  "max_num_batched_tokens": 8192,
   "bench_dir": "h100_Llama-3.1-8B_tp2_sglang",
   "backend": "h100-tp2-sglang-analytic-roofline",
   "calibration_status": "h100_tp2_sglang_analytic_roofline_firstcut",
