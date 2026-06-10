@@ -169,15 +169,17 @@ PREFILL_FA3_MS_PER_TOKEN2 = 8.31e-7             # pipeline FA3 attention kernel,
 # fresh worktree, i.e. a non-production cohort). Re-gated 2026-06-10 under the production replay-ON
 # config: H100 TTFT-cell 18.20→18.07, E2EL 11.33→11.20 (improves), A100 +0.12/+0.10 (within ±0.3),
 # H100x2 advisory 34.71→33.06 → ADOPTED. Replaces the gate-tuned 50/50 (and the earlier imported 57/43;
-# the offline batch-CSV's 12/88 was wrong — lacked the serving stack). HONESTY NOTE on the SUM
-# (audit-v2 R2): 6.103e-3 is NOT itself a measurement — it is the cached coefficient of the c1
-# BENCHMARK regression (commit 760d9bd), i.e. fitted to cells that sit inside the scored validation
-# payload. The regenerable live measurement (build_host_split's own lstsq over prefill_live_ttft_H100
-# .csv) gives 5.8872e-3 (−3.5%); the stage-split gave 5.174–5.989. Only the PARTITION (0.5236) is the
-# de-fit measurement; the sum remains an open RED item — candidate de-fit: gate 5.8872e-3 through.
-# See prediction_construction.md De-fit log + fitted_constants_audit_v2.md.
-PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.003195416551520391   # MEASURED 0.5236×6.103e-3 — amortized once per step
-PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002907583448479609   # MEASURED 0.4764×6.103e-3 — per request, summed
+# the offline batch-CSV's 12/88 was wrong — lacked the serving stack). SUM de-fit (R2 CLOSED
+# 2026-06-10, ttft_pricing_defit_plan.md Item 1): the sum is now the LIVE regenerable measurement
+# 5.8872e-3 (build_host_split's own c1 lstsq over prefill_live_ttft_H100.csv), replacing the
+# benchmark-fitted 6.103e-3 (the 760d9bd c1 benchmark-regression coefficient — audit-v2 R2).
+# Gate (replay-ON): H100 TTFT +0.06 / E2EL −0.10, A100 +0.16/+0.10, TPOT byte-identical, H100x2
+# advisory TTFT 33.06→31.76 → PASS. Workload caveat (documented, the future refinement): the
+# benchmark fit exceeded the probe on all three regression params (floor/new/cached) — real
+# chat-templated prompts exercise heavier host paths than the probe's synthetic text; re-probe
+# with replayed benchmark prompts to close that gap. The artifact pins these literals.
+PREFILL_HOST_SHARED_MS_PER_TOKEN = 0.0030824476411757708  # MEASURED 0.5236×5.8872e-3 — amortized once per step
+PREFILL_HOST_PERREQ_MS_PER_TOKEN = 0.002804790423340364   # MEASURED 0.4764×5.8872e-3 — per request, summed
 
 # VALIDATION-ANCHORED CAP, NOT A MEASUREMENT (audit-v2 R1, fitted_constants_audit_v2.md): the upper
 # util the batch ramp reaches. The previous "measured 15.5 ms/1k GT cohort" claim fails verification:

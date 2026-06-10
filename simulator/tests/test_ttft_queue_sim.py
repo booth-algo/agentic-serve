@@ -481,7 +481,7 @@ def test_no_fitted_constants():
     assert mod.PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN == 0.005745  # measured frontend.new
     assert mod.PREFILL_FA3_MS_PER_TOKEN2 == 8.31e-7        # pipeline FA3 kernel (fa3_prefill grid)
     # Host serving-stack cached split — MEASURED partition (de-fit 2026-06-10): shared fraction
-    # 0.5236 of the measured sum 6.103e-3 = the pooled-OLS point estimate of the live B-sweep band
+    # 0.5236 of the live-measured sum 5.8872e-3 = the pooled-OLS point estimate of the live B-sweep band
     # [0.40, 0.54] (build_host_split.py → prefill_host_split_H100.json). Initially rejected by a
     # replay-OFF worktree gate (+0.44pt); ADOPTED on the production replay-ON re-gate (H100 TTFT
     # 18.20→18.07, A100 within ±0.3, H100x2 advisory 34.71→33.06). Pinned BOTH ways: the literals
@@ -492,11 +492,12 @@ def test_no_fitted_constants():
     assert mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN == _split_art["constants"]["PREFILL_HOST_PERREQ_MS_PER_TOKEN"]
     assert round(_split_art["shared_frac"], 4) == 0.5236              # the measured point estimate
     assert 0.40 < _split_art["band"]["lo"] < _split_art["shared_frac"] < _split_art["band"]["hi"] < 0.55
-    # The SUM is NOT itself measured (audit-v2 R2): 6.103e-3 is the c1 BENCHMARK regression
-    # coefficient (760d9bd, fitted to scored cells); the regenerable live lstsq gives 5.8872e-3.
-    # Pinned EXACT so the open red item can't drift silently while it awaits its own de-fit gate.
+    # SUM de-fit (R2 closed 2026-06-10): the sum is the LIVE regenerable c1 lstsq measurement
+    # (the artifact's constants.sum_ms_per_tok = 5.8872e-3), replacing the benchmark-fitted
+    # 6.103e-3 (kept in the artifact's benchmark_sum_reference block for history).
     assert (mod.PREFILL_HOST_SHARED_MS_PER_TOKEN
-            + mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN) == 0.006103       # benchmark-fitted sum (R2)
+            + mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN) == _split_art["constants"]["sum_ms_per_tok"]
+    assert _split_art["benchmark_sum_reference"]["host_sum_ms_per_tok"] == 0.006103  # retired fit
     # Prefill-GEMM util ramp: endpoints are engine config; the SATURATION CAP 1.0 is a
     # validation-anchored tuned cap, NOT a measurement (audit-v2 R1 — the claimed GT-cohort anchor
     # fails verification and the prefill_gemm_H100.csv microbench plateaus at util 0.655–0.672);

@@ -86,21 +86,21 @@ Per engine step (`_price_step`) — a mixed prefill+decode step:
 | prefill NEW | `(gemm_per_tok_loaded(total_chunk) + PREFILL_NEW_DISPATCH_RESIDUAL)·total_chunk` | 🟢 + 🔵 `0.005745` (measured host serving-stack/new tok; de-fit 2026-06-05) |
 | └ `gemm_per_tok` | `2·(n_params/tp)/(peak_flops·util-ramp)` + `PREFILL_TP_COMM·(tp>1)` (util ramps `util_flops→PREFILL_GEMM_UTIL_SAT=1.0` over the chunk budget) | 🟢 GEMM + ⚙️ ramp endpoints; 🔴 `UTIL_SAT=1.0` (validation-anchored cap, not measured — audit-v2 R1/S6); 🔴 `TP_COMM=0.00585` (backed-out remainder, not a comm measurement — audit-v2 G3; tp>1 advisory only) |
 | prefill FA3 | `PREFILL_FA3_MS_PER_TOKEN2 · M·(R + 0.5·M)·frac` (super-linear attn; M=tokens (re)prefilled, R=resident prefix) | 🔵 `8.31e-7` |
-| host per-req | `PREFILL_HOST_PERREQ_MS_PER_TOKEN · cached · frac` (re-tokenize cached context, summed over concurrent prefills) | 🔵 partition 0.4764 (measured split, de-fit 2026-06-10) × 🔴 sum 6.103e-3 (benchmark-fitted — audit-v2 R2) |
-| host shared | `PREFILL_HOST_SHARED_MS_PER_TOKEN · mean_cached` (amortized once/step) | 🔵 partition 0.5236 (measured split, de-fit 2026-06-10) × 🔴 sum 6.103e-3 (audit-v2 R2) |
+| host per-req | `PREFILL_HOST_PERREQ_MS_PER_TOKEN · cached · frac` (re-tokenize cached context, summed over concurrent prefills) | 🔵 partition 0.4764 × 🔵 sum 5.8872e-3 (both measured; sum de-fit 2026-06-10, R2 closed) |
+| host shared | `PREFILL_HOST_SHARED_MS_PER_TOKEN · mean_cached` (amortized once/step) | 🔵 partition 0.5236 × 🔵 sum 5.8872e-3 (R2 closed — see De-fit log) |
 | step cost | `step_ms = max(decode_ms + scheduler_overhead, prefill_ms)` | 🔵 |
 | floor (once per req, at first token) | `floor_residual = max(0, prefill_floor − scheduler_overhead)` added to `first_token_epoch` | 🔵 (PR #73: per-config; H100=25.86, H100x2=14.01) |
 
 → **`TTFT[turn] = first_token_epoch − arrival_epoch`** = queue-wait + prefill service + per-request floor.
 A turn no session reaches falls back to the forward static predictor (`_fallback_ttft`).
 
-The **prefill host-split partition** is the measured point estimate (shared fraction 0.5236, pooled
-OLS of the live B-sweep band [0.40,0.54]; adopted 2026-06-10 on the production replay-ON re-gate —
-see the De-fit log). **Audit v2 (2026-06-10, `fitted_constants_audit_v2.md`) corrected an earlier
-"no 🔴 rows remain" claim here:** the host **sum** 6.103e-3 is still the c1 benchmark-regression
-coefficient (fitted to scored cells; the regenerable live measurement gives 5.8872e-3 — open R2),
-and `PREFILL_GEMM_UTIL_SAT`/`TP_COMM` are validation-anchored/backed-out, not measured (R1/G3).
-(`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit 2026-06-05 and is genuinely 🔵 — regenerates exactly.)
+The **host term is now measured both ways**: partition 0.5236 (pooled OLS of the live B-sweep
+band, adopted 2026-06-10) × sum 5.8872e-3 (the live c1 lstsq, R2 de-fit 2026-06-10 — replaced the
+benchmark-fitted 6.103e-3; see the De-fit log). Remaining 🔴 in this table per audit v2
+(`fitted_constants_audit_v2.md`): `PREFILL_GEMM_UTIL_SAT` (validation-anchored cap, R1) and
+`TP_COMM` (backed-out remainder, G3) — both honestly labeled, de-fit plan in
+`ttft_pricing_defit_plan.md` Items 2–3. (`PREFILL_NEW_DISPATCH_RESIDUAL` was de-fit 2026-06-05
+and is genuinely 🔵 — regenerates exactly.)
 
 ---
 
@@ -112,8 +112,9 @@ and `PREFILL_GEMM_UTIL_SAT`/`TP_COMM` are validation-anchored/backed-out, not me
 ## Fitted-constant debt — audit v1 (7 found 2026-06-05, workflow `wpa6sviup`; **4 de-fit, 3 retired (note below), 0 remaining**)
 
 **Audit v2 (2026-06-10, post-restructure — `fitted_constants_audit_v2.md`) found NEW debt beyond
-these 7:** 2 RED (`PREFILL_GEMM_UTIL_SAT=1.0` validation-anchored cap; the host SUM 6.103e-3
-benchmark-fitted — both honestly relabeled in code/tests pending their own de-fit gates), 9 GRAY
+these 7:** 2 RED (`PREFILL_GEMM_UTIL_SAT=1.0` validation-anchored cap — open, plan Item 2; the host
+SUM 6.103e-3 benchmark-fitted — **✅ DE-FIT 2026-06-10**, replaced by the live 5.8872e-3, see the
+De-fit log), 9 GRAY
 (incl. `util_bw=0.93` matching no documented computation, `TP_COMM` backed-out, `SAT_SUSTAIN 9/24`
 unpinned anchors), and **14 STRUCTURAL** — discrete modeling rules adjudicated by the same gate
 suite they pass ("the 9-gate suite is the new fitting surface"). The v1 table below remains the
@@ -150,6 +151,24 @@ retirement.)
 `.omc/specs/deep-dive-whether-there-are-fitted.md`.
 
 ### De-fit log
+- **2026-06-10 — host cached SUM 6.103e-3 → 5.8872e-3 (LIVE measurement): audit-v2 R2 CLOSED** (`ttft_queue_sim`; `ttft_pricing_defit_plan.md` Item 1).
+  The sum both host constants scale was the `760d9bd` c1 **benchmark-regression** coefficient
+  (`prefill ≈ 22.5 + 0.0310·new + 0.006103·cached`, lstsq over the benchmark's own c1 cells — i.e.
+  fitted to cells inside the scored validation payload; audit-v2 RED). Replaced by the **live
+  regenerable measurement**: `build_host_split`'s c1 lstsq over `prefill_live_ttft_H100.csv` →
+  **5.8872e-3 ms/tok** (floor 16.03, new 29.397/1k, n=20). Partition unchanged (measured 0.5236) →
+  SHARED 3.0824e-3 / PERREQ 2.8048e-3, sum exactly the live value; artifact `constants` block is now
+  the adopted source (benchmark sum retired to `benchmark_sum_reference`), pinned by test.
+  **Gap decomposition (pre-registered, run before gating):** the benchmark fit exceeds the probe on
+  ALL THREE parameters (floor 22.5 vs 16.03 ms, new 31.0 vs 29.4, cached 6.103 vs 5.887 ms/1k) —
+  consistent with real chat-templated benchmark prompts exercising heavier tokenize/template host
+  paths than the probe's synthetic single-block text; reconciliation with the B-sweep's fixed
+  ~12.5 ms/req and the measured 25.86 ms prefill floor is coherent (16.03 + 12.46 ≈ 28.5 band).
+  Documented refinement: re-run the live probe replaying ACTUAL benchmark prompts.
+  **Gate (replay-ON, vs f165a88 baseline): PASS** — H100 TTFT 18.07→18.13 (+0.06), E2EL
+  10.86→10.76 (−0.10); A100 TTFT 22.06→22.22 (+0.16), E2EL 15.77→15.86 (+0.10); TPOT
+  **byte-identical** both GPUs (wiring-clean check); H100x2 advisory improves TTFT 33.06→**31.76**,
+  E2EL 25.04→**24.01**. 187 tests + 12 subtests green.
 - **2026-06-09/10 — `PREFILL_HOST_SHARED`/`PERREQ` 50/50 partition: measurement built → ADOPTED on the production re-gate (de-fit)** (`ttft_queue_sim`; the last 2 debt rows — spec `.omc/specs/deep-dive-whether-there-are-fitted.md` rows 2-3, "use the point estimate of the 40-54% band, not the gate-max").
   The SUM 6.103e-3 ms/cached-token was always measured (the c1 serving-regression cached coefficient;
   live-validated at 5.89 by the 2026-06-03 loopback probe, commit 9dce1dc; corroborated by stage-split

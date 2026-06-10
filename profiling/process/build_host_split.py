@@ -63,9 +63,11 @@ C1_CSV = RESULTS / "prefill_live_ttft_H100.csv"
 BSWEEP_CSV = RESULTS / "prefill_live_split_H100.csv"
 OUT_JSON = REPO_ROOT / "profile_data" / "kernels" / "prefill_host_split_H100.json"
 
-# The benchmark-fitted cached host SUM the split partitions (ms/cached-token). MEASURED:
-# corroborated by the live c1 probe (5.887, below) and the 2026-06-05 c1 stage-split
-# (frontend.cached 5.174 + prefill_span.cached 0.815 = 5.989; serving_stage_split_H100.csv).
+# RETIRED from production (R2 de-fit 2026-06-10): the benchmark-fitted cached host SUM —
+# the `760d9bd` c1 benchmark-regression coefficient, i.e. FITTED to scored validation cells
+# (audit-v2 R2), kept only for the artifact's historical reference block. Production now uses
+# this builder's own live c1 lstsq (5.887e-3); the 2026-06-05 stage-split corroborates the
+# magnitude (frontend.cached 5.174 + prefill_span.cached 0.815 = 5.989).
 HOST_SUM_MS_PER_TOKEN = 6.103e-3
 
 # Pre-registered estimator scope: the band-defining planes. P=2000 excluded (see docstring).
@@ -149,9 +151,29 @@ def main() -> None:
         "pooled_fit": pooled,
         "shared_frac": shared_frac,
         "band": {"lo": band[0], "hi": band[1], "planes": list(BAND_PLANES)},
+        # ADOPTED (R2 de-fit 2026-06-10, ttft_pricing_defit_plan.md Item 1): the measured
+        # partition scaled by the LIVE regenerable sum — this builder's own c1 lstsq over
+        # prefill_live_ttft_H100.csv. Replaces the benchmark-fitted HOST_SUM 6.103e-3 (the
+        # `760d9bd` c1 benchmark-regression coefficient, audit-v2 R2 — fitted to cells inside
+        # the scored validation payload). Gate (replay-ON): H100 TTFT +0.06 / E2EL −0.10,
+        # A100 +0.16/+0.10 (within ±0.3), TPOT byte-identical, H100x2 advisory TTFT
+        # 33.06→31.76 / E2EL 25.04→24.01 → PASS.
         "constants": {
+            "PREFILL_HOST_SHARED_MS_PER_TOKEN": shared_frac * c1_rate,
+            "PREFILL_HOST_PERREQ_MS_PER_TOKEN": (1.0 - shared_frac) * c1_rate,
+            "sum_ms_per_tok": c1_rate,
+        },
+        # Historical reference: the retired benchmark-fitted sum and its scaled constants
+        # (kept so the De-fit log's before/after stays regenerable). Workload caveat from the
+        # gap decomposition: the benchmark fit exceeded the live probe on ALL THREE regression
+        # parameters (floor 22.5 vs 16.03, new 31.0 vs 29.4, cached 6.103 vs 5.887) — real
+        # chat-templated prompts exercise heavier host paths than the probe's synthetic text;
+        # the future refinement is replaying actual benchmark prompts through the live probe.
+        "benchmark_sum_reference": {
+            "host_sum_ms_per_tok": HOST_SUM_MS_PER_TOKEN,
             "PREFILL_HOST_SHARED_MS_PER_TOKEN": shared_frac * HOST_SUM_MS_PER_TOKEN,
             "PREFILL_HOST_PERREQ_MS_PER_TOKEN": (1.0 - shared_frac) * HOST_SUM_MS_PER_TOKEN,
+            "gap_vs_live_sum_ms_per_tok": HOST_SUM_MS_PER_TOKEN - c1_rate,
         },
         "alternatives": {
             "endpoint_mean": float(np.mean(band)),

@@ -87,7 +87,9 @@ amortizes: ~40-54% is shared (the amortized fraction rises with prefix length), 
 that measured range, a **50/50** split maximizes the gate (a fast TTFT+E2EL sweep: 57/43→32.89/19.32,
 **50/50→32.05/19.38**, 40/60→32.53/19.92). → **split set to 50/50** (was the imported 57/43). The offline
 batch-CSV's 12/88 was wrong because it lacked the per-request HTTP/IPC baseline (and 12/88 regressed). Sum
-kept at the benchmark-true 6.103e-3 (live-validated at 5.89). `PREFILL_HOST_SHARED/PERREQ` → `0.0030515` each.
+kept at the time at 6.103e-3 — HISTORICAL: that value was the `760d9bd` benchmark-regression coefficient,
+not a measurement (audit-v2 R2); superseded 2026-06-10 by the measured split 0.5236 × the live sum
+5.8872e-3 (see `prediction_construction.md` De-fit log).
 
 ## Net (live)
 The cached rate 6.1 is now **measured + decomposed + split-de-fitted** — no longer a blind fit:
