@@ -4,7 +4,7 @@
   "model": "Llama-3.1-8B",
   "tp": 2,
   "engine": "vllm",
-  "available_kv_blocks": 23820,
+  "available_kv_blocks": 24574,
   "max_num_batched_tokens": 2048,
   "bench_dir": "a100_Llama-3.1-8B_tp2_vllm",
   "backend": "a100-tp2-vllm-analytic-roofline",
@@ -17,9 +17,9 @@
     },
     "kv_pool": {
       "status": "derived",
-      "value": 23820,
-      "source": "configs/kv_pool.py",
-      "note": "40GiB util 0.85, weights 16.1GB/tp2, reserve 3.5GB"
+      "value": 24574,
+      "source": "engine-log-anchored reconstruction (same-host same-model tp1 GT-era measured pool, G6 back-solved reserve, kv-shards scaling)",
+      "note": "ENGINE-ANCHORED RECONSTRUCTION (the GT's own tp2 engine log on port 8089 was overwritten 05-26; verbatim excerpts + full derivation committed at profile_data/engine_logs/a100_Llama-3.1-8B_multi_pool_evidence.txt, L12-a100multi 2026-06-11): tp1 GT-era anchor 8458 blocks (manifest measured '135328 tokens / 16 @ gpu_mem=0.85') back-solves THIS host's reserve = 40GiB*0.85 - 16.06e9 - 8458*2,097,152 = 2,709,510,400 B = 2.710 GB (the kv_pool.py G6 docstring value), replacing the generic 3.5 GB rule mean; kv-shards scaling min(tp,8): pool = floor((36,507,222,016 - 16.06e9/2 - 2.7095e9)/1,048,576) = 24,574 blocks. HARD BRACKETS [2048, 27157]: >= 2048 (vLLM v1 startup check at GT max_model_len 32768, vllm/v1/core/kv_cache_utils.py check_enough_kv_cache_memory), <= 27,157 (zero-reserve host arithmetic). Corroboration: surviving same-host tp1 zero-CG pool lines (a100:/tmp/vllm_mse.log 05-04 + /tmp/vllm_smoke.log 04-30, both v0.19.0 util .85: 'GPU KV cache size: 140,208 tokens' = 8763 blocks -> reserve 2.0699 GB -> tp2 25,184) sit 2.5% ABOVE the pin, as they must (GT ran WITH the CUDA-graph estimate; 8763-8458 = 305 blocks = 0.64 GB ~= the CG estimate, the L10 1475-vs-1201 structure). Replaces the RESERVE=3.5GB rule value 23,820. Hand-pinned: regeneration via generate_deployments would revert to the rule value. Successor: capture the exact tp2 engine line at GT flags (one server start, next host window)."
     },
     "saturated_ceiling": {
       "status": "inherited",
