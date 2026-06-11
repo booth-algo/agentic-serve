@@ -289,3 +289,54 @@ threading, and its consumption in `ttft_queue_sim._prefill_gemm_per_tok_loaded`.
   alone); the binding evaluation is the wired replay-ON gate below. Baseline reproduction
   verified at HEAD before any edit: scoped (H100x2,H100x4) and pair (H100,A100) gate outputs
   byte-match `/tmp/hm_r1.*` and `/tmp/hm_pair_base.predictions.json`, 0 bytes stderr.
+
+- **2026-06-11 — ROUND 2 EXECUTED + ADOPTED: per-config measured tp4 prefill host-cached rate
+  (3.5303e-3 vs the tp1-measured 5.8872e-3 charged before) + FA3 coefficient (2.6791e-7 vs
+  8.31e-7) → TTFT cell 33.8703 → 24.9634, E2EL 25.6170 → **16.3179** (< 20 TARGET MET), TPOT
+  byte-unchanged 37.0951; H100/A100 pair AND H100x2 byte-identical.**
+  Artifact `profile_data/kernels/prefill_stage_rates_H100x4.json` (committed; regenerable:
+  `python3 -m profiling.process.build_stage_split_rates --tp 4`; both validations passed:
+  tp1-leg host drift +1.7% < 5%, FA3 ratio 0.32240 ∈ (0,1)). Wiring exactly per the
+  pre-registration: optional `RooflineParams.prefill_host_cached_ms_per_token` /
+  `prefill_fa3_ms_per_token2` (default None → module constants), `configs/loader.py`
+  threading, `ttft_queue_sim._prefill_host_fa3_rates` consumer (factored helper, the
+  `_prefill_gemm_per_tok_loaded` test pattern), pinned ONLY in the H100x4 manifest
+  (provenance `data.prefill_stage_rates`; `calibration_status` →
+  `h100_tp4_vllm_analytic_decode_measured_tp4_prefill_law`). Default-path wiring verified
+  BYTE-IDENTICAL on the scoped gate BEFORE the pin; helper refactor byte-reproduced the
+  pinned gate. New tests `test_prefill_host_fa3_per_config_override_and_byte_identical_default`,
+  `test_prefill_stage_rates_manifest_pins_match_artifact`,
+  `profiling/tests/test_build_stage_split_rates.py` (OLS exactness + artifact regeneration
+  parity, CSV-guarded). Full suite 403 passed / 1 pre-existing skip / 15 subtests.
+  **Gates (replay-ON, `RAMP_TPOT_REQUIRE_POOLS=1`, 0 bytes stderr):** scoped → `/tmp/hm_r2.*`
+  (H100x4 37.0951/24.9634/16.3179; H100x2 21.5336/29.0163/18.5506, rows JSON-identical to
+  round 1 — regression exactly 0); pair → `/tmp/hm_pair_r2.*`, predictions BYTE-IDENTICAL to
+  `/tmp/hm_pair_base.predictions.json` (`cmp` clean; H100 14.4697/18.1309/10.7777, A100
+  14.3728/22.2222/15.8653).
+  **Remaining-error localization at the adopted state (honest):** conc≥120 TTFT over-prediction
+  is GONE (median signed −0.109 s; was +0.21..+5.53 s) — per-profile e2el now chat 15.78 /
+  osworld 13.93 / swebench 16.88 / terminalbench 18.68. The de-fit EXPOSED a compensating
+  under-charge at low/mid-conc terminalbench/swebench (term c10–c40 TTFT now UNDER-predicts,
+  err 30–39% vs 16–17% before — the over-priced tp1 host rate was masking an un-modeled
+  fixed per-request cost; the build_host_split artifact's `diagnostic_fixed_cost_refit`
+  ≈12.5 ms/req names the candidate term) and leaves the swebench c≥256 TPOT b_eff
+  over-price (tpot_err 153–163, the round-1 named successor) as the dominant single-cell
+  residual (swebench c320 e2el 33.26). Both are upstream structural successors, documented,
+  not re-tuned here.
+
+- **2026-06-11 — ROUND 2 CLOSE: lane goal MET (supersedes the round-1 PARTIAL finalize
+  above). No GPU work this round (both stage-split legs were measured in round 1; GPUs 4–7
+  untouched).**
+
+  | config | tpot_cell | ttft_cell | e2el_cell | Δ vs campaign baseline |
+  |---|---|---|---|---|
+  | H100x4 (lane) | 37.0951 | **24.9634** | **16.3179** | 0 / −14.49 / −13.49 |
+  | H100 (binding) | 14.4697 | 18.1309 | 10.7777 | 0 (byte-identical) |
+  | A100 (binding) | 14.3728 | 22.2222 | 15.8653 | 0 (byte-identical) |
+  | H100x2 (binding) | 21.5336 | 29.0163 | 18.5506 | 0 (byte-identical) |
+
+  Goal restated: H100x4 E2EL cell-MAPE < 20 ✓ (16.3179, from 29.8081 baseline: round-1 comm
+  −4.19, round-2 host+FA3 −9.30); H100x2 < 20 ✓ (18.5506, regression 0); pair byte-identical ✓.
+  Adopted levers are all MEASURED per-config artifact pins with byte-identical default
+  fallbacks; refused/retained levers and the two named successors (b_eff mapping; the fixed
+  per-request host cost) are documented above with their evidence.
