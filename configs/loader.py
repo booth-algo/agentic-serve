@@ -81,6 +81,11 @@ def load_deployment(dep_path: Path) -> Deployment:
     # Any explicitly-launched value belongs in the deployment JSON, same key.
     if "max_num_batched_tokens" in d:
         merged["max_num_batched_tokens"] = int(d["max_num_batched_tokens"])
+    # Optional MEASURED prefill tp-comm total (ms per new token at this config's tp degree, G3
+    # like-for-like; see RooflineParams.prefill_tp_comm_ms_per_token). Absent -> None -> the
+    # sim's PREFILL_TP_COMM_MS_PER_TOKEN·(tp−1) fallback (byte-identical for unpinned configs).
+    if d.get("prefill_tp_comm_ms_per_token") is not None:
+        merged["prefill_tp_comm_ms_per_token"] = float(d["prefill_tp_comm_ms_per_token"])
     fields = RooflineParams.__dataclass_fields__
     roofline = RooflineParams(**{k: v for k, v in merged.items() if k in fields})
     data = d.get("data", {})

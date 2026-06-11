@@ -158,7 +158,8 @@ TOKEN_ID_LO, TOKEN_ID_HI = 1000, 30000   # plain-text band of the Llama-3.1 voca
 
 
 def prompt_token_ids(cell_b: int, nominal_t: int, req_idx: int, n_tokens: int) -> list[int]:
-    rng = random.Random((cell_b, nominal_t, req_idx, "serving_decode_grid"))
+    # str seed: random.Random rejects tuples on Python >= 3.11
+    rng = random.Random(f"{cell_b}:{nominal_t}:{req_idx}:serving_decode_grid")
     return [rng.randrange(TOKEN_ID_LO, TOKEN_ID_HI) for _ in range(n_tokens)]
 
 
@@ -282,6 +283,13 @@ async def _run_shard(req_specs: list[dict], port: int, api_key: str, model_name:
         if barrier is not None:
             await asyncio.get_running_loop().run_in_executor(None, barrier.wait)
         wall_anchor = time.time() - time.perf_counter()   # per-process wall<->perf_counter map
+        # GC pauses are the dominant client-side lag source at high event rates (measurement
+        # hygiene, run 1 -> run 2 fix): freeze startup garbage and disable collection for the
+        # duration of the streams; re-enable after gather.
+        import gc
+        gc.collect()
+        gc.freeze()
+        gc.disable()
         sampler = asyncio.create_task(_loop_lag_sampler(stop, lag))
 
         async def one(spec: dict) -> dict:
@@ -306,6 +314,8 @@ async def _run_shard(req_specs: list[dict], port: int, api_key: str, model_name:
         results = await asyncio.gather(*(one(s) for s in req_specs))
         stop.set()
         await sampler
+        gc.enable()
+        gc.collect()
     lag_p99 = round(_p99(lag), 3)
     for r in results:
         r["lag_p99_ms"] = lag_p99
@@ -313,7 +323,18 @@ async def _run_shard(req_specs: list[dict], port: int, api_key: str, model_name:
     return out
 
 
-def _shard_entry(req_specs, port, api_key, model_name, eos_mode, barrier, shard_id, out_path):
+def _shard_entry(req_specs, port, api_key, model_name, eos_mode, barrier, shard_id, out_path,
+                 rt: bool = False):
+    if rt:
+        # SCHED_RR for the SHARD PROCESS ONLY (needs CAP_SYS_NICE / root): the GPU host's own
+        # server threads otherwise preempt the client loop for ~2 ms CFS slices, tripping the
+        # pre-registered p99 loop-lag flag while leaving the p50 ITL unchanged (run1 1-shard vs
+        # run2 8-shard agree <=0.5%). The server keeps its normal policy (separate process).
+        try:
+            os.sched_setscheduler(0, os.SCHED_RR, os.sched_param(10))
+            print(f"shard {shard_id}: SCHED_RR set", flush=True)
+        except (PermissionError, OSError) as e:
+            print(f"shard {shard_id}: SCHED_RR unavailable ({e}); staying SCHED_OTHER", flush=True)
     res = asyncio.run(_run_shard(req_specs, port, api_key, model_name, eos_mode, barrier))
     for r in res:
         r["shard"] = shard_id
@@ -321,7 +342,8 @@ def _shard_entry(req_specs, port, api_key, model_name, eos_mode, barrier, shard_
 
 
 def run_cell(cell: dict, port: int, api_key: str, model_name: str, eos_mode: str,
-             shard_threshold: int, n_shards: int, tmp_dir: Path) -> list[dict]:
+             shard_threshold: int, n_shards: int, tmp_dir: Path,
+             rt_shards: bool = False) -> list[dict]:
     """Fire one (B, T) cell; returns per-request records (wall-anchored)."""
     b = cell["batch_size"]
     specs = [{"cell_b": b, "nominal_T": cell["nominal_T"], "req": i,
@@ -340,7 +362,7 @@ def run_cell(cell: dict, port: int, api_key: str, model_name: str, eos_mode: str
         chunk = specs[w::shards]
         path = tmp_dir / f"shard_{b}_{cell['nominal_T']}_{w}.json"
         p = ctx.Process(target=_shard_entry, args=(chunk, port, api_key, model_name,
-                                                   eos_mode, barrier, w, str(path)))
+                                                   eos_mode, barrier, w, str(path), rt_shards))
         p.start()
         procs.append(p)
         paths.append(path)
@@ -443,6 +465,10 @@ def main() -> None:
                          "lattice is re-derived by the same cap rule")
     ap.add_argument("--shard-threshold", type=int, default=160)
     ap.add_argument("--n-shards", type=int, default=4)
+    ap.add_argument("--rt-shards", action="store_true",
+                    help="SCHED_RR for shard processes (needs root/CAP_SYS_NICE); the server "
+                         "keeps its normal policy. Counters the host's ~2 ms CFS preemptions "
+                         "of the client loop (loop-lag flag hygiene).")
     ap.add_argument("--cells", default=None,
                     help="optional explicit 'B:T,B:T,...' subset (default: the lattice)")
     ap.add_argument("--out-raw", required=True, help="append-only per-request JSONL.gz")
@@ -499,7 +525,8 @@ def main() -> None:
             for c in cells:
                 t0 = time.time()
                 recs = run_cell(c, a.port, a.api_key, a.served_model_name, eos_mode,
-                                a.shard_threshold, a.n_shards, tmp_dir)
+                                a.shard_threshold, a.n_shards, tmp_dir,
+                                rt_shards=a.rt_shards)
                 for r in recs:
                     raw_f.write(json.dumps({"cell": [c["batch_size"], c["nominal_T"]], **r}) + "\n")
                 raw_f.flush()

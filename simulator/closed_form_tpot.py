@@ -74,6 +74,13 @@ class RooflineParams:
     scheduler_overhead_ms_per_step: float = 5.7  # PINNED; per-step Python/dispatcher cost, originally mean over 99 lowest-work decode steps of swe_c40. Pre-registered re-derivation (median over 2666 batch-1 decode steps, all 4 traces) gives 4.5574 — roofline_utils_H100.json; 5.7 sits at the top of the per-trace range, not the center.
     tensor_parallel: int = 1                   # TP degree: shards KV (by head) + weights across GPUs. tp=1 = single-GPU (unchanged).
     kv_heads: int = 8                          # GQA KV heads (Llama-3.1-8B); caps KV sharding at min(tp, kv_heads).
+    # Per-config MEASURED prefill tensor-parallel comm term: TOTAL ms per new token at THIS config's
+    # tp degree (G3 like-for-like method, comm = prefill_span.new(tpN) − span.new(tp1)/N, both legs
+    # the same multiprocess api_server stage-split). None -> ttft_queue_sim falls back to
+    # PREFILL_TP_COMM_MS_PER_TOKEN·(tp−1) (BYTE-IDENTICAL for every config that does not pin it;
+    # tp1 -> 0 either way). Pinned per-deployment in the deployment JSON from the
+    # profile_data/kernels/prefill_tp_comm_*.json artifact (L11 de-fit, 2026-06-11).
+    prefill_tp_comm_ms_per_token: float | None = None
 
     @property
     def kv_capacity_bytes(self) -> int:

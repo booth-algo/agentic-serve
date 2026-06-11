@@ -59,6 +59,14 @@ def test_solve_cell_fixed_point() -> None:
     assert osl == 385 and prompt == 512 - 385 // 2
 
 
+def test_prompt_token_ids_deterministic_and_unique() -> None:
+    a = _client.prompt_token_ids(320, 2048, 0, 1820)
+    b = _client.prompt_token_ids(320, 2048, 0, 1820)
+    c = _client.prompt_token_ids(320, 2048, 1, 1820)
+    assert a == b and a != c and len(a) == 1820
+    assert all(_client.TOKEN_ID_LO <= t < _client.TOKEN_ID_HI for t in a)
+
+
 def _mk_record(req: int, first_wall: float, n_events: int, itl_ms: float,
                prompt: int = 1820, osl: int = 456, nominal_t: int = 2048,
                lag: float = 0.1) -> dict:

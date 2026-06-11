@@ -559,6 +559,28 @@ def test_prefill_floor_changes_tp2_but_not_default():
         assert all(v > 0 for v in f)
 
 
+def test_prefill_tp_comm_per_config_override_and_byte_identical_default():
+    # L11 (2026-06-11): RooflineParams.prefill_tp_comm_ms_per_token is the per-config MEASURED
+    # total comm at the config's own tp degree (G3 like-for-like). None (the default — every
+    # config that does not pin it) MUST reduce to the existing PREFILL_TP_COMM_MS_PER_TOKEN·(tp−1)
+    # fallback: byte-identical for unpinned configs, tp1 -> 0 either way.
+    import simulator.ttft_queue_sim as mod
+    from dataclasses import replace as _replace
+    p1 = RooflineParams()
+    p4 = _replace(p1, tensor_parallel=4)
+    base4 = mod._prefill_gemm_per_tok_loaded(p4, 512.0)
+    gemm4 = base4 - mod.PREFILL_TP_COMM_MS_PER_TOKEN * 3   # the fallback charges 3 extra ranks
+    # pinning the measured total replaces exactly the comm share
+    p4_pin = _replace(p4, prefill_tp_comm_ms_per_token=0.005)
+    assert abs(mod._prefill_gemm_per_tok_loaded(p4_pin, 512.0) - (gemm4 + 0.005)) < 1e-12
+    # explicit None == default fallback (byte-identical)
+    assert mod._prefill_gemm_per_tok_loaded(_replace(p4, prefill_tp_comm_ms_per_token=None),
+                                            512.0) == base4
+    # tp1: fallback comm is 0 and a 0.0 pin is identical (no tp1 config pins it)
+    assert mod._prefill_gemm_per_tok_loaded(p1, 512.0) == mod._prefill_gemm_per_tok_loaded(
+        _replace(p1, prefill_tp_comm_ms_per_token=0.0), 512.0)
+
+
 def test_no_fitted_constants():
     # Every module-level numeric constant is a vLLM serving default or config-derived —
     # NONE is fitted to the TTFT target.
