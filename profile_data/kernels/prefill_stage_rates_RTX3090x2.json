@@ -1,0 +1,61 @@
+{
+  "schema": "prefill_stage_rates.v1",
+  "gpu": "RTX3090x2",
+  "model": "Llama-3.1-8B",
+  "tp": 2,
+  "method": "like-for-like multiprocess api_server stage-split pair (same script + lattice both legs, RTX3090 host). HOST: 4-param OLS ttft ~ floor + a*new + b*cached + c*new*(cached+new/2) per leg; per-config value = b(tpN) DIRECT (AMENDED from the H100 3-param family: the 3090's ~9x FA3 coefficient contaminates the 3-param cached coefficient ~60% via the quadratic projection, and the consumer charges HOST and FA3 separately; the 4-param estimator reproduces the production H100 SUM within 5% on the H100 bridge leg). FA3: same 4-param fit on prefill_span_ms; per-config value = c(tpN) DIRECT (no production anchor to ratio-transport on this GPU; L13 pre-registration).",
+  "host_fit_tp1_4p": {
+    "1": 27.822804566,
+    "new": 0.200849606,
+    "cached": 0.009014412,
+    "fa3": 7.512e-06,
+    "_fit_mape_pct": 1.716905238,
+    "_n_rows": 20.0
+  },
+  "host_fit_tp2_4p": {
+    "1": 26.781330877,
+    "new": 0.222557309,
+    "cached": 0.008871114,
+    "fa3": 3.751e-06,
+    "_fit_mape_pct": 1.19217552,
+    "_n_rows": 20.0
+  },
+  "host_estimator_validation_h100_bridge": {
+    "production_sum_ms_per_tok": 0.005887238064516135,
+    "h100_tp1_leg_4p_ms_per_tok": 0.005630204961102327,
+    "rel_drift": 0.043659369741307276,
+    "tolerance": 0.05
+  },
+  "fa3_fit_tp1": {
+    "1": 21.440582155,
+    "new": 0.193724422,
+    "cached": 0.001967653,
+    "fa3": 7.462166549053142e-06,
+    "_fit_mape_pct": 2.503824244,
+    "_n_rows": 20.0
+  },
+  "fa3_fit_tp2": {
+    "1": 20.244892107,
+    "new": 0.215664375,
+    "cached": 0.001775727,
+    "fa3": 3.709510737661759e-06,
+    "_fit_mape_pct": 1.887057251,
+    "_n_rows": 20.0
+  },
+  "fa3_ratio_tpn_over_tp1": 0.4971090786136971,
+  "constants": {
+    "prefill_host_cached_ms_per_token": 0.008871113914188109,
+    "prefill_fa3_ms_per_token2": 3.709510737661759e-06
+  },
+  "partition_caveat": "shared/per-request partition stays the production measured fraction 0.5236 (tp1 B-sweep band point, prefill_host_split_H100.json): no RTX3090 B-sweep exists; only the measured SUM is per-config. The consumer (_price_step) applies the fraction to the pinned SUM.",
+  "sensitivity_3param_family": {
+    "host_cached_tp1_3p": 0.014603056774193547,
+    "host_cached_tp2_3p": 0.011662203225806453,
+    "note": "the original H100 3-param coefficients, contaminated here by the FA3 quadratic projection (see method) \u2014 reported, NOT pinned."
+  },
+  "fallbacks_it_replaces": {
+    "host_sum_ms_per_tok": 0.005887238064516135,
+    "PREFILL_FA3_MS_PER_TOKEN2": 8.31e-07
+  },
+  "_notes": "Pinned in the RTX3090x2 deployment JSON top-level keys prefill_host_cached_ms_per_token / prefill_fa3_ms_per_token2 -> RooflineParams (loader). Every config without the pins keeps the module constants byte-identically. Regenerate: python3 -m profiling.process.build_stage_split_rates --gpu RTX3090 --tp 2. Sources: serving_stage_split.py --tensor-parallel-size {1,2} on the 3090 host (L13, 2026-06-11; GPUs 0 / 0-1 / 0-3, PIX-only PCIe)."
+}

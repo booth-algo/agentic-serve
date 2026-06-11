@@ -58,21 +58,27 @@ def _span_new_rate(path: Path) -> dict:
             "n_rows": n}
 
 
-def build_tpn(n: int, tpn_csv: Path, out_json: Path) -> None:
+def build_tpn(n: int, tpn_csv: Path, out_json: Path, gpu: str = "H100",
+              tp1_csv: Path = TP1_CSV, host: str = "h100") -> None:
     """L11 extension (2026-06-11): the SAME G3 like-for-like method at tp degree ``n`` —
     comm_total = prefill_span.new(tpN) − span.new(tp1)/N (the TOTAL per-new-token cost the tpN
     GPU prefill window carries above its 1/N GEMM share). Consumed per-config via the deployment
     JSON key ``prefill_tp_comm_ms_per_token`` -> RooflineParams (None for every other config ->
-    the tp2-measured per-extra-rank fallback, byte-identical). The tp2 artifact is untouched."""
-    for p in (TP1_CSV, tpn_csv):
+    the tp2-measured per-extra-rank fallback, byte-identical). The tp2 artifact is untouched.
+
+    L13 extension (2026-06-11): ``--gpu RTX3090`` runs the SAME estimator on the RTX3090's
+    OWN stage-split legs (cross-GPU transfer of the H100 tp1 leg is INVALID — L11 proved the
+    per-extra-rank comm extrapolation fails even within one GPU family; the 3090 host is pure
+    PCIe, no NVLink). H100 default paths byte-untouched."""
+    for p in (tp1_csv, tpn_csv):
         if not p.exists():
             raise SystemExit(f"missing {p} — pull both stage-split legs first")
-    tp1 = _span_new_rate(TP1_CSV)
+    tp1 = _span_new_rate(tp1_csv)
     tpn = _span_new_rate(tpn_csv)
     comm = tpn["new_ms_per_tok"] - tp1["new_ms_per_tok"] / float(n)
     payload = {
         "schema": "prefill_tp_comm.v1",
-        "gpu": f"H100x{n}", "model": "Llama-3.1-8B", "tp": n,
+        "gpu": f"{gpu}x{n}", "model": "Llama-3.1-8B", "tp": n,
         "method": ("like-for-like multiprocess api_server stage-split pair (same script both "
                    f"legs); comm_total = prefill_span.new(tp{n}) − prefill_span.new(tp1)/{n}"),
         "tp1_fit": {k: round(v, 6) if isinstance(v, float) else v for k, v in tp1.items()},
@@ -80,10 +86,11 @@ def build_tpn(n: int, tpn_csv: Path, out_json: Path) -> None:
         "constants": {"prefill_tp_comm_ms_per_token_total": comm},
         "fallback_it_replaces_ms_per_token": None,  # filled below for context
         "_notes": (f"TOTAL tp{n} comm per new token (NOT per-extra-rank). Pinned in the "
-                   f"deployment JSON key prefill_tp_comm_ms_per_token of the H100x{n} config; "
+                   f"deployment JSON key prefill_tp_comm_ms_per_token of the {gpu}x{n} config; "
                    "every config without the pin keeps PREFILL_TP_COMM_MS_PER_TOKEN*(tp-1). "
-                   f"Regenerate: python3 -m profiling.process.build_tp_comm --tp {n}. Sources: "
-                   f"serving_stage_split.py --tensor-parallel-size {{1,{n}}} on h100."),
+                   f"Regenerate: python3 -m profiling.process.build_tp_comm --tp {n}"
+                   + (f" --gpu {gpu}" if gpu != "H100" else "") + ". Sources: "
+                   f"serving_stage_split.py --tensor-parallel-size {{1,{n}}} on {host}."),
     }
     import simulator.ttft_queue_sim as _sim
     payload["fallback_it_replaces_ms_per_token"] = _sim.PREFILL_TP_COMM_MS_PER_TOKEN * (n - 1)
@@ -101,7 +108,18 @@ def main() -> None:
     ap.add_argument("--tp", type=int, default=2,
                     help="tp degree of the second leg (2 = the original G3 artifact; "
                          "4 = the L11 H100x4 total-comm artifact)")
+    ap.add_argument("--gpu", default="H100", choices=["H100", "RTX3090"],
+                    help="GPU family of the stage-split legs (L13: RTX3090 uses its OWN "
+                         "tp1 leg serving_stage_split_RTX3090.csv; H100 paths untouched)")
     a = ap.parse_args()
+    if a.gpu == "RTX3090":
+        build_tpn(a.tp,
+                  Path(f"profile_data/results/serving_stage_split_RTX3090_tp{a.tp}.csv"),
+                  Path(f"profile_data/kernels/prefill_tp_comm_RTX3090x{a.tp}.json"),
+                  gpu="RTX3090",
+                  tp1_csv=Path("profile_data/results/serving_stage_split_RTX3090.csv"),
+                  host="3090")
+        return
     if a.tp != 2:
         build_tpn(a.tp, Path(f"profile_data/results/serving_stage_split_H100_tp{a.tp}.csv"),
                   Path(f"profile_data/kernels/prefill_tp_comm_H100x{a.tp}.json"))

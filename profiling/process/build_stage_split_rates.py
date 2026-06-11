@@ -182,12 +182,138 @@ def build(tp: int) -> None:
     print(f"wrote {out_json}")
 
 
+def build_consumer(gpu: str, tp: int) -> None:
+    """L13 extension (--gpu RTX3090, 2026-06-11): per-config host-cached + FA3 pins from the
+    consumer GPU's OWN stage-split legs (serving_stage_split_{gpu}.csv / _tp{tp}.csv).
+
+    AMENDED ESTIMATORS (documented in defit_log_entries/L13-3090multi.md BEFORE any gate;
+    decided on consumer-structure grounds, no gate output consulted):
+
+    * HOST = the 4-param ttft OLS cached coefficient ``b`` of ``ttft ~ floor + a*new +
+      b*cached + c*new*(cached+new/2)`` on the tp{tp} leg, DIRECT. The original 3-param
+      family is UNUSABLE on the RTX3090: its measured FA3 coefficient is ~9x the H100's
+      (7.46e-6 vs 8.31e-7), so the quadratic term's projection onto ``cached`` contaminates
+      the 3-param coefficient by ~60% (3090 tp1: 3p 1.460e-2 vs 4p 9.014e-3) where on the
+      H100 legs the two families agreed within ~6% (5.99e-3 vs 5.63e-3 around the production
+      5.887e-3). The consumer (``_price_step``) charges HOST and FA3 as SEPARATE terms, so
+      pinning the 3p coefficient alongside an FA3 pin would double-count the quadratic mass.
+      CROSS-INSTRUMENT VALIDATION (hard-fail): the SAME 4-param estimator on the H100 tp1
+      leg must reproduce the production host SUM within the builder's established 5%
+      tolerance (measured: 5.6302e-3 vs 5.8872e-3, -4.4%).
+    * FA3 = the 4-param span OLS coefficient ``c`` on the tp{tp} leg, DIRECT (pre-registered
+      in L13: the H100 ratio-transport pattern has no {gpu}-measured production anchor to
+      transport; L11 showed direct vs transported outcome-equivalent). Validations
+      (hard-fail): c(tp1) > 0, and 0 < c(tp{tp})/c(tp1) <= 1 (head-sharding can only help).
+
+    The 3-param sensitivity values are reported in the artifact. H100 default mode
+    (``build``) byte-untouched."""
+    import simulator.ttft_queue_sim as sim
+    prod_sum_live = sim.PREFILL_HOST_SHARED_MS_PER_TOKEN + sim.PREFILL_HOST_PERREQ_MS_PER_TOKEN
+    assert abs(prod_sum_live - PROD_HOST_SUM) < 1e-15, "production host SUM moved — update anchor"
+
+    tp1_csv = RESULTS / f"serving_stage_split_{gpu}.csv"
+    tpn_csv = RESULTS / f"serving_stage_split_{gpu}_tp{tp}.csv"
+    for p in (tp1_csv, tpn_csv, TP1_CSV):
+        if not p.exists():
+            raise SystemExit(f"missing {p} — pull the stage-split legs first "
+                             "(the H100 tp1 leg is the estimator-validation bridge)")
+    rows1 = list(csv.DictReader(tp1_csv.open()))
+    rowsn = list(csv.DictReader(tpn_csv.open()))
+    rows_h100 = list(csv.DictReader(TP1_CSV.open()))
+
+    # Cross-instrument estimator validation on the H100 bridge leg (hard-fail).
+    host_h100_4p = _ols(rows_h100, "ttft_ms", ["1", "new", "cached", "fa3"])
+    drift = abs(host_h100_4p["cached"] - PROD_HOST_SUM) / PROD_HOST_SUM
+    if drift > HOST_TP1_TOLERANCE:
+        raise SystemExit(f"4-param estimator on the H100 bridge leg gives "
+                         f"{host_h100_4p['cached']:.6e}, drifting {drift*100:.1f}% from the "
+                         f"production SUM {PROD_HOST_SUM:.6e} — estimator family no longer "
+                         "validates cross-instrument; refusing to emit")
+
+    host1 = _ols(rows1, "ttft_ms", ["1", "new", "cached", "fa3"])
+    hostn = _ols(rowsn, "ttft_ms", ["1", "new", "cached", "fa3"])
+    fa3_1 = _ols(rows1, "prefill_span_ms", ["1", "new", "cached", "fa3"])
+    fa3_n = _ols(rowsn, "prefill_span_ms", ["1", "new", "cached", "fa3"])
+    host1_3p = _ols(rows1, "ttft_ms", ["1", "new", "cached"])
+    hostn_3p = _ols(rowsn, "ttft_ms", ["1", "new", "cached"])
+    if fa3_1["fa3"] <= 0:
+        raise SystemExit(f"tp1-leg FA3 coefficient {fa3_1['fa3']:.4e} not positive — refusing")
+    ratio = fa3_n["fa3"] / fa3_1["fa3"]
+    if not (0.0 < ratio <= 1.0):
+        raise SystemExit(f"FA3 tp{tp}/tp1 ratio {ratio:.4f} outside (0,1] — not a sharding "
+                         "signal; refusing")
+
+    out_json = REPO_ROOT / "profile_data" / "kernels" / f"prefill_stage_rates_{gpu}x{tp}.json"
+    payload = {
+        "schema": "prefill_stage_rates.v1",
+        "gpu": f"{gpu}x{tp}", "model": "Llama-3.1-8B", "tp": tp,
+        "method": ("like-for-like multiprocess api_server stage-split pair (same script + "
+                   f"lattice both legs, {gpu} host). HOST: 4-param OLS ttft ~ floor + a*new "
+                   "+ b*cached + c*new*(cached+new/2) per leg; per-config value = b(tpN) "
+                   "DIRECT (AMENDED from the H100 3-param family: the 3090's ~9x FA3 "
+                   "coefficient contaminates the 3-param cached coefficient ~60% via the "
+                   "quadratic projection, and the consumer charges HOST and FA3 separately; "
+                   "the 4-param estimator reproduces the production H100 SUM within 5% on "
+                   "the H100 bridge leg). FA3: same 4-param fit on prefill_span_ms; "
+                   "per-config value = c(tpN) DIRECT (no production anchor to "
+                   "ratio-transport on this GPU; L13 pre-registration)."),
+        "host_fit_tp1_4p": {k: round(v, 9) for k, v in host1.items()},
+        f"host_fit_tp{tp}_4p": {k: round(v, 9) for k, v in hostn.items()},
+        "host_estimator_validation_h100_bridge": {
+            "production_sum_ms_per_tok": PROD_HOST_SUM,
+            "h100_tp1_leg_4p_ms_per_tok": host_h100_4p["cached"],
+            "rel_drift": drift, "tolerance": HOST_TP1_TOLERANCE},
+        "fa3_fit_tp1": {k: (round(v, 9) if k != "fa3" else v) for k, v in fa3_1.items()},
+        f"fa3_fit_tp{tp}": {k: (round(v, 9) if k != "fa3" else v) for k, v in fa3_n.items()},
+        "fa3_ratio_tpn_over_tp1": ratio,
+        "constants": {
+            "prefill_host_cached_ms_per_token": hostn["cached"],
+            "prefill_fa3_ms_per_token2": fa3_n["fa3"],
+        },
+        "partition_caveat": (
+            "shared/per-request partition stays the production measured fraction "
+            f"{sim.PREFILL_HOST_SHARED_MS_PER_TOKEN / PROD_HOST_SUM:.4f} (tp1 B-sweep band "
+            f"point, prefill_host_split_H100.json): no {gpu} B-sweep exists; only the "
+            "measured SUM is per-config. The consumer (_price_step) applies the fraction "
+            "to the pinned SUM."),
+        "sensitivity_3param_family": {
+            "host_cached_tp1_3p": host1_3p["cached"],
+            f"host_cached_tp{tp}_3p": hostn_3p["cached"],
+            "note": ("the original H100 3-param coefficients, contaminated here by the "
+                     "FA3 quadratic projection (see method) — reported, NOT pinned.")},
+        "fallbacks_it_replaces": {
+            "host_sum_ms_per_tok": PROD_HOST_SUM,
+            "PREFILL_FA3_MS_PER_TOKEN2": PROD_FA3},
+        "_notes": (f"Pinned in the {gpu}x{tp} deployment JSON top-level keys "
+                   "prefill_host_cached_ms_per_token / prefill_fa3_ms_per_token2 -> "
+                   "RooflineParams (loader). Every config without the pins keeps the module "
+                   "constants byte-identically. Regenerate: python3 -m "
+                   f"profiling.process.build_stage_split_rates --gpu {gpu} --tp {tp}. "
+                   f"Sources: serving_stage_split.py --tensor-parallel-size {{1,{tp}}} on "
+                   "the 3090 host (L13, 2026-06-11; GPUs 0 / 0-1 / 0-3, PIX-only PCIe)."),
+    }
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(json.dumps(payload, indent=2) + "\n")
+    print(f"HOST cached 4p: tp1 {host1['cached']*1e3:.4f} ms/1k | tp{tp} "
+          f"{hostn['cached']*1e3:.4f} ms/1k (3p sensitivity: {host1_3p['cached']*1e3:.4f} / "
+          f"{hostn_3p['cached']*1e3:.4f}; h100-bridge drift {drift*100:.1f}%)")
+    print(f"FA3: tp1 {fa3_1['fa3']:.4e} | tp{tp} {fa3_n['fa3']:.4e} (ratio {ratio:.5f}) "
+          f"-> pinned DIRECT {fa3_n['fa3']:.6e} (module constant {PROD_FA3:.2e})")
+    print(f"wrote {out_json}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--tp", type=int, default=4, help="tp degree of the second leg")
+    ap.add_argument("--gpu", default="H100", choices=["H100", "RTX3090"],
+                    help="GPU family of the stage-split legs (L13: RTX3090 uses its OWN legs "
+                         "+ the amended 4-param estimators; H100 default byte-untouched)")
     a = ap.parse_args()
     if a.tp < 2:
         raise SystemExit("--tp must be >= 2 (tp1 is the bridge leg)")
+    if a.gpu != "H100":
+        build_consumer(a.gpu, a.tp)
+        return
     build(a.tp)
 
 
