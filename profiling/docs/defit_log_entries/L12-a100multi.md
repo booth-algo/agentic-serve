@@ -356,3 +356,35 @@ Pre-registered expectation CONFIRMED — no environment drift; the round-1 lever
 (P0 + P1 + P3a/P3b + P2′ + P4) reproduces exactly. No lever applied this round; the
 named successors (1)–(5) above remain the honest remainder and all require GPU access.
 **Lane outcome unchanged: SUCCESS.**
+
+## Lane close (2026-06-11; finalize replay at HEAD `b385843`, gates replay-ON, RAMP_TPOT_REQUIRE_POOLS=1)
+
+Final verification triple re-run at the unchanged HEAD (78 `*_realized_*.json` replay
+files present; working tree clean):
+
+* **(a) A100x2/A100x4** → `/tmp/am_rfinal.*`: predictions AND metrics **byte-identical
+  to `/tmp/am_r2.*`** (≡ r1, `cmp` clean). A100x2 e2el **14.2759** / ttft 24.3284 /
+  tpot 18.3993 (baseline 14.6301 / 23.8786 / 45.0845 → Δe2el −0.354, below baseline;
+  goal < 20 MET); A100x4 e2el **17.5061** / ttft 37.3608 / tpot 28.9292 (baseline
+  17.3047 / 33.1784 / 57.7320 → Δe2el +0.201; goal < 20 MET; ttft +4.18 is the
+  pre-registered honest exposure of an already median-OVER TTFT under engine truth,
+  adopted as the P3+P2′ composition).
+* **(b) H100/H100x2 pair** → `/tmp/am_pair_rfinal.*`: predictions **byte-identical to
+  `/tmp/am_pair_base.predictions.json`** (`cmp` clean; metrics ≡ r2/r1). H100 e2el
+  10.7777, H100x2 18.5506 — untouched throughout the lane.
+* **(c) A100 tp1 (BINDING)** → `/tmp/am_a100_rfinal.*`: **byte-identical to
+  `/tmp/am_a100_r2.*`** (≡ r1). e2el **12.2162** / ttft **20.1710** / tpot **14.3728**
+  vs binding baseline 15.8653 / 22.2222 / 14.3728 → Δ −3.6491 / −2.0512 / 0; the ±0.3
+  binding gate PASSES (all three improve or are exactly unchanged).
+* **pytest:** 389 passed, 1 skipped, 15 subtests passed (without
+  `RAMP_TPOT_REQUIRE_POOLS` per the suite contract; same counts as r1/r2 and the L10
+  finalize).
+
+**Final adopted lever set:** P0 evidence + P1 engine-anchored pools (24574/56806) +
+P3a/P3b own GT ceilings (A100x2 109.2/121.9; A100x4 73.3 THIN) + P2′ A100-family
+scheduler truth in composition + P4 tp1 scheduler truth. P2-standalone remains the one
+documented revert (compensating-fit conflict, L6 class). Named successors (1)–(5)
+unchanged; all require GPU access and are the honest remainder.
+
+**LANE CLOSED: SUCCESS.** Both A100 multi e2el cells < 20, A100x2 below baseline,
+pair byte-identical, binding tp1 improved on every metric, full suite green.
