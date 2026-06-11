@@ -264,3 +264,60 @@ gate-picking — both are fitting. Successor for the method itself: A100 (mml 32
 RTX3090 (mml 16384) GTs also ran the <70 GiB/a100 2048/256 resolved defaults; adopting
 their scheduler truth via the same manifest pins belongs to their own gated lanes (this
 lane held their slices byte-identical, as required).
+
+## Round 3 (2026-06-11): no admissible offline lever remains — verification + re-gate
+
+**Pre-lever checks (committed BEFORE the gate, per protocol):**
+
+1. **Pool truth re-verified, nothing new.** The orchestrator's independent pool hunt
+   returned `2080ti_Llama-3.1-8B_tp1_vllm = 1201`, eager-4096 engine line `1475`,
+   hard brackets `[512, 1475]` — exactly the values already pinned at `d6be418`
+   (manifest `available_kv_blocks: 1201`, verbatim citation in `data.kv_pool.note`,
+   evidence file `profile_data/engine_logs/2080ti_Llama-3.1-8B_tp1_pool_evidence.txt`).
+   No new engine-log truth to apply.
+2. **GT-artifact builders re-run at HEAD → byte-identical.**
+   `python3 -m profiling.process.build_saturated_ceiling` and
+   `python3 -m profiling.process.build_prefill_floor` both regenerate every artifact
+   byte-identical (`git status` clean; 2080Ti anchors stay out25=54.8 ms n=372 /
+   out95=42.9 ms n=233, population 605; 20 config floors unchanged). The builders'
+   inputs did not change in round 2 (the ceiling consumes only `available_kv_blocks`
+   for pressure — unchanged since R1; the floor is conc=1-only) → no regeneration lever.
+
+**Round-3 diagnosis of `/tmp/tp1_r2.predictions.json` under the GATE's own scoring**
+(`gate_scoped_rows._gpu_metrics`: cell = mean over rows of the ROW `e2el_err`, which is
+the WITHIN-ROW turn-level MAPE — not the err-of-means used in the round-1 map):
+
+* The same 44 rows score **16.67** on err-of-means vs **22.21** gate-scored: ~5.5 pts of
+  the headline is sign-cancelling WITHIN-ROW turn error (e.g. swe c320 ttft signed
+  −18.6 % vs abs 48.2 %; terminal c320 signed −4.6 % vs abs 40.3 %) — error in the
+  per-turn TTFT *dynamics* (cohort ordering/timing), invisible to any constant-input
+  lever by construction.
+* **Counterfactuals (gate scoring):** all TTFT turn errors zeroed → **6.56**; all
+  priced-TPOT turn errors zeroed → **20.85**. TTFT remains the only path < 20; the
+  direct e2el contribution of priced TPOT is ~1.4 pts (its real damage is indirect,
+  through the queue-sim drain rate — the P4(a) coupling).
+* **Worst cells:** swe c160 53.5, terminal c120 50.6, swe c320 46.5, osworld c256 38.5,
+  osworld c160 38.5, terminal c320 36.5, terminal c10 35.7, terminal c5 34.6,
+  swe c200 31.7, chat c20 30.7. Three signatures, each mapping onto an already-named
+  NON-offline successor:
+  1. **TTFT-under at mid/high conc with sign-cancelling per-turn errors** (swe c160/c320,
+     terminal c120/c320, osworld c80–c256): the closed-loop sim's per-turn admission
+     timing, the round-2 "queue-regime sensitivity" — every scheduler input it consumes
+     is already per-config engine truth (P4(c) exhausted); no engine-config knob left.
+  2. **Ceiling-clamped TPOT vs wide measured plateaus** (measured per-turn TPOT spans
+     28–159 ms on swe/terminal high-conc; predictions clamp at the out-keyed anchors
+     34.7–54.8): P4(a) out-only anchor keying — builder-STRUCTURE change, pre-registered
+     out of scope; relitigating it now, against a failing gate, is the "per-profile
+     gate-picking" this entry already ruled out as fitting.
+  3. **c1–c10 over-side** (chat/swe/terminal c1 TTFT +43..+66 %): the consumer prefill
+     law (H100-measured grids + H100 host constants) — needs the live c1 stage-split
+     microbench (L9 successor 4); guessing a consumer constant offline is fitting.
+
+**Decision (per pre-registered P4(b)/(d) and the round-2 honest stop): NO honest offline
+lever remains.** Round 3 is verification + re-gate only; the working tree is unchanged
+from `7d92648`, so `/tmp/tp1_r3.*` is expected byte-identical to `/tmp/tp1_r2.*` and the
+trio byte-identical to `/tmp/postmerge_trio.*`. Lane outcome: **partial progress,
+35.47 → 22.21 (−13.3 pts), target < 20 not reached**; the residual is fully decomposed
+onto the three named successors above (exact tp1 engine pool line at GT flags; live
+consumer prefill-law microbench; P4(a) per-profile ceiling-keying builder RFC; plus the
+A100/RTX3090 scheduler-truth adoptions in their own lanes).
