@@ -13,7 +13,7 @@
   "data": {
     "decode_grid": {
       "status": "missing",
-      "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
+      "note": "KEPT analytic BY MEASUREMENT, round-2 per-cell verdict (2026-06-10, lane L8): a 96-cell tp4 decode_steps lattice exists (decode_profile_H100x4_merged_2026-06-10.csv, md5 81552f697d0a4c9d6a68ec14d2e442ff, B<=320 x T<=24576 capped at the real 2,129,952-token pool; regenerable via build_decode_grid.py) and shows the analytic roofline UNDER-prices the isolated tp4 kernel (median 0.79x, worst 0.55x at high-B short-T) -- but wiring it moves TPOT cell-MAPE 37.10 -> 64.80. Per-cell (44 GT cells): only 6 improve (chat c5-c80 / osworld c5, sum -21.0pt) vs 38 degrade (sum +1240pt), INCLUDING all four conc=1 cells (swebench c1 +20.7, terminalbench c1 +14.5) -- GT serving TPOT sits at/below the analytic price almost everywhere while the measured wall is strictly above analytic in 95/96 lattice cells, so any full wiring is monotonically harmful outside the narrow chat band; at conc>=120 GT sits BELOW the isolated kernel wall itself (chat c320 meas 6.56 ms vs 11.5 ms at B=320 T=1024), so NO decode price >= the measured kernel can fit those cells. The over-prediction lives in the shared b_eff/regime mapping (S10/S8/util-cap successor cluster) and/or the decode_steps walls-vs-trace host-gap that grows with B (S12: walls +12-35% above trace) -- not in the decode price this config owns. Partial/banded wiring would select grid domain by validation outcome (compensating fit) -- refused. Adoption refused; artifacts retained for the successor."
     },
     "kv_pool": {
       "status": "derived",
@@ -24,7 +24,15 @@
     "saturated_ceiling": {
       "status": "inherited",
       "from": "H100",
-      "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
+      "note": "KEPT inherited BY MEASUREMENT (2026-06-10, lane L8): the tp4 GT never reaches the saturated regime (max KV pressure 1.81 over 1043 turns vs build_saturated_ceiling threshold 2.5; builder would refuse) -> no own ceiling is derivable. The inherited H100-tp1 anchors bind ONLY as a clamp on swebench conc320 (pred pinned at 243.1 ms vs measured 83-90): they truncate the analytic-decode amplifier over-prediction rather than model a real tp4 plateau. Fix is the measured tp4 decode grid, not a ceiling."
+    },
+    "prefill_floor": {
+      "status": "measured",
+      "value": 18.08,
+      "path": "profile_data/kernels/prefill_floor_llama31_8b.json",
+      "source": "build_prefill_floor.py (min_clean_c1, n=63; regenerated 2026-06-10 byte-identical)",
+      "date": "2026-06-10",
+      "note": "per-config measured floor resolved by ttft_queue_sim._prefill_floor_for('H100x4') -> 18.08 ms (slug h100x4); supersedes the 26.0 tp1 fallback. Already active in the L8 baseline (TTFT 39.4507)."
     },
     "roofline_peak": {
       "status": "measured",
