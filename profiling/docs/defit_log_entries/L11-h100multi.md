@@ -224,3 +224,68 @@ threading, and its consumption in `ttft_queue_sim._prefill_gemm_per_tok_loaded`.
   b_eff-mapping problem with measured bounds — GT chat c320 TPOT equals serving truth at
   B≈100–110, not B≈300; fixing the realized-decode-batch estimate (engine-trace oracle, L4
   style) is the remaining lever for H100x4 TPOT/E2EL and the conc≥120 queue drain.
+
+- **2026-06-11 — ROUND 2 PRE-REGISTRATION (diagnosis + lever committed BEFORE the wiring
+  gate). Lever: per-config MEASURED tp4 prefill HOST-cached rate + FA3 coefficient, derived
+  from the round-1 stage-split pair already on disk — no new GPU work.**
+
+  **Diagnosis (on `/tmp/hm_r1.predictions.json`, the round-1 adopted state):**
+  * E2EL oracle decomposition (per-turn swap, e2el = ttft + out·tpot recomposed): base
+    25.6170; **TTFT-oracle → 7.7510**; TPOT-oracle → 22.5963; both → 4.3001. The E2EL
+    remainder is ~entirely the TTFT queue-drain over-prediction, NOT the TPOT amplifier.
+  * Worst cells: osworld c256/c320 TTFT err 82.6/81.8 (pred 2435/2843 ms vs meas 1364/1639),
+    swebench c320 60.0 (18.12 s vs 10.72 s), terminalbench c256 40.3. Component ablation
+    (module-attribute patches, gate_scoped_rows style, no source edits): zeroing the HOST
+    cached terms collapses osworld@256 pred 2435→594 ms (the dominant simulated mass is
+    `PREFILL_HOST_PERREQ_MS_PER_TOKEN·cached` summed over ~256 concurrent prefills);
+    FA3=0 takes swebench@320 18.12→13.64 s (second-order); decode price in `_price_step`
+    is masked by `max(decode, prefill)` during the drain (zeroing it moves nothing).
+  * c1 ground anchor: osworld@1 turns with cached≈1930–2029 measure TTFT 22.6–22.7 ms over
+    the measured 18.08 floor → real tp4 marginal cached cost ≈ 2.4 ms/1k vs the tp1-measured
+    5.887 ms/1k the sim charges (the same over-charge class as the floor 26→18.08 and the
+    comm 9.84→3.96 precedents: tp1 host constants imposed on the tp4 stack).
+  * Like-for-like confirmation (the round-1 `serving_stage_split.py` pair, SAME script and
+    lattice both legs, columns beyond `prefill_span_ms` unused until now): 3-param OLS
+    `ttft ~ floor + a·new + b·cached` gives b(tp1) = **5.9889e-3** — reproduces the
+    production host SUM 5.8872e-3 within **+1.7%** (cross-instrument validation of the
+    estimator family, which is `build_host_split.fit_c1_rate`'s own model) — and b(tp4) =
+    **3.5303e-3**: the tp4 stack's measured cached-host rate is **0.59×** the tp1 value
+    the sim charges. 4-param OLS `prefill_span ~ floor + a·new + b·cached +
+    c·new·(cached+new/2)` gives the FA3 cross-coefficient c(tp1) = **5.5722e-7** /
+    c(tp4) = **1.7965e-7** (fit MAPE 13.3%/3.8%): the tp4 attention prefill is
+    head-sharded, ratio **0.32240** (between 1/4 perfect shard and 1; the tp1 4p span fit
+    also independently corroborates the production 8.31e-7's magnitude, and at
+    new=2048/cached=16000 the tp1 closed-form check 22.733/1k·2048 + 8.31e-7·2048·17024 =
+    75.6 ms vs measured span 75.3 ms).
+
+  **PRE-REGISTERED ESTIMATORS (deterministic builder
+  `profiling/process/build_stage_split_rates.py --tp 4` →
+  `profile_data/kernels/prefill_stage_rates_H100x4.json`):**
+  * `prefill_host_cached_ms_per_token`(H100x4) = the 3-param ttft-lattice OLS cached
+    coefficient on the tp4 leg = **3.5302703225806482e-3** (estimator-parity with the
+    production `build_host_split` c1 fit; builder hard-fails if the tp1 leg's same-estimator
+    value drifts >5% from the production SUM). The shared/per-request PARTITION keeps the
+    production measured fraction 0.5236 (tp1 B-sweep band point estimate): the tp4 B-sweep
+    does not exist — documented caveat, partition is a stack-structure choice held fixed,
+    only the measured SUM is per-config.
+  * `prefill_fa3_ms_per_token2`(H100x4) = production 8.31e-7 × the like-for-like 4-param
+    span-fit ratio c(tp4)/c(tp1) = 8.31e-7 × 0.32239587 = **2.679109720609454e-7**
+    (transport via the tp1 leg bridges the kernel-grid provenance to the serving-stack
+    instrument, the G3 pattern; the DIRECT tp4 coefficient 1.7965e-7 is reported in the
+    artifact as sensitivity — preview shows the two are outcome-equivalent, e2el 16.32 vs
+    16.21, so the choice is not outcome-driven).
+  **Wiring (the Phase-B mechanism, mirrored):** optional `RooflineParams`
+  `prefill_host_cached_ms_per_token` / `prefill_fa3_ms_per_token2` (default `None` → the
+  module constants, BYTE-IDENTICAL for every unpinned config), `configs/loader.py`
+  threading, consumption in `ttft_queue_sim._price_step` (host: shared/perreq = the
+  production fraction × the pinned SUM; `None` keeps the original constant path untouched);
+  pinned ONLY in the L11-owned H100x4 manifest. TPOT is structurally untouched (both terms
+  are TTFT-only).
+  **Adopt rule:** adopt iff H100x4 E2EL cell-MAPE improves vs 25.6170 AND TTFT improves vs
+  33.8703 AND TPOT byte-unchanged AND H100/A100/H100x2 BYTE-IDENTICAL (H100x2 is unpinned →
+  stronger than the ≤+0.3 contract); else revert to this documented stop-point.
+  **Transparency:** the candidate constants were previewed during diagnosis via the same
+  module-attribute patches (H100x4 ttft/e2el ≈ 24.97/16.32 host+fa3; 25.43/17.61 host
+  alone); the binding evaluation is the wired replay-ON gate below. Baseline reproduction
+  verified at HEAD before any edit: scoped (H100x2,H100x4) and pair (H100,A100) gate outputs
+  byte-match `/tmp/hm_r1.*` and `/tmp/hm_pair_base.predictions.json`, 0 bytes stderr.
