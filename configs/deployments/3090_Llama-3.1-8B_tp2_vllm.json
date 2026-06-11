@@ -6,11 +6,17 @@
   "engine": "vllm",
   "available_kv_blocks": 9893,
   "max_num_batched_tokens": 2048,
+  "prefill_tp_comm_ms_per_token": 0.11863964780201262,
   "bench_dir": "3090_Llama-3.1-8B_tp2_vllm",
   "backend": "rtx3090-tp2-vllm-analytic-roofline",
-  "calibration_status": "3090_tp2_vllm_analytic_roofline_firstcut",
+  "calibration_status": "3090_tp2_vllm_analytic_decode_measured_tp2comm_prefill",
   "ground_truth": true,
   "data": {
+    "prefill_tp_comm": {
+      "status": "measured",
+      "path": "profile_data/kernels/prefill_tp_comm_RTX3090x2.json",
+      "note": "G3 like-for-like own-leg pair (serving_stage_split tp1/tp2 on the 3090 host, L13 2026-06-11): comm_total = span.new(tp2) - span.new(tp1)/2 = 118.640 ms/1k new tokens (pure-PCIe all-reduce, PIX pair; replaces the NVLink-extrapolated PREFILL_TP_COMM_MS_PER_TOKEN*(tp-1) = 3.279 ms/1k fallback, x36). Regenerate: python3 -m profiling.process.build_tp_comm --gpu RTX3090 --tp 2"
+    },
     "decode_grid": {
       "status": "missing",
       "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
