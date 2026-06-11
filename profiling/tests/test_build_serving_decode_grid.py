@@ -157,3 +157,56 @@ def test_builder_csv_is_load_grid_compatible(tmp_path: Path) -> None:
     from simulator.kernel_step_cost import load_grid
     g = load_grid(out)
     assert len(g.cells) == 2 and g.fixed_floor_ms == 3.0
+
+
+def _write_run(path: Path, cell: list[int], itl: float, lag: float, n: int = 4,
+               n_events: int = 456) -> None:
+    with gzip.open(path, "wt") as f:
+        f.write(json.dumps({"_meta": True, "tool": "t"}) + "\n")
+        for i in range(n):
+            f.write(json.dumps({"cell": cell, **_mk_record(
+                i, 100.0 + 0.1 * i, n_events, itl, lag=lag)}) + "\n")
+
+
+def test_lag_upgrade_default_off_keeps_check(tmp_path: Path) -> None:
+    # L13 amendment is OPT-IN: without --lag-upgrade a reproducible lag-only cell stays check
+    # (pre-L13 artifacts regenerate byte-identically).
+    r1, r2 = tmp_path / "r1.jsonl.gz", tmp_path / "r2.jsonl.gz"
+    _write_run(r1, [4, 2048], itl=7.0, lag=2.1)
+    _write_run(r2, [4, 2048], itl=7.0, lag=2.05)
+    rows = build([r1, r2])
+    assert rows[0]["validation_status"] == "check"
+    assert "lag_reproducibility_upgrade" not in rows[0]
+
+
+def test_lag_upgrade_reproducible_marginal_lag_to_ok(tmp_path: Path) -> None:
+    # >=2 hygiene-clean passes, value spread <=0.5%, latest lag <=1.5x limit -> ok + evidence
+    r1, r2 = tmp_path / "r1.jsonl.gz", tmp_path / "r2.jsonl.gz"
+    _write_run(r1, [4, 2048], itl=7.0, lag=2.1)
+    _write_run(r2, [4, 2048], itl=7.02, lag=2.05)   # 0.29% spread
+    rows = build([r1, r2], lag_upgrade=True)
+    assert rows[0]["validation_status"] == "ok"
+    assert rows[0]["lag_reproducibility_upgrade"].startswith("passes=2")
+    assert rows[0]["decode_step_ms"] == 7.02         # latest pass still wins
+
+
+def test_lag_upgrade_refuses_drift_high_lag_single_pass_and_nonlag(tmp_path: Path) -> None:
+    # value drift >0.5% across passes -> stays check (the honest exclusion)
+    r1, r2 = tmp_path / "d1.jsonl.gz", tmp_path / "d2.jsonl.gz"
+    _write_run(r1, [4, 2048], itl=7.0, lag=2.1)
+    _write_run(r2, [4, 2048], itl=7.1, lag=2.05)     # 1.4% spread
+    assert build([r1, r2], lag_upgrade=True)[0]["validation_status"] == "check"
+    # latest-pass lag beyond 1.5x the limit -> stays check even if values agree
+    r3, r4 = tmp_path / "h1.jsonl.gz", tmp_path / "h2.jsonl.gz"
+    _write_run(r3, [4, 2048], itl=7.0, lag=2.1)
+    _write_run(r4, [4, 2048], itl=7.0, lag=3.5)
+    assert build([r3, r4], lag_upgrade=True)[0]["validation_status"] == "check"
+    # single pass -> no corroboration -> stays check
+    r5 = tmp_path / "s1.jsonl.gz"
+    _write_run(r5, [4, 2048], itl=7.0, lag=2.1)
+    assert build([r5], lag_upgrade=True)[0]["validation_status"] == "check"
+    # non-lag hygiene flag (too few in-window samples) is NOT upgradeable
+    r6, r7 = tmp_path / "n1.jsonl.gz", tmp_path / "n2.jsonl.gz"
+    _write_run(r6, [4, 2048], itl=7.0, lag=0.1, n_events=40)
+    _write_run(r7, [4, 2048], itl=7.0, lag=0.1, n_events=40)
+    assert build([r6, r7], lag_upgrade=True)[0]["validation_status"] == "check"
