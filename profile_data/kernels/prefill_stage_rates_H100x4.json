@@ -1,0 +1,58 @@
+{
+  "schema": "prefill_stage_rates.v1",
+  "gpu": "H100x4",
+  "model": "Llama-3.1-8B",
+  "tp": 4,
+  "method": "like-for-like multiprocess api_server stage-split pair (same script + lattice both legs; the round-1 L11 Phase-B tp4 leg). HOST: 3-param OLS ttft ~ floor + a*new + b*cached per leg (build_host_split.fit_c1_rate family); per-config value = b(tpN) direct, tp1 leg validates the estimator against the production SUM. FA3: 4-param OLS prefill_span ~ floor + a*new + b*cached + c*new*(cached+new/2) per leg; per-config value = production 8.31e-7 x c(tpN)/c(tp1) (ratio transport via the tp1 bridge leg, the G3 pattern).",
+  "host_fit_tp1": {
+    "1": 18.686454279,
+    "new": 0.028477685,
+    "cached": 0.005988861,
+    "_fit_mape_pct": 7.719060235,
+    "_n_rows": 20.0
+  },
+  "host_fit_tp4": {
+    "1": 5.339979539,
+    "new": 0.015054991,
+    "cached": 0.00353027,
+    "_fit_mape_pct": 10.607169161,
+    "_n_rows": 20.0
+  },
+  "host_tp1_vs_production_sum": {
+    "production_sum_ms_per_tok": 0.005887238064516135,
+    "tp1_leg_ms_per_tok": 0.005988861290322579,
+    "rel_drift": 0.017261613118544152,
+    "tolerance": 0.05
+  },
+  "fa3_fit_tp1": {
+    "1": 10.308301519,
+    "new": 0.018535177,
+    "cached": 0.00040022,
+    "fa3": 5.572221688209295e-07,
+    "_fit_mape_pct": 13.268394293,
+    "_n_rows": 20.0
+  },
+  "fa3_fit_tp4": {
+    "1": 4.410387685,
+    "new": 0.008293357,
+    "cached": 0.000108576,
+    "fa3": 1.7964612864275598e-07,
+    "_fit_mape_pct": 3.756444735,
+    "_n_rows": 20.0
+  },
+  "fa3_ratio_tpn_over_tp1": 0.3223958749216375,
+  "constants": {
+    "prefill_host_cached_ms_per_token": 0.003530270322580645,
+    "prefill_fa3_ms_per_token2": 2.679109720598808e-07
+  },
+  "partition_caveat": "shared/per-request partition stays the production measured fraction 0.5236 (tp1 B-sweep band point, prefill_host_split_H100.json): no tp4 B-sweep exists; only the measured SUM is per-config. The consumer (_price_step) applies the fraction to the pinned SUM.",
+  "fa3_direct_sensitivity": {
+    "direct_c_tp4": 1.7964612864275598e-07,
+    "note": "the direct tpN serving-stack coefficient; outcome-equivalent to the transported value in the round-2 preview (e2el 16.21 vs 16.32) \u2014 the transport choice is provenance-driven, not outcome-driven."
+  },
+  "fallbacks_it_replaces": {
+    "host_sum_ms_per_tok": 0.005887238064516135,
+    "PREFILL_FA3_MS_PER_TOKEN2": 8.31e-07
+  },
+  "_notes": "Pinned in the H100x4 deployment JSON top-level keys prefill_host_cached_ms_per_token / prefill_fa3_ms_per_token2 -> RooflineParams (loader). Every config without the pins keeps the module constants byte-identically. Regenerate: python3 -m profiling.process.build_stage_split_rates --tp 4. Sources: serving_stage_split.py --tensor-parallel-size {1,4} on h100 (h100_setup.md; tp4 leg measured 2026-06-11, GPUs 4-7)."
+}
