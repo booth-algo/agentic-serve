@@ -331,3 +331,57 @@ verification-only); H100/A100/RTX3090 slices byte-identical to `/tmp/tp1_base.pr
 `/tmp/postmerge_trio.*` (`cmp` clean on both). RTX2080Ti final: e2el_cell **22.2064**
 (ttft 37.563, tpot 25.6936). **Lane closes at the honest stop: 35.47 → 22.21, < 20 not
 reachable with the admissible offline evidence; successors named above.**
+
+## Finalize (2026-06-11): lever audit, full re-gate at HEAD, lane outcome PARTIAL
+
+**Lever keep/revert audit.** The cumulative lane diff at HEAD (`a1023ec~1..b182c01`) is
+exactly the two gated levers plus documentation/evidence — nothing else to keep or revert:
+
+| lever | files | own-round guards | finalize decision |
+|---|---|---|---|
+| R1: kv_pool 512 → 1201 (engine-log-anchored, brackets [512, 1475]) + own-ceiling regen | `configs/deployments/2080ti_Llama-3.1-8B_tp1_vllm.json`, `profile_data/.../saturated_ceiling_RTX2080Ti_llama31_8b.json`, evidence file | trio byte-identical; H100/A100/RTX3090 byte-identical; pytest green; 2080Ti e2el 35.47 → 26.96 | **KEPT** (re-verified below) |
+| R2: P4(c) per-config scheduler truth in the TTFT queue sim (`QSimSchedConfig`; manifest pins `max_model_len=8192`/`max_num_seqs=256`) | `simulator/ttft_queue_sim.py`, `profiling/process/build_simulator_rows.py`, `configs/loader.py`, manifest | trio byte-identical; H100/A100/RTX3090 byte-identical; 2080Ti tpot_cell EXACTLY unchanged (TTFT-only by construction); 2080Ti e2el 26.96 → 22.21 | **KEPT** (re-verified below) |
+| R3 | no working-tree change (verification-only) | r3 byte-identical to r2 | nothing to revert |
+
+**Finalize re-gate (replay-ON, `RAMP_TPOT_REQUIRE_POOLS=1`, clean tree at HEAD):**
+
+* pytest FULL repo suite: **389 passed, 1 skipped, 15 subtests passed** (earlier rounds
+  quoted a scoped subset; the scoped `simulator/tests` suite alone is 156 + 1 skipped —
+  both green at HEAD).
+* `/tmp/tp1_final.{predictions,metrics}.json` **byte-identical** to `/tmp/tp1_r3.*`
+  (`cmp` clean on both) — the committed tree reproduces the round-3 gate exactly.
+* H100 / A100 / RTX3090 slices **identical** to `/tmp/tp1_base.predictions.json`.
+* Binding trio `/tmp/tp1_trio_final.{predictions,metrics}.json` **byte-identical** to
+  `/tmp/postmerge_trio.*` (`cmp` clean on both).
+
+**Final gate table (E2EL cell-MAPE; baseline → final):**
+
+| config | baseline | final | delta | gate | status |
+|---|---|---|---|---|---|
+| RTX2080Ti tp1 (target) | 35.4720 | **22.2064** | −13.27 | < 20 | **NOT MET** (ttft 68.42 → 37.56, tpot 26.40 → 25.69) |
+| H100 tp1 | 10.7777 | 10.7777 | 0 (byte-identical) | < 20 and ≤ +0.3 | PASS |
+| A100 tp1 | 15.8653 | 15.8653 | 0 (byte-identical) | < 20 and ≤ +0.3 | PASS |
+| RTX3090 tp1 | 16.0045 | 16.0045 | 0 (byte-identical) | < 20 and ≤ +0.3 | PASS |
+| Binding trio H100/A100/H100x2 | 10.7777 / 15.8653 / 18.5506 | same | byte-identical | byte-identical | PASS |
+
+**Lane outcome: PARTIAL.** 35.47 → 22.21 (−13.3 pts, −37 %) on admissible evidence only
+(engine-log-anchored pool truth + engine-config scheduler truth; zero fitted constants);
+the last 2.2 pts to the < 20 target are NOT reachable offline. The honest remainder, with
+the measurement each cell-cluster needs (full decomposition in the round-3 section):
+
+1. **Exact tp1 engine pool line at GT flags** — one vLLM server start on the 2080ti when
+   the host frees (removes the [512, 1475] reconstruction bracket; pool is the pressure
+   denominator for TPOT saturation and queue-sim eviction).
+2. **Consumer prefill-law live stage-split microbench** (L9 successor 4) — c1–c10
+   over-side cells (chat/swe/terminal c1 TTFT +43..+66 %) and the mid/high-conc TTFT
+   rate are priced by H100-measured grids + H100 comm constants on a Turing card.
+3. **P4(a) per-profile ceiling-anchor keying** — builder-STRUCTURE RFC; terminal TPOT
+   clamps at the out-keyed anchor ~54.8 ms vs measured plateaus 63–73 ms (swe/terminal
+   merged into one out-25 anchor).
+4. **Queue-regime sensitivity** at swe c160 / terminal c120 (non-monotone sign flips
+   between neighbor cells) — needs engine traces (cohort ordering/timing), not constants;
+   ~5.5 pts of the headline is sign-cancelling WITHIN-ROW turn error invisible to any
+   constant-input lever.
+5. Successor adoptions for other lanes: A100 (mml 32768) and RTX3090 (mml 16384) GTs
+   also ran the <70 GiB 2048/256 resolved scheduler defaults — same manifest-pin lever,
+   their own gated lanes.
