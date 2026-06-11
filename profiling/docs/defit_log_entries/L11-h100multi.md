@@ -117,3 +117,110 @@ threading, and its consumption in `ttft_queue_sim._prefill_gemm_per_tok_loaded`.
   (`nvidia-smi --query-compute-apps`) before each; fresh `/data48/kevinlau/h100multi_run/`;
   no `rm` inside ssh; no weight downloads; CSVs/JSONLs pulled to the shared symlinked
   `profile_data/results/` with unique dated names; GPUs verified clean after every run.
+
+- **2026-06-11 — PHASE A EXECUTED: tp4 serving-context decode grid measured (26/26 pre-registered
+  cells, 3 client passes) → adoption REFUSED by the pre-registered gate; analytic fill KEPT BY
+  MEASUREMENT. The L8 overlap hypothesis is FALSIFIED in magnitude: serving truth = median
+  0.846× of the isolated wall, NOT the ~0.57× the GT high-conc cells would need.**
+  **Runs (GPUs 4,5,6,7, run dir `/data48/kevinlau/h100multi_run/s1_grid_tp4/`, clean scripts
+  copy, GPUs verified free before each launch and clean = 0 compute apps after each):**
+  server `-m vllm.entrypoints.openai.api_server`, tp4, `--no-enable-prefix-caching
+  --max-num-seqs 320 --max-num-batched-tokens 8192 --max-model-len 25600
+  --gpu-memory-utilization 0.90 --dtype bfloat16`; **live pool = 2,116,352 tokens** (server-log
+  `GPU KV cache size`, exactly the L8 value; lattice cap honored, (160,12288) final KV
+  2,015,520 = 95.2% of live pool, no preemption). `ignore_eos` accepted on vLLM 0.19.0 but the
+  64-token warmup streamed 60–61 events (SSE coalescing) → runs 1–2 used the `min_tokens=osl`
+  fallback, run 3 `ignore_eos` (61 ≥ threshold); cross-mode values agree ≤0.2%, coalesce_frac
+  ≤0.4% on all cells. RUN 1 (26 cells, 1 shard <160 / 4 shards ≥160): 8 ok, 18 loop-lag-flagged
+  (p99 >2 ms; values healthy). RUN 2 (18 flagged cells, 8 shards, gc freeze/disable): values
+  reproduce ≤0.5% vs run 1 → the flags are client-loop scheduling noise (even 1 stream/loop
+  shows ~2 ms p99 spikes on a host whose CPUs run the tp4 server), not measurement distortion;
+  3 more ok. RUN 3 (15 cells, 8 shards + `--rt-shards` SCHED_RR via sudo, separate root cache
+  dir): 12 more ok at p99 1.7–2.0 ms; **final merged grid 23 ok / 3 check** ((32,8192),
+  (160,12288), (256,512) at p99 2.006–2.017 — kept flagged per the pre-registered rule;
+  load_grid analytic-fills them as interior holes). Only (256,512) shows real drift across
+  passes (9.15→8.75→8.50, −4%/−3%); every other cell ≤0.5%.
+  **Builder amendment (decided + implemented + CSV built BEFORE the first grid gate, committed
+  with this entry; consumer-structure reasoning only, no validation data consulted):** raw
+  effective contexts are unique floats per cell, which makes every `load_grid` t-axis column
+  single-B (ragged) and the bilinear corners mix measured cells with analytic fills almost
+  everywhere — so `build_serving_decode_grid.py` SNAPS `context_len` to the cell's nominal T
+  when the measured effective is within 2% (always true here: the `prompt = T − osl/2` design
+  landed every effective within 0.2–1.4% of nominal), keeping the measured effective in the
+  `effective_context_len` diagnostic column; >2% deviation keeps the effective and flags check.
+  **The pre-registered quantification (serving vs isolated vs analytic at the same (B,T)):**
+  serving/isolated median **0.846×** (B=1 row 0.81–0.99, mid-B 0.78–0.91) — the L8 overlap
+  factor, directly measured: isolated per-step fixed costs DO partially overlap under
+  continuous serving, but only ~15%; **at B≥256 × T=512 serving EXCEEDS the isolated wall**
+  ((256,512) 1.05×, (320,512) **1.32×**: per-token host/stream cost grows with B in real
+  serving). serving/analytic median **1.088×** (B≤8 ≈ 0.95–1.00; B≥80 short-T 1.15–2.09 —
+  the analytic fill genuinely under-prices serving there). Key cells: B=1 ≈ 2.97–3.24 ms
+  (≈ the isolated warm floor), (320,2048) **12.84 ms** vs isolated 15.90 vs analytic 10.71 —
+  and vs **GT chat c320 measured TPOT 6.56 ms**, which equals the measured serving ITL at
+  B≈100–110 / ctx≈2k: the GT never decodes 320-deep; the sim's b_eff/regime mapping queries
+  ≈300. The residual is the S10/S8/util-cap successor cluster, now BOUNDED by measured serving
+  truth on both sides (no decode price ≥ measured serving truth can fit conc≥120; banding =
+  compensating fit, refused).
+  **Gates (replay-ON, `RAMP_TPOT_REQUIRE_POOLS=1`, 0 bytes stderr):** grid wired ALONE:
+  TPOT cell 37.0951 → **45.6599**, E2EL 29.8081 → **31.6730**, TTFT unchanged 39.4507 (chat
+  12.11→13.71, swebench 68.49→80.63, osworld 16.60→24.64, terminalbench 52.89→65.74); grid
+  STACKED on the adopted Phase-B comm pin: E2EL 25.6170 → 26.5615. Both fail the pre-registered
+  adopt rule (E2EL must improve) → **manifest `decode_grid` reverted to the documented
+  `missing` stop-point with the falsification evidence in the note.** Trio untouched.
+
+- **2026-06-11 — PHASE B EXECUTED + ADOPTED: measured tp4 prefill comm (G3 like-for-like)
+  replaces the tp2-extrapolated 9.84 ms/1k → TTFT cell 39.4507 → 33.8703, E2EL 29.8081 →
+  25.6170, TPOT byte-unchanged; trio BYTE-IDENTICAL.**
+  Same-session stage-split tp4 leg (`serving_stage_split.py --tensor-parallel-size 4`, GPUs
+  4–7, own server flags, c1) → `serving_stage_split_H100_tp4.csv` (20 rows). `build_tp_comm.py
+  --tp 4` (new mode; the tp2 default path byte-untouched) → `profile_data/kernels/
+  prefill_tp_comm_H100x4.json`: span.new(tp1) 22.733 ms/1k (the existing leg), span.new(tp4)
+  **9.647 ms/1k** → **comm_total = 9.647 − 22.733/4 = 3.9635 ms/1k**, vs the
+  `PREFILL_TP_COMM_MS_PER_TOKEN·(tp−1)` fallback = 9.8367 ms/1k the model charged before — the
+  per-extra-rank extrapolation from tp2 over-charged tp4 by ~5.9 ms per 1k new tokens (NCCL
+  all-reduce cost does not grow ∝(tp−1) per token; tp4 total sits just above the tp2 measured
+  3.279). Wiring: new OPTIONAL `RooflineParams.prefill_tp_comm_ms_per_token` (default None →
+  the old formula, gate-verified BYTE-IDENTICAL on x4+trio BEFORE any pin), threaded by
+  `configs/loader.py` from the deployment JSON; consumed in
+  `ttft_queue_sim._prefill_gemm_per_tok_loaded`; pinned ONLY in the L11-owned H100x4 manifest
+  (provenance entry `data.prefill_tp_comm`; `calibration_status` →
+  `h100_tp4_vllm_analytic_decode_measured_tp4comm_prefill`). New pin test
+  (`test_prefill_tp_comm_per_config_override_and_byte_identical_default`).
+  **Remaining-error diagnosis at the adopted state (the honest localization):** chat e2el ≤15
+  at every conc; the E2EL residual is osworld/swebench/terminalbench conc≥120 (e2el 24–66)
+  driven by (a) queue-drain TTFT over-prediction (med signed +0.21..+5.53 s; swebench c320
+  +5.5 s) and (b) the b_eff over-estimation TPOT over-price (swebench c160–320 tpot_err
+  120–163) — the S10/S8/util-cap successor cluster, upstream of this lane's config scope,
+  now with the serving-truth grid as its measured bound.
+
+- **2026-06-11 — PHASE C NOT RUN (pre-registered condition false).** The tp2 serving-grid leg
+  was conditioned on Phase A adopting; it did not. H100x2 stays on the L3 isolated grid,
+  byte-identical (18.5506 E2EL < 20 ✓, regression 0).
+
+- **2026-06-11 — FINALIZE: lane outcome PARTIAL (comm lever adopted; grid lever refused with
+  falsification evidence; E2EL 29.81 → 25.62 vs target <20 — the measured remainder is
+  upstream of this lane's admissible levers).**
+
+  | config | tpot_cell | ttft_cell | e2el_cell | Δ vs baseline |
+  |---|---|---|---|---|
+  | H100x4 (lane) | 37.0951 | **33.8703** | **25.6170** | 0 / −5.58 / −4.19 |
+  | H100 (binding) | 14.4697 | 18.1309 | 10.7777 | 0 (byte-identical) |
+  | A100 (binding) | 14.3728 | 22.2222 | 15.8653 | 0 (byte-identical) |
+  | H100x2 (binding) | 21.5336 | 29.0163 | 18.5506 | 0 (byte-identical) |
+
+  H100x4 per-profile TPOT unchanged (chat 12.1083 / swebench 68.4871 / osworld 16.6027 /
+  terminalbench 52.8857). GPUs 4–7 verified clean (0 compute apps) after every run including
+  the two failed client launches. **Artifacts (shared gitignored `profile_data/results/`,
+  R2-sync with the L3/L8 sets):** `serving_decode_grid_H100x4_2026-06-11.jsonl.gz`
+  md5 `d3a6b23c8dc40b8d4f669a35d1ff4a12`, `..._pass2.jsonl.gz` `2e2133d23306d3144333e01704796fa2`,
+  `..._pass3.jsonl.gz` `377758e92d2c9620f315d6833be55288`,
+  `serving_decode_grid_H100x4_merged_2026-06-11.csv` `a3814643bcbd2ce191c6d7333b93fbb8`
+  (regenerable: `python3 -m profiling.process.build_serving_decode_grid --inputs <3 raws>`),
+  per-run summaries `b4ff1f3a…/2038313193…/2bb87b88…`, `serving_stage_split_H100_tp4.csv`
+  `0879c71237ed48f9b13257c61fcecc39`. Committed artifact:
+  `profile_data/kernels/prefill_tp_comm_H100x4.json` (regenerable:
+  `python3 -m profiling.process.build_tp_comm --tp 4`).
+  **Named successor (sharpened by this lane):** the S10/S8/util-cap cluster is now a
+  b_eff-mapping problem with measured bounds — GT chat c320 TPOT equals serving truth at
+  B≈100–110, not B≈300; fixing the realized-decode-batch estimate (engine-trace oracle, L4
+  style) is the remaining lever for H100x4 TPOT/E2EL and the conc≥120 queue drain.

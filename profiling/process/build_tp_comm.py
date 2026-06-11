@@ -58,7 +58,54 @@ def _span_new_rate(path: Path) -> dict:
             "n_rows": n}
 
 
+def build_tpn(n: int, tpn_csv: Path, out_json: Path) -> None:
+    """L11 extension (2026-06-11): the SAME G3 like-for-like method at tp degree ``n`` —
+    comm_total = prefill_span.new(tpN) − span.new(tp1)/N (the TOTAL per-new-token cost the tpN
+    GPU prefill window carries above its 1/N GEMM share). Consumed per-config via the deployment
+    JSON key ``prefill_tp_comm_ms_per_token`` -> RooflineParams (None for every other config ->
+    the tp2-measured per-extra-rank fallback, byte-identical). The tp2 artifact is untouched."""
+    for p in (TP1_CSV, tpn_csv):
+        if not p.exists():
+            raise SystemExit(f"missing {p} — pull both stage-split legs first")
+    tp1 = _span_new_rate(TP1_CSV)
+    tpn = _span_new_rate(tpn_csv)
+    comm = tpn["new_ms_per_tok"] - tp1["new_ms_per_tok"] / float(n)
+    payload = {
+        "schema": "prefill_tp_comm.v1",
+        "gpu": f"H100x{n}", "model": "Llama-3.1-8B", "tp": n,
+        "method": ("like-for-like multiprocess api_server stage-split pair (same script both "
+                   f"legs); comm_total = prefill_span.new(tp{n}) − prefill_span.new(tp1)/{n}"),
+        "tp1_fit": {k: round(v, 6) if isinstance(v, float) else v for k, v in tp1.items()},
+        f"tp{n}_fit": {k: round(v, 6) if isinstance(v, float) else v for k, v in tpn.items()},
+        "constants": {"prefill_tp_comm_ms_per_token_total": comm},
+        "fallback_it_replaces_ms_per_token": None,  # filled below for context
+        "_notes": (f"TOTAL tp{n} comm per new token (NOT per-extra-rank). Pinned in the "
+                   f"deployment JSON key prefill_tp_comm_ms_per_token of the H100x{n} config; "
+                   "every config without the pin keeps PREFILL_TP_COMM_MS_PER_TOKEN*(tp-1). "
+                   f"Regenerate: python3 -m profiling.process.build_tp_comm --tp {n}. Sources: "
+                   f"serving_stage_split.py --tensor-parallel-size {{1,{n}}} on h100."),
+    }
+    import simulator.ttft_queue_sim as _sim
+    payload["fallback_it_replaces_ms_per_token"] = _sim.PREFILL_TP_COMM_MS_PER_TOKEN * (n - 1)
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(json.dumps(payload, indent=2) + "\n")
+    print(f"tp1 span.new {tp1['new_ms_per_tok']*1e3:.3f} ms/1k | tp{n} "
+          f"{tpn['new_ms_per_tok']*1e3:.3f} -> comm_total {comm*1e3:.4f} ms/1k "
+          f"(fallback it replaces: {payload['fallback_it_replaces_ms_per_token']*1e3:.4f} ms/1k)")
+    print(f"wrote {out_json}")
+
+
 def main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--tp", type=int, default=2,
+                    help="tp degree of the second leg (2 = the original G3 artifact; "
+                         "4 = the L11 H100x4 total-comm artifact)")
+    a = ap.parse_args()
+    if a.tp != 2:
+        build_tpn(a.tp, Path(f"profile_data/results/serving_stage_split_H100_tp{a.tp}.csv"),
+                  Path(f"profile_data/kernels/prefill_tp_comm_H100x{a.tp}.json"))
+        return
     for p in (TP1_CSV, TP2_CSV):
         if not p.exists():
             raise SystemExit(f"missing {p} — pull both stage-split legs first")

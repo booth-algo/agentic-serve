@@ -8,12 +8,12 @@
   "max_num_batched_tokens": 8192,
   "bench_dir": "h100_Llama-3.1-8B_tp4_vllm",
   "backend": "h100-tp4-vllm-analytic-roofline",
-  "calibration_status": "h100_tp4_vllm_analytic_roofline_firstcut",
+  "calibration_status": "h100_tp4_vllm_analytic_decode_measured_tp4comm_prefill",
   "ground_truth": true,
   "data": {
     "decode_grid": {
       "status": "missing",
-      "note": "KEPT analytic BY MEASUREMENT, round-2 per-cell verdict (2026-06-10, lane L8): a 96-cell tp4 decode_steps lattice exists (decode_profile_H100x4_merged_2026-06-10.csv, md5 81552f697d0a4c9d6a68ec14d2e442ff, B<=320 x T<=24576 capped at the real 2,129,952-token pool; regenerable via build_decode_grid.py) and shows the analytic roofline UNDER-prices the isolated tp4 kernel (median 0.79x, worst 0.55x at high-B short-T) -- but wiring it moves TPOT cell-MAPE 37.10 -> 64.80. Per-cell (44 GT cells): only 6 improve (chat c5-c80 / osworld c5, sum -21.0pt) vs 38 degrade (sum +1240pt), INCLUDING all four conc=1 cells (swebench c1 +20.7, terminalbench c1 +14.5) -- GT serving TPOT sits at/below the analytic price almost everywhere while the measured wall is strictly above analytic in 95/96 lattice cells, so any full wiring is monotonically harmful outside the narrow chat band; at conc>=120 GT sits BELOW the isolated kernel wall itself (chat c320 meas 6.56 ms vs 11.5 ms at B=320 T=1024), so NO decode price >= the measured kernel can fit those cells. The over-prediction lives in the shared b_eff/regime mapping (S10/S8/util-cap successor cluster) and/or the decode_steps walls-vs-trace host-gap that grows with B (S12: walls +12-35% above trace) -- not in the decode price this config owns. Partial/banded wiring would select grid domain by validation outcome (compensating fit) -- refused. Adoption refused; artifacts retained for the successor."
+      "note": "KEPT analytic BY MEASUREMENT -- twice. (1) L8 (2026-06-10): the 96-cell ISOLATED-kernel lattice (decode_profile_H100x4_merged_2026-06-10.csv, md5 81552f697d0a4c9d6a68ec14d2e442ff) was refused per-cell (TPOT 37.10 -> 64.80; 6/44 cells improve vs 38/44 degrade; GT at conc>=120 sits below the isolated wall). (2) L11 (2026-06-11): the SERVING-context grid (serving_decode_grid_H100x4_merged_2026-06-11.csv, md5 a3814643bcbd2ce191c6d7333b93fbb8; live tp4 api_server, prefix caching OFF, per-request mid-stream ITL p50 in the all-B-decoding steady window, 26 pre-registered cells, 3 client passes merged latest-wins, values reproducible <=0.5% across 1/8-shard + SCHED_RR client topologies) measures the quantity the sim actually prices and FALSIFIES the L8 overlap hypothesis in magnitude: serving = median 0.846x of the isolated wall (not the ~0.57x the GT would need), and at B>=256 x T=512 serving EXCEEDS the isolated wall (320x512 1.32x: per-token host/stream cost grows with B). Wiring it moves TPOT 37.10 -> 45.66 and E2EL 29.81 -> 31.67 (26.56 stacked on the adopted tp4-comm pin vs 25.62 without) -- refused by the pre-registered gate. The GT chat c320 TPOT 6.56 ms equals the MEASURED serving ITL at B~100-110/ctx~2k, while the pipeline queries the grid at b_eff~300: the residual is the b_eff/regime over-estimation (S10/S8/util-cap successor cluster), now bounded by a measured serving-truth grid on BOTH sides. No decode price >= measured serving truth can fit conc>=120; banding refused (compensating fit). Artifacts retained."
     },
     "kv_pool": {
       "status": "derived",
@@ -25,6 +25,14 @@
       "status": "inherited",
       "from": "H100",
       "note": "KEPT inherited BY MEASUREMENT (2026-06-10, lane L8): the tp4 GT never reaches the saturated regime (max KV pressure 1.81 over 1043 turns vs build_saturated_ceiling threshold 2.5; builder would refuse) -> no own ceiling is derivable. The inherited H100-tp1 anchors bind ONLY as a clamp on swebench conc320 (pred pinned at 243.1 ms vs measured 83-90): they truncate the analytic-decode amplifier over-prediction rather than model a real tp4 plateau. Fix is the measured tp4 decode grid, not a ceiling."
+    },
+    "prefill_tp_comm": {
+      "status": "measured",
+      "value": 0.00396346764752022,
+      "path": "profile_data/kernels/prefill_tp_comm_H100x4.json",
+      "source": "build_tp_comm.py --tp 4 (G3 like-for-like: serving_stage_split.py tp1/tp4 pair, comm_total = span.new(tp4) 3.9635 ms/1k above span.new(tp1)/4; tp4 leg serving_stage_split_H100_tp4.csv 2026-06-11, GPUs 4-7)",
+      "date": "2026-06-11",
+      "note": "TOTAL tp4 comm per new prefill token, pinned via the top-level deployment key prefill_tp_comm_ms_per_token -> RooflineParams (loader). Replaces the tp2-measured per-extra-rank extrapolation 3x3.279=9.84 ms/1k for THIS config only (every unpinned config keeps the fallback byte-identically). Gate: TTFT cell 39.4507 -> 33.8703, E2EL 29.8081 -> 25.6170, TPOT byte-unchanged; trio byte-identical."
     },
     "prefill_floor": {
       "status": "measured",
@@ -68,5 +76,6 @@
       "path": "h100_Llama-3.1-8B_tp4_vllm",
       "source": "/mnt/100g"
     }
-  }
+  },
+  "prefill_tp_comm_ms_per_token": 0.00396346764752022
 }

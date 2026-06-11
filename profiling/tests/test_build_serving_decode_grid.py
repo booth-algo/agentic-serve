@@ -118,6 +118,23 @@ def test_builder_merge_latest_wins(tmp_path: Path) -> None:
     assert len(rows) == 1
     assert rows[0]["decode_step_ms"] == 7.0          # run2 (latest) wins
     assert rows[0]["source_file"] == "run2.jsonl.gz"
+    # snap rule: effective (prompt 1820 + ~progress) lands within 2% of nominal 2048 -> snapped,
+    # measured effective preserved in the diagnostic column
+    assert rows[0]["context_len"] == 2048
+    assert abs(rows[0]["effective_context_len"] - 2048) / 2048 <= 0.02
+
+
+def test_builder_snap_flags_large_deviation(tmp_path: Path) -> None:
+    # an effective context >2% off nominal (asymmetric steady window) keeps the measured
+    # effective and is flagged check
+    run = tmp_path / "run.jsonl.gz"
+    with gzip.open(run, "wt") as f:
+        for i in range(2):
+            f.write(json.dumps({"cell": [2, 2048],
+                                **_mk_record(i, 100.0, 456, 7.0, prompt=1500)}) + "\n")
+    rows = build([run])
+    assert rows[0]["validation_status"] == "check"
+    assert rows[0]["context_len"] == rows[0]["effective_context_len"] != 2048
 
 
 def test_builder_csv_is_load_grid_compatible(tmp_path: Path) -> None:

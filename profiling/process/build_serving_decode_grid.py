@@ -40,7 +40,7 @@ _spec.loader.exec_module(_client)  # aiohttp is lazily imported by the client; s
 
 summarize_cell = _client.summarize_cell
 SUMMARY_FIELDS = _client.SUMMARY_FIELDS
-OUT_FIELDS = SUMMARY_FIELDS + ["source_file"]
+OUT_FIELDS = SUMMARY_FIELDS + ["effective_context_len", "source_file"]
 
 
 def read_run(path: Path) -> tuple[dict, dict[tuple[int, int], list[dict]]]:
@@ -62,7 +62,20 @@ def read_run(path: Path) -> tuple[dict, dict[tuple[int, int], list[dict]]]:
     return meta, cells
 
 
-def build(inputs: list[Path]) -> list[dict]:
+def build(inputs: list[Path], snap_tolerance: float = 0.02) -> list[dict]:
+    """Merge runs (latest wins per cell) and summarize.
+
+    ``snap_tolerance`` (L11 builder amendment, decided PRE-GATE on consumer-structure grounds,
+    no validation data consulted): the lattice's ``prompt = T - osl/2`` design targets an
+    effective context == nominal T at the steady-window middle, and the measured effectives land
+    within ~1.5% of nominal — but as raw floats they are UNIQUE per (B, T) cell, which makes
+    every ``load_grid`` t-axis column single-B (ragged), so the consumer's bilinear corners mix
+    measured cells with analytic fills almost everywhere, diluting the measurement. The builder
+    therefore SNAPS ``context_len`` to the cell's nominal T when the measured effective is
+    within ``snap_tolerance`` of it (the by-construction case; rows align into a proper B x T
+    grid) and keeps the measured effective in the ``effective_context_len`` diagnostic column.
+    A deviation beyond the tolerance means the steady window was asymmetric/disturbed: the cell
+    keeps its measured effective AND is flagged ``check``."""
     merged: dict[tuple[int, int], tuple[list[dict], str]] = {}
     for path in inputs:
         meta, cells = read_run(path)
@@ -79,6 +92,15 @@ def build(inputs: list[Path]) -> list[dict]:
         if dropped:
             row["validation_status"] = "check"
             print(f"cell {key}: {dropped} empty-stream request(s) -> check")
+        eff = row["context_len"]
+        nominal = row["nominal_T"]
+        row["effective_context_len"] = eff
+        if nominal > 0 and abs(eff - nominal) / nominal <= snap_tolerance:
+            row["context_len"] = nominal
+        else:
+            row["validation_status"] = "check"
+            print(f"cell {key}: effective context {eff} deviates >{snap_tolerance:.0%} "
+                  f"from nominal {nominal} -> kept + check")
         row["source_file"] = src
         rows.append(row)
     return rows
