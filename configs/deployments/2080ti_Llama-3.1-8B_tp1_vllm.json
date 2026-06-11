@@ -4,7 +4,7 @@
   "model": "Llama-3.1-8B",
   "tp": 1,
   "engine": "vllm",
-  "available_kv_blocks": 512,
+  "available_kv_blocks": 1201,
   "max_num_batched_tokens": 2048,
   "bench_dir": "2080ti_Llama-3.1-8B_tp1_vllm",
   "backend": "rtx2080ti-tp1-vllm-analytic-roofline",
@@ -17,9 +17,9 @@
     },
     "kv_pool": {
       "status": "derived",
-      "value": 512,
-      "source": "vLLM v1 startup feasibility (engine source) + GT metadata",
-      "note": "ENGINE-FEASIBILITY BOUND (no surviving engine log): the GT ran (vllm 0.19.0) with max_model_len=8192/util 0.85 (GT config metadata + orchestrator state max_len_override=8192), and vLLM v1 refuses to start unless the pool holds max_model_len tokens (vllm/v1/core/kv_cache_utils.py check_enough_kv_cache_memory) -> pool >= 8192/16 = 512 blocks; GT corroboration: longest measured session context = 8181 tokens. Upper bracket from host arithmetic: 22GiB-modded card (nvidia-smi 22528 MiB), total*0.85 - weights 16.06GB = 4.02GB -> <= 1916 blocks. The kv_pool.py rule gives 247 (< the startup bound -> provably too small; the 3.5GB reserve back-solves to <=2.97GB here). PINNED at the 512 lower bound \u2014 replaces the pool=1 sentinel that priced this config permanently saturated (+337% c1 TPOT, +1.15e6 ms c1 TTFT). Successor: capture the tp1 engine log."
+      "value": 1201,
+      "source": "engine-log-anchored reconstruction (same-host same-model tp1 engine pool line + tp1 CUDA-graph estimate)",
+      "note": "ENGINE-ANCHORED RECONSTRUCTION (the GT's own engine log was overwritten 05-22; full verbatim excerpts committed at profile_data/engine_logs/2080ti_Llama-3.1-8B_tp1_pool_evidence.txt, L10-tp1sub20 2026-06-11): same-host same-model same-util tp1 ENGINE POOL LINE 2080ti:/tmp/calib_2080ti_test.log (04-29, vllm 0.19.0, enforce_eager, max_model_len=4096, util 0.85): 'GPU KV cache size: 23,600 tokens' / 'Available KV cache memory: 2.88 GiB' -> 1475 blocks at zero CUDA-graph estimate. The GT config (non-eager, max_model_len=8192, util 0.85, VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 via sweep_multiturn_profiles.sh) differs only by the CG estimate (profile_run activation peak is max_num_batched_tokens=2048-bound, max_len-insensitive); the same-model tp1 CG estimate from the 3090 anchor log (3090:/tmp/vllm_8093.log 06-02: equiv-util 0.8500->0.8277 on 25,769,803,776 B) is 0.575e9 B (actual capture 0.48 GiB, consistent). pool = 3.093e9 - 0.575e9 = 2.519e9 B / 2,097,152 B-per-block = 1201 blocks (19,216 tokens). HARD ENGINE BRACKETS [512, 1475]: >= 512 (vLLM v1 startup check at max_model_len 8192, vllm/v1/core/kv_cache_utils.py check_enough_kv_cache_memory), <= 1475 (the zero-CG eager ceiling above); residual uncertainty is only the Ampere->Turing transfer of the tp1 CG estimate (<= 1.88 GiB by the startup bound). Cross-checks: three independent same-host engine logs decompose to ~0.83 GiB non-CG overhead (tp1-eager 0.83 / tp2 0.82 / tp4 0.82); the tp2-sibling overhead transfer (3.29 GB) gives 347 < the 512 startup bound -> falsified. Replaces the L9 512-block startup-feasibility LOWER-BOUND pin (which priced mass eviction/serialized admission: chat TTFT +87% at c10); the kv_pool.py rule gives 247 (provably too small). Hand-pinned: regeneration via generate_deployments would revert to the rule value. Successor: capture the exact tp1 engine line at GT flags (one server start, next host window)."
     },
     "saturated_ceiling": {
       "status": "measured",
