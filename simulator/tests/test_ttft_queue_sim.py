@@ -581,6 +581,71 @@ def test_prefill_tp_comm_per_config_override_and_byte_identical_default():
         _replace(p1, prefill_tp_comm_ms_per_token=0.0), 512.0)
 
 
+def test_prefill_host_fa3_per_config_override_and_byte_identical_default():
+    # L11 round 2 (2026-06-11): RooflineParams.prefill_host_cached_ms_per_token /
+    # prefill_fa3_ms_per_token2 are the per-config MEASURED serving-stack prefill rates
+    # (like-for-like tp1/tpN stage-split pair, build_stage_split_rates.py). None (the default —
+    # every config that does not pin them) MUST return the tp1-measured module constants
+    # UNCHANGED: byte-identical for unpinned configs.
+    import simulator.ttft_queue_sim as mod
+    from dataclasses import replace as _replace
+    p = RooflineParams()
+    fa3, hs, hp = mod._prefill_host_fa3_rates(p)
+    assert fa3 == mod.PREFILL_FA3_MS_PER_TOKEN2
+    assert hs == mod.PREFILL_HOST_SHARED_MS_PER_TOKEN
+    assert hp == mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN
+    # explicit None == default (byte-identical)
+    assert mod._prefill_host_fa3_rates(_replace(
+        p, prefill_host_cached_ms_per_token=None, prefill_fa3_ms_per_token2=None)) == (fa3, hs, hp)
+    # a pinned SUM keeps the production measured shared/per-request FRACTION applied to it
+    _, hs4, hp4 = mod._prefill_host_fa3_rates(_replace(p, prefill_host_cached_ms_per_token=0.004))
+    assert abs((hs4 + hp4) - 0.004) < 1e-15
+    prod_sum = mod.PREFILL_HOST_SHARED_MS_PER_TOKEN + mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN
+    assert abs(hs4 / 0.004 - mod.PREFILL_HOST_SHARED_MS_PER_TOKEN / prod_sum) < 1e-12
+    # a 0.0 FA3 pin is respected (explicit `is None` resolution, no `or`-falsiness bug)
+    assert mod._prefill_host_fa3_rates(_replace(p, prefill_fa3_ms_per_token2=0.0))[0] == 0.0
+    # end-to-end: default params reproduce the no-params prediction exactly, and a
+    # cached-heavy cell prices strictly LOWER under a smaller pinned host sum
+    turns = _mk_turns(8, cached=6000.0, new=400.0, output=24.0)
+    base = predict_cell_ttft_qsim(turns, SWE, 40)
+    assert base == predict_cell_ttft_qsim(turns, SWE, 40, RooflineParams())
+    low = predict_cell_ttft_qsim(
+        turns, SWE, 40, _replace(p, prefill_host_cached_ms_per_token=prod_sum / 2))
+    assert sum(low) < sum(base)
+
+
+def test_prefill_stage_rates_manifest_pins_match_artifact():
+    # The H100x4 deployment pins == the regenerable artifact constants (pinned BOTH ways so
+    # neither drifts silently — the prefill_host_split precedent), and the loader threads
+    # them ONLY into the pinned config (binding trio stays None -> byte-identical defaults).
+    art_p = REPO_ROOT / "profile_data/kernels/prefill_stage_rates_H100x4.json"
+    dep_p = REPO_ROOT / "configs/deployments/h100_Llama-3.1-8B_tp4_vllm.json"
+    art = json.loads(art_p.read_text())
+    dep = json.loads(dep_p.read_text())
+    assert dep["prefill_host_cached_ms_per_token"] == art["constants"]["prefill_host_cached_ms_per_token"]
+    assert dep["prefill_fa3_ms_per_token2"] == art["constants"]["prefill_fa3_ms_per_token2"]
+    entry = dep["data"]["prefill_stage_rates"]
+    assert entry["status"] == "measured"
+    assert entry["host_cached_ms_per_token"] == dep["prefill_host_cached_ms_per_token"]
+    assert entry["fa3_ms_per_token2"] == dep["prefill_fa3_ms_per_token2"]
+    # the measured tp4 rates land BELOW the tp1 constants they replace (sharded attention
+    # prefill; measurably faster tp4 host stack) — sanity bounds, not tunes
+    import simulator.ttft_queue_sim as mod
+    prod_sum = mod.PREFILL_HOST_SHARED_MS_PER_TOKEN + mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN
+    assert 0.0 < dep["prefill_host_cached_ms_per_token"] < prod_sum
+    assert 0.0 < dep["prefill_fa3_ms_per_token2"] < mod.PREFILL_FA3_MS_PER_TOKEN2
+    from configs.loader import all_deployments
+    for c in all_deployments():
+        if c.model != "Llama-3.1-8B" or c.engine != "vllm":
+            continue
+        if c.gpu_key == "H100x4":
+            assert c.roofline.prefill_host_cached_ms_per_token == dep["prefill_host_cached_ms_per_token"]
+            assert c.roofline.prefill_fa3_ms_per_token2 == dep["prefill_fa3_ms_per_token2"]
+        elif c.gpu_key in ("H100", "A100", "H100x2"):
+            assert c.roofline.prefill_host_cached_ms_per_token is None
+            assert c.roofline.prefill_fa3_ms_per_token2 is None
+
+
 def test_no_fitted_constants():
     # Every module-level numeric constant is a vLLM serving default or config-derived —
     # NONE is fitted to the TTFT target.

@@ -8,7 +8,7 @@
   "max_num_batched_tokens": 8192,
   "bench_dir": "h100_Llama-3.1-8B_tp4_vllm",
   "backend": "h100-tp4-vllm-analytic-roofline",
-  "calibration_status": "h100_tp4_vllm_analytic_decode_measured_tp4comm_prefill",
+  "calibration_status": "h100_tp4_vllm_analytic_decode_measured_tp4_prefill_law",
   "ground_truth": true,
   "data": {
     "decode_grid": {
@@ -33,6 +33,15 @@
       "source": "build_tp_comm.py --tp 4 (G3 like-for-like: serving_stage_split.py tp1/tp4 pair, comm_total = span.new(tp4) 3.9635 ms/1k above span.new(tp1)/4; tp4 leg serving_stage_split_H100_tp4.csv 2026-06-11, GPUs 4-7)",
       "date": "2026-06-11",
       "note": "TOTAL tp4 comm per new prefill token, pinned via the top-level deployment key prefill_tp_comm_ms_per_token -> RooflineParams (loader). Replaces the tp2-measured per-extra-rank extrapolation 3x3.279=9.84 ms/1k for THIS config only (every unpinned config keeps the fallback byte-identically). Gate: TTFT cell 39.4507 -> 33.8703, E2EL 29.8081 -> 25.6170, TPOT byte-unchanged; trio byte-identical."
+    },
+    "prefill_stage_rates": {
+      "status": "measured",
+      "host_cached_ms_per_token": 0.003530270322580645,
+      "fa3_ms_per_token2": 2.679109720598808e-07,
+      "path": "profile_data/kernels/prefill_stage_rates_H100x4.json",
+      "source": "build_stage_split_rates.py --tp 4 (L11 round 2, like-for-like tp1/tp4 stage-split pair, same script + lattice both legs; tp4 leg serving_stage_split_H100_tp4.csv 2026-06-11, GPUs 4-7 -- the round-1 Phase-B session). HOST: 3-param OLS ttft ~ floor + a*new + b*cached per leg (the production build_host_split.fit_c1_rate family); tp1 leg reproduces the production SUM 5.8872e-3 within +1.7% (estimator validation), tp4 leg = 3.5303e-3 pinned DIRECT (the prefill_floor precedent). FA3: 4-param OLS prefill_span ~ floor + a*new + b*cached + c*new*(cached+new/2) per leg; pinned = production 8.31e-7 x c(tp4)/c(tp1) = 8.31e-7 x 0.32240 (ratio transport via the tp1 bridge leg, the G3 pattern; direct c(tp4)=1.7965e-7 reported as sensitivity in the artifact).",
+      "date": "2026-06-11",
+      "note": "Per-config tp4 serving-stack prefill rates, pinned via the top-level deployment keys prefill_host_cached_ms_per_token / prefill_fa3_ms_per_token2 -> RooflineParams (loader) -> ttft_queue_sim._price_step. Replaces the tp1-measured host SUM 5.8872e-3 (the tp4 stack's own measured rate is 0.59x; the GT's c1 osworld turns independently anchor ~2.4 ms/1k marginal) and the tp1 FA3 8.31e-7 (head-sharded attention prefill) for THIS config only -- every unpinned config keeps the module constants byte-identically. The shared/per-request host PARTITION stays the production measured fraction 0.5236 applied to the pinned SUM (no tp4 B-sweep exists; documented caveat). Gate (L11 R2): TTFT cell 33.8703 -> 24.9634, E2EL 25.6170 -> 16.3179, TPOT byte-unchanged 37.0951; H100/A100/H100x2 byte-identical."
     },
     "prefill_floor": {
       "status": "measured",
@@ -77,5 +86,7 @@
       "source": "/mnt/100g"
     }
   },
-  "prefill_tp_comm_ms_per_token": 0.00396346764752022
+  "prefill_tp_comm_ms_per_token": 0.00396346764752022,
+  "prefill_host_cached_ms_per_token": 0.003530270322580645,
+  "prefill_fa3_ms_per_token2": 2.679109720598808e-07
 }

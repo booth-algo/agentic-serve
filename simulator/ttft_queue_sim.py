@@ -805,6 +805,27 @@ def _ensure_step(state: _ServerState) -> None:
         state.step_scheduled = True
 
 
+def _prefill_host_fa3_rates(p: RooflineParams) -> tuple[float, float, float]:
+    """(fa3_coef, host_shared_rate, host_perreq_rate) for ``_price_step``'s prefill terms.
+
+    Per-config MEASURED prefill HOST-cached SUM + FA3 coefficient (L11 round 2: the
+    like-for-like tp1/tpN stage-split pair, ``build_stage_split_rates.py``). ``None`` — every
+    config that does not pin them — returns the tp1-measured module constants UNCHANGED
+    (byte-identical). A pinned host SUM keeps the production measured shared/per-request
+    FRACTION (0.5236, prefill_host_split_H100.json; no tpN B-sweep exists) applied to the
+    per-config SUM. Explicit ``is None`` checks so a 0.0 pin is respected."""
+    fa3_coef = getattr(p, "prefill_fa3_ms_per_token2", None)
+    if fa3_coef is None:
+        fa3_coef = PREFILL_FA3_MS_PER_TOKEN2
+    host_sum = getattr(p, "prefill_host_cached_ms_per_token", None)
+    if host_sum is None:
+        return fa3_coef, PREFILL_HOST_SHARED_MS_PER_TOKEN, PREFILL_HOST_PERREQ_MS_PER_TOKEN
+    prod_sum = PREFILL_HOST_SHARED_MS_PER_TOKEN + PREFILL_HOST_PERREQ_MS_PER_TOKEN
+    return (fa3_coef,
+            host_sum * (PREFILL_HOST_SHARED_MS_PER_TOKEN / prod_sum),
+            host_sum * (PREFILL_HOST_PERREQ_MS_PER_TOKEN / prod_sum))
+
+
 def _price_step(state: _ServerState) -> float:
     """One mixed prefill+decode step. Decode = measured kernel. Prefill = three measured terms:
       * NEW   : serving per-(re)prefilled-token rate (linear, batched ∝ total chunk tokens),
@@ -819,6 +840,8 @@ def _price_step(state: _ServerState) -> float:
     p = state.params
     decode_batch = len(state.running)
     decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p) if decode_batch > 0 else 0.0
+
+    fa3_coef, host_shared_rate, host_perreq_rate = _prefill_host_fa3_rates(p)
 
     budget = max(0, state.sched_max_num_batched_tokens - decode_batch)
     total_chunk = 0.0       # batched NEW-token rate scales with total tokens this step
@@ -839,14 +862,14 @@ def _price_step(state: _ServerState) -> float:
         frac = chunk / r.prefill_total if r.prefill_total > 0 else 1.0
         M = r.prefill_total          # tokens this turn (re-)prefills (reprefill_cached + new)
         R = r.resident_prefix        # resident prefix the (re-)prefill attends
-        gpu_fa3_ms += PREFILL_FA3_MS_PER_TOKEN2 * M * (R + 0.5 * M) * frac
-        host_perreq_ms += PREFILL_HOST_PERREQ_MS_PER_TOKEN * r.cached * frac
+        gpu_fa3_ms += fa3_coef * M * (R + 0.5 * M) * frac
+        host_perreq_ms += host_perreq_rate * r.cached * frac
         cached_w_sum += r.cached * frac
         cached_w_n += 1
     if any_prefill:
         gpu_new_ms = (_prefill_gemm_per_tok_loaded(p, total_chunk) + PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN) * total_chunk
         mean_cached = cached_w_sum / cached_w_n if cached_w_n else 0.0
-        host_shared_ms = PREFILL_HOST_SHARED_MS_PER_TOKEN * mean_cached  # amortized once/step
+        host_shared_ms = host_shared_rate * mean_cached  # amortized once/step
         # Per-STEP fixed cost is the scheduler/launch overhead (one engine tick), NOT the full
         # PREFILL_FLOOR — the floor's first-token-emit/detok/return part is a per-REQUEST cost
         # added ONCE at first-token (see _on_first_token). Charging the full floor every step

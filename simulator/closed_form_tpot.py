@@ -81,6 +81,16 @@ class RooflineParams:
     # tp1 -> 0 either way). Pinned per-deployment in the deployment JSON from the
     # profile_data/kernels/prefill_tp_comm_*.json artifact (L11 de-fit, 2026-06-11).
     prefill_tp_comm_ms_per_token: float | None = None
+    # Per-config MEASURED prefill HOST-cached rate (SUM, ms per re-sent cached token) and FA3
+    # coefficient (ms per token^2) for THIS config's serving stack — the L11 round-2 like-for-like
+    # tp1/tpN stage-split pair (build_stage_split_rates.py; same script + lattice both legs).
+    # None -> the ttft_queue_sim module constants (PREFILL_HOST_SHARED+PERREQ 5.8872e-3 split
+    # 0.5236, and PREFILL_FA3_MS_PER_TOKEN2 8.31e-7), BYTE-IDENTICAL for every config that does
+    # not pin them. Pinned per-deployment from profile_data/kernels/prefill_stage_rates_*.json.
+    # The host shared/per-request partition is NOT per-config (no tpN B-sweep exists): the
+    # consumer applies the production measured fraction to the pinned SUM.
+    prefill_host_cached_ms_per_token: float | None = None
+    prefill_fa3_ms_per_token2: float | None = None
 
     @property
     def kv_capacity_bytes(self) -> int:
