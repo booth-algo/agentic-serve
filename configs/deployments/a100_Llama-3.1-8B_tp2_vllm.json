@@ -6,6 +6,8 @@
   "engine": "vllm",
   "available_kv_blocks": 24574,
   "max_num_batched_tokens": 2048,
+  "max_model_len": 32768,
+  "max_num_seqs": 256,
   "bench_dir": "a100_Llama-3.1-8B_tp2_vllm",
   "backend": "a100-tp2-vllm-analytic-roofline",
   "calibration_status": "a100_tp2_vllm_analytic_roofline_firstcut",
@@ -22,9 +24,11 @@
       "note": "ENGINE-ANCHORED RECONSTRUCTION (the GT's own tp2 engine log on port 8089 was overwritten 05-26; verbatim excerpts + full derivation committed at profile_data/engine_logs/a100_Llama-3.1-8B_multi_pool_evidence.txt, L12-a100multi 2026-06-11): tp1 GT-era anchor 8458 blocks (manifest measured '135328 tokens / 16 @ gpu_mem=0.85') back-solves THIS host's reserve = 40GiB*0.85 - 16.06e9 - 8458*2,097,152 = 2,709,510,400 B = 2.710 GB (the kv_pool.py G6 docstring value), replacing the generic 3.5 GB rule mean; kv-shards scaling min(tp,8): pool = floor((36,507,222,016 - 16.06e9/2 - 2.7095e9)/1,048,576) = 24,574 blocks. HARD BRACKETS [2048, 27157]: >= 2048 (vLLM v1 startup check at GT max_model_len 32768, vllm/v1/core/kv_cache_utils.py check_enough_kv_cache_memory), <= 27,157 (zero-reserve host arithmetic). Corroboration: surviving same-host tp1 zero-CG pool lines (a100:/tmp/vllm_mse.log 05-04 + /tmp/vllm_smoke.log 04-30, both v0.19.0 util .85: 'GPU KV cache size: 140,208 tokens' = 8763 blocks -> reserve 2.0699 GB -> tp2 25,184) sit 2.5% ABOVE the pin, as they must (GT ran WITH the CUDA-graph estimate; 8763-8458 = 305 blocks = 0.64 GB ~= the CG estimate, the L10 1475-vs-1201 structure). Replaces the RESERVE=3.5GB rule value 23,820. Hand-pinned: regeneration via generate_deployments would revert to the rule value. Successor: capture the exact tp2 engine line at GT flags (one server start, next host window)."
     },
     "saturated_ceiling": {
-      "status": "inherited",
-      "from": "H100",
-      "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
+      "status": "measured",
+      "path": "profile_data/kernels/saturated_ceiling_A100x2_llama31_8b.json",
+      "source": "build_saturated_ceiling.py",
+      "date": "2026-06-11",
+      "note": "own measured plateau anchors from THIS config's GT (established builder, pressure >= 2.5 at the P1 engine-anchored pool 24574; L12-a100multi P3a): out28 -> 109.2 ms (n=121), out88 -> 121.9 ms (n=22), replacing the inherited H100 anchors (243.1/134.9 ms) that never cap an A100x2 plateau measuring 87-122 ms (swe/terminal tpot over-priced up to +96% median at the baseline)."
     },
     "roofline_peak": {
       "status": "measured",
@@ -59,6 +63,11 @@
       "status": "measured",
       "path": "a100_Llama-3.1-8B_tp2_vllm",
       "source": "/mnt/100g"
+    },
+    "scheduler": {
+      "status": "measured",
+      "source": "GT server metadata + installed-engine resolved defaults (vllm 0.19.0 g2a69949bd on the a100 host, read-only 2026-06-11)",
+      "note": "ENGINE-CONFIG TRUTH for the TTFT queue-sim admission arithmetic (QSimSchedConfig; the L10-tp1sub20 R2 mechanism, A100-family adoption pre-registered there as a named successor; L12-a100multi P2, REVERTED standalone as a compensating-fit conflict, RE-GATED and adopted as P2' on top of the P3 own-ceiling fix -- see the L12 round record). VERBATIM EVIDENCE (full excerpts: profile_data/engine_logs/a100_Llama-3.1-8B_multi_pool_evidence.txt): (1) GT server metadata (every bench JSON config block, e.g. chat-multiturn-synth_conc10.json): 'max_model_len': 32768, 'max_num_batched_tokens': None, 'max_num_seqs': None -> both scheduler caps ran at vLLM resolved defaults. (2) Installed engine on the GT host (a100, vllm 0.19.0 commit g2a69949bd), vllm/engine/arg_utils.py get_batch_defaults lines 2050-2072: the EXPLICIT A100 carve-out -- 'NOTE(Kuntai): Setting large max_num_batched_tokens for A100 reduces throughput, see PR #17885' ... 'if device_memory >= 70 * GiB_bytes and \"a100\" not in device_name:' else OPENAI_API_SERVER: max_num_batched_tokens=2048, max_num_seqs=256. Device 'NVIDIA A100-SXM4-40GB, 39936 MiB' (nvidia-smi): BOTH halves of the condition route this host to the SMALL defaults (39 GiB < 70 GiB AND 'a100' in the name). (3) long_prefill_token_threshold = int(32768*0.04) = 1310 -- numerically UNCHANGED vs the sim's H100 module constant (A100 GT ran the same max_model_len 32768); the net effective changes are the token budget 8192->2048 (matching the kernel-TPOT side's manifest-pinned 2048) and the running-set cap 1024->256, which BINDS at conc 256-320 on this config (the real server also capped running seqs at 256)."
     }
   }
 }
