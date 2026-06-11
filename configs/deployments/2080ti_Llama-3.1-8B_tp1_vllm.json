@@ -6,6 +6,8 @@
   "engine": "vllm",
   "available_kv_blocks": 1201,
   "max_num_batched_tokens": 2048,
+  "max_model_len": 8192,
+  "max_num_seqs": 256,
   "bench_dir": "2080ti_Llama-3.1-8B_tp1_vllm",
   "backend": "rtx2080ti-tp1-vllm-analytic-roofline",
   "calibration_status": "2080ti_tp1_vllm_analytic_roofline_firstcut",
@@ -64,6 +66,14 @@
       "status": "measured",
       "path": "profile_data/kernels/prefill_floor_llama31_8b.json",
       "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) \u2014 manifest entry documents ownership (L9-consumer 2026-06-10)"
+    },
+    "scheduler": {
+      "status": "derived",
+      "max_model_len": 8192,
+      "max_num_seqs": 256,
+      "long_prefill_token_threshold": 327,
+      "source": "GT server metadata + installed-engine resolved defaults (read-only, 2026-06-11)",
+      "note": "ENGINE-CONFIG TRUTH for the TTFT queue-sim admission arithmetic (QSimSchedConfig; L10-tp1sub20 round 2). VERBATIM EVIDENCE: (1) GT server metadata (every bench JSON config block, e.g. chat-multiturn-synth_conc10.json): 'max_model_len': 8192, 'max_num_batched_tokens': None, 'max_num_seqs': None -> both scheduler caps ran at vLLM resolved defaults. (2) Installed engine on the GT host (2080ti, vllm 0.19.0 commit g2a69949bd, read off site-packages 2026-06-11), vllm/engine/arg_utils.py get_batch_defaults: 'if device_memory >= 70 * GiB_bytes and \"a100\" not in device_name: ... else: default_max_num_batched_tokens = {UsageContext.LLM_CLASS: 8192, UsageContext.OPENAI_API_SERVER: 2048}; default_max_num_seqs = {UsageContext.LLM_CLASS: 256, UsageContext.OPENAI_API_SERVER: 256}' -- the 22 GiB 2080Ti resolves OPENAI_API_SERVER: max_num_batched_tokens=2048 (matches the verified top-level pin), max_num_seqs=256. (3) long_prefill_token_threshold = int(8192*0.04) = 327 applies the queue sim's PRE-EXISTING gated chunk-cap rule (module comment, int(max_model_len*0.04) citing vllm/config/scheduler.py) with THIS config's GT-recorded max_model_len instead of the H100's 32768; engine-source caveat recorded honestly: upstream the 0.04 rule fires only when max_num_partial_prefills > 1 (vllm/config/scheduler.py:244-246; default 1 -> threshold 0, chunk bounded by the token budget alone) -- the rule itself is the sim's established structural choice, NOT relitigated here, only its max_model_len input made per-config truth. max_num_seqs=256 is expected to be behaviorally inert (the 1201-block pool binds at ~8-13 resident sessions); pinned for engine-truth completeness. Successors: A100/RTX3090 GTs also ran the <70GiB/a100 2048/256 defaults (same metadata pattern, mml 32768/16384) -- adopting their truth belongs to their own gated lanes (this lane requires their slices byte-identical)."
     }
   }
 }

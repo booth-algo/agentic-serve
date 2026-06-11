@@ -96,7 +96,7 @@ from simulator.ramp_tpot import (
 )
 from simulator.ttft_predict import _prefill_per_token_ms, predict_turn_ttft
 
-__all__ = ["predict_cell_ttft_qsim", "predict_cell_e2el_qsim", "PROFILE_DIST"]
+__all__ = ["predict_cell_ttft_qsim", "predict_cell_e2el_qsim", "PROFILE_DIST", "QSimSchedConfig"]
 
 # --- vLLM serving defaults (documented runtime config, NOT fitted) ------------
 # Resolved by vLLM EngineArgs for H100 + OPENAI_API_SERVER (arg_utils._set_default_args,
@@ -115,6 +115,37 @@ MAX_NUM_BATCHED_TOKENS = 8192  # vLLM H100 OPENAI_API_SERVER resolved default (p
 # Config-derived (max_model_len x vLLM's 0.04), NOT a fitted constant.
 MAX_MODEL_LEN = 32768
 LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
+
+
+@dataclass(frozen=True)
+class QSimSchedConfig:
+    """Per-deployment vLLM scheduler truth for the queue sim's ADMISSION arithmetic
+    (``_schedule``/``_price_step`` token budget, per-request chunk cap, running-set cap).
+
+    The module constants above are the H100 OPENAI_API_SERVER resolved defaults; they are
+    NOT engine truth for <70 GiB consumer devices: vllm 0.19.0 (g2a69949bd, read off the
+    2080ti host install 2026-06-11) ``vllm/engine/arg_utils.py get_batch_defaults``:
+    ``device_memory < 70 GiB (or "a100" in device_name) -> OPENAI_API_SERVER:
+    max_num_batched_tokens=2048, max_num_seqs=256``. The kernel-TPOT side already prices
+    per-deployment (``RooflineParams.max_num_batched_tokens``); this struct brings the
+    TTFT sim to the same per-config truth. Threaded by the emitter
+    (``build_simulator_rows``) ONLY for deployments whose manifest pins
+    ``max_model_len``/``max_num_seqs`` (verified GT server metadata + resolved engine
+    defaults); every ``None`` field — and a ``None`` sched — resolves to the module
+    constants (BYTE-IDENTICAL default; the ``prefill_floor_ms`` threading precedent).
+    ``long_prefill_token_threshold`` keeps the module's established
+    ``int(max_model_len*0.04)`` rule with the config's OWN max_model_len (engine-source
+    caveat recorded in defit_log_entries/L10-tp1sub20.md round 2: upstream the 0.04 rule
+    is conditioned on ``max_num_partial_prefills>1``; the sim's adoption of it is a
+    pre-existing gated structural choice, not relitigated here). NOT fitted constants —
+    engine-config truth with verbatim citations in the deployment manifest. NOTE: the
+    ``_prefill_gemm_per_tok_loaded`` util-ramp endpoints stay on the module constants by
+    design — that ramp is a retained compensating fit inside the prefill-law pricing
+    stack (audit-v2 R1/S6), part of the consumer-prefill-law successor, NOT scheduler
+    admission arithmetic."""
+    max_num_batched_tokens: int | None = None
+    long_prefill_token_threshold: int | None = None
+    max_num_seqs: int | None = None
 
 # --- PREFILL COST: measured-serving anchors + pipeline FA3 kernel -------------
 # TTFT prefill cost has three measured parts (the H100 HIT-vs-MISS profile settled the
@@ -499,6 +530,11 @@ class _ServerState:
     # Per-config measured prefill floor (ms); resolved from gpu_key at predict_cell_ttft_qsim and
     # threaded here. Default = the legacy H100-tp1 constant (gpu_key=None -> byte-identical).
     prefill_floor_ms: float = PREFILL_FLOOR_MS
+    # Per-config scheduler truth (QSimSchedConfig), resolved at _run_sim; defaults = the
+    # module-level H100 constants (sched=None -> byte-identical). See QSimSchedConfig.
+    sched_max_num_batched_tokens: float = float(MAX_NUM_BATCHED_TOKENS)
+    sched_long_prefill_threshold: float = float(LONG_PREFILL_TOKEN_THRESHOLD)
+    sched_max_num_seqs: int = MAX_NUM_SEQS
 
     def push(self, epoch: float, kind: int, payload: Any) -> None:
         heapq.heappush(self.heap, (epoch, self.seq, kind, payload))
@@ -655,9 +691,9 @@ def _schedule(state: _ServerState) -> None:
     if not state.waiting:
         return
     decode_slots = len(state.running)
-    budget = MAX_NUM_BATCHED_TOKENS - decode_slots
+    budget = state.sched_max_num_batched_tokens - decode_slots
     for r in state.prefilling.values():
-        budget -= min(r.remaining_prefill, LONG_PREFILL_TOKEN_THRESHOLD)
+        budget -= min(r.remaining_prefill, state.sched_long_prefill_threshold)
     cache = state.cache
     # Hard-protect = sessions with a req in-flight THIS step (KV pinned). Grows as we admit, so
     # a head admitted earlier in this pass is never preempted to make room for a later one.
@@ -665,7 +701,7 @@ def _schedule(state: _ServerState) -> None:
     in_flight |= {r.session_id for r in state.running.values()}
     deferred: list[_Req] = []
     for head in state.waiting:
-        if budget <= 0 or len(state.running) + len(state.prefilling) >= MAX_NUM_SEQS:
+        if budget <= 0 or len(state.running) + len(state.prefilling) >= state.sched_max_num_seqs:
             deferred.append(head)
             continue
         sid = head.session_id
@@ -728,7 +764,7 @@ def _schedule(state: _ServerState) -> None:
         # the grow_to success so a DEFERRED head never falsely primes a block nobody prefilled.
         if state.shared_prefix_tokens > 0.0:
             state.shared_primed = True
-        budget -= min(head.remaining_prefill, LONG_PREFILL_TOKEN_THRESHOLD)
+        budget -= min(head.remaining_prefill, state.sched_long_prefill_threshold)
     state.waiting = deferred
 
 
@@ -778,7 +814,7 @@ def _price_step(state: _ServerState) -> float:
     decode_batch = len(state.running)
     decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p) if decode_batch > 0 else 0.0
 
-    budget = max(0, MAX_NUM_BATCHED_TOKENS - decode_batch)
+    budget = max(0, state.sched_max_num_batched_tokens - decode_batch)
     total_chunk = 0.0       # batched NEW-token rate scales with total tokens this step
     gpu_fa3_ms = 0.0        # pipeline FA3 attention (per request; super-linear for re-prefills)
     host_perreq_ms = 0.0    # per-request host re-tokenize (summed over concurrent prefills)
@@ -786,7 +822,7 @@ def _price_step(state: _ServerState) -> float:
     cached_w_n = 0
     any_prefill = False
     for r in state.prefilling.values():  # dict insertion order == FIFO admission order
-        chunk = min(r.remaining_prefill, float(LONG_PREFILL_TOKEN_THRESHOLD), float(budget))
+        chunk = min(r.remaining_prefill, float(state.sched_long_prefill_threshold), float(budget))
         if chunk <= 0:
             r._chunk = 0.0  # type: ignore[attr-defined]
             continue
@@ -956,12 +992,24 @@ def _run_sim(
     preempt_policy: str = "lru",
     shared_prefix_tokens: float = 0.0,
     prefill_floor_ms: float | None = None,
+    sched: QSimSchedConfig | None = None,
 ) -> dict[tuple[int, int], float]:
     cache = PrefixLRUCache(params.available_kv_blocks, params.cache_block_size)
+    # Per-config scheduler truth: None (or None fields) -> the module H100 constants
+    # (byte-identical default). See QSimSchedConfig.
+    _sched = sched or QSimSchedConfig()
     state = _ServerState(
         params=params, cache=cache, sessions=sessions, preempt_policy=preempt_policy,
         shared_prefix_tokens=max(0.0, float(shared_prefix_tokens)),
         prefill_floor_ms=PREFILL_FLOOR_MS if prefill_floor_ms is None else float(prefill_floor_ms),
+        sched_max_num_batched_tokens=float(
+            MAX_NUM_BATCHED_TOKENS if _sched.max_num_batched_tokens is None
+            else _sched.max_num_batched_tokens),
+        sched_long_prefill_threshold=float(
+            LONG_PREFILL_TOKEN_THRESHOLD if _sched.long_prefill_token_threshold is None
+            else _sched.long_prefill_token_threshold),
+        sched_max_num_seqs=(
+            MAX_NUM_SEQS if _sched.max_num_seqs is None else int(_sched.max_num_seqs)),
     )
 
     _release_herd(state, 0)  # turn-0 herd: all sessions arrive at epoch 0
@@ -1090,6 +1138,7 @@ def predict_cell_ttft_qsim(
     oracle_bench_root: "Path | str | None" = None,
     gpu_key: str | None = None,
     prefill_floor_ms: float | None = None,
+    sched: QSimSchedConfig | None = None,
     _survival_override: list[float] | None = None,
     _scale_override: list[float] | None = None,
 ) -> list[float]:
@@ -1108,7 +1157,11 @@ def predict_cell_ttft_qsim(
     ``prefix_aware_synthetic`` workloads): the front S tokens of every session's context are an
     identical shared block that vLLM dedups — ONE session prefills it, the rest HIT. Threaded by
     the emitter from ``request_metadata.shared_prefix_actual_tokens``; ``0.0`` (default) is a
-    no-op (byte-identical). NOT a fitted constant (per-cell measured workload input)."""
+    no-op (byte-identical). NOT a fitted constant (per-cell measured workload input).
+
+    ``sched`` (QSimSchedConfig) is the per-deployment vLLM scheduler truth for the admission
+    arithmetic (token budget / per-request chunk cap / running-set cap); ``None`` (default)
+    resolves to the module-level H100 constants — byte-identical. See QSimSchedConfig."""
     if not turns:
         return []
     p = params or RooflineParams()
@@ -1131,6 +1184,7 @@ def predict_cell_ttft_qsim(
         sessions, p, max_events, preempt_policy=preempt_policy,
         shared_prefix_tokens=shared_prefix_tokens,
         prefill_floor_ms=floor,
+        sched=sched,
     )
     return _aggregate(ttfts, turns, profile, float(concurrency), p, gpu_key)
 

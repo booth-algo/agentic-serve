@@ -48,6 +48,12 @@ class Deployment:
     saturated_ceiling: Path | None  # None -> in-code default (H100) saturated-ITL ceiling
     roofline: RooflineParams        # composed from gpu + model + (available_kv_blocks, tp)
     data: dict                      # per-input provenance / coverage manifest
+    # Optional ENGINE-CONFIG keys (verified GT server metadata / resolved engine defaults,
+    # NOT fit knobs): when pinned in the deployment JSON, build_simulator_rows threads them
+    # into the TTFT queue sim as QSimSchedConfig (per-config scheduler truth). None ->
+    # the sim's module-level H100 constants (byte-identical inherit).
+    max_model_len: int | None = None   # GT server metadata (recorded launch flag)
+    max_num_seqs: int | None = None    # resolved engine default (arg_utils get_batch_defaults)
 
 
 def _read(path: Path) -> dict:
@@ -86,6 +92,8 @@ def load_deployment(dep_path: Path) -> Deployment:
         decode_grid=_owned_path(data, "decode_grid"),
         saturated_ceiling=_owned_path(data, "saturated_ceiling"),
         roofline=roofline, data=data,
+        max_model_len=int(d["max_model_len"]) if d.get("max_model_len") is not None else None,
+        max_num_seqs=int(d["max_num_seqs"]) if d.get("max_num_seqs") is not None else None,
     )
 
 
