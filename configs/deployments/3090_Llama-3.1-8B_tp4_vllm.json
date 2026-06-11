@@ -4,7 +4,7 @@
   "model": "Llama-3.1-8B",
   "tp": 4,
   "engine": "vllm",
-  "available_kv_blocks": 27445,
+  "available_kv_blocks": 32070,
   "max_num_batched_tokens": 2048,
   "prefill_tp_comm_ms_per_token": 0.30580255643854004,
   "prefill_host_cached_ms_per_token": 0.00874919408720911,
@@ -33,10 +33,10 @@
       "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
     },
     "kv_pool": {
-      "status": "derived",
-      "value": 27445,
-      "source": "configs/kv_pool.py",
-      "note": "24GiB util 0.85, weights 16.1GB/tp4, reserve 3.5GB CAVEAT (L9-consumer 2026-06-10): the 3.5GB reserve back-solves to ~1.6GB on this host (Llama tp1 engine log) \u2014 derived pool likely UNDER-estimates by ~10-20%; no surviving engine log for this tp. Successor: capture it."
+      "status": "measured",
+      "value": 32070,
+      "source": "3090:/home/kevinlau/m3090_run/l13/vllm_gtflags_tp4.log 2026-06-11: 'GPU KV cache size: 513,120 tokens' (= 32070 blocks) at the GT flags (vllm 0.19.0, mml 32768, util 0.85, batched/seqs engine defaults) \u2014 one fresh server start on the GT host, verbatim excerpt in profile_data/engine_logs/3090_Llama-3.1-8B_multi_pool_evidence.txt",
+      "note": "Replaces the kv_pool.py derived 27445 (-14.4%): the generic 3.5GB reserve over-reserves this host's multi-GPU configs \u2014 measured per-GPU reserve back-solves to 0.68GB (evidence file; the L9 small-pool amplification, closed). HAND-PINNED measured pool: a naive generate_deployments.py regeneration would revert it (L9 successor 6)."
     },
     "saturated_ceiling": {
       "status": "measured",
