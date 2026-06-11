@@ -161,3 +161,64 @@ plateaus run 52–73 (out-only anchor keying merges them), and P4(c) (engine-tru
 admissible engine-config lever for round 2. No fitting performed; no rollback — every
 binding gate is clean and the dominant residual moved from the falsified pool pin to
 the named builder-structure successor.
+
+## Round 2 pre-registration (committed BEFORE the lever; 2026-06-11)
+
+**Diagnosis of `/tmp/tp1_r1.predictions.json` (44 cells, mean-over-turns decomposition):**
+the residual is now almost pure UNDER-prediction — 37/44 cells signed-negative, median
+signed e2el −18.97 %. Two distinct signatures:
+
+1. **TTFT under with TPOT now CORRECT** (the dominant mass): swebench c120 TPOT +1.5 %
+   but TTFT −60.7 % (pred 20.5 s vs meas 52.0 s); swe c200 −56.9 %, osworld c160–c256
+   −37..−40 %, chat c10/c20 −45/−53 %, terminal c80/c120 −37/−45 %. With pool AND decode
+   speed both right, the queue sim still admits/advances prefills too fast.
+2. **terminalbench TPOT still ceiling-clamped** (pred ~52 vs meas 63–73 at c40–c320) —
+   the P4(a) out-only anchor-keying structural residual, pre-registered NOT in scope.
+
+**Root cause found for (1), engine-config truth (P4(c) executed read-only):** the queue
+sim prices admission with MODULE-LEVEL H100 constants — `MAX_NUM_BATCHED_TOKENS = 8192`,
+`LONG_PREFILL_TOKEN_THRESHOLD = int(32768·0.04) = 1310`, `MAX_NUM_SEQS = 1024` — for
+EVERY GPU, while the 2080Ti GT verifiably ran a 4× smaller scheduler: GT server metadata
+(`chat-multiturn-synth_conc10.json` config block): `max_model_len=8192`,
+`max_num_batched_tokens=None` (unset), `max_num_seqs=None` (unset); installed engine
+(2080ti host, vllm 0.19.0 `g2a69949bd`, read-only) `vllm/engine/arg_utils.py
+get_batch_defaults`: `device_memory < 70 GiB → OPENAI_API_SERVER:
+max_num_batched_tokens=2048, max_num_seqs=256`. The kernel-TPOT side of the SAME cells
+already prices with the per-deployment 2048 (`RooflineParams.max_num_batched_tokens`,
+manifest-pinned, L9) — the TTFT queue sim is the one consumer still on the H100
+constants. Internal inconsistency + engine truth ⇒ the round-2 lever.
+
+**Threshold caveat (recorded honestly):** in the installed source the
+`int(max_model_len·0.04)` rule fires only when `max_num_partial_prefills > 1`
+(`vllm/config/scheduler.py:244-246`; default 1 → threshold 0 → a prefill chunk is
+bounded by the token budget alone). The sim's adoption of the 0.04 rule is a
+PRE-EXISTING gated structural choice (module comment, audit-v2 lineage) — this round
+only replaces its `max_model_len` input with the config's own GT-recorded value
+(8192 → threshold 327), NOT relitigating the rule. The `_prefill_gemm_per_tok_loaded`
+util-ramp endpoints (1310/8192) are NOT touched: that ramp is a documented retained
+compensating fit (audit-v2 R1/S6) inside the prefill-law pricing stack — part of the
+consumer-prefill-law successor, not scheduler admission arithmetic.
+
+**Lever (offline, no new tuned constants):** thread per-config scheduler truth into the
+queue sim — optional `QSimSchedConfig(max_num_batched_tokens, long_prefill_token_threshold,
+max_num_seqs)` passed by `build_row` ONLY when the deployment manifest pins
+`max_model_len`/`max_num_seqs`; every unpinned config resolves to the existing module
+constants (BYTE-IDENTICAL by construction). Pin the 2080Ti tp1 manifest:
+`max_model_len: 8192`, `max_num_seqs: 256` (+ provenance note with the verbatim
+citations above). A100/RTX3090 GT also ran 2048/256 (same <70 GiB rule) — adopting their
+truth is a NAMED SUCCESSOR for their own gated lanes, not silently bundled here (their
+slices must stay byte-identical this round; per-lane adoption is the L9 precedent —
+pools/floors/ceilings landed one config at a time, each on its own gate).
+
+**Pre-registered expectations:** budget 8192→2048 + per-req chunk 1310→327 slow the
+sim's per-step prefill advancement ~4× on the 2080Ti only → TTFT predictions RISE
+broadly at c≥5 → the 37-cell under side compresses (swe c120/c200, terminal c80/c120,
+chat c10/c20, osworld c160–c256 move toward measured). `max_num_seqs` 1024→256: NO
+behavioral change expected (the 1201-block pool binds at ~8–13 resident sessions ≪ 256;
+pinned for engine-truth completeness). c1 floor cells may rise slightly (more chunks ×
+per-step overhead) — direction WORSE for the +40..+66 % over-side c1 cells, bounded,
+documented (prefill-law successor). Terminal TPOT clamp untouched (~3–5 pts residual).
+H100/A100/RTX3090 slices and the trio: byte-identical expected. Landing band: e2el
+cell-MAPE 15–22 — the target < 20 is INSIDE the band but not guaranteed; if ≥ 20 the
+remaining residuals are the two named structural successors (P4(a) anchor keying,
+consumer prefill law) → L9 honest-stop protocol.
