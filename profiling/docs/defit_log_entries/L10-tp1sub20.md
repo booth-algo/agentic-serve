@@ -321,3 +321,13 @@ trio byte-identical to `/tmp/postmerge_trio.*`. Lane outcome: **partial progress
 onto the three named successors above (exact tp1 engine pool line at GT flags; live
 consumer prefill-law microbench; P4(a) per-profile ceiling-keying builder RFC; plus the
 A100/RTX3090 scheduler-truth adoptions in their own lanes).
+
+**Round 3 gate results (replay-ON, RAMP_TPOT_REQUIRE_POOLS=1; no lever applied):**
+pytest 200 passed + 1 skipped + 12 subtests green. `/tmp/tp1_r3.{predictions,metrics}.json`
+**byte-identical** to `/tmp/tp1_r2.*` (`cmp` clean on both — confirms the round was
+verification-only); H100/A100/RTX3090 slices byte-identical to `/tmp/tp1_base.predictions.json`
+(10.7777 / 15.8653 / 16.0045, all < 20, delta 0); binding trio
+`/tmp/tp1_trio_r3.{predictions,metrics}.json` **byte-identical** to
+`/tmp/postmerge_trio.*` (`cmp` clean on both). RTX2080Ti final: e2el_cell **22.2064**
+(ttft 37.563, tpot 25.6936). **Lane closes at the honest stop: 35.47 → 22.21, < 20 not
+reachable with the admissible offline evidence; successors named above.**
