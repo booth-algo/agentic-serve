@@ -334,3 +334,25 @@ untouched since the round-1 finalize gates, so the round-2 gate triple must be
 `/tmp/am_pair_base.predictions.json`. Any divergence = environment drift → STOP and
 diagnose before reporting. Full pytest at the end (suite contract: WITHOUT
 `RAMP_TPOT_REQUIRE_POOLS` exported; the gates themselves run WITH it).
+
+## Round 2 results (2026-06-11; verification-only, gates replay-ON, RAMP_TPOT_REQUIRE_POOLS=1)
+
+All three gates re-run at HEAD (78 `*_realized_*.json` replay files present, replay-ON):
+
+* **(a) A100x2/A100x4** → `/tmp/am_r2.{predictions,metrics}.json`: **byte-identical to
+  `/tmp/am_r1.*`** on both predictions and metrics (`cmp` clean). A100x2 e2el **14.2759**
+  / ttft 24.3284 / tpot 18.3993; A100x4 e2el **17.5061** / ttft 37.3608 / tpot 28.9292.
+  Goal held: both e2el < 20; A100x2 below baseline (14.6301 − 0.35).
+* **(b) H100/H100x2 pair** → `/tmp/am_pair_r2.*`: predictions **byte-identical to
+  `/tmp/am_pair_base.predictions.json`** (`cmp` clean; metrics ≡ r1).
+* **(c) A100 tp1 (binding)** → `/tmp/am_a100_r2.*`: **byte-identical to
+  `/tmp/am_a100_r1.*`**; e2el **12.2162** / ttft **20.1710** / tpot **14.3728** — all
+  within +0.3 of the binding baseline 15.8653 / 22.2222 / 14.3728 (e2el −3.65,
+  ttft −2.05, tpot exactly unchanged).
+* **pytest:** 389 passed, 1 skipped, 15 subtests passed (same counts as the round-1 and
+  L10 finalizes; run without `RAMP_TPOT_REQUIRE_POOLS` per the suite contract).
+
+Pre-registered expectation CONFIRMED — no environment drift; the round-1 lever set
+(P0 + P1 + P3a/P3b + P2′ + P4) reproduces exactly. No lever applied this round; the
+named successors (1)–(5) above remain the honest remainder and all require GPU access.
+**Lane outcome unchanged: SUCCESS.**
