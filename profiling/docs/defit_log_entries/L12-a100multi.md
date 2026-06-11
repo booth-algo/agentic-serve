@@ -192,3 +192,53 @@ there).
 
 (Execution results are appended below by the rounds; everything above this line was
 committed before any lever was touched.)
+
+## Round 1 execution record (2026-06-11; gates all replay-ON, RAMP_TPOT_REQUIRE_POOLS=1)
+
+**P0 (committed `05c6723`):** evidence file in; no code; predictions byte-identical by
+construction (the pre-edit reproduction run at HEAD was already byte-identical).
+
+**P1 (committed `d590044`): KEPT.** Pools 23820 → 24574 / 55298 → 56806. Gates: pair
+**byte-identical**; A100 tp1 **byte-identical**; A100x2 e2el 14.6301 → 14.9172 (+0.287,
+inside the +0.3 binding bound; ttft 23.88 → 24.10, tpot 45.08 → 44.73), A100x4 e2el
+17.3047 → **16.3966** (−0.91; ttft 33.18 → 32.93, tpot 57.73 → 56.18). Both moved in the
+pre-registered directions with the pre-registered small magnitudes.
+
+**P2 (scheduler truth tp2/tp4): REVERTED per the pre-registered binding rule —
+resolved-as-compensating-fit (the L6 outcome class).** With the engine-true
+QSimSchedConfig (budget 2048, seqs 256), A100x2 e2el 14.9172 → 16.2914 (> the
+min(20, 14.9301) bound) and A100x4 16.3966 → 20.0168 (> 20); pair byte-identical;
+tpot cells EXACTLY unchanged (TTFT-only, as constructed). Diagnosis (per-cell, committed
+before the next lever): the budget cut OVERSHOOTS TTFT through zero on A100x2 — signed
+ttft median −13.5 % → **+10.4 %** (swe c320 pred 49.7 s → 67.0 s vs meas 57.8 s — the
+under-cells flip to bigger over-errors), and on A100x4 amplifies the already-over side
++13.5 % → +26.4 %. Mechanism: the queue sim's DRAIN on these two configs prices decode
+with the ANALYTIC roofline + H100-inherited ceiling (out28 anchor 243.1 ms vs measured
+A100x2 plateaus 87–122 ms) — the drain is too SLOW, and the H100 8192-token budget was
+acting as a compensating fit for it. Removing the compensation alone breaks the binding
+gates. Exactly the L4/L6 pairing: the engine truth cannot land until the coupled
+mispriced term (the drain) is fixed.
+
+### Pre-registered continuation (committed BEFORE P3): P3 ceilings, then RE-GATE P2 on top
+
+1. **P3a/P3b (own ceilings, as pre-registered above):** flip
+   `data.saturated_ceiling` → measured for A100x2 and A100x4, run the established
+   `build_saturated_ceiling` (expected artifacts: A100x2 out28→109.2 n=121 /
+   out88→121.9 n=22; A100x4 single-cluster out28→73.3 n=27, THIN-flagged). All other
+   ceiling artifacts must regenerate byte-identical. Expected: the swe/terminal
+   high-conc TPOT over-pricing collapses → tpot_cell drops on both; the queue-sim drain
+   speeds up → TTFT predictions DROP broadly (direction-worse for x2's under-TTFT at
+   mid conc, direction-better for x4's over-TTFT) — e2el net recorded by the gate.
+   Keep/revert per the same binding rule.
+2. **P2′ (the L4-precedented re-gate, pre-registered now):** with the drain on own
+   measured plateaus, RE-APPLY the unchanged engine-truth scheduler pins (identical
+   edits, no new constants) and re-gate. If the composition holds the binding rule
+   (A100x2 e2el ≤ 14.9301 absolute bound stays the P1 reference — i.e. ≤
+   baseline+0.3 — and A100x4 < 20), the compensating fit retires and engine truth
+   lands; if it still breaks, P2 stays reverted and the A100 scheduler truth is
+   re-registered as BLOCKED-ON the measured A100 serving decode grid (named successor,
+   needs the 2 free A100s).
+3. **P4 unchanged** (tp1 scheduler truth, ±0.3 binding): tp1 prices decode with a
+   MEASURED grid + its OWN measured ceiling (175.4/125.8) — the compensation mechanism
+   above does not apply there; its TTFT is genuinely median-under. Decision by its own
+   gate.
