@@ -222,3 +222,45 @@ H100/A100/RTX3090 slices and the trio: byte-identical expected. Landing band: e2
 cell-MAPE 15–22 — the target < 20 is INSIDE the band but not guaranteed; if ≥ 20 the
 remaining residuals are the two named structural successors (P4(a) anchor keying,
 consumer prefill law) → L9 honest-stop protocol.
+
+## Round 2 results (2026-06-11, lever committed e56be4a; gates replay-ON, RAMP_TPOT_REQUIRE_POOLS=1)
+
+pytest 200 passed + 1 skipped + 12 subtests green. H100/A100/RTX3090 prediction slices
+**byte-identical** to `/tmp/tp1_base.predictions.json` (10.78 / 15.87 / 16.00 unchanged);
+binding trio **byte-identical** to `/tmp/postmerge_trio.{predictions,metrics}.json`
+(`cmp` clean on both). RTX2080Ti tpot_cell EXACTLY unchanged (25.6936 → 25.6936) — the
+lever is TTFT-only, as constructed.
+
+RTX2080Ti: **e2el_cell 26.96 → 22.21** (−4.75 this round; 35.47 → 22.21 cumulative,
+−13.3 pts), ttft_cell 42.73 → 37.56. Landed at the BAD edge of the pre-registered 15–22
+band: **target < 20 NOT reached**. Median signed e2el −18.97 % → −8.99 % (under-side
+mass 34/44 cells, 18.7 of the 22.2 pts).
+
+Per-cell movement (gate scoring, r1 → r2): the swe/terminal mid-conc under-side the
+lever targeted COLLAPSED — swebench c120 57.8→12.8, c256 41.4→10.5, c80 34.7→11.2,
+c40 29.2→10.1, c200 55.3→31.7; chat c40 27.7→12.4, c80 21.9→12.1, c120 18.6→10.0;
+terminal c200 26.4→14.3, c40 27.9→15.5, c80 34.2→24.4. Honest exposure — 2 cells
+WORSENED >5 pts: swebench c160 42.5→53.5 and terminalbench c120 42.1→50.6 (both
+TTFT-under, signed −53/−56 %), NON-MONOTONE with their improved neighbors (swe c120 now
++8.3 OVER while c160 is −53 UNDER): the closed-loop sim flips regime cell-to-cell —
+this is queue-regime sensitivity around the (pool, budget) operating point, not a
+constant-rate misprice; no engine-config knob is implicated.
+
+**Honest stop (L9 protocol).** P4(c) is now EXHAUSTED: every scheduler parameter the sim
+consumes (token budget, chunk cap, running-set cap, pool, block size) is per-config
+engine truth for this deployment. The remaining 22.2 pts decompose onto the three
+pre-registered NON-offline residuals: (1) **consumer prefill law** — the c1 cells
+(+24..+25 % over, ttft_err 46–66 at c1–c10 across profiles) and the under-side TTFT
+rate at mid/high conc are both priced by H100-measured grids + H100 host constants;
+needs the live c1 stage-split microbench on the 2080Ti (L9 successor 4). (2) **P4(a)
+out-only ceiling anchor keying** — terminal TPOT still clamped ~52 vs measured 63–73
+(turn-level tpot_err 26–41 on terminal, 57–61 on swe high-conc, sign-cancelling in the
+cell mean); per-profile anchor keying is a builder-structure change, pre-registered out
+of scope. (3) **queue-regime sensitivity** at swe c160/terminal c120 (above). Admissible
+next steps, in order: capture the exact tp1 engine pool line at GT flags (one server
+start, next host window — removes the [512,1475] residual bracket), run the live
+prefill-law microbench, then the P4(a) builder RFC. NO pool scanning, NO per-profile
+gate-picking — both are fitting. Successor for the method itself: A100 (mml 32768) and
+RTX3090 (mml 16384) GTs also ran the <70 GiB/a100 2048/256 resolved defaults; adopting
+their scheduler truth via the same manifest pins belongs to their own gated lanes (this
+lane held their slices byte-identical, as required).
