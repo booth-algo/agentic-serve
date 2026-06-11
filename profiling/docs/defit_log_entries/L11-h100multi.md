@@ -340,3 +340,40 @@ threading, and its consumption in `ttft_queue_sim._prefill_gemm_per_tok_loaded`.
   Adopted levers are all MEASURED per-config artifact pins with byte-identical default
   fallbacks; refused/retained levers and the two named successors (b_eff mapping; the fixed
   per-request host cost) are documented above with their evidence.
+
+- **2026-06-11 — FINALIZE: lever audit + full re-gate at HEAD (clean tree `d9ee1c4`) — LANE
+  CLOSED: GOAL MET.**
+
+  | lever | files | own-round guards | finalize decision |
+  |---|---|---|---|
+  | R1 Phase A: tp4 SERVING-context decode grid (26 cells measured, 3 passes, ≤0.5% reproducible) | `serving_decode_grid.py` + `build_serving_decode_grid.py` + tests; CSV/JSONLs in `profile_data/results/` | gate: TPOT 37.10→45.66, E2EL 29.81→31.67 (stacked 26.56) — pre-registered adopt rule FAILED | **REFUSED kept** — manifest `decode_grid` at the documented `missing` stop-point with the L8-falsification note; tools+artifacts retained (the b_eff successor's measured bound) |
+  | R1 Phase B: tp4 prefill comm pin 3.9635 ms/1k (G3 like-for-like; replaces 9.84 extrapolation) | optional `RooflineParams.prefill_tp_comm_ms_per_token` (default None byte-identical), loader, `prefill_tp_comm_H100x4.json`, H100x4 manifest pin | TTFT 39.4507→33.8703, E2EL 29.8081→25.6170, TPOT byte-unchanged; trio byte-identical; default-path gate byte-identical BEFORE pin | **KEPT** (re-verified below) |
+  | R1 Phase C: tp2 serving grid | none (pre-registered condition false — Phase A did not adopt) | — | nothing to revert |
+  | R2: tp4 host-cached rate 3.5303e-3 + FA3 2.6791e-7 (stage-split pair OLS, builder-validated) | optional `RooflineParams.prefill_host_cached_ms_per_token`/`prefill_fa3_ms_per_token2` (default None byte-identical), loader, `_prefill_host_fa3_rates`, `prefill_stage_rates_H100x4.json`, H100x4 manifest pin | TTFT 33.8703→24.9634, E2EL 25.6170→16.3179, TPOT byte-unchanged; H100/A100/H100x2 byte-identical | **KEPT** (re-verified below) |
+
+  **Finalize re-gate (replay-ON, `RAMP_TPOT_REQUIRE_POOLS=1`, clean tree at HEAD, 0 bytes
+  stderr both runs):**
+  * scoped `/tmp/hm_rfinal.{predictions,metrics}.json` **byte-identical** to `/tmp/hm_r2.*`
+    (`cmp` clean on both) — H100x4 37.0951/24.9634/16.3179, H100x2 21.5336/29.0163/18.5506;
+  * pair `/tmp/hm_pair_rfinal.{predictions,metrics}.json` **byte-identical** to
+    `/tmp/hm_pair_r2.*` AND to the pre-edit `/tmp/hm_pair_base.predictions.json` — H100
+    14.4697/18.1309/10.7777, A100 14.3728/22.2222/15.8653 (the binding pair never moved a byte
+    across the whole lane);
+  * pytest FULL suite at HEAD: **403 passed, 1 pre-existing skip, 15 subtests** (standard env;
+    note exporting `RAMP_TPOT_REQUIRE_POOLS=1` INTO the pytest env fails the 3 tests that
+    deliberately exercise the pools-missing fallback path — env-contamination, not a
+    regression);
+  * R2-sync artifact md5s re-verified byte-exact against the round-1 list above (3 raw
+    JSONL.gz, merged grid CSV, `serving_stage_split_H100_tp4.csv`); committed artifacts
+    (`prefill_tp_comm_H100x4.json`, `prefill_stage_rates_H100x4.json`) and the H100x4 manifest
+    pins (`0.00396346764752022` / `0.003530270322580645` / `2.679109720598808e-07`) audited
+    in-tree;
+  * h100 GPUs 4–7 re-verified clean at finalize: **0 compute apps host-wide**, 0% util on all
+    four (GPU 6 shows an 88 MiB residual allocation with no owning process — not ours, no
+    compute app).
+
+  Lane outcome: **GOAL MET** (H100x4 e2el 16.3179 < 20; H100x2 18.5506 < 20 with regression
+  exactly 0; H100/A100 byte-identical). Successors handed off: (1) b_eff/realized-decode-batch
+  mapping (S10/S8/util-cap cluster, now bounded by the serving-truth grid); (2) the exposed
+  fixed per-request host cost at low-conc terminalbench/swebench
+  (`diagnostic_fixed_cost_refit` ≈12.5 ms/req names the candidate term).
