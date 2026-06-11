@@ -311,3 +311,26 @@ own-GT ceilings.
    saturated GT lands (L9 3090x4 precedent).
 5. **A100 prefill law** is still H100-measured (cached_prefill_grid/fa3_grid inherited);
    tp1 c1–c10 TTFT residuals and the x2/x4 low-conc cells live there.
+
+## Round 2 pre-registration (2026-06-11; committed BEFORE the gate — L10 R3 protocol)
+
+**Prior-round feedback:** the round-1 lane result was not consumed — the orchestrator
+report was missing the gate `metrics` payload (fails: `["metrics MISSING"]`; pair=true).
+The committed work itself passed every binding gate (record above).
+
+**Lever decision: NO new lever this round (verification-only).** Re-audited the
+remainder against the lane constraints: every named successor (1)–(5) above requires a
+GPU launch (serving decode grid; tp2/tp4 engine pool lines at GT flags; G7 utils run;
+more saturated GT for the THIN x4 ceiling; A100 prefill-law measurement) — all forbidden
+while 7/8 a100 GPUs run the benchmark sweep, and no new read-only evidence has appeared
+since the round-1 harvest. Applying any further offline constant without such evidence
+would be fitting (campaign rule). Exactly the L10-R3 situation: the honest move is a
+verification round.
+
+**Pre-registered expectation:** the working tree at HEAD `f409f52` is clean and
+untouched since the round-1 finalize gates, so the round-2 gate triple must be
+**byte-identical** to the round-1 artifacts on both predictions and metrics:
+`/tmp/am_r2.*` ≡ `/tmp/am_r1.*`, `/tmp/am_a100_r2.*` ≡ `/tmp/am_a100_r1.*`, pair ≡
+`/tmp/am_pair_base.predictions.json`. Any divergence = environment drift → STOP and
+diagnose before reporting. Full pytest at the end (suite contract: WITHOUT
+`RAMP_TPOT_REQUIRE_POOLS` exported; the gates themselves run WITH it).
