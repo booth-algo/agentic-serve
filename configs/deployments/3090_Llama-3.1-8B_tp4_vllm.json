@@ -7,6 +7,8 @@
   "available_kv_blocks": 27445,
   "max_num_batched_tokens": 2048,
   "prefill_tp_comm_ms_per_token": 0.30580255643854004,
+  "prefill_host_cached_ms_per_token": 0.00874919408720911,
+  "prefill_fa3_ms_per_token2": 1.7706559461945128e-06,
   "bench_dir": "3090_Llama-3.1-8B_tp4_vllm",
   "backend": "rtx3090-tp4-vllm-analytic-roofline",
   "calibration_status": "3090_tp4_vllm_analytic_decode_measured_tp4comm_prefill",
@@ -16,6 +18,15 @@
       "status": "measured",
       "path": "profile_data/kernels/prefill_tp_comm_RTX3090x4.json",
       "note": "G3 like-for-like own-leg pair (serving_stage_split tp1/tp4 on the 3090 host, L13 2026-06-11): comm_total = span.new(tp4) - span.new(tp1)/4 = 305.803 ms/1k new tokens (pure-PCIe all-reduce, PIX quad; the tp4 span is SLOWER than tp1 in absolute terms — replaces the NVLink-extrapolated 9.837 ms/1k fallback, x31). Regenerate: python3 -m profiling.process.build_tp_comm --gpu RTX3090 --tp 4"
+    },
+    "prefill_stage_rates": {
+      "status": "measured",
+      "host_cached_ms_per_token": 0.00874919408720911,
+      "fa3_ms_per_token2": 1.7706559461945128e-06,
+      "path": "profile_data/kernels/prefill_stage_rates_RTX3090x4.json",
+      "source": "build_stage_split_rates.py --gpu RTX3090 --tp 4 (L13 2026-06-11, like-for-like tp1/tp4 own-leg stage-split pair on the 3090 host). HOST: 4-param OLS ttft ~ floor + a*new + b*cached + c*new*(cached+new/2), pinned = b(tp4) DIRECT (AMENDED from the H100 3-param family: this GPU's FA3 coefficient is ~9x the H100's, so the 3p cached coefficient is ~60% quadratic contamination and would double-count against the separate FA3 pin; the 4p estimator reproduces the production H100 SUM at -4.4% on the H100 bridge leg). FA3: same 4p fit on prefill_span_ms, pinned = c(tp4) DIRECT (no production anchor to ratio-transport; shard ratio 0.2373).",
+      "date": "2026-06-11",
+      "note": "Per-config tp4 serving-stack prefill rates via the L11 optional RooflineParams mechanism (top-level keys -> loader -> _price_step). Replaces the H100-tp1-measured host SUM 5.8872e-3 (this stack measures 8.7492e-3, +49%) and FA3 8.31e-7 (this GPU measures 1.7707e-6, x2.1) for THIS config only; unpinned configs keep the module constants byte-identically. Shared/per-request host partition stays the production fraction 0.5236 (no 3090 B-sweep; documented caveat)."
     },
     "decode_grid": {
       "status": "missing",

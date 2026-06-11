@@ -646,6 +646,47 @@ def test_prefill_stage_rates_manifest_pins_match_artifact():
             assert c.roofline.prefill_fa3_ms_per_token2 is None
 
 
+def test_l13_3090_multi_manifest_pins_match_artifacts():
+    # L13 (2026-06-11): the RTX3090x2/x4 deployments pin all THREE per-config prefill rates
+    # (comm / host-cached / FA3) to their regenerable own-leg artifacts — pinned both ways so
+    # neither drifts silently (the H100x4 precedent above). Binding configs stay None.
+    import simulator.ttft_queue_sim as mod
+    for tp in (2, 4):
+        dep = json.loads((REPO_ROOT / f"configs/deployments/3090_Llama-3.1-8B_tp{tp}_vllm.json"
+                          ).read_text())
+        comm_art = json.loads((REPO_ROOT / f"profile_data/kernels/prefill_tp_comm_RTX3090x{tp}.json"
+                               ).read_text())
+        rates_art = json.loads((REPO_ROOT
+                                / f"profile_data/kernels/prefill_stage_rates_RTX3090x{tp}.json"
+                                ).read_text())
+        assert dep["prefill_tp_comm_ms_per_token"] == \
+            comm_art["constants"]["prefill_tp_comm_ms_per_token_total"]
+        assert dep["prefill_host_cached_ms_per_token"] == \
+            rates_art["constants"]["prefill_host_cached_ms_per_token"]
+        assert dep["prefill_fa3_ms_per_token2"] == \
+            rates_art["constants"]["prefill_fa3_ms_per_token2"]
+        entry = dep["data"]["prefill_stage_rates"]
+        assert entry["status"] == "measured"
+        assert entry["host_cached_ms_per_token"] == dep["prefill_host_cached_ms_per_token"]
+        assert entry["fa3_ms_per_token2"] == dep["prefill_fa3_ms_per_token2"]
+        # PCIe comm sits far ABOVE the NVLink-extrapolated fallback it replaces; host/FA3 sit
+        # ABOVE the H100-tp1 module constants (the 3090's measured stack is slower) — sanity
+        # bounds (signs), not tunes.
+        assert dep["prefill_tp_comm_ms_per_token"] > mod.PREFILL_TP_COMM_MS_PER_TOKEN * (tp - 1)
+        assert dep["prefill_host_cached_ms_per_token"] > (
+            mod.PREFILL_HOST_SHARED_MS_PER_TOKEN + mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN)
+        assert dep["prefill_fa3_ms_per_token2"] > mod.PREFILL_FA3_MS_PER_TOKEN2
+    from configs.loader import all_deployments
+    for c in all_deployments():
+        if c.model != "Llama-3.1-8B" or c.engine != "vllm":
+            continue
+        if c.gpu_key in ("H100", "A100", "H100x2", "RTX3090"):
+            # binding pair + tp1 guard stay on the byte-identical None defaults
+            assert c.roofline.prefill_tp_comm_ms_per_token is None
+            assert c.roofline.prefill_host_cached_ms_per_token is None
+            assert c.roofline.prefill_fa3_ms_per_token2 is None
+
+
 def test_no_fitted_constants():
     # Every module-level numeric constant is a vLLM serving default or config-derived —
     # NONE is fitted to the TTFT target.
