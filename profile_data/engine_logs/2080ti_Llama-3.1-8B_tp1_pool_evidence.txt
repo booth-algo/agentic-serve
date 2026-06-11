@@ -1,0 +1,29 @@
+Engine-log excerpts: 2080ti Llama-3.1-8B tp1 vllm KV pool evidence (read-only harvest 2026-06-11, L10 lane).
+All lines verbatim from logs on host `2080ti` (and one cited 3090 anchor); vLLM v0.19.0 throughout.
+
+[A] Same-host same-model same-util tp1 ENGINE POOL LINE (eager, max_model_len=4096) — 2080ti:/tmp/calib_2080ti_test.log (mtime Apr 29 22:47):
+(APIServer pid=2352491) INFO 04-29 22:47:21 [utils.py:233] non-default args: {'port': 8089, 'api_key': ['test'], 'model': '/home/kevinlau/models/Llama-3.1-8B-Instruct', 'trust_remote_code': True, 'max_model_len': 4096, 'enforce_eager': True, 'gpu_memory_utilization': 0.85, 'enable_prefix_caching': True, 'enable_chunked_prefill': True}
+(EngineCore pid=2352662) INFO 04-29 22:47:50 [gpu_model_runner.py:4820] Model loading took 14.99 GiB memory and 9.958862 seconds
+(EngineCore pid=2352662) INFO 04-29 22:47:54 [gpu_worker.py:436] Available KV cache memory: 2.88 GiB
+(EngineCore pid=2352662) INFO 04-29 22:47:54 [kv_cache_utils.py:1319] GPU KV cache size: 23,600 tokens
+(EngineCore pid=2352662) INFO 04-29 22:47:54 [kv_cache_utils.py:1324] Maximum concurrency for 4,096 tokens per request: 5.76x
+(NOTE: this start later crashed in FlashInfer kernel warmup — the pool computation above completed and is engine truth for eager/4096/0.85. 23,600 tokens = 1475 blocks.)
+
+[B] CUDA-graph estimate decode (installed engine source, read off the host): with VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 (exported by sweep_multiturn_profiles.sh line 16, in force for the May-11/12 GT sweep — proven by [C]) the pool subtracts a cudagraph estimate; enforce_eager sets it to 0 (gpu_worker.py:380-399: "cudagraph_memory_estimate = 0 / if not self.model_config.enforce_eager ..."); the estimate is recoverable from the INFO line as (current_util - equiv_util) * total_memory (gpu_worker.py:446-461, cg_util_delta = cudagraph_memory_estimate / total_mem).
+
+[C] Same-host sibling CG-estimate + breakdown lines (non-eager, util 0.85):
+2080ti:/tmp/vllm_8093.log (Llama tp2, 05-11): "The current --gpu-memory-utilization=0.8500 is equivalent to --gpu-memory-utilization=0.7496 without CUDA graph memory profiling." -> cg_est = 0.1004*23,622,320,128 = 2.372e9 B; also "Model loading took 7.51 GiB", "Available KV cache memory: 8.16 GiB", "GPU KV cache size: 133,632 tokens", "Graph capturing finished in 10 secs, took 1.50 GiB".
+2080ti:/tmp/vllm_8090.log (Llama tp4, 05-22): equiv 0.7542 -> cg_est = 2.263e9 B; "Model loading took 3.77 GiB", "Available KV cache memory: 12.0 GiB", "GPU KV cache size: 393,120 tokens", "Graph capturing finished in 12 secs, took 1.47 GiB".
+Decomposition check (requested = 0.85*23,622,320,128 = 20.079e9 B = 18.70 GiB): tp2 torch_peak+non_torch = 18.70-7.51-8.16-2.21 = 0.82 GiB; tp4 = 18.70-3.77-12.0-2.11 = 0.82 GiB; tp1-eager [A] = 18.70-14.99-2.88 = 0.83 GiB. Three independent engine logs agree on ~0.83 GiB per-GPU non-CG overhead on this host.
+
+[D] tp1 CG estimate anchor (same model, same tp1, same engine, Ampere card) — 3090:/tmp/vllm_8093.log (06-02, the L9 3090-tp1 pool anchor):
+(EngineCore pid=2596996) INFO 06-02 21:51:54 [gpu_worker.py:452] CUDA graph memory profiling is enabled (VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1). This will become the default in v0.19. The current --gpu-memory-utilization=0.8500 is equivalent to --gpu-memory-utilization=0.8277 without CUDA graph memory profiling. To maintain the same effective KV cache size as before, increase --gpu-memory-utilization to 0.8723.
+(EngineCore pid=2596996) INFO 06-02 21:52:04 [gpu_model_runner.py:6046] Graph capturing finished in 10 secs, took 0.48 GiB
+-> cg_est(Llama tp1) = (0.8500-0.8277)*25,769,803,776 = 0.575e9 B (actual capture 0.48 GiB — estimate is consistent at tp1).
+
+[E] GT launch flags (engine-config truth for the deployment): result JSON config metadata (/mnt/100g/agent-bench/results/sync/2080ti_Llama-3.1-8B_tp1_vllm/chat-multiturn_conc20.json): max_model_len=8192, gpu_memory_utilization=0.85, backend=vllm; orchestrator state signature (/mnt/100g/agent-bench/state/2080ti_Llama-3.1-8B_tp1_multi.signature): "32768|0.85|..." with dispatch log max_len=8192 (orchestrator override). _engine_version.txt: vllm 0.19.0. The exact GT server log (2080ti:/tmp/vllm_8090.log of 05-12) remains overwritten (05-22 Llama-tp4 launch).
+
+RECONSTRUCTION (GT config = non-eager, max_model_len 8192, util 0.85; only delta vs [A] is the CG estimate — profile_run activation peak is max_num_batched_tokens(2048)-bound, max_len-insensitive):
+pool_bytes = avail_eager([A], 1475 blocks = 3.0933-3.0954e9 B) - cg_est_tp1([D], 0.575e9 B) = 2.519e9 B
+=> 1201 blocks (19,216 tokens).
+HARD ENGINE BRACKETS: >= 512 blocks (GT started at max_model_len 8192; vLLM v1 startup check) and <= 1475 blocks (zero-CG ceiling, [A]). Residual uncertainty: the cross-card (Ampere->Turing) transfer of the tp1 CG estimate only; the GT's own startup at 8192 caps that term at <= 1.88 GiB.
