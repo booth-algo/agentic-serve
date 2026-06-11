@@ -10,17 +10,22 @@ import {
 
 // The Predictions tab: one large hardware × model matrix. Rows = hardware configs
 // (gpu + tensor-parallel + serving backend, i.e. the payload's gpu_key), columns =
-// models, cells = the average TTFT / TPOT / E2EL over every (profile × concurrency)
-// prediction row for that pair. A toggle switches between predicted values and the
-// measured benchmark values where ground truth exists.
+// models, cells = average predicted AND measured TTFT / TPOT / E2EL over every
+// (profile × concurrency) prediction row for that pair. The cell background is the
+// cell's E2EL MAPE, using the same error bands as the Simulator tab
+// (servingErrorTone: <10% green, 10–25% blue, 25–50% orange, ≥50% red).
 
-type MetricMode = 'pred' | 'meas';
+interface MetricAgg {
+  pred: number | null;
+  meas: number | null;
+}
 
 interface CellAgg {
-  ttft: number | null;
-  tpot: number | null;
-  e2el: number | null;
-  n: number; // rows (profile × concurrency cells) behind the averages
+  ttft: MetricAgg;
+  tpot: MetricAgg;
+  e2el: MetricAgg;
+  e2elMape: number | null; // mean of row e2el_err (%) — drives the background band
+  n: number;
 }
 
 function average(values: number[]): number | null {
@@ -28,19 +33,24 @@ function average(values: number[]): number | null {
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
-function aggregateCell(rows: ServingRow[], mode: MetricMode): CellAgg {
-  const collect = (key: 'ttft' | 'tpot' | 'e2el'): number[] => {
+function aggregateCell(rows: ServingRow[]): CellAgg {
+  const collect = (key: keyof ServingRow): number[] => {
     const out: number[] = [];
     for (const row of rows) {
-      const v = mode === 'pred' ? row[`${key}_pred`] : row[`${key}_meas`];
+      const v = row[key];
       if (typeof v === 'number' && Number.isFinite(v)) out.push(v);
     }
     return out;
   };
+  const metric = (k: 'ttft' | 'tpot' | 'e2el'): MetricAgg => ({
+    pred: average(collect(`${k}_pred` as keyof ServingRow)),
+    meas: average(collect(`${k}_meas` as keyof ServingRow)),
+  });
   return {
-    ttft: average(collect('ttft')),
-    tpot: average(collect('tpot')),
-    e2el: average(collect('e2el')),
+    ttft: metric('ttft'),
+    tpot: metric('tpot'),
+    e2el: metric('e2el'),
+    e2elMape: average(collect('e2el_err')),
     n: rows.length,
   };
 }
@@ -53,9 +63,21 @@ function formatMs(value: number | null): string {
   return `${value.toFixed(1)} ms`;
 }
 
+// Same bands/colors as the Simulator tab's servingErrorTone, applied to the whole cell.
+function mapeTone(mape: number | null): { cell: string; badge: string } {
+  if (mape == null) {
+    return { cell: 'bg-transparent', badge: 'text-[#6e7681]' };
+  }
+  const v = Math.abs(mape);
+  if (v < 10) return { cell: 'bg-[#3fb950]/10', badge: 'text-[#3fb950]' };
+  if (v < 25) return { cell: 'bg-[#58a6ff]/10', badge: 'text-[#58a6ff]' };
+  if (v < 50) return { cell: 'bg-[#f0883e]/10', badge: 'text-[#f0883e]' };
+  return { cell: 'bg-[#f85149]/10', badge: 'text-[#f85149]' };
+}
+
 // gpu_key encodes the hardware config: "H100x2" = H100, tp2, vLLM;
-// "RTX3090x4 (sglang)" = RTX3090, tp4, sglang. Derive the (gpu, tp, backend)
-// sub-label from the key (rows carry tensor_parallel_size when present, which wins).
+// "RTX3090x4 (sglang)" = RTX3090, tp4, sglang. Rows carry tensor_parallel_size
+// when present, which wins over the key parse.
 function hardwareParts(gpuKey: string, rows: ServingRow[]): { gpu: string; tp: number; backend: string } {
   const backend = /\(sglang\)/i.test(gpuKey) ? 'sglang' : 'vllm';
   const base = gpuKey.replace(/\s*\(sglang\)\s*/i, '');
@@ -70,6 +92,12 @@ function hardwareParts(gpuKey: string, rows: ServingRow[]): { gpu: string; tp: n
   };
 }
 
+const METRIC_ROWS = [
+  { key: 'ttft', label: 'TTFT' },
+  { key: 'tpot', label: 'TPOT' },
+  { key: 'e2el', label: 'E2EL' },
+] as const;
+
 export function PredictionsMatrixPage({
   dataScope,
   predictionsUrl = servingPredictionsJsonUrl,
@@ -78,7 +106,6 @@ export function PredictionsMatrixPage({
   predictionsUrl?: string;
 }) {
   const [servingIndex, setServingIndex] = useState<ServingIndex | null>(null);
-  const [mode, setMode] = useState<MetricMode>('pred');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -111,12 +138,12 @@ export function PredictionsMatrixPage({
       const byModel: Record<string, CellAgg> = {};
       for (const model of modelList) {
         const modelRows = rows.filter(r => r.model === model);
-        if (modelRows.length) byModel[model] = aggregateCell(modelRows, mode);
+        if (modelRows.length) byModel[model] = aggregateCell(modelRows);
       }
       return { gpuKey, parts: hardwareParts(gpuKey, rows), byModel };
     }).filter(h => Object.keys(h.byModel).length > 0);
     return { modelList, hardware };
-  }, [scopeIndex, mode]);
+  }, [scopeIndex]);
 
   if (loading) {
     return (
@@ -146,25 +173,19 @@ export function PredictionsMatrixPage({
         <div>
           <h2 className="text-lg font-semibold text-[#e6edf3]">Predictions matrix</h2>
           <p className="text-sm text-[#8b949e]">
-            Average {mode === 'pred' ? 'predicted' : 'measured'} TTFT / TPOT / E2EL per
-            hardware config × model, across all profiles and concurrencies
-            ({DATA_SCOPE_META[dataScope].label.toLowerCase()}).
+            Per hardware config × model, averaged over all profiles and concurrencies
+            ({DATA_SCOPE_META[dataScope].label.toLowerCase()}). Each cell:{' '}
+            <span className="text-[#e6edf3]">predicted</span> /{' '}
+            <span className="text-[#8b949e]">measured</span>; background = E2EL MAPE.
           </p>
         </div>
-        <div className="flex overflow-hidden rounded-md border border-[#30363d] text-sm">
-          {(['pred', 'meas'] as const).map(m => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={
-                m === mode
-                  ? 'bg-[#1f6feb] px-3 py-1.5 font-medium text-white'
-                  : 'bg-[#161b22] px-3 py-1.5 text-[#8b949e] hover:text-[#e6edf3]'
-              }
-            >
-              {m === 'pred' ? 'Predicted' : 'Measured'}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-medium text-[#8b949e]">E2EL MAPE:</span>
+          <span className="rounded border border-[#3fb950]/30 bg-[#3fb950]/10 px-2 py-0.5 text-[#3fb950]">&lt;10%</span>
+          <span className="rounded border border-[#58a6ff]/30 bg-[#58a6ff]/10 px-2 py-0.5 text-[#58a6ff]">10–25%</span>
+          <span className="rounded border border-[#f0883e]/30 bg-[#f0883e]/10 px-2 py-0.5 text-[#f0883e]">25–50%</span>
+          <span className="rounded border border-[#f85149]/30 bg-[#f85149]/10 px-2 py-0.5 text-[#f85149]">≥50%</span>
+          <span className="rounded border border-[#30363d] bg-[#21262d] px-2 py-0.5 text-[#6e7681]">no GT</span>
         </div>
       </div>
 
@@ -196,27 +217,34 @@ export function PredictionsMatrixPage({
                 </td>
                 {matrix.modelList.map(model => {
                   const cell = byModel[model];
-                  if (!cell || (cell.ttft == null && cell.tpot == null && cell.e2el == null)) {
+                  if (!cell) {
                     return (
                       <td key={model} className="border-t border-[#30363d] px-3 py-2 align-top text-[#484f58]">
                         —
                       </td>
                     );
                   }
+                  const tone = mapeTone(cell.e2elMape);
+                  const hasMeas = cell.ttft.meas != null || cell.tpot.meas != null || cell.e2el.meas != null;
                   return (
                     <td
                       key={model}
-                      className="whitespace-nowrap border-t border-[#30363d] px-3 py-2 align-top"
-                      title={`${gpuKey} × ${model}: averaged over ${cell.n} profile×concurrency cells (${mode === 'pred' ? 'predicted' : 'measured'})`}
+                      className={`whitespace-nowrap border-t border-[#30363d] px-3 py-2 align-top ${hasMeas ? tone.cell : 'bg-[#21262d]/40'}`}
+                      title={`${gpuKey} × ${model}: averaged over ${cell.n} profile×concurrency cells${cell.e2elMape != null ? ` · E2EL MAPE ${cell.e2elMape.toFixed(1)}%` : ' · no ground truth'}`}
                     >
-                      <div className="grid grid-cols-[auto_1fr] gap-x-2 text-xs leading-5">
-                        <span className="text-[#8b949e]">TTFT</span>
-                        <span className="text-right tabular-nums text-[#e6edf3]">{formatMs(cell.ttft)}</span>
-                        <span className="text-[#8b949e]">TPOT</span>
-                        <span className="text-right tabular-nums text-[#e6edf3]">{formatMs(cell.tpot)}</span>
-                        <span className="text-[#8b949e]">E2EL</span>
-                        <span className="text-right tabular-nums text-[#e6edf3]">{formatMs(cell.e2el)}</span>
+                      <div className="grid grid-cols-[auto_1fr_1fr] gap-x-2 text-xs leading-5">
+                        {METRIC_ROWS.map(({ key, label }) => {
+                          const m = cell[key];
+                          return (
+                            <MetricRow key={key} label={label} pred={m.pred} meas={m.meas} />
+                          );
+                        })}
                       </div>
+                      {cell.e2elMape != null && (
+                        <div className={`mt-1 text-right font-mono text-[10px] ${tone.badge}`}>
+                          {cell.e2elMape.toFixed(1)}% e2el
+                        </div>
+                      )}
                     </td>
                   );
                 })}
@@ -226,5 +254,15 @@ export function PredictionsMatrixPage({
         </table>
       </div>
     </div>
+  );
+}
+
+function MetricRow({ label, pred, meas }: { label: string; pred: number | null; meas: number | null }) {
+  return (
+    <>
+      <span className="text-[#8b949e]">{label}</span>
+      <span className="text-right tabular-nums text-[#e6edf3]">{formatMs(pred)}</span>
+      <span className="text-right tabular-nums text-[#8b949e]">{formatMs(meas)}</span>
+    </>
   );
 }
