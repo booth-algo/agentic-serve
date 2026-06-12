@@ -48,7 +48,7 @@
     },
     "roofline_peak": {
       "status": "derived",
-      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (3090: bf16 -> FP32 accumulate, GeForce half-rate) — see configs/gpus/RTX3090.json _notes (L9-consumer 2026-06-10)"
+      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (3090: bf16 -> FP32 accumulate, GeForce half-rate) \u2014 see configs/gpus/RTX3090.json _notes (L9-consumer 2026-06-10)"
     },
     "util_flops": {
       "status": "placeholder",
@@ -83,12 +83,18 @@
     "prefill_floor": {
       "status": "measured",
       "path": "profile_data/kernels/prefill_floor_llama31_8b.json",
-      "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) — manifest entry documents ownership (L9-consumer 2026-06-10)"
+      "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) \u2014 manifest entry documents ownership (L9-consumer 2026-06-10)"
     },
     "s7_response_resident": {
       "status": "measured-not-adopted",
       "path": "profile_data/kernels/s7_response_resident_RTX3090x2.json",
       "note": "L13 round 2 (2026-06-12): tp2-leg measured rho=0.6617 (S7 GT-protocol replay, same estimator as the ADOPTED x4 pin) was wired and REVERTED by the pre-registered per-config gate: e2el 21.609 -> 22.1244 (ttft 44.09 -> 40.40 but chat c80-c200 flip over->UNDER: ttft_signed +39.8->-15.2 at c80, +19.2->-27.9 at c120 - at tp2 the GT high-conc TTFTs are drain-bound in a way the credit-reduced volumes under-price; composition with scheduler truth (budget 2048 + seqs 256) fails harder, 31.5287). Kept as the measured bound; successor = the tp2 high-conc drain (engine-side c120-c200 clusters in the S7 tp2 evidence)."
+    },
+    "s8_duplicate_session": {
+      "status": "measured-not-adopted",
+      "path": "profile_data/kernels/s8_duplicate_session_RTX3090x2.json",
+      "source": "build_s7_drain_evidence.py --prefix s8 --profile terminalbench-multiturn-synth --emit-dup-pin --pool-tokens 175808 (L13 round 3, 2026-06-12): S8 GT-protocol replay of the terminalbench tp2 ladder on the 3090 host, engine-side /metrics prefix-cache TOKEN counters, CELL-level monotonic deltas; f = 1 - median(cell computed/bench_new) over no-eviction cells conc>=10 (tp2 pool 175,808 tokens -> tb c10/c20 qualify; ratios 0.397/0.587 - the c10 counters reproduce the tp4 leg EXACTLY, the documented engine-seed-0 cross-leg determinism).",
+      "note": "L13 round 3 (2026-06-12): tp2-leg measured f=0.5082 (S8 GT-protocol replay, same estimator + pressure-gated mechanism as the ADOPTED x4 pin; tb tp2 c10/c20 ratios 0.397/0.587, c10 counters byte-reproduce the tp4 leg - engine seed-0 cross-leg determinism) was wired and REVERTED by the pre-registered per-config gate: e2el 21.609 -> 22.5273 (ttft 44.09 -> 36.33 improves but the tp2 mid-conc balance breaks - the same compensation structure that reverted rho-x2). Kept as the measured bound; the x2 mid-conc TTFT-over and TPOT-under remain a COUPLED pair (successor: price the mid-conc drain interference into TPOT before any further volume credit)."
     }
   }
 }

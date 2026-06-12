@@ -1,0 +1,30 @@
+{
+ "constants": {
+  "qsim_duplicate_session_fraction": 0.5081528172168701
+ },
+ "n_cells": 2,
+ "cells": [
+  {
+   "profile": "terminalbench-multiturn-synth",
+   "conc": 10,
+   "computed": 39418.0,
+   "bench_new": 99354.0,
+   "final_ctx_med": 8132.5
+  },
+  {
+   "profile": "terminalbench-multiturn-synth",
+   "conc": 20,
+   "computed": 109747.0,
+   "bench_new": 186978.0,
+   "final_ctx_med": 7907.0
+  }
+ ],
+ "cell_ratios": [
+  0.3967,
+  0.587
+ ],
+ "pool_tokens": 175808,
+ "estimator": "f = 1 - median(cell_computed/cell_bench_new) over cells with conc>=10 and conc*median_final_ctx <= pool_tokens (no-eviction); cell-level monotonic /metrics counter deltas",
+ "source": "S8 engine-side /metrics prefix-cache counters, 3090 host, GT protocol replay (one server per profile ladder, ascending concs, VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1, vllm 0.19.0), tp2; profiles: ['terminalbench-multiturn-synth']",
+ "date": "2026-06-12"
+}
