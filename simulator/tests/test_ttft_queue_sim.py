@@ -694,6 +694,29 @@ def test_l13_3090_multi_manifest_pins_match_artifacts():
             assert entry["qsim_response_resident_fraction"] == \
                 dep["qsim_response_resident_fraction"]
             assert 0.0 < dep["qsim_response_resident_fraction"] <= 1.0
+        # L13 round 3 (2026-06-12): a pinned saturated-drain comm rate must match its
+        # regenerable S8 artifact both ways (build_s7_drain_evidence --emit-comm-sat-pin;
+        # pre-registered estimator r_sat = median(rate | computed >= 20k)) and sit strictly
+        # BELOW the c1 comm pin (it is a measured bulk-drain amortization — a value at/above
+        # the c1 pin would mean the burst evidence showed none, i.e. the pin is refused).
+        if dep.get("prefill_tp_comm_saturated_ms_per_token") is not None:
+            art = json.loads((REPO_ROOT
+                              / f"profile_data/kernels/prefill_tp_comm_saturated_RTX3090x{tp}.json"
+                              ).read_text())
+            assert dep["prefill_tp_comm_saturated_ms_per_token"] == \
+                art["constants"]["prefill_tp_comm_saturated_ms_per_token"]
+            assert 0.0 < dep["prefill_tp_comm_saturated_ms_per_token"] < \
+                dep["prefill_tp_comm_ms_per_token"]
+        # L13 round 3 (2026-06-12): a pinned duplicate-session fraction must match its
+        # regenerable S8 artifact both ways (build_s7_drain_evidence --emit-dup-pin) and be
+        # a proper fraction.
+        if dep.get("qsim_duplicate_session_fraction") is not None:
+            art = json.loads((REPO_ROOT
+                              / f"profile_data/kernels/s8_duplicate_session_RTX3090x{tp}.json"
+                              ).read_text())
+            assert dep["qsim_duplicate_session_fraction"] == \
+                art["constants"]["qsim_duplicate_session_fraction"]
+            assert 0.0 < dep["qsim_duplicate_session_fraction"] < 1.0
     from configs.loader import all_deployments
     for c in all_deployments():
         if c.model != "Llama-3.1-8B" or c.engine != "vllm":
@@ -705,6 +728,7 @@ def test_l13_3090_multi_manifest_pins_match_artifacts():
             assert c.roofline.prefill_fa3_ms_per_token2 is None
             assert c.roofline.qsim_response_resident_fraction is None
             assert c.roofline.prefill_tp_comm_saturated_ms_per_token is None
+            assert c.roofline.qsim_duplicate_session_fraction is None
 
 
 def test_comm_saturated_ramp_override_and_byte_identical_default():
@@ -769,6 +793,37 @@ def test_response_resident_fraction_override_and_byte_identical_default():
                                   _replace(p, qsim_response_resident_fraction=0.5))
     assert half[0] == base[0]  # turn-0 invariant holds at every rho
     assert half != base        # and the credit demonstrably engages
+
+
+def test_duplicate_session_fraction_override_and_byte_identical_default():
+    # L13 round 3 (2026-06-12): qsim_duplicate_session_fraction is the MEASURED fraction of
+    # cohort sessions that are repeated traces (the *_tracereplay_* profiles draw from a
+    # FINITE trace set), whose ENTIRE turn content the engine prefix-cache hits via the twin
+    # session's blocks (S8 /metrics cell-level computed/bench_new 0.40-0.52 at tb tp4 c10-40
+    # with prev-output only ~5% of new). None (default) and 0.0 must be byte-identical
+    # legacy; a pinned fraction must (a) never credit a single-session cell (sid 0 is
+    # excluded — a duplicate needs an earlier twin), and (b) lower the cohort drains at
+    # mid concurrency.
+    from dataclasses import replace as _replace
+    p = _replace(RooflineParams(), tensor_parallel=4,
+                 prefill_tp_comm_ms_per_token=0.30580255643854004)
+    turns = [
+        {"turn_index": i, "cached_context_tokens": 900.0 * i,
+         "new_prefill_tokens": 450.0, "output_tokens": 25.0}
+        for i in range(5)
+    ]
+    base = predict_cell_ttft_qsim(turns, CHAT, 40, p)
+    assert predict_cell_ttft_qsim(
+        turns, CHAT, 40, _replace(p, qsim_duplicate_session_fraction=None)) == base
+    assert predict_cell_ttft_qsim(
+        turns, CHAT, 40, _replace(p, qsim_duplicate_session_fraction=0.0)) == base
+    half = predict_cell_ttft_qsim(turns, CHAT, 40,
+                                  _replace(p, qsim_duplicate_session_fraction=0.5))
+    assert sum(half) < sum(base)   # cohort drains shrink at mid conc
+    # single-session cell: sid 0 can never be a duplicate -> byte-identical at ANY fraction
+    base_c1 = predict_cell_ttft_qsim(turns, CHAT, 1, p)
+    assert predict_cell_ttft_qsim(
+        turns, CHAT, 1, _replace(p, qsim_duplicate_session_fraction=1.0)) == base_c1
 
 
 def test_no_fitted_constants():

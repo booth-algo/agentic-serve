@@ -115,6 +115,18 @@ class RooflineParams:
     # c1 -> saturated over the SAME chunk-fill fraction as the prefill GEMM util ramp
     # (ttft_queue_sim._prefill_gemm_per_tok_loaded).
     prefill_tp_comm_saturated_ms_per_token: float | None = None
+    # Per-config MEASURED duplicate-session fraction (L13 S8, 2026-06-12): the trace-replay
+    # profiles (terminalbench/swebench *_tracereplay_* realized pools) draw sessions from a
+    # FINITE trace set, so concurrent cohorts contain repeated traces whose ENTIRE turn
+    # content the engine's prefix cache deduplicates ACROSS sessions (S8 engine-side
+    # /metrics: cell-level computed/bench_new = 1.02 at c1 -> 0.82 at c5 -> 0.40-0.52 at
+    # c10-40 on tb tp4, while prev-output covers only ~5% of new — the rho credit above
+    # cannot represent it; chat shows no such surplus, its dedup is fully the rho credit).
+    # Consumer: ttft_queue_sim._schedule deterministic session quantile (sid >= 1 — a
+    # duplicate needs an earlier twin — primed-herd gated like the shared cross-session APC
+    # prefix). None (default) = no duplicate credit, BYTE-IDENTICAL for every config that
+    # does not pin it (0.0 is also exactly legacy).
+    qsim_duplicate_session_fraction: float | None = None
 
     @property
     def kv_capacity_bytes(self) -> int:

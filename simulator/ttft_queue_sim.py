@@ -353,6 +353,16 @@ class PrefixLRUCache:
         self.recency: dict[int, int] = {}  # session_id -> last-touch tick (LRU key)
         self._tick = 0
         self.evictions = 0
+        # Sticky over-subscription marker (L13 S8 round 3): flips True the first time
+        # tier-2 eviction (PARTIAL trims of idle HERD residents — genuine
+        # over-subscription) is reached, and stays True (the engine's free queue then
+        # recycles blocks continuously for the rest of the run). Consumed ONLY by the
+        # duplicate-session credit (``qsim_duplicate_session_fraction``): a duplicate's
+        # hit lives in its TWIN's blocks, and once the pool recycles, the twin's content
+        # no longer survives between turns (S8: tb tp4 cell computed/bench_new 0.40-0.52
+        # at no-eviction c10-40 but 3.94 at c80 where the cohort exceeds the pool — the
+        # dedup DIES under eviction). No pricing effect for unpinned configs.
+        self.pressure_seen = False
 
     def tokens_to_blocks(self, num_tokens: float) -> int:
         return int(math.ceil(max(0.0, float(num_tokens)) / self.block_size))
@@ -428,6 +438,7 @@ class PrefixLRUCache:
         # preemption falsified against the trace oracles; whole-prefix loss only EMERGES when
         # the herd working set exceeds the whole pool). The freed amount is exactly ``need``:
         # the engine never frees more than the allocation requires.
+        self.pressure_seen = True  # tier 2 reached = genuine over-subscription (sticky; see __init__)
         soft = [
             s for s in self.cached
             if s in soft_protect and s not in hard_protect and self.cached[s] > 0
@@ -545,6 +556,11 @@ class _ServerState:
     # (a per-cell DATA input read from request_metadata.shared_prefix_actual_tokens).
     shared_prefix_tokens: float = 0.0
     shared_primed: bool = False
+    # First SUCCESSFUL admission of the run (global, monotone) — the duplicate-session
+    # credit's priming gate (L13 S8): a duplicate's hit lives in its TWIN's blocks, so an
+    # EMPTY cache cannot be hit; after any admission the twin content is this-run MRU
+    # resident. Independent of ``shared_primed`` (which is the S>0 APC-prefix feature).
+    dup_primed: bool = False
     # Per-config measured prefill floor (ms); resolved from gpu_key at predict_cell_ttft_qsim and
     # threaded here. Default = the legacy H100-tp1 constant (gpu_key=None -> byte-identical).
     prefill_floor_ms: float = PREFILL_FLOOR_MS
@@ -772,7 +788,35 @@ def _schedule(state: _ServerState) -> None:
             if state.shared_prefix_tokens > 0.0 and state.shared_primed
             else 0.0
         )
-        resident_credit = max(resident_prefix, shared_resident)
+        # Duplicate-session cross-session dedup (L13 S8 engine truth, 2026-06-12): the
+        # trace-replay profiles draw sessions from a FINITE trace set, so cohorts contain
+        # repeated traces whose ENTIRE turn content (history + injected delta + response)
+        # the engine's prefix cache hits via the TWIN session's blocks — S8 /metrics
+        # cell-level computed/bench_new on tb tp4: 1.02 (c1) -> 0.82 (c5) -> 0.40-0.52
+        # (c10-40) while prev-output covers only ~5% of new (the rho credit above cannot
+        # carry it; chat shows no surplus — rho explains chat exactly, and the two
+        # quantile rules NEST: both count sessions from sid 0 up, so where rho already
+        # grants full-new credit the duplicate credit adds nothing).
+        # ``qsim_duplicate_session_fraction`` applies the measured fraction as a
+        # DETERMINISTIC session quantile over sids >= 1 (a duplicate needs an earlier
+        # twin — sid 0 can never be one, so c1 cells are untouched), gated on
+        # ``dup_primed`` (first successful admission of the run, the shared-APC-prefix
+        # priming pattern: the twin's blocks are this-run MRU; an empty cache cannot be
+        # hit). NOT capped by the OWN-session snapshot — the hit lives in the TWIN's
+        # blocks (own-snapshot capping would collapse this credit back to the rho
+        # credit). None (default) and 0.0 are byte-identical legacy for unpinned configs.
+        fdup = getattr(state.params, "qsim_duplicate_session_fraction", None)
+        dup_resident = 0.0
+        if (fdup is not None and fdup > 0.0 and sid >= 1 and state.sessions
+                and state.dup_primed and not cache.pressure_seen
+                and (sid + 0.5) / len(state.sessions) <= float(fdup)):
+            # ``not pressure_seen``: once the pool over-subscribes (tier-2 trims), the
+            # twin's blocks recycle between turns and the cross-session hit DIES (S8:
+            # ratio 0.40-0.52 at no-eviction c10-40, 3.94 at c80 over-pool — measured;
+            # the standalone uncapped pin was gate-FALSIFIED on exactly the eviction
+            # cells, x4 e2el 24.59 -> 35.10 with tb/swe/osworld c120-320 +38..+64).
+            dup_resident = head.cached + head.new_prefill
+        resident_credit = max(resident_prefix, shared_resident, dup_resident)
         # Split the resident credit front-to-back: cached tokens first, then new (the shared block
         # is the front of new at turn-0). reprefill = the un-resident remainder of each.
         cached_hit = min(head.cached, resident_credit)
@@ -801,6 +845,7 @@ def _schedule(state: _ServerState) -> None:
         # the grow_to success so a DEFERRED head never falsely primes a block nobody prefilled.
         if state.shared_prefix_tokens > 0.0:
             state.shared_primed = True
+        state.dup_primed = True
         budget -= min(head.remaining_prefill, state.sched_long_prefill_threshold)
     state.waiting = deferred
 

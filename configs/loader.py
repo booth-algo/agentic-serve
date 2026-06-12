@@ -102,6 +102,11 @@ def load_deployment(dep_path: Path) -> Deployment:
             d["prefill_tp_comm_saturated_ms_per_token"])
     if d.get("qsim_response_resident_fraction") is not None:
         merged["qsim_response_resident_fraction"] = float(d["qsim_response_resident_fraction"])
+    # Optional MEASURED duplicate-session fraction (L13 S8 probe, 2026-06-12; trace-replay
+    # cohorts repeat traces -> engine-side cross-session dedup; see the RooflineParams field
+    # comment). Absent -> None -> no duplicate credit (byte-identical for unpinned configs).
+    if d.get("qsim_duplicate_session_fraction") is not None:
+        merged["qsim_duplicate_session_fraction"] = float(d["qsim_duplicate_session_fraction"])
     fields = RooflineParams.__dataclass_fields__
     roofline = RooflineParams(**{k: v for k, v in merged.items() if k in fields})
     data = d.get("data", {})

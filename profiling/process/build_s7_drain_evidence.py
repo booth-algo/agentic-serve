@@ -130,6 +130,38 @@ def turn_medians(result_json: Path, key: str) -> dict[int, float]:
     return {ti: st.median(v) for ti, v in byt.items()}
 
 
+def cell_volume_rows(run_dir: Path, prefix: str, profile: str, tp: int
+                     ) -> list[dict]:
+    """CELL-level engine-truth volumes for one replayed profile ladder: per cell, the
+    monotonic /metrics counter deltas over the whole CELL window (immune to the
+    admission-burst cluster-window problem — the counters move at SCHEDULING time, so
+    intra-cell cluster durations are NOT compute durations at mid concurrency) vs the
+    benchmark-view ``new_prefill_tokens`` sum, plus the cohort-final context median for
+    the no-eviction criterion."""
+    short = profile.split("-")[0]
+    samples = load_samples(run_dir / f"{prefix}_metrics_tp{tp}.jsonl")
+    cells = load_cells(run_dir / f"{prefix}_cells_tp{tp}.log")
+    out = []
+    for conc, t0, t1 in cells:
+        win = [s for s in samples if t0 <= s["ts"] <= t1]
+        res = run_dir / f"{prefix}_{short}_conc{conc}_tp{tp}.json"
+        if len(win) < 2 or not _exists(res):
+            continue
+        dq = _col(win[-1], "prefix_cache_queries") - _col(win[0], "prefix_cache_queries")
+        dh = _col(win[-1], "prefix_cache_hits") - _col(win[0], "prefix_cache_hits")
+        reqs = [r for r in json.loads(_read_text(res)).get("per_request", [])
+                if r.get("success")]
+        if not reqs:
+            continue
+        bench_new = sum(float(r["new_prefill_tokens"]) for r in reqs)
+        last_turn = max(int(r["turn_index"]) for r in reqs)
+        final_ctx = st.median([float(r["total_context_tokens"]) for r in reqs
+                               if int(r["turn_index"]) == last_turn])
+        out.append({"profile": profile, "conc": conc, "computed": dq - dh,
+                    "bench_new": bench_new, "final_ctx_med": final_ctx})
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-dir", type=Path, required=True)
@@ -151,6 +183,22 @@ def main() -> None:
                          "(PRE-REGISTERED L13 round-3 estimator: r_sat = median rate over "
                          "clusters with computed >= 20000; comm_sat = r_sat - analytic "
                          "gemm(util_sat) - dispatch, both module constants)")
+    ap.add_argument("--pool-csv", type=Path, action="append", default=[],
+                    help="additional reduced evidence CSV(s) whose same-tp clusters pool into "
+                         "the --emit-comm-sat-pin estimator (e.g. the other S8 profile leg)")
+    ap.add_argument("--emit-dup-pin", type=Path, default=None,
+                    help="write the qsim_duplicate_session_fraction pin artifact JSON "
+                         "(L13 round-3 estimator: f = 1 - median over CELLS with conc >= 10 "
+                         "AND conc*median_final_ctx <= pool_tokens of "
+                         "cell_computed/cell_bench_new — CELL-level monotonic counter deltas, "
+                         "immune to the admission-burst cluster-window problem)")
+    ap.add_argument("--pool-tokens", type=int, default=None,
+                    help="GT-protocol KV pool size in tokens for the --emit-dup-pin "
+                         "no-eviction cell criterion (e.g. 477856 tp4 / 175808 tp2)")
+    ap.add_argument("--dup-cells", action="append", default=[], metavar="DIR:PROFILE",
+                    help="additional run-dir:profile pairs whose same-tp CELLS pool into the "
+                         "--emit-dup-pin estimator (other S8 profile legs; each dir uses the "
+                         "same --prefix file layout)")
     args = ap.parse_args()
     short = args.profile.split("-")[0]
 
@@ -258,9 +306,13 @@ def main() -> None:
                    if c.gpu_key == gpu_key and c.model == "Llama-3.1-8B" and c.engine == "vllm")
         p = cfg.roofline
         gemm_sat = 2.0 * (float(p.n_params) / args.tp) / (p.peak_flops_per_s * PREFILL_GEMM_UTIL_SAT) * 1e3
+        pin_rows: list[dict] = list(rows)
+        for extra in args.pool_csv:
+            with open(extra, newline="") as f:
+                pin_rows.extend(r for r in csv.DictReader(f) if int(r["tp"]) == args.tp)
         sat_rates = sorted(
-            float(r["rate_ms_per_tok"]) for r in rows
-            if r["rate_ms_per_tok"] != "" and int(r["computed"]) >= 20000)
+            float(r["rate_ms_per_tok"]) for r in pin_rows
+            if r["rate_ms_per_tok"] != "" and int(float(r["computed"])) >= 20000)
         if not sat_rates:
             raise SystemExit("no clusters with computed >= 20000 — cannot emit comm_sat pin")
         r_sat = st.median(sat_rates)
@@ -272,7 +324,8 @@ def main() -> None:
             "cluster_rates": sat_rates,
             "gemm_sat_ms_per_tok": gemm_sat,
             "dispatch_ms_per_tok": PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN,
-            "filter": f"clusters with computed>=20000, {args.profile} GT-protocol replay, tp{args.tp}",
+            "filter": (f"clusters with computed>=20000, {args.profile} GT-protocol replay, tp{args.tp}"
+                       + (f", pooled with {[p.name for p in args.pool_csv]}" if args.pool_csv else "")),
             "estimator": ("r_sat = median(rate_ms_per_tok | computed>=20000); comm_sat = r_sat - "
                           "gemm(util_sat=1.0, analytic) - PREFILL_NEW_DISPATCH_RESIDUAL (pre-registered "
                           "L13 round 3 BEFORE the S8 measurement)"),
@@ -284,6 +337,47 @@ def main() -> None:
         }
         args.emit_comm_sat_pin.write_text(json.dumps(art, indent=1) + "\n")
         print(f"comm_sat pin {comm_sat:.6f} (r_sat {r_sat:.4f}, n={len(sat_rates)}) -> {args.emit_comm_sat_pin}")
+
+    if args.emit_dup_pin:
+        # L13 round-3 duplicate-session fraction (see the RooflineParams field comment):
+        # f = 1 - median(cell_computed / cell_bench_new) over CELLS with conc >= 10 (a
+        # duplicate needs a twin; c1/c5 cohorts are too small for the asymptote) AND
+        # conc * median_final_ctx <= pool_tokens (no-eviction cells only — under eviction
+        # computed includes full-context re-prefills and the ratio measures eviction, not
+        # dedup). CELL-level monotonic counter deltas (admission-burst windows are not
+        # compute windows; cell deltas are exact regardless).
+        if args.pool_tokens is None:
+            raise SystemExit("--emit-dup-pin needs --pool-tokens (GT-protocol pool size)")
+        vol_rows = cell_volume_rows(args.run_dir, args.prefix, args.profile, args.tp)
+        for spec in args.dup_cells:
+            dir_s, _, prof = spec.rpartition(":")
+            vol_rows += cell_volume_rows(Path(dir_s), args.prefix, prof, args.tp)
+        kept = [r for r in vol_rows
+                if r["conc"] >= 10 and r["conc"] * r["final_ctx_med"] <= args.pool_tokens
+                and r["bench_new"] > 0]
+        if not kept:
+            raise SystemExit("no qualifying no-eviction cells (conc>=10) for the dup pin")
+        ratios = sorted(r["computed"] / r["bench_new"] for r in kept)
+        f_dup = 1.0 - st.median(ratios)
+        art = {
+            "constants": {"qsim_duplicate_session_fraction": f_dup},
+            "n_cells": len(kept),
+            "cells": [{k: (round(v, 4) if isinstance(v, float) else v)
+                       for k, v in r.items()} for r in kept],
+            "cell_ratios": [round(x, 4) for x in ratios],
+            "pool_tokens": args.pool_tokens,
+            "estimator": ("f = 1 - median(cell_computed/cell_bench_new) over cells with "
+                          "conc>=10 and conc*median_final_ctx <= pool_tokens (no-eviction); "
+                          "cell-level monotonic /metrics counter deltas"),
+            "source": (
+                f"S8 engine-side /metrics prefix-cache counters, 3090 host, GT protocol "
+                f"replay (one server per profile ladder, ascending concs, "
+                f"VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1, vllm 0.19.0), tp{args.tp}; "
+                f"profiles: {[args.profile] + [s.rpartition(':')[2] for s in args.dup_cells]}"),
+            "date": "2026-06-12",
+        }
+        args.emit_dup_pin.write_text(json.dumps(art, indent=1) + "\n")
+        print(f"dup pin {f_dup:.4f} (n={len(kept)} cells, ratios {ratios}) -> {args.emit_dup_pin}")
 
 
 if __name__ == "__main__":
