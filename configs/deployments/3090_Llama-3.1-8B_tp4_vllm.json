@@ -4,20 +4,21 @@
   "model": "Llama-3.1-8B",
   "tp": 4,
   "engine": "vllm",
-  "available_kv_blocks": 32070,
+  "available_kv_blocks": 29866,
   "max_num_batched_tokens": 2048,
   "prefill_tp_comm_ms_per_token": 0.30580255643854004,
   "prefill_host_cached_ms_per_token": 0.00874919408720911,
   "prefill_fa3_ms_per_token2": 1.7706559461945128e-06,
+  "qsim_response_resident_fraction": 0.7217,
   "bench_dir": "3090_Llama-3.1-8B_tp4_vllm",
-  "backend": "rtx3090-tp4-vllm-analytic-roofline",
-  "calibration_status": "3090_tp4_vllm_analytic_decode_measured_tp4comm_prefill",
+  "backend": "rtx3090-tp4-vllm-serving-decode-grid",
+  "calibration_status": "3090_tp4_vllm_serving_decode_grid_measured_tp4comm_prefill",
   "ground_truth": true,
   "data": {
     "prefill_tp_comm": {
       "status": "measured",
       "path": "profile_data/kernels/prefill_tp_comm_RTX3090x4.json",
-      "note": "G3 like-for-like own-leg pair (serving_stage_split tp1/tp4 on the 3090 host, L13 2026-06-11): comm_total = span.new(tp4) - span.new(tp1)/4 = 305.803 ms/1k new tokens (pure-PCIe all-reduce, PIX quad; the tp4 span is SLOWER than tp1 in absolute terms \u2014 replaces the NVLink-extrapolated 9.837 ms/1k fallback, x31). Regenerate: python3 -m profiling.process.build_tp_comm --gpu RTX3090 --tp 4"
+      "note": "G3 like-for-like own-leg pair (serving_stage_split tp1/tp4 on the 3090 host, L13 2026-06-11): comm_total = span.new(tp4) - span.new(tp1)/4 = 305.803 ms/1k new tokens (pure-PCIe all-reduce, PIX quad; the tp4 span is SLOWER than tp1 in absolute terms — replaces the NVLink-extrapolated 9.837 ms/1k fallback, x31). Regenerate: python3 -m profiling.process.build_tp_comm --gpu RTX3090 --tp 4"
     },
     "prefill_stage_rates": {
       "status": "measured",
@@ -29,14 +30,16 @@
       "note": "Per-config tp4 serving-stack prefill rates via the L11 optional RooflineParams mechanism (top-level keys -> loader -> _price_step). Replaces the H100-tp1-measured host SUM 5.8872e-3 (this stack measures 8.7492e-3, +49%) and FA3 8.31e-7 (this GPU measures 1.7707e-6, x2.1) for THIS config only; unpinned configs keep the module constants byte-identically. Shared/per-request host partition stays the production fraction 0.5236 (no 3090 B-sweep; documented caveat)."
     },
     "decode_grid": {
-      "status": "missing",
-      "note": "KEPT analytic BY MEASUREMENT (L13 P4, 2026-06-11): the tp4 SERVING-context grid (serving_decode_grid_RTX3090x4_merged_2026-06-11.csv, 28 cells / 28 ok via --lag-upgrade, 2 client topologies, values reproducible <=0.42%; grid-flag pool 546,704 tokens) measures serving/analytic median 2.112x (B=1 row 1.58-1.60x, B>=32 fill region 1.85-5.08x; B=80 ctx512 52.4 ms vs 10.3 analytic) -- wiring it moves TPOT cell 51.38 -> 29.71 but E2EL 26.61 -> 29.69, REFUSED by the pre-registered adopt rule (E2EL must improve); with scheduler truth composed (mml 32768 / seqs 256) 29.45, P5-only 29.76 -- every combination fails. The failure is NOT the grid: it is localized to (a) the mid-conc TTFT-over rows (chat c10-120 ttft_err 143-392%: with comm-true prefill pricing the queue sim's drain serializes re-prefills the real engine overlaps -- the TPOT-under was compensating inside e2el; queue-drain overlap successor, BLOCKS this grid AND the x2/x4 scheduler truth) and (b) the c1 rows where the measured serving B=1 ITL (10.3 ms) exceeds the GT TPOT (~7.5 ms; the L8/L11 GT-below-the-serving-wall finding, now at tp4 conc=1 -- b_eff/regime successor). Grid artifacts retained in profile_data/results/ as the measured bound for both successors."
+      "status": "measured",
+      "path": "profile_data/results/serving_decode_grid_RTX3090x4_merged_2026-06-11.csv",
+      "source": "serving_decode_grid.py tp4 (L13 S6, 2026-06-11; 28 cells / 28 ok via --lag-upgrade, 2 client topologies, reproducible <=0.42%; grid-flag pool 546,704 tokens). Regenerate: build_serving_decode_grid --lag-upgrade --inputs <pass1> <pass2>.",
+      "note": "ADOPTED IN COMPOSITION with the S7 response-resident credit (L13 round 2, 2026-06-12): standalone the grid moved TPOT 51.38->29.71 but e2el 26.61->29.69 (REFUSED round 1 - the TPOT-under was compensating the mid-conc TTFT-over), and standalone the S7 credit moved ttft 104.40->74.27 but e2el 26.61->32.31 (same compensation, mirrored). Composed they fix BOTH sides (the L12 composition lesson; per-lever gate numbers in defit_log_entries/L13-3090multi.md round 2). Serving/analytic median 2.112x (B=1 row 1.58-1.60x: the analytic floor under-prices tp4 PCIe per-step collectives; B>=32 fill 1.85-5.08x)."
     },
     "kv_pool": {
       "status": "measured",
-      "value": 32070,
-      "source": "3090:/home/kevinlau/m3090_run/l13/vllm_gtflags_tp4.log 2026-06-11: 'GPU KV cache size: 513,120 tokens' (= 32070 blocks) at the GT flags (vllm 0.19.0, mml 32768, util 0.85, batched/seqs engine defaults) \u2014 one fresh server start on the GT host, verbatim excerpt in profile_data/engine_logs/3090_Llama-3.1-8B_multi_pool_evidence.txt",
-      "note": "Replaces the kv_pool.py derived 27445 (-14.4%): the generic 3.5GB reserve over-reserves this host's multi-GPU configs \u2014 measured per-GPU reserve back-solves to 0.68GB (evidence file; the L9 small-pool amplification, closed). HAND-PINNED measured pool: a naive generate_deployments.py regeneration would revert it (L9 successor 6)."
+      "value": 29866,
+      "source": "3090:/home/kevinlau/m3090_run/l13/s7/vllm_s7_tp4.log 2026-06-11: 'GPU KV cache size: 477,856 tokens' (= 29866 blocks) at the FULL GT protocol incl. VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 (the GT launcher sweep_multiturn_profiles.sh exports it; the S4 capture missed it) - verbatim excerpt in profile_data/engine_logs/3090_Llama-3.1-8B_multi_pool_evidence.txt",
+      "note": "L13 ROUND-2 CORRECTION of the S4 value 32070: with cudagraph memory profiling on, util 0.85 resolves to an effective 0.8043 (vllm's own log line), Available KV cache memory 14.58 GiB. HAND-PINNED measured pool: a naive generate_deployments.py regeneration would revert it (L9 successor 6)."
     },
     "saturated_ceiling": {
       "status": "measured",
@@ -45,7 +48,7 @@
     },
     "roofline_peak": {
       "status": "derived",
-      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (3090: bf16 -> FP32 accumulate, GeForce half-rate) \u2014 see configs/gpus/RTX3090.json _notes (L9-consumer 2026-06-10)"
+      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (3090: bf16 -> FP32 accumulate, GeForce half-rate) — see configs/gpus/RTX3090.json _notes (L9-consumer 2026-06-10)"
     },
     "util_flops": {
       "status": "placeholder",
@@ -80,7 +83,14 @@
     "prefill_floor": {
       "status": "measured",
       "path": "profile_data/kernels/prefill_floor_llama31_8b.json",
-      "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) \u2014 manifest entry documents ownership (L9-consumer 2026-06-10)"
+      "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) — manifest entry documents ownership (L9-consumer 2026-06-10)"
+    },
+    "s7_response_resident": {
+      "status": "measured",
+      "qsim_response_resident_fraction": 0.7217,
+      "path": "profile_data/kernels/s7_response_resident_RTX3090x4.json",
+      "source": "build_s7_drain_evidence.py --tp 4 --emit-pin (L13 round 2, 2026-06-12): S7 GT-protocol replay on the 3090 host, engine-side /metrics gpu_prefix_cache_queries/hits per turn cluster; rho = (hits/req - blockfloor16(prompt))/prev_output, median over turns 1-4 at conc 10-80 (n=16, within-cell-clean).",
+      "note": "ENGINE-SEMANTICS truth: vLLM caches DECODED output blocks and the re-tokenized history matches them up to a per-session divergence -> aggregate hits = prompt + rho*prev_output with a bimodal per-request split (probe TTFT distribution p50 0.74s vs p90 4.8s at c120 t1 reproduces GT shape). The benchmark cached_context_tokens (cache_estimate_source=previous_prompt_tokens) EXCLUDES output blocks, so the legacy credit re-prefilled ~2x the engine-measured volume (e.g. c80 t1: engine computed 13,178 tokens vs benchmark-view 24,760). Consumer: ttft_queue_sim._schedule deterministic session-quantile credit, capped by the live resident-block snapshot (eviction semantics untouched). Raw evidence: profile_data/results/s7_replay/."
     }
   }
 }

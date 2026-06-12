@@ -4,7 +4,7 @@
   "model": "Llama-3.1-8B",
   "tp": 2,
   "engine": "vllm",
-  "available_kv_blocks": 12220,
+  "available_kv_blocks": 10988,
   "max_num_batched_tokens": 2048,
   "prefill_tp_comm_ms_per_token": 0.11863964780201262,
   "prefill_host_cached_ms_per_token": 0.008871113914188109,
@@ -37,9 +37,9 @@
     },
     "kv_pool": {
       "status": "measured",
-      "value": 12220,
-      "source": "3090:/home/kevinlau/m3090_run/l13/vllm_gtflags_tp2.log 2026-06-11: 'GPU KV cache size: 195,520 tokens' (= 12220 blocks) at the GT flags (vllm 0.19.0, mml 32768, util 0.85, batched/seqs engine defaults) \u2014 one fresh server start on the GT host, verbatim excerpt in profile_data/engine_logs/3090_Llama-3.1-8B_multi_pool_evidence.txt",
-      "note": "Replaces the kv_pool.py derived 9893 (-19.0%): the generic 3.5GB reserve over-reserves this host's multi-GPU configs \u2014 measured per-GPU reserve back-solves to 0.66GB (evidence file; the L9 small-pool amplification, closed). HAND-PINNED measured pool: a naive generate_deployments.py regeneration would revert it (L9 successor 6)."
+      "value": 10988,
+      "source": "3090:/home/kevinlau/m3090_run/l13/s7/vllm_s7_tp2.log 2026-06-11: 'GPU KV cache size: 175,808 tokens' (= 10988 blocks) at the FULL GT protocol incl. VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 (the GT launcher sweep_multiturn_profiles.sh exports it; the S4 capture missed it) - verbatim excerpt in profile_data/engine_logs/3090_Llama-3.1-8B_multi_pool_evidence.txt",
+      "note": "L13 ROUND-2 CORRECTION of the S4 value 12220: with cudagraph memory profiling on, util 0.85 resolves to an effective 0.7989 (vllm's own log line), Available KV cache memory 10.73 GiB. HAND-PINNED measured pool: a naive generate_deployments.py regeneration would revert it (L9 successor 6)."
     },
     "saturated_ceiling": {
       "status": "measured",
@@ -48,7 +48,7 @@
     },
     "roofline_peak": {
       "status": "derived",
-      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (3090: bf16 -> FP32 accumulate, GeForce half-rate) \u2014 see configs/gpus/RTX3090.json _notes (L9-consumer 2026-06-10)"
+      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (3090: bf16 -> FP32 accumulate, GeForce half-rate) — see configs/gpus/RTX3090.json _notes (L9-consumer 2026-06-10)"
     },
     "util_flops": {
       "status": "placeholder",
@@ -83,7 +83,12 @@
     "prefill_floor": {
       "status": "measured",
       "path": "profile_data/kernels/prefill_floor_llama31_8b.json",
-      "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) \u2014 manifest entry documents ownership (L9-consumer 2026-06-10)"
+      "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) — manifest entry documents ownership (L9-consumer 2026-06-10)"
+    },
+    "s7_response_resident": {
+      "status": "measured-not-adopted",
+      "path": "profile_data/kernels/s7_response_resident_RTX3090x2.json",
+      "note": "L13 round 2 (2026-06-12): tp2-leg measured rho=0.6617 (S7 GT-protocol replay, same estimator as the ADOPTED x4 pin) was wired and REVERTED by the pre-registered per-config gate: e2el 21.609 -> 22.1244 (ttft 44.09 -> 40.40 but chat c80-c200 flip over->UNDER: ttft_signed +39.8->-15.2 at c80, +19.2->-27.9 at c120 - at tp2 the GT high-conc TTFTs are drain-bound in a way the credit-reduced volumes under-price; composition with scheduler truth (budget 2048 + seqs 256) fails harder, 31.5287). Kept as the measured bound; successor = the tp2 high-conc drain (engine-side c120-c200 clusters in the S7 tp2 evidence)."
     }
   }
 }
