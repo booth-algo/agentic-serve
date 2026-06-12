@@ -10,7 +10,14 @@ inference-benchmark/results/
 *.ncu-rep
 # Profiling/simulator data lives in profile_data/ (kernels/ = committed curated grids;
 # results/ = regenerable measured grids + prediction outputs; _archive/ = stale scratch).
+# Both the no-slash and slash forms are needed: the trailing-slash pattern matches only a
+# DIRECTORY at that path, so a SYMLINK named profile_data/results slips past it and gets
+# committed — checking that commit out then silently REPLACES the real (ignored) data
+# directory with the symlink (2026-06-12 incident: lane-worktree symlink merged via PR #75
+# deleted the local shared results store; see profiling/docs/results_store_incident_2026-06-12.md).
+profile_data/results
 profile_data/results/
+profile_data/_archive
 profile_data/_archive/
 
 # Dashboard generated data (regenerated from results, exceeds GitHub 100MB limit)
