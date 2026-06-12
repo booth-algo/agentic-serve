@@ -91,6 +91,30 @@ class RooflineParams:
     # consumer applies the production measured fraction to the pinned SUM.
     prefill_host_cached_ms_per_token: float | None = None
     prefill_fa3_ms_per_token2: float | None = None
+    # Per-config ENGINE-SEMANTICS truth (L13 S7 probe, 2026-06-12): vLLM's prefix cache keeps a
+    # session's DECODED output blocks resident, and the next turn's prompt re-tokenization
+    # matches the generated tokens up to a per-session divergence point — so a resident turn
+    # re-prefills only the un-matched remainder, NOT the benchmark's ``new_prefill_tokens`` view
+    # (``cache_estimate_source='previous_prompt_tokens'`` EXCLUDES output blocks entirely). S7
+    # measured this engine-side (/metrics gpu_prefix_cache_queries−hits per replayed GT turn
+    # window, 3090 host, GT protocol): aggregate hits/req = prev-prompt + rho·prev-output with a
+    # BIMODAL per-request split (the per-turn TTFT distribution: a ~rho majority of sessions hit
+    # their whole previous response, the rest re-prefill it). This field is that MEASURED
+    # response-resident fraction. None (default) keeps the legacy prompt-basis credit —
+    # BYTE-IDENTICAL for every config that does not pin it (0.0 is also exactly legacy);
+    # a pinned rho gives the deterministic session-quantile fraction rho of the cohort full
+    # previous-response credit in the queue sim's hit/miss accounting (still capped by the
+    # session's live resident-block snapshot, so eviction semantics are untouched). Pinned
+    # per-deployment from the committed S7 evidence artifact.
+    qsim_response_resident_fraction: float | None = None
+    # Per-config MEASURED saturated prefill comm rate (ms per (re)prefilled token at FULL
+    # chunked-prefill budget; L13 S7 barrier-drain regression over the replayed GT ladder). The c1
+    # stage-split comm pin above is measured at single-request chunks; the engine's batched drain
+    # amortizes the PCIe all-reduce below it. None (default) keeps the flat c1 comm rate —
+    # BYTE-IDENTICAL for every config that does not pin it; a pinned value interpolates
+    # c1 -> saturated over the SAME chunk-fill fraction as the prefill GEMM util ramp
+    # (ttft_queue_sim._prefill_gemm_per_tok_loaded).
+    prefill_tp_comm_saturated_ms_per_token: float | None = None
 
     @property
     def kv_capacity_bytes(self) -> int:

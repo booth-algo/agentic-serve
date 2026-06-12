@@ -676,6 +676,24 @@ def test_l13_3090_multi_manifest_pins_match_artifacts():
         assert dep["prefill_host_cached_ms_per_token"] > (
             mod.PREFILL_HOST_SHARED_MS_PER_TOKEN + mod.PREFILL_HOST_PERREQ_MS_PER_TOKEN)
         assert dep["prefill_fa3_ms_per_token2"] > mod.PREFILL_FA3_MS_PER_TOKEN2
+    # L13 round 2 (2026-06-12): the S7 response-resident fraction pin matches its regenerable
+    # artifact both ways (the same precedent); the pool values match the round-2 GT-protocol
+    # captures (VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1, the GT launcher's env).
+    for tp, blocks in ((2, 10988), (4, 29866)):
+        dep = json.loads((REPO_ROOT / f"configs/deployments/3090_Llama-3.1-8B_tp{tp}_vllm.json"
+                          ).read_text())
+        assert dep["available_kv_blocks"] == blocks
+        if dep.get("qsim_response_resident_fraction") is not None:
+            art = json.loads((REPO_ROOT
+                              / f"profile_data/kernels/s7_response_resident_RTX3090x{tp}.json"
+                              ).read_text())
+            assert dep["qsim_response_resident_fraction"] == \
+                art["constants"]["qsim_response_resident_fraction"]
+            entry = dep["data"]["s7_response_resident"]
+            assert entry["status"] == "measured"
+            assert entry["qsim_response_resident_fraction"] == \
+                dep["qsim_response_resident_fraction"]
+            assert 0.0 < dep["qsim_response_resident_fraction"] <= 1.0
     from configs.loader import all_deployments
     for c in all_deployments():
         if c.model != "Llama-3.1-8B" or c.engine != "vllm":
@@ -685,6 +703,72 @@ def test_l13_3090_multi_manifest_pins_match_artifacts():
             assert c.roofline.prefill_tp_comm_ms_per_token is None
             assert c.roofline.prefill_host_cached_ms_per_token is None
             assert c.roofline.prefill_fa3_ms_per_token2 is None
+            assert c.roofline.qsim_response_resident_fraction is None
+            assert c.roofline.prefill_tp_comm_saturated_ms_per_token is None
+
+
+def test_comm_saturated_ramp_override_and_byte_identical_default():
+    # L13 round 2 (2026-06-12): RooflineParams.prefill_tp_comm_saturated_ms_per_token is the
+    # per-config MEASURED batched-drain comm rate (S7 barrier-drain regression on the replayed
+    # GT ladder). None (the default — every config that does not pin it) MUST keep the flat
+    # c1 comm rate: byte-identical for unpinned configs. A pinned value interpolates
+    # c1 -> saturated over the SAME chunk-fill fraction as the util ramp.
+    import simulator.ttft_queue_sim as mod
+    from dataclasses import replace as _replace
+    p4 = _replace(RooflineParams(), tensor_parallel=4,
+                  prefill_tp_comm_ms_per_token=0.30580255643854004)
+    lo, hi = float(mod.LONG_PREFILL_TOKEN_THRESHOLD), float(mod.MAX_NUM_BATCHED_TOKENS)
+    for m in (64.0, lo, hi, 3000.0):
+        base = mod._prefill_gemm_per_tok_loaded(p4, m)
+        # explicit None == default (byte-identical)
+        assert mod._prefill_gemm_per_tok_loaded(
+            _replace(p4, prefill_tp_comm_saturated_ms_per_token=None), m) == base
+    p4_sat = _replace(p4, prefill_tp_comm_saturated_ms_per_token=0.05)
+    # below/at the chunk threshold the ramp fraction is 0 -> the c1 rate exactly
+    assert mod._prefill_gemm_per_tok_loaded(p4_sat, lo) == mod._prefill_gemm_per_tok_loaded(p4, lo)
+    # at full budget the comm share is exactly the saturated pin
+    full_flat = mod._prefill_gemm_per_tok_loaded(p4, hi)
+    full_sat = mod._prefill_gemm_per_tok_loaded(p4_sat, hi)
+    assert abs(full_sat - (full_flat - 0.30580255643854004 + 0.05)) < 1e-12
+    # midpoint sits strictly between
+    mid = mod._prefill_gemm_per_tok_loaded(p4_sat, (lo + hi) / 2)
+    assert full_sat < mid < mod._prefill_gemm_per_tok_loaded(p4_sat, lo)
+
+
+def test_response_resident_fraction_override_and_byte_identical_default():
+    # L13 round 2 (2026-06-12): qsim_response_resident_fraction is the MEASURED fraction of
+    # sessions whose previous-turn response stays a prefix-cache HIT at the next turn (engine
+    # truth: vLLM caches DECODED output blocks and the re-tokenized history matches them up to
+    # a per-session divergence — S7 /metrics evidence; the benchmark's ``cached`` estimate is
+    # prompt-only). None (default) and 0.0 keep the legacy prompt-basis credit: byte-identical.
+    # A pinned rho must (a) leave turn-0 (no previous response) unchanged, (b) not raise any
+    # turn at rho=1.0, and (c) strictly lower later turns. (No monotonicity-in-rho assertion:
+    # at intermediate rho the light sessions start decoding mid-drain and the mixed steps slow
+    # the heavy half — the cell MEDIAN can legitimately sit above both endpoints.)
+    from dataclasses import replace as _replace
+    p = _replace(RooflineParams(), tensor_parallel=2,
+                 prefill_tp_comm_ms_per_token=0.11863964780201262)
+    turns = [
+        {"turn_index": i, "cached_context_tokens": 420.0 * i,
+         "new_prefill_tokens": 320.0, "output_tokens": 240.0}
+        for i in range(5)
+    ]
+    base = predict_cell_ttft_qsim(turns, CHAT, 40, p)
+    same = predict_cell_ttft_qsim(turns, CHAT, 40,
+                                  _replace(p, qsim_response_resident_fraction=None))
+    assert same == base
+    zero = predict_cell_ttft_qsim(turns, CHAT, 40,
+                                  _replace(p, qsim_response_resident_fraction=0.0))
+    assert zero == base
+    full = predict_cell_ttft_qsim(turns, CHAT, 40,
+                                  _replace(p, qsim_response_resident_fraction=1.0))
+    assert full[0] == base[0]
+    assert all(f <= b + 1e-9 for f, b in zip(full, base))
+    assert sum(full) < sum(base)
+    half = predict_cell_ttft_qsim(turns, CHAT, 40,
+                                  _replace(p, qsim_response_resident_fraction=0.5))
+    assert half[0] == base[0]  # turn-0 invariant holds at every rho
+    assert half != base        # and the credit demonstrably engages
 
 
 def test_no_fitted_constants():

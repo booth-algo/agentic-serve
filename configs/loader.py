@@ -93,6 +93,15 @@ def load_deployment(dep_path: Path) -> Deployment:
     for _k in ("prefill_host_cached_ms_per_token", "prefill_fa3_ms_per_token2"):
         if d.get(_k) is not None:
             merged[_k] = float(d[_k])
+    # Optional MEASURED saturated (batched-drain) prefill comm rate + the engine-semantics
+    # sequence-resident-credit pin (L13 S7 probe, 2026-06-12; see the RooflineParams field
+    # comments). Absent -> None -> flat c1 comm / legacy prompt-basis credit (byte-identical
+    # for unpinned configs).
+    if d.get("prefill_tp_comm_saturated_ms_per_token") is not None:
+        merged["prefill_tp_comm_saturated_ms_per_token"] = float(
+            d["prefill_tp_comm_saturated_ms_per_token"])
+    if d.get("qsim_response_resident_fraction") is not None:
+        merged["qsim_response_resident_fraction"] = float(d["qsim_response_resident_fraction"])
     fields = RooflineParams.__dataclass_fields__
     roofline = RooflineParams(**{k: v for k, v in merged.items() if k in fields})
     data = d.get("data", {})

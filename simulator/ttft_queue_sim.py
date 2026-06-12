@@ -286,6 +286,16 @@ def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> floa
     comm = getattr(p, "prefill_tp_comm_ms_per_token", None)
     if comm is None:
         comm = PREFILL_TP_COMM_MS_PER_TOKEN * (tp - 1)
+    # Batched-drain amortization (L13 S7, 2026-06-12): the c1 stage-split comm rate is measured at
+    # single-request chunks; the engine's BARRIER DRAIN (many requests' chunks batched per step)
+    # amortizes the PCIe all-reduce well below it (S7: replayed GT ladder, engine-side computed
+    # tokens from /metrics vs measured drain makespans). A deployment that pins the MEASURED
+    # saturated rate interpolates c1 -> saturated over the SAME chunk-fill fraction as the util
+    # ramp above (small/single chunks keep the exact c1 rate -> the c1 stage-split anchors are
+    # untouched). None -> flat c1 comm, BYTE-IDENTICAL for every config that does not pin it.
+    comm_sat = getattr(p, "prefill_tp_comm_saturated_ms_per_token", None)
+    if comm_sat is not None:
+        comm = comm + (comm_sat - comm) * frac
     return gemm + comm
 
 
@@ -493,6 +503,8 @@ class _Req:
     is_miss: bool = False      # cache miss (session was evicted) -> re-prefilled full context
     resident_prefix: float = 0.0  # cached tokens that are a HIT (attended, not re-prefilled); set at admission
     prefill_total: float = 0.0    # total tokens to (re-)prefill this turn; set at admission (for chunk fraction)
+    prev_output: float = 0.0      # previous turn's output tokens (the response inside this turn's
+                                  # ``new_prefill``) — the S7 response-resident credit basis; 0 at turn 0
 
 
 @dataclass
@@ -728,7 +740,26 @@ def _schedule(state: _ServerState) -> None:
         # eviction semantics — it stays until that structural successor lands (the util-cap
         # precedent), NOT because the engine freezes anything.
         snap_blocks = state.resident_at_barrier.get(sid, cache.cached_blocks(sid))
-        resident_prefix = min(head.cached, snap_blocks * cache.block_size)
+        # Resident-credit basis (L13 S7 engine truth, 2026-06-12): the engine's prefix cache
+        # retains the session's DECODED output blocks, and the next turn's re-tokenized prompt
+        # MATCHES those generated tokens up to a per-session divergence point — so a resident
+        # turn re-prefills only the un-matched remainder of its context, NOT the benchmark's
+        # prompt-basis ``new_prefill`` view (cache_estimate_source='previous_prompt_tokens'
+        # excludes output blocks). The S7 /metrics counters measured aggregate hits/req =
+        # prev-prompt + rho·prev-output with a BIMODAL per-request split (the measured per-turn
+        # TTFT distribution: a ~rho majority of sessions hit their whole previous response, the
+        # rest re-prefill it). ``qsim_response_resident_fraction`` (RooflineParams optional
+        # field, the L11 pin mechanism) applies that as a DETERMINISTIC session quantile —
+        # sessions with (sid+0.5)/C <= rho extend their credit basis by the previous turn's
+        # output; the credit stays capped by the LIVE resident-block snapshot, so eviction
+        # semantics are untouched. None (default) and 0.0 are the legacy prompt-basis cap,
+        # BYTE-IDENTICAL for every config that does not pin it.
+        rho = getattr(state.params, "qsim_response_resident_fraction", None)
+        credit_basis = head.cached
+        if rho is not None and head.prev_output > 0.0 and state.sessions:
+            if (sid + 0.5) / len(state.sessions) <= float(rho):
+                credit_basis = head.cached + min(head.prev_output, head.new_prefill)
+        resident_prefix = min(credit_basis, snap_blocks * cache.block_size)
         # Shared cross-session APC prefix: once primed (some session has prefilled it), the front
         # S tokens of THIS session's context are resident too — a HIT — even at turn-0 where the
         # per-session ``cached`` is 0 and the shared block lives inside ``new_prefill``. Credited
@@ -790,6 +821,10 @@ def _on_arrival(state: _ServerState, session_id: int, turn_index: int) -> None:
         remaining_prefill=new,  # provisional; _schedule sets hit/miss at admission
         output_left=max(1, int(round(spec.output_tokens))),
         kv_tokens=cached + new,
+        # the previous turn's generated response (it sits at the FRONT of this turn's
+        # ``new_prefill`` in the benchmark's prompt-basis accounting) — the S7
+        # response-resident credit basis; 0.0 at turn 0 (no previous response).
+        prev_output=(sess.turns[turn_index - 1].output_tokens if turn_index >= 1 else 0.0),
     )
     state.waiting.append(req)
     state.results[(session_id, turn_index)] = {"arrival_epoch": state.clock}
