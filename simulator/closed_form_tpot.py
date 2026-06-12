@@ -65,15 +65,68 @@ class RooflineParams:
     peak_flops_per_s: float = 989e12
     peak_bw_bytes_per_s: float = 3.35e12
     kv_bytes_per_token: float = 131072.0
-    util_flops: float = 0.65
-    util_bw: float = 0.93
+    util_flops: float = 0.65  # PINNED; pre-registered re-derivation over the 4 serving-wall traces gives 0.5886 (n=7, thin; submit-wall convention unreliable under AsyncScheduler) — see profile_data/kernels/roofline_utils_H100.json + defit_log_entries/L6-utils.md. R1 curve (prefill_gemm_util_H100.json) is the authoritative prefill source.
+    util_bw: float = 0.93     # PINNED; does NOT reproduce from any documented computation (audit-v2 G4). Pre-registered recipe over the 4 serving-wall traces gives 0.8111 (62 steady-state decode steps, byte-quartile-stable) — profile_data/kernels/roofline_utils_H100.json. Candidate 0.8111 was wired and gated 2026-06-10 (replay-ON) and REJECTED: H100 tpot_cell +0.67pt, chat +0.77pt vs baseline (see defit_log_entries/L6-utils.md). Kept as pinned-with-measured-disagreement — 0.93 compensates host overhead the decode pricing carries no separate term for.
     bytes_per_param: float = 2.0
     available_kv_blocks: int = 27_250          # empirical H100 (max free_kv_blocks across 4 vLLM engine traces 2026-05-27; ~1.5% less than spec-derived 27651)
     cache_block_size: int = 16                 # vLLM v1 default
     max_num_batched_tokens: int = 8192         # ENGINE CONFIG, not a fit: vLLM OPENAI_API_SERVER resolved default for >=70GiB non-A100 devices (vllm/engine/arg_utils.py _set_default_args; A100-named devices resolve 2048 — set per-deployment JSON). Benchmark servers launched with the flag unset (server metadata: null), so the resolved default is what ran. Consumed by kernel_tpot._overflow_weight as the chunked-prefill per-step token budget.
-    scheduler_overhead_ms_per_step: float = 5.7  # per-step Python/dispatcher cost. Calibrated from 99 lowest-work decode steps in swe_c40 trace (mean engine_step_wall=6.61ms minus mean model_submit_wall=0.93ms = 5.68ms). Single-anchor discipline, not a fit.
+    scheduler_overhead_ms_per_step: float = 5.7  # PINNED; per-step Python/dispatcher cost, originally mean over 99 lowest-work decode steps of swe_c40. Pre-registered re-derivation (median over 2666 batch-1 decode steps, all 4 traces) gives 4.5574 — roofline_utils_H100.json; 5.7 sits at the top of the per-trace range, not the center.
     tensor_parallel: int = 1                   # TP degree: shards KV (by head) + weights across GPUs. tp=1 = single-GPU (unchanged).
     kv_heads: int = 8                          # GQA KV heads (Llama-3.1-8B); caps KV sharding at min(tp, kv_heads).
+    # Per-config MEASURED prefill tensor-parallel comm term: TOTAL ms per new token at THIS config's
+    # tp degree (G3 like-for-like method, comm = prefill_span.new(tpN) − span.new(tp1)/N, both legs
+    # the same multiprocess api_server stage-split). None -> ttft_queue_sim falls back to
+    # PREFILL_TP_COMM_MS_PER_TOKEN·(tp−1) (BYTE-IDENTICAL for every config that does not pin it;
+    # tp1 -> 0 either way). Pinned per-deployment in the deployment JSON from the
+    # profile_data/kernels/prefill_tp_comm_*.json artifact (L11 de-fit, 2026-06-11).
+    prefill_tp_comm_ms_per_token: float | None = None
+    # Per-config MEASURED prefill HOST-cached rate (SUM, ms per re-sent cached token) and FA3
+    # coefficient (ms per token^2) for THIS config's serving stack — the L11 round-2 like-for-like
+    # tp1/tpN stage-split pair (build_stage_split_rates.py; same script + lattice both legs).
+    # None -> the ttft_queue_sim module constants (PREFILL_HOST_SHARED+PERREQ 5.8872e-3 split
+    # 0.5236, and PREFILL_FA3_MS_PER_TOKEN2 8.31e-7), BYTE-IDENTICAL for every config that does
+    # not pin them. Pinned per-deployment from profile_data/kernels/prefill_stage_rates_*.json.
+    # The host shared/per-request partition is NOT per-config (no tpN B-sweep exists): the
+    # consumer applies the production measured fraction to the pinned SUM.
+    prefill_host_cached_ms_per_token: float | None = None
+    prefill_fa3_ms_per_token2: float | None = None
+    # Per-config ENGINE-SEMANTICS truth (L13 S7 probe, 2026-06-12): vLLM's prefix cache keeps a
+    # session's DECODED output blocks resident, and the next turn's prompt re-tokenization
+    # matches the generated tokens up to a per-session divergence point — so a resident turn
+    # re-prefills only the un-matched remainder, NOT the benchmark's ``new_prefill_tokens`` view
+    # (``cache_estimate_source='previous_prompt_tokens'`` EXCLUDES output blocks entirely). S7
+    # measured this engine-side (/metrics gpu_prefix_cache_queries−hits per replayed GT turn
+    # window, 3090 host, GT protocol): aggregate hits/req = prev-prompt + rho·prev-output with a
+    # BIMODAL per-request split (the per-turn TTFT distribution: a ~rho majority of sessions hit
+    # their whole previous response, the rest re-prefill it). This field is that MEASURED
+    # response-resident fraction. None (default) keeps the legacy prompt-basis credit —
+    # BYTE-IDENTICAL for every config that does not pin it (0.0 is also exactly legacy);
+    # a pinned rho gives the deterministic session-quantile fraction rho of the cohort full
+    # previous-response credit in the queue sim's hit/miss accounting (still capped by the
+    # session's live resident-block snapshot, so eviction semantics are untouched). Pinned
+    # per-deployment from the committed S7 evidence artifact.
+    qsim_response_resident_fraction: float | None = None
+    # Per-config MEASURED saturated prefill comm rate (ms per (re)prefilled token at FULL
+    # chunked-prefill budget; L13 S7 barrier-drain regression over the replayed GT ladder). The c1
+    # stage-split comm pin above is measured at single-request chunks; the engine's batched drain
+    # amortizes the PCIe all-reduce below it. None (default) keeps the flat c1 comm rate —
+    # BYTE-IDENTICAL for every config that does not pin it; a pinned value interpolates
+    # c1 -> saturated over the SAME chunk-fill fraction as the prefill GEMM util ramp
+    # (ttft_queue_sim._prefill_gemm_per_tok_loaded).
+    prefill_tp_comm_saturated_ms_per_token: float | None = None
+    # Per-config MEASURED duplicate-session fraction (L13 S8, 2026-06-12): the trace-replay
+    # profiles (terminalbench/swebench *_tracereplay_* realized pools) draw sessions from a
+    # FINITE trace set, so concurrent cohorts contain repeated traces whose ENTIRE turn
+    # content the engine's prefix cache deduplicates ACROSS sessions (S8 engine-side
+    # /metrics: cell-level computed/bench_new = 1.02 at c1 -> 0.82 at c5 -> 0.40-0.52 at
+    # c10-40 on tb tp4, while prev-output covers only ~5% of new — the rho credit above
+    # cannot represent it; chat shows no such surplus, its dedup is fully the rho credit).
+    # Consumer: ttft_queue_sim._schedule deterministic session quantile (sid >= 1 — a
+    # duplicate needs an earlier twin — primed-herd gated like the shared cross-session APC
+    # prefix). None (default) = no duplicate credit, BYTE-IDENTICAL for every config that
+    # does not pin it (0.0 is also exactly legacy).
+    qsim_duplicate_session_fraction: float | None = None
 
     @property
     def kv_capacity_bytes(self) -> int:

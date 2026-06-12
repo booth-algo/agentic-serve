@@ -4,31 +4,51 @@
   "model": "Llama-3.1-8B",
   "tp": 2,
   "engine": "vllm",
-  "available_kv_blocks": 9893,
+  "available_kv_blocks": 10988,
   "max_num_batched_tokens": 2048,
+  "prefill_tp_comm_ms_per_token": 0.11863964780201262,
+  "prefill_host_cached_ms_per_token": 0.008871113914188109,
+  "prefill_fa3_ms_per_token2": 3.709510737661759e-06,
   "bench_dir": "3090_Llama-3.1-8B_tp2_vllm",
-  "backend": "rtx3090-tp2-vllm-analytic-roofline",
-  "calibration_status": "3090_tp2_vllm_analytic_roofline_firstcut",
+  "backend": "rtx3090-tp2-vllm-serving-decode-grid",
+  "calibration_status": "3090_tp2_vllm_serving_decode_grid_measured_tp2comm_prefill",
   "ground_truth": true,
   "data": {
+    "prefill_tp_comm": {
+      "status": "measured",
+      "path": "profile_data/kernels/prefill_tp_comm_RTX3090x2.json",
+      "note": "G3 like-for-like own-leg pair (serving_stage_split tp1/tp2 on the 3090 host, L13 2026-06-11): comm_total = span.new(tp2) - span.new(tp1)/2 = 118.640 ms/1k new tokens (pure-PCIe all-reduce, PIX pair; replaces the NVLink-extrapolated PREFILL_TP_COMM_MS_PER_TOKEN*(tp-1) = 3.279 ms/1k fallback, x36). Regenerate: python3 -m profiling.process.build_tp_comm --gpu RTX3090 --tp 2"
+    },
+    "prefill_stage_rates": {
+      "status": "measured",
+      "host_cached_ms_per_token": 0.008871113914188109,
+      "fa3_ms_per_token2": 3.709510737661759e-06,
+      "path": "profile_data/kernels/prefill_stage_rates_RTX3090x2.json",
+      "source": "build_stage_split_rates.py --gpu RTX3090 --tp 2 (L13 2026-06-11, like-for-like tp1/tp2 own-leg stage-split pair on the 3090 host). HOST: 4-param OLS ttft ~ floor + a*new + b*cached + c*new*(cached+new/2), pinned = b(tp2) DIRECT (AMENDED from the H100 3-param family: this GPU's FA3 coefficient is ~9x the H100's, so the 3p cached coefficient is ~60% quadratic contamination and would double-count against the separate FA3 pin; the 4p estimator reproduces the production H100 SUM at -4.4% on the H100 bridge leg). FA3: same 4p fit on prefill_span_ms, pinned = c(tp2) DIRECT (no production anchor to ratio-transport; shard ratio 0.4971).",
+      "date": "2026-06-11",
+      "note": "Per-config tp2 serving-stack prefill rates via the L11 optional RooflineParams mechanism (top-level keys -> loader -> _price_step). Replaces the H100-tp1-measured host SUM 5.8872e-3 (this stack measures 8.8711e-3, +51%) and FA3 8.31e-7 (this GPU measures 3.7095e-6, x4.5) for THIS config only; unpinned configs keep the module constants byte-identically. Shared/per-request host partition stays the production fraction 0.5236 (no 3090 B-sweep; documented caveat)."
+    },
     "decode_grid": {
-      "status": "missing",
-      "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
+      "status": "measured",
+      "path": "profile_data/results/serving_decode_grid_RTX3090x2_merged_2026-06-11.csv",
+      "source": "build_serving_decode_grid.py --lag-upgrade merge of the 3 L13 S5 passes (serving_decode_grid.py, tp2 GPUs 0-1 PIX pair on the 3090 host, grid flags: prefix caching OFF, seqs 320, batched 8192, mml 25600, util 0.90, bf16; live pool 212,304 tokens -> 21-cell lattice by the committed 0.95-cap rule; pass 2 = 8-shard gc-freeze, pass 3 = 8-shard SCHED_RR via sudo, latest wins per cell). 20 ok / 1 check: values reproduce <=0.5% across the 3 client topologies on every cell except (160,512) (0.64% cross-pass drift -> stays check, analytic-filled interior hole). The default-OFF --lag-upgrade builder amendment (L13, documented in the builder docstring) promotes lag-only-flagged cells whose value reproduces <=0.5% across >=2 hygiene-clean passes with latest-pass p99 lag <=1.5x the 2.0 ms limit -- on this host the tp server's CPU load leaves ~2.0-2.1 ms p99 client-loop spikes even under SCHED_RR, and the marginal flag would otherwise analytic-fill exactly the measured fill region the grid corrects.",
+      "date": "2026-06-11",
+      "note": "FIRST measured decode data for this config (L13 P4); previously pure analytic roofline + own L9/P3 ceilings. Pre-registered quantification: serving/analytic median 1.219 at the same (B,T); B>=32 fill region 1.4-2.0x analytic under-price (B=80 ctx512: 38.3 ms measured vs 18.8 analytic). The L11 H100x4 grid REFUSAL does not transport: that config had an isolated kernel grid and the serving grid (0.846x isolated) could not explain THAT gap; here there is no measured decode data at all and the GT TPOT under-bias lives exactly in the measured fill region. Regenerate: python3 -m profiling.process.build_serving_decode_grid --lag-upgrade --inputs <3 S5 raw passes, chronological>"
     },
     "kv_pool": {
-      "status": "derived",
-      "value": 9893,
-      "source": "configs/kv_pool.py",
-      "note": "24GiB util 0.85, weights 16.1GB/tp2, reserve 3.5GB"
+      "status": "measured",
+      "value": 10988,
+      "source": "3090:/home/kevinlau/m3090_run/l13/s7/vllm_s7_tp2.log 2026-06-11: 'GPU KV cache size: 175,808 tokens' (= 10988 blocks) at the FULL GT protocol incl. VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 (the GT launcher sweep_multiturn_profiles.sh exports it; the S4 capture missed it) - verbatim excerpt in profile_data/engine_logs/3090_Llama-3.1-8B_multi_pool_evidence.txt",
+      "note": "L13 ROUND-2 CORRECTION of the S4 value 12220: with cudagraph memory profiling on, util 0.85 resolves to an effective 0.7989 (vllm's own log line), Available KV cache memory 10.73 GiB. HAND-PINNED measured pool: a naive generate_deployments.py regeneration would revert it (L9 successor 6)."
     },
     "saturated_ceiling": {
-      "status": "inherited",
-      "from": "H100",
-      "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
+      "status": "measured",
+      "path": "profile_data/kernels/saturated_ceiling_RTX3090x2_llama31_8b.json",
+      "note": "own measured plateau anchors from this config GT (build_saturated_ceiling; replaces the H100-inherited ceiling that under-caps the measured consumer plateaus at conc>=200, L9-consumer 2026-06-10)"
     },
     "roofline_peak": {
-      "status": "placeholder",
-      "note": "datasheet peak FLOPS/BW (FP16-accumulate ambiguity on consumer GPUs)"
+      "status": "derived",
+      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (3090: bf16 -> FP32 accumulate, GeForce half-rate) \u2014 see configs/gpus/RTX3090.json _notes (L9-consumer 2026-06-10)"
     },
     "util_flops": {
       "status": "placeholder",
@@ -59,6 +79,22 @@
       "status": "measured",
       "path": "3090_Llama-3.1-8B_tp2_vllm",
       "source": "/mnt/100g"
+    },
+    "prefill_floor": {
+      "status": "measured",
+      "path": "profile_data/kernels/prefill_floor_llama31_8b.json",
+      "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) \u2014 manifest entry documents ownership (L9-consumer 2026-06-10)"
+    },
+    "s7_response_resident": {
+      "status": "measured-not-adopted",
+      "path": "profile_data/kernels/s7_response_resident_RTX3090x2.json",
+      "note": "L13 round 2 (2026-06-12): tp2-leg measured rho=0.6617 (S7 GT-protocol replay, same estimator as the ADOPTED x4 pin) was wired and REVERTED by the pre-registered per-config gate: e2el 21.609 -> 22.1244 (ttft 44.09 -> 40.40 but chat c80-c200 flip over->UNDER: ttft_signed +39.8->-15.2 at c80, +19.2->-27.9 at c120 - at tp2 the GT high-conc TTFTs are drain-bound in a way the credit-reduced volumes under-price; composition with scheduler truth (budget 2048 + seqs 256) fails harder, 31.5287). Kept as the measured bound; successor = the tp2 high-conc drain (engine-side c120-c200 clusters in the S7 tp2 evidence)."
+    },
+    "s8_duplicate_session": {
+      "status": "measured-not-adopted",
+      "path": "profile_data/kernels/s8_duplicate_session_RTX3090x2.json",
+      "source": "build_s7_drain_evidence.py --prefix s8 --profile terminalbench-multiturn-synth --emit-dup-pin --pool-tokens 175808 (L13 round 3, 2026-06-12): S8 GT-protocol replay of the terminalbench tp2 ladder on the 3090 host, engine-side /metrics prefix-cache TOKEN counters, CELL-level monotonic deltas; f = 1 - median(cell computed/bench_new) over no-eviction cells conc>=10 (tp2 pool 175,808 tokens -> tb c10/c20 qualify; ratios 0.397/0.587 - the c10 counters reproduce the tp4 leg EXACTLY, the documented engine-seed-0 cross-leg determinism).",
+      "note": "L13 round 3 (2026-06-12): tp2-leg measured f=0.5082 (S8 GT-protocol replay, same estimator + pressure-gated mechanism as the ADOPTED x4 pin; tb tp2 c10/c20 ratios 0.397/0.587, c10 counters byte-reproduce the tp4 leg - engine seed-0 cross-leg determinism) was wired and REVERTED by the pre-registered per-config gate: e2el 21.609 -> 22.5273 (ttft 44.09 -> 36.33 improves but the tp2 mid-conc balance breaks - the same compensation structure that reverted rho-x2). Kept as the measured bound; the x2 mid-conc TTFT-over and TPOT-under remain a COUPLED pair (successor: price the mid-conc drain interference into TPOT before any further volume credit)."
     }
   }
 }

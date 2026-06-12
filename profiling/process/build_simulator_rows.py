@@ -36,7 +36,9 @@ from simulator.closed_form_tpot import RooflineParams  # noqa: E402
 from simulator.cohort_scale import cohort_scale_mean  # noqa: E402
 from simulator.kernel_step_cost import load_grid  # noqa: E402
 from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot  # noqa: E402
-from simulator.ttft_queue_sim import _prefill_floor_for, predict_cell_ttft_qsim  # noqa: E402
+from simulator.ttft_queue_sim import (  # noqa: E402
+    QSimSchedConfig, _prefill_floor_for, predict_cell_ttft_qsim,
+)
 from configs.loader import Deployment, all_deployments  # noqa: E402
 
 DASHBOARD_JSON = Path("inference-benchmark/dashboard/public/simulator-predictions.json")
@@ -154,9 +156,26 @@ def build_row(profile: str, conc: int, params: RooflineParams, cfg: Deployment,
     #    independently of the cohort via the explicit ``prefill_floor_ms`` (so it survives any future
     #    cohort gating). Monotonic: every config's TTFT <= the pre-floor value, tp1 byte-identical.
     cohort_gpu_key = cfg.gpu_key if cfg.model == "Llama-3.1-8B" else None
+    # Per-config vLLM scheduler truth for the queue sim's ADMISSION arithmetic — built ONLY
+    # when the deployment manifest pins it (verified GT server metadata + resolved engine
+    # defaults; see the manifest's scheduler note + QSimSchedConfig). Unpinned configs pass
+    # None -> the sim's module-level H100 constants (byte-identical). The token budget is
+    # the SAME per-deployment ``max_num_batched_tokens`` the kernel-TPOT side already
+    # prices with (engine-truth parity between the two consumers of one engine config);
+    # the chunk cap keeps the sim's established int(max_model_len*0.04) rule with the
+    # config's OWN GT-recorded max_model_len (L10-tp1sub20 round 2, 2026-06-11).
+    sched = None
+    if cfg.max_model_len is not None or cfg.max_num_seqs is not None:
+        sched = QSimSchedConfig(
+            max_num_batched_tokens=int(params.max_num_batched_tokens),
+            long_prefill_token_threshold=(
+                int(cfg.max_model_len * 0.04) if cfg.max_model_len is not None else None),
+            max_num_seqs=cfg.max_num_seqs,
+        )
     ttft_pred = predict_cell_ttft_qsim(
         turns, profile, float(conc), params, shared_prefix_tokens=shared_prefix_tokens,
-        gpu_key=cohort_gpu_key, prefill_floor_ms=_prefill_floor_for(cohort_gpu_key))
+        gpu_key=cohort_gpu_key, prefill_floor_ms=_prefill_floor_for(cohort_gpu_key),
+        sched=sched)
     for t, tp, tf in zip(turns, tpot_pred, ttft_pred):
         out = float(t["output_tokens"])
         t["tpot_pred"] = round(float(tp), 4)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot
-from simulator.kernel_tpot_hint import predict_cell_tpot_hinted
+from simulator._legacy.kernel_tpot_hint import predict_cell_tpot_hinted
 
 
 def _kti(cached: float, new: float, out: float, sched: float) -> KernelTurnInput:

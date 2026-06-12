@@ -21,17 +21,12 @@
     "model": "Llama-3.1-8B-Instruct",
     "gpu": "H100 SXM (3.35 TB/s HBM3, 989 TFLOPS BF16 dense)",
     "kv_bytes_per_token_derivation": "2 (K+V) * 32 (layers) * 8 (kv_heads, GQA) * 128 (head_dim) * 2 (bf16) = 131072 bytes",
-    "util_flops_anchor": {
-      "source": "vllm_engine_step_trace_swe_c40_t12 step 1 (pure prefill, N=7189, model_submit_wall_ms = 178)",
-      "theoretical_compute_ms": "2 * 8.03e9 * 7189 / 989e12 = 116.6 ms",
-      "util_flops": "116.6 / 178 = 0.655 ≈ 0.65"
-    },
-    "util_bw_anchor": {
-      "source": "vllm_engine_step_trace_swe_c40_t12 steps 17-22 (decode-only steady state, B=40, T~7200, engine_step_wall_ms ≈ 17 ms)",
-      "bytes_per_step": "weights(2 * 8.03e9) + kv_read(40 * 7200 * 131072) + kv_write(40 * 131072) ≈ 53.81 GB",
-      "theoretical_bandwidth_ms": "53.81e9 / 3.35e12 = 16.06 ms",
-      "util_bw": "16.06 / 17 = 0.945 ≈ 0.93"
-    },
-    "principle": "Both utilization factors are derived from independent anchor measurements (one compute-bound, one bandwidth-bound), NOT fit across the full trace dataset. Per the plan, no per-workload tuning."
+    "util_provenance": {
+      "status": "pinned-with-measured-disagreement (audit-v2 G4, 2026-06-10)",
+      "history": "The original hand-read anchors ('116.6/178 = 0.655 ≈ 0.65' on a step that does not exist in the committed swe_c40 trace, and '16.06/17 = 0.945 ≈ 0.93' whose cited step 17 is a 290 ms outlier and whose T~7200 byte count matches no reconstructed step) are NOT reproducible — removed.",
+      "rederivation": "Pre-registered deterministic recipe over the four pinned serving-wall traces (gitignored working-set on this host) (recipe text committed BEFORE computing): util_bw = 0.8111 (median over 62 steady-state, bandwidth-dominated, outlier-trimmed decode-only steps; byte-quartile-stable 0.804-0.830), util_flops = 0.5886 (n=7, THIN; submit-wall convention gives >1 on 2 steps under AsyncScheduler — prefer prefill_gemm_util_H100.json), scheduler_overhead = 4.5574 ms (median over 2666 batch-1 decode steps).",
+      "artifact": "profile_data/kernels/roofline_utils_H100.json (builder: profiling/process/build_roofline_utils.py; recipe: profiling/docs/defit_log_entries/L6-utils.md)",
+      "values_kept": "0.65 / 0.93 / 5.7 retained. util_bw=0.8111 was wired as a candidate and gated 2026-06-10 (replay-ON gate_scoped_rows vs same-worktree baseline): H100 tpot_cell 14.32→14.99 (+0.67), tpot chat 5.46→6.23 (+0.77), H100x2 tpot_cell 28.75→31.01 (+2.26); TTFT and A100 unmoved → FAIL (±0.3), candidate REJECTED (defit_log_entries/L6-utils.md). 0.93 stays pinned-with-measured-disagreement: it compensates host overhead the decode pricing carries no separate term for (cf. the net-of-sched util 1.25 > 1 diagnostic — util_bw=0.93 and a separate 5.7 ms decode sched term cannot both be honest)."
+    }
   }
 }

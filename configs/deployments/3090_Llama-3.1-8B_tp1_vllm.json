@@ -4,7 +4,7 @@
   "model": "Llama-3.1-8B",
   "tp": 1,
   "engine": "vllm",
-  "available_kv_blocks": 1117,
+  "available_kv_blocks": 2008,
   "max_num_batched_tokens": 2048,
   "bench_dir": "3090_Llama-3.1-8B_tp1_vllm",
   "backend": "rtx3090-tp1-vllm-analytic-roofline",
@@ -16,19 +16,19 @@
       "note": "no measured kernel grid for this GPU/model -> analytic decode roofline (configs scale by weight bytes / bandwidth / KV)"
     },
     "kv_pool": {
-      "status": "derived",
-      "value": 1117,
-      "source": "configs/kv_pool.py",
-      "note": "24GiB util 0.85, weights 16.1GB/tp1, reserve 3.5GB"
+      "status": "measured",
+      "value": 2008,
+      "source": "vLLM v1 engine log (engine-config truth)",
+      "note": "ENGINE LOG: 3090:/tmp/vllm_8093.log (2026-06-02, vllm 0.19.0, Llama-3.1-8B tp1, max_seq_len=16384, dtype=bfloat16, util 0.85): 'GPU KV cache size: 32,128 tokens' / 'Available KV cache memory: 3.92 GiB' -> 32128/16 = 2008 blocks. The matching bench wrapper (bench_Llama-3.1-8B_tp1_multi_vllm_p8093.log) wrote THIS GT dir; GT config metadata is 16384/0.85 for 44 files (9 older files say 32768 \u2014 mixed-era caveat; pool is max_len-insensitive at fixed util). Replaces derived 1117 (reserve-rule overestimates consumer reserve: true non-KV overhead back-solves to 1.63 GB, not 3.5)."
     },
     "saturated_ceiling": {
-      "status": "inherited",
-      "from": "H100",
-      "note": "TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model plateaus -> first-cut"
+      "status": "measured",
+      "path": "profile_data/kernels/saturated_ceiling_RTX3090_llama31_8b.json",
+      "note": "own measured plateau anchors from this config GT (build_saturated_ceiling; replaces the H100-inherited ceiling that mispriced consumer plateaus, L9-consumer 2026-06-10)"
     },
     "roofline_peak": {
-      "status": "placeholder",
-      "note": "datasheet peak FLOPS/BW (FP16-accumulate ambiguity on consumer GPUs)"
+      "status": "derived",
+      "note": "datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (2080Ti: fp16 cast, sm75; 3090: bf16 \u2014 both FP32-accumulate GeForce half-rate) \u2014 see configs/gpus/*.json _notes (L9-consumer 2026-06-10)"
     },
     "util_flops": {
       "status": "placeholder",
@@ -59,6 +59,11 @@
       "status": "measured",
       "path": "3090_Llama-3.1-8B_tp1_vllm",
       "source": "/mnt/100g"
+    },
+    "prefill_floor": {
+      "status": "measured",
+      "path": "profile_data/kernels/prefill_floor_llama31_8b.json",
+      "note": "own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1); resolved by ttft_queue_sim._prefill_floor_for(gpu_key) \u2014 manifest entry documents ownership (L9-consumer 2026-06-10)"
     }
   }
 }

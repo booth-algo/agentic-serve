@@ -6,17 +6,20 @@ wait** a request sees before its first token (client_queue_wait ~= 0, so all ser
 queueing is folded into the measured ``ttft_ms``). The per-turn TTFT is a
 *saturate-ramp-RECOVER* curve that emerges from the cohort's trajectory.
 
-THE CLIMB MECHANISM (measured + traced against /root/vllm v1 scheduler): a multi-turn
-session's KV **persists across its turns** (prefix reuse), growing each turn. Under load
-the cohort's cumulative KV vastly exceeds the pool, so the scheduler **evicts** whole
-sessions (RECOMPUTE — frees their blocks); an evicted session's next turn is a cache
-**MISS** and must **re-prefill its entire context** (cached+new), not just the new tokens.
-That full re-prefill congests the chunked-prefill token budget and head-of-line-blocks new
-arrivals' first token. Because cached context grows every turn, the re-prefill cost
-compounds — TTFT climbs unboundedly for full-staying cohorts (swebench/terminal, flat
-survival) and saturates/recovers as the cohort drains (osworld). A turn whose session KV
-is still **resident** is a cache HIT and prefills only its new tokens (cheap) — so the
-hit/miss fraction self-adjusts to KV pressure and sets the magnitude.
+THE CLIMB MECHANISM (measured + traced against /root/vllm v1 scheduler + the L4
+engine-trace oracles, 2026-06-10): a multi-turn session's KV **persists across its turns**
+(prefix reuse), growing each turn. Under load the cohort's cumulative KV vastly exceeds
+the pool, so the engine's free-queue recycling **trims** resident prefixes from their
+TAIL, LRU-OLDEST first (vllm/v1/core/block_pool.py: tail-first frees + popleft eviction;
+whole-prefix loss only emerges when the herd working set exceeds the whole pool). A
+trimmed session's next turn must **re-prefill the lost tail of its context**, not just the
+new tokens. That re-prefill congests the chunked-prefill token budget and
+head-of-line-blocks new arrivals' first token. Because cached context grows every turn,
+the re-prefill cost compounds — TTFT climbs unboundedly for full-staying cohorts
+(swebench/terminal, flat survival) and saturates/recovers as the cohort drains (osworld).
+A turn whose session KV is still **resident** is a cache HIT and prefills only its new
+tokens (cheap) — so the hit/miss fraction self-adjusts to KV pressure and sets the
+magnitude.
 
 MODEL (fit-free — NO new fitted constants):
 
@@ -31,19 +34,35 @@ MODEL (fit-free — NO new fitted constants):
 * Shared GPU continuous-batching steps; admission gated by KV blocks
   (``PrefixLRUCache(available_kv_blocks=27250, 16)``) + ``max_num_seqs`` + ``MAX_NUM_BATCHED_TOKENS``
   (vLLM serving defaults, documented config — not MAPE knobs).
-* **Block-level prefix cache (``PrefixLRUCache``) with two-tier eviction.** A session's cached
-  PREFIX persists across turns AND across eviction. Tier 1 reclaims FREE residents (departed/dead
-  sessions' blocks — the LRU buffer that shields active sessions). Tier 2, only under GENUINE
-  over-subscription (the cohort KV exceeds the pool so tier 1 can't satisfy admission), PREEMPTS
-  idle herd residents by ``preempt_policy`` (``'tail'`` = most-recently-used first, vLLM v1
-  RECOMPUTE tail-preempt ≫ ``'lru'``), evicting WHOLE sessions so the overflow concentrates on a
-  full-miss minority (median stays a hit). In-flight KV (a req prefilling/decoding THIS step) is
-  never evicted. Without tier 2 the sim DEADLOCKS at high concurrency (whole herd protected → no
-  admission → silent fallback to the static formula); without whole-session eviction the trim
-  spreads thin and every session becomes a partial miss (osworld 2× over-count). A turn's hit/miss
-  is FROZEN at barrier release (``resident_at_barrier``) so a peer's in-pass eviction can't cascade
-  it into a spurious miss. Light over-subscription → cheap hits → TTFT RECOVERS; heavy → full
-  re-prefills → the PEAK.
+* **Block-level prefix cache (``PrefixLRUCache``) with ENGINE-FAITHFUL two-tier eviction
+  (re-derived 2026-06-10 against the vLLM v1 engine-trace oracles — full evidence in
+  profiling/docs/defit_log_entries/L4-queue.md).** A session's cached PREFIX persists across
+  turns AND across eviction. Tier 1 reclaims FREE residents (departed/dead sessions' blocks —
+  the LRU buffer that shields active sessions). Tier 2, only under GENUINE over-subscription
+  (the cohort KV exceeds the pool so tier 1 can't satisfy admission), trims idle herd
+  residents' prefixes PARTIALLY in global-recency LRU order (oldest-touched first). That is
+  the real engine's semantics: a BlockPool replica (block-hash prefix cache, single LRU free
+  queue, tail-first frees, popleft eviction) reproduces the traces' live computed_tokens
+  EXACTLY on 92.7-100% of lookups; flipping ONLY the order to MRU-newest degrades exactness
+  to 80.9-93.3% and grows absolute token error 3.2-26x. In all four archived serving traces
+  100% of turn>0 prefix losses are PARTIAL (tail-trim, head survives; zero whole-session
+  misses in 602 lossy lookups) — the retired tier-2 whole-session MRU preemption (audit-v2
+  S7) was a victim-selection primitive the engine does not have. In-flight KV (a req
+  prefilling/decoding THIS step) is never evicted. Without tier 2 the sim DEADLOCKS at high
+  concurrency (whole herd protected → no admission → silent fallback to the static formula).
+  A turn's hit/miss is FROZEN at barrier release (``resident_at_barrier``) — a COMPENSATING
+  RULE, RETAINED ON THE GATE (audit-v2 S8, adjudicated 2026-06-10): the engine computes hits
+  LIVE at scheduling (erosion is real even within one scheduling step), and the freeze
+  over-credits 20.2-85.4% of its frozen prefix credit under pressure (frozen rule variants
+  under-count re-prefill tokens 42-54% vs engine truth; live+lru+partial lands within
+  1.3-12.6%). UNFREEZING WAS BUILT AND GATE-REJECTED (2026-06-10, together with the S7
+  partial-LRU landing): H100 ttft_cell 18.13→21.60 (+3.47), H100x2 advisory 29.02→33.91,
+  while A100 IMPROVED (TTFT −1.22, E2EL −1.15) and TPOT stayed byte-identical — i.e. the
+  freeze is compensating an over-amplification of re-prefill volume into TTFT that lives
+  OUTSIDE the eviction cluster (volume is now trace-faithful; the overshoot is the
+  pricing/queue-amplifier interaction), so per the no-cherry-picking precedent it stays
+  until that structural successor lands. Light over-subscription → cheap hits → TTFT
+  RECOVERS; heavy → deep re-prefills → the PEAK.
 * Barrier round-robin (matches the harness ``run_multi_turn_benchmark``: all sessions' turn-N
   requests dispatched together, ``asyncio.gather`` between turns): turn ``t``'s ENTIRE herd of
   surviving sessions arrives at the SAME epoch; turn ``t+1`` is released only after EVERY
@@ -77,7 +96,7 @@ from simulator.ramp_tpot import (
 )
 from simulator.ttft_predict import _prefill_per_token_ms, predict_turn_ttft
 
-__all__ = ["predict_cell_ttft_qsim", "predict_cell_e2el_qsim", "PROFILE_DIST"]
+__all__ = ["predict_cell_ttft_qsim", "predict_cell_e2el_qsim", "PROFILE_DIST", "QSimSchedConfig"]
 
 # --- vLLM serving defaults (documented runtime config, NOT fitted) ------------
 # Resolved by vLLM EngineArgs for H100 + OPENAI_API_SERVER (arg_utils._set_default_args,
@@ -96,6 +115,37 @@ MAX_NUM_BATCHED_TOKENS = 8192  # vLLM H100 OPENAI_API_SERVER resolved default (p
 # Config-derived (max_model_len x vLLM's 0.04), NOT a fitted constant.
 MAX_MODEL_LEN = 32768
 LONG_PREFILL_TOKEN_THRESHOLD = int(MAX_MODEL_LEN * 0.04)  # = 1310
+
+
+@dataclass(frozen=True)
+class QSimSchedConfig:
+    """Per-deployment vLLM scheduler truth for the queue sim's ADMISSION arithmetic
+    (``_schedule``/``_price_step`` token budget, per-request chunk cap, running-set cap).
+
+    The module constants above are the H100 OPENAI_API_SERVER resolved defaults; they are
+    NOT engine truth for <70 GiB consumer devices: vllm 0.19.0 (g2a69949bd, read off the
+    2080ti host install 2026-06-11) ``vllm/engine/arg_utils.py get_batch_defaults``:
+    ``device_memory < 70 GiB (or "a100" in device_name) -> OPENAI_API_SERVER:
+    max_num_batched_tokens=2048, max_num_seqs=256``. The kernel-TPOT side already prices
+    per-deployment (``RooflineParams.max_num_batched_tokens``); this struct brings the
+    TTFT sim to the same per-config truth. Threaded by the emitter
+    (``build_simulator_rows``) ONLY for deployments whose manifest pins
+    ``max_model_len``/``max_num_seqs`` (verified GT server metadata + resolved engine
+    defaults); every ``None`` field — and a ``None`` sched — resolves to the module
+    constants (BYTE-IDENTICAL default; the ``prefill_floor_ms`` threading precedent).
+    ``long_prefill_token_threshold`` keeps the module's established
+    ``int(max_model_len*0.04)`` rule with the config's OWN max_model_len (engine-source
+    caveat recorded in defit_log_entries/L10-tp1sub20.md round 2: upstream the 0.04 rule
+    is conditioned on ``max_num_partial_prefills>1``; the sim's adoption of it is a
+    pre-existing gated structural choice, not relitigated here). NOT fitted constants —
+    engine-config truth with verbatim citations in the deployment manifest. NOTE: the
+    ``_prefill_gemm_per_tok_loaded`` util-ramp endpoints stay on the module constants by
+    design — that ramp is a retained compensating fit inside the prefill-law pricing
+    stack (audit-v2 R1/S6), part of the consumer-prefill-law successor, NOT scheduler
+    admission arithmetic."""
+    max_num_batched_tokens: int | None = None
+    long_prefill_token_threshold: int | None = None
+    max_num_seqs: int | None = None
 
 # --- PREFILL COST: measured-serving anchors + pipeline FA3 kernel -------------
 # TTFT prefill cost has three measured parts (the H100 HIT-vs-MISS profile settled the
@@ -230,7 +280,23 @@ def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> floa
     frac = 0.0 if hi <= lo else min(1.0, max(0.0, (batch_tokens - lo) / (hi - lo)))
     util = p.util_flops + (PREFILL_GEMM_UTIL_SAT - p.util_flops) * frac
     gemm = 2.0 * (float(p.n_params) / tp) / (p.peak_flops_per_s * util) * 1e3
-    return gemm + PREFILL_TP_COMM_MS_PER_TOKEN * (tp - 1)
+    # Comm term: the per-config MEASURED total (RooflineParams.prefill_tp_comm_ms_per_token, G3
+    # like-for-like at the config's OWN tp degree — L11 de-fit) when the deployment pins it; else
+    # the tp2-measured per-extra-rank extrapolation (BYTE-IDENTICAL fallback; tp1 -> 0 either way).
+    comm = getattr(p, "prefill_tp_comm_ms_per_token", None)
+    if comm is None:
+        comm = PREFILL_TP_COMM_MS_PER_TOKEN * (tp - 1)
+    # Batched-drain amortization (L13 S7, 2026-06-12): the c1 stage-split comm rate is measured at
+    # single-request chunks; the engine's BARRIER DRAIN (many requests' chunks batched per step)
+    # amortizes the PCIe all-reduce well below it (S7: replayed GT ladder, engine-side computed
+    # tokens from /metrics vs measured drain makespans). A deployment that pins the MEASURED
+    # saturated rate interpolates c1 -> saturated over the SAME chunk-fill fraction as the util
+    # ramp above (small/single chunks keep the exact c1 rate -> the c1 stage-split anchors are
+    # untouched). None -> flat c1 comm, BYTE-IDENTICAL for every config that does not pin it.
+    comm_sat = getattr(p, "prefill_tp_comm_saturated_ms_per_token", None)
+    if comm_sat is not None:
+        comm = comm + (comm_sat - comm) * frac
+    return gemm + comm
 
 
 # Event kinds; ordering is (epoch, seq, kind) — deterministic FIFO at equal epochs.
@@ -271,10 +337,14 @@ class PrefixLRUCache:
     This is what makes the measured saturate-ramp-RECOVER emerge with the right magnitude: a
     MILDLY over-subscribed cohort (the drained tail) reuses few blocks per turn, so sessions
     keep almost all their prefix → cheap hits → TTFT recovers; a HEAVILY over-subscribed one
-    (the peak) churns the whole pool → full re-prefills → TTFT peaks. Replacing the previous
-    free-on-evict pool (which reset a victim to 0 blocks → full-re-prefill cascade) with this
-    retention model is the fix for the osworld over-prediction. Capacity and block size are
-    vLLM config (``available_kv_blocks`` / ``cache_block_size``); NO fitted constants."""
+    (the peak) churns the whole pool → deep re-prefills → TTFT peaks. Partial tail-trim in
+    LRU-oldest order is the TRACE-VALIDATED engine behaviour on BOTH tiers (S7 re-derivation
+    2026-06-10: 100% of turn>0 prefix losses in the archived serving traces are partial;
+    LRU-oldest replica exact on 92.7-100% of live lookups, MRU falsified at 3.2-26x the token
+    error — see defit_log_entries/L4-queue.md). Whole-prefix loss still EMERGES under extreme
+    pressure (herd working set > whole pool recycles every block before reuse), it is just no
+    longer a victim-selection primitive. Capacity and block size are vLLM config
+    (``available_kv_blocks`` / ``cache_block_size``); NO fitted constants."""
 
     def __init__(self, capacity_blocks: int, block_size: int = 16) -> None:
         self.capacity = int(capacity_blocks)
@@ -283,6 +353,16 @@ class PrefixLRUCache:
         self.recency: dict[int, int] = {}  # session_id -> last-touch tick (LRU key)
         self._tick = 0
         self.evictions = 0
+        # Sticky over-subscription marker (L13 S8 round 3): flips True the first time
+        # tier-2 eviction (PARTIAL trims of idle HERD residents — genuine
+        # over-subscription) is reached, and stays True (the engine's free queue then
+        # recycles blocks continuously for the rest of the run). Consumed ONLY by the
+        # duplicate-session credit (``qsim_duplicate_session_fraction``): a duplicate's
+        # hit lives in its TWIN's blocks, and once the pool recycles, the twin's content
+        # no longer survives between turns (S8: tb tp4 cell computed/bench_new 0.40-0.52
+        # at no-eviction c10-40 but 3.94 at c80 where the cohort exceeds the pool — the
+        # dedup DIES under eviction). No pricing effect for unpinned configs.
+        self.pressure_seen = False
 
     def tokens_to_blocks(self, num_tokens: float) -> int:
         return int(math.ceil(max(0.0, float(num_tokens)) / self.block_size))
@@ -303,9 +383,12 @@ class PrefixLRUCache:
 
     def _trim_tail(self, sids: list[int], need: int, whole: bool = False) -> None:
         """Free blocks by evicting ``sids`` (in the given order) until ``need`` blocks are free.
-        ``whole=True`` evicts each victim's ENTIRE resident prefix (concentrating the overflow
-        onto a minority of full-miss sessions, so the MEDIAN session stays a full hit — the
-        measured osworld saturate-recover); ``whole=False`` trims only the marginal tail."""
+        ``whole=False`` (the production path) trims only the marginal tail — the engine's
+        block-granular free-queue recycling (S7: 100% of natural-load prefix losses in the
+        archived serving traces are PARTIAL tail-trims). ``whole=True`` evicts each victim's
+        ENTIRE resident prefix; it is RETIRED from production (trace-falsified: zero
+        whole-session misses in 602 lossy lookups) and kept only as the adjudication tool's
+        counterfactual seam (compare_eviction_semantics.py)."""
         for v in sids:
             if self.free() >= need:
                 break
@@ -316,20 +399,29 @@ class PrefixLRUCache:
                 del self.cached[v]
 
     def _evict(
-        self, need: int, hard_protect: set[int], soft_protect: set[int], policy: str = "tail"
+        self, need: int, hard_protect: set[int], soft_protect: set[int], policy: str = "lru"
     ) -> bool:
         """Free ``need`` physical blocks in two tiers:
 
         1. **Reclaim free residents** — sessions in NEITHER protect set (departed/dead
            sessions' residual prefix), trimmed LRU-oldest-first. This is the rotation buffer.
-        2. **Preempt under genuine over-subscription** — if the cohort's persistent KV fills
-           the pool so tier 1 can't satisfy ``need``, evict ``soft_protect`` (herd members not
-           in-flight = idle resident hits-to-be) by ``policy``: ``'tail'`` = most-recently-used
-           first (vLLM v1 RECOMPUTE tail-preempt), ``'lru'`` = oldest-first (prefix-cache LRU).
-           A preempted session re-prefills its trimmed tail on its turn (a MISS) — the climb.
+        2. **Trim under genuine over-subscription** — if the cohort's persistent KV fills
+           the pool so tier 1 can't satisfy ``need``, PARTIALLY trim ``soft_protect`` (herd
+           members not in-flight = idle resident hits-to-be) in global-recency LRU order,
+           oldest-touched first. A trimmed session re-prefills its lost tail on its turn (a
+           partial MISS) — the climb.
+
+        ENGINE-FAITHFUL (S7 re-derivation 2026-06-10, defit_log_entries/L4-queue.md): vLLM v1
+        evicts free-queue blocks LRU-OLDEST block-by-block (block_pool.py popleft; tail-first
+        frees), so victims lose their prefix TAIL partially and oldest-touched sessions lose
+        first. The trace replica validated this exactly (92.7-100% of live lookups; MRU order
+        falsified at 3.2-26x the token error; 100% of natural-load prefix losses are partial).
+        The retired rule here — ``'tail'`` (MRU-first) victims trimmed WHOLE — had no engine
+        analog; ``policy='tail'`` is retained ONLY as the adjudication tool's falsification
+        seam (compare_eviction_semantics.py counterfactuals), never the production path.
 
         ``hard_protect`` (a req in-flight THIS step, KV pinned) is never evicted. Returns True
-        once ``need`` is free, False only if even preempting every idle resident is not enough
+        once ``need`` is free, False only if even trimming every idle resident is not enough
         (a single over-large head behind pinned in-flight KV — deferred, retried on completion)."""
         if need <= self.free():
             return True
@@ -341,16 +433,18 @@ class PrefixLRUCache:
         self._trim_tail(free_residents, need)
         if self.free() >= need:
             return True
-        # tier 2: genuine over-subscription -> preempt idle herd residents (vLLM RECOMPUTE),
-        # evicting WHOLE sessions (concentrate the overflow on a full-miss minority) so the
-        # median session stays a hit — without this the trim spreads thin and every session
-        # becomes a partial miss (osworld ~2x over-count).
+        # tier 2: genuine over-subscription -> PARTIAL tail-trims of idle herd residents in
+        # LRU-oldest order — the engine's free-queue recycling (S7: whole-session MRU
+        # preemption falsified against the trace oracles; whole-prefix loss only EMERGES when
+        # the herd working set exceeds the whole pool). The freed amount is exactly ``need``:
+        # the engine never frees more than the allocation requires.
+        self.pressure_seen = True  # tier 2 reached = genuine over-subscription (sticky; see __init__)
         soft = [
             s for s in self.cached
             if s in soft_protect and s not in hard_protect and self.cached[s] > 0
         ]
         soft.sort(key=lambda s: (self.recency.get(s, -1), s), reverse=(policy == "tail"))
-        self._trim_tail(soft, need, whole=True)
+        self._trim_tail(soft, need)
         return self.free() >= need
 
     def grow_to(
@@ -359,11 +453,12 @@ class PrefixLRUCache:
         target_blocks: int,
         hard_protect: set[int],
         soft_protect: set[int],
-        policy: str = "tail",
+        policy: str = "lru",
     ) -> bool:
         """Make ``sid`` resident up to ``target_blocks``, RECLAIMING its surviving prefix and
-        allocating only the delta (reclaiming free residents, then preempting idle herd
-        residents under over-subscription — see ``_evict``). Touches ``sid`` (MRU). Returns
+        allocating only the delta (reclaiming free residents, then partially trimming idle
+        herd residents LRU-oldest under over-subscription — see ``_evict``). Touches ``sid``
+        (MRU). Returns
         False (HOL block) only if the delta cannot be freed even after preemption. Context only
         grows, so a target below the current residency just keeps the larger residency."""
         cur = self.cached.get(sid, 0)
@@ -419,6 +514,8 @@ class _Req:
     is_miss: bool = False      # cache miss (session was evicted) -> re-prefilled full context
     resident_prefix: float = 0.0  # cached tokens that are a HIT (attended, not re-prefilled); set at admission
     prefill_total: float = 0.0    # total tokens to (re-)prefill this turn; set at admission (for chunk fraction)
+    prev_output: float = 0.0      # previous turn's output tokens (the response inside this turn's
+                                  # ``new_prefill``) — the S7 response-resident credit basis; 0 at turn 0
 
 
 @dataclass
@@ -437,9 +534,15 @@ class _ServerState:
     step_scheduled: bool = False
     # --- barrier round-robin state (matches the benchmark harness, see _release_herd) ---
     current_turn: int = 0       # turn_index of the herd currently in flight
+    # Tier-2 victim order: 'lru' (oldest-touched first, partial trims) is the ENGINE-FAITHFUL
+    # production value (S7 re-derivation 2026-06-10); 'tail' (MRU-first) is retained only as
+    # the adjudication tool's falsification seam.
     herd_remaining: int = 0     # requests of the current herd not yet departed; 0 -> barrier
-    preempt_policy: str = "tail"  # over-subscription victim: 'tail' (vLLM RECOMPUTE) or 'lru'
-    resident_at_barrier: dict[int, int] = field(default_factory=dict)  # sid -> resident blocks at herd release (hit/miss frozen here)
+    preempt_policy: str = "lru"
+    # sid -> resident blocks at herd release: the S8 hit/miss FREEZE — a compensating rule
+    # RETAINED ON THE GATE (engine truth is LIVE lookups; unfreeze gate-rejected 2026-06-10,
+    # H100 +3.47pt — see the module docstring and defit_log_entries/L4-queue.md).
+    resident_at_barrier: dict[int, int] = field(default_factory=dict)
     # --- shared cross-session APC prefix (prefix_aware_synthetic workloads) ---
     # ``shared_prefix_tokens`` (S) is the profile-constant prefix that EVERY session's prompt
     # carries at the FRONT of its context (system-prompt-level, generated from a per-PROFILE label
@@ -453,9 +556,19 @@ class _ServerState:
     # (a per-cell DATA input read from request_metadata.shared_prefix_actual_tokens).
     shared_prefix_tokens: float = 0.0
     shared_primed: bool = False
+    # First SUCCESSFUL admission of the run (global, monotone) — the duplicate-session
+    # credit's priming gate (L13 S8): a duplicate's hit lives in its TWIN's blocks, so an
+    # EMPTY cache cannot be hit; after any admission the twin content is this-run MRU
+    # resident. Independent of ``shared_primed`` (which is the S>0 APC-prefix feature).
+    dup_primed: bool = False
     # Per-config measured prefill floor (ms); resolved from gpu_key at predict_cell_ttft_qsim and
     # threaded here. Default = the legacy H100-tp1 constant (gpu_key=None -> byte-identical).
     prefill_floor_ms: float = PREFILL_FLOOR_MS
+    # Per-config scheduler truth (QSimSchedConfig), resolved at _run_sim; defaults = the
+    # module-level H100 constants (sched=None -> byte-identical). See QSimSchedConfig.
+    sched_max_num_batched_tokens: float = float(MAX_NUM_BATCHED_TOKENS)
+    sched_long_prefill_threshold: float = float(LONG_PREFILL_TOKEN_THRESHOLD)
+    sched_max_num_seqs: int = MAX_NUM_SEQS
 
     def push(self, epoch: float, kind: int, payload: Any) -> None:
         heapq.heappush(self.heap, (epoch, self.seq, kind, payload))
@@ -600,20 +713,21 @@ def _running_ctx_mean(state: _ServerState) -> float:
 
 def _schedule(state: _ServerState) -> None:
     """Admission for the current herd. The hit/miss decision is made from the block-level
-    prefix cache: the session's SURVIVING resident prefix is a HIT (re-prefill only the
-    evicted tail + new tokens); a fully-evicted session is a full MISS. Reserve the full
-    context blocks, RECLAIMING the surviving prefix and evicting ONLY non-herd cache — dead
-    sessions or sessions that already completed THIS round — never a herd member still
-    awaiting its turn (a hit-to-be), which is what kept the cohort from cascading to 100%
-    miss. A head that can't get blocks yet is DEFERRED (skipped, stays waiting) and retried
-    once a completion frees blocks — so hits run while misses wait, and the resident set
-    ROTATES (the saturate-ramp-RECOVER). Also gated by the per-step token budget + max_seqs."""
+    prefix cache: the session's SURVIVING resident prefix (per the barrier snapshot — the
+    retained S8 freeze, see below) is a HIT (re-prefill only the evicted tail + new tokens);
+    a fully-evicted session is a full MISS. Reserve the full context blocks, RECLAIMING the
+    surviving prefix and evicting free residents first (dead sessions or sessions that
+    already completed THIS round), then — only under genuine over-subscription — partially
+    trimming idle herd residents LRU-oldest (see ``_evict``). A head that can't get blocks
+    yet is DEFERRED (skipped, stays waiting) and retried once a completion frees blocks — so
+    hits run while misses wait, and the resident set ROTATES (the saturate-ramp-RECOVER).
+    Also gated by the per-step token budget + max_seqs."""
     if not state.waiting:
         return
     decode_slots = len(state.running)
-    budget = MAX_NUM_BATCHED_TOKENS - decode_slots
+    budget = state.sched_max_num_batched_tokens - decode_slots
     for r in state.prefilling.values():
-        budget -= min(r.remaining_prefill, LONG_PREFILL_TOKEN_THRESHOLD)
+        budget -= min(r.remaining_prefill, state.sched_long_prefill_threshold)
     cache = state.cache
     # Hard-protect = sessions with a req in-flight THIS step (KV pinned). Grows as we admit, so
     # a head admitted earlier in this pass is never preempted to make room for a later one.
@@ -621,17 +735,47 @@ def _schedule(state: _ServerState) -> None:
     in_flight |= {r.session_id for r in state.running.values()}
     deferred: list[_Req] = []
     for head in state.waiting:
-        if budget <= 0 or len(state.running) + len(state.prefilling) >= MAX_NUM_SEQS:
+        if budget <= 0 or len(state.running) + len(state.prefilling) >= state.sched_max_num_seqs:
             deferred.append(head)
             continue
         sid = head.session_id
         # Block-level prefix-cache hit: the surviving resident prefix covers up to
         # ``cached_blocks * block_size`` tokens of this turn's cached context; only the
         # EVICTED tail of that prefix plus the new tokens must be (re-)prefilled. Resident
-        # blocks are read from the BARRIER SNAPSHOT (frozen at herd release), not live, so a
-        # peer's in-pass eviction can't cascade this session into a spurious MISS.
+        # blocks are read from the BARRIER SNAPSHOT (frozen at herd release), not live —
+        # a COMPENSATING RULE, RETAINED ON THE GATE (audit-v2 S8, adjudicated against the
+        # engine-trace oracles 2026-06-10, defit_log_entries/L4-queue.md): vLLM computes
+        # hits LIVE at scheduling, and live erosion is real even WITHIN one scheduling step
+        # (trace pool060 step 287: five same-step lookups descend 353/313/273/233/193 blocks
+        # as each peer's allocation eats the next prefix); the freeze over-credits
+        # 20.2-85.4% of its frozen prefix credit under pressure (frozen variants
+        # under-count re-prefill 42-54% vs engine truth). The LIVE lookup was implemented
+        # and GATE-REJECTED (H100 ttft_cell 18.13→21.60, H100x2 29.02→33.91, A100 IMPROVED
+        # −1.22): with re-prefill VOLUME now trace-faithful, the freeze is compensating the
+        # volume→TTFT over-amplification elsewhere (pricing/queue interaction), not
+        # eviction semantics — it stays until that structural successor lands (the util-cap
+        # precedent), NOT because the engine freezes anything.
         snap_blocks = state.resident_at_barrier.get(sid, cache.cached_blocks(sid))
-        resident_prefix = min(head.cached, snap_blocks * cache.block_size)
+        # Resident-credit basis (L13 S7 engine truth, 2026-06-12): the engine's prefix cache
+        # retains the session's DECODED output blocks, and the next turn's re-tokenized prompt
+        # MATCHES those generated tokens up to a per-session divergence point — so a resident
+        # turn re-prefills only the un-matched remainder of its context, NOT the benchmark's
+        # prompt-basis ``new_prefill`` view (cache_estimate_source='previous_prompt_tokens'
+        # excludes output blocks). The S7 /metrics counters measured aggregate hits/req =
+        # prev-prompt + rho·prev-output with a BIMODAL per-request split (the measured per-turn
+        # TTFT distribution: a ~rho majority of sessions hit their whole previous response, the
+        # rest re-prefill it). ``qsim_response_resident_fraction`` (RooflineParams optional
+        # field, the L11 pin mechanism) applies that as a DETERMINISTIC session quantile —
+        # sessions with (sid+0.5)/C <= rho extend their credit basis by the previous turn's
+        # output; the credit stays capped by the LIVE resident-block snapshot, so eviction
+        # semantics are untouched. None (default) and 0.0 are the legacy prompt-basis cap,
+        # BYTE-IDENTICAL for every config that does not pin it.
+        rho = getattr(state.params, "qsim_response_resident_fraction", None)
+        credit_basis = head.cached
+        if rho is not None and head.prev_output > 0.0 and state.sessions:
+            if (sid + 0.5) / len(state.sessions) <= float(rho):
+                credit_basis = head.cached + min(head.prev_output, head.new_prefill)
+        resident_prefix = min(credit_basis, snap_blocks * cache.block_size)
         # Shared cross-session APC prefix: once primed (some session has prefilled it), the front
         # S tokens of THIS session's context are resident too — a HIT — even at turn-0 where the
         # per-session ``cached`` is 0 and the shared block lives inside ``new_prefill``. Credited
@@ -644,7 +788,35 @@ def _schedule(state: _ServerState) -> None:
             if state.shared_prefix_tokens > 0.0 and state.shared_primed
             else 0.0
         )
-        resident_credit = max(resident_prefix, shared_resident)
+        # Duplicate-session cross-session dedup (L13 S8 engine truth, 2026-06-12): the
+        # trace-replay profiles draw sessions from a FINITE trace set, so cohorts contain
+        # repeated traces whose ENTIRE turn content (history + injected delta + response)
+        # the engine's prefix cache hits via the TWIN session's blocks — S8 /metrics
+        # cell-level computed/bench_new on tb tp4: 1.02 (c1) -> 0.82 (c5) -> 0.40-0.52
+        # (c10-40) while prev-output covers only ~5% of new (the rho credit above cannot
+        # carry it; chat shows no surplus — rho explains chat exactly, and the two
+        # quantile rules NEST: both count sessions from sid 0 up, so where rho already
+        # grants full-new credit the duplicate credit adds nothing).
+        # ``qsim_duplicate_session_fraction`` applies the measured fraction as a
+        # DETERMINISTIC session quantile over sids >= 1 (a duplicate needs an earlier
+        # twin — sid 0 can never be one, so c1 cells are untouched), gated on
+        # ``dup_primed`` (first successful admission of the run, the shared-APC-prefix
+        # priming pattern: the twin's blocks are this-run MRU; an empty cache cannot be
+        # hit). NOT capped by the OWN-session snapshot — the hit lives in the TWIN's
+        # blocks (own-snapshot capping would collapse this credit back to the rho
+        # credit). None (default) and 0.0 are byte-identical legacy for unpinned configs.
+        fdup = getattr(state.params, "qsim_duplicate_session_fraction", None)
+        dup_resident = 0.0
+        if (fdup is not None and fdup > 0.0 and sid >= 1 and state.sessions
+                and state.dup_primed and not cache.pressure_seen
+                and (sid + 0.5) / len(state.sessions) <= float(fdup)):
+            # ``not pressure_seen``: once the pool over-subscribes (tier-2 trims), the
+            # twin's blocks recycle between turns and the cross-session hit DIES (S8:
+            # ratio 0.40-0.52 at no-eviction c10-40, 3.94 at c80 over-pool — measured;
+            # the standalone uncapped pin was gate-FALSIFIED on exactly the eviction
+            # cells, x4 e2el 24.59 -> 35.10 with tb/swe/osworld c120-320 +38..+64).
+            dup_resident = head.cached + head.new_prefill
+        resident_credit = max(resident_prefix, shared_resident, dup_resident)
         # Split the resident credit front-to-back: cached tokens first, then new (the shared block
         # is the front of new at turn-0). reprefill = the un-resident remainder of each.
         cached_hit = min(head.cached, resident_credit)
@@ -656,12 +828,13 @@ def _schedule(state: _ServerState) -> None:
         head.resident_prefix = resident_credit           # HIT prefix attended each prefill step
         head.prefill_total = max(1.0, head.remaining_prefill)  # to spread the cached-attn cost across chunks
         target_blocks = cache.tokens_to_blocks(head.kv_tokens)
-        # Reserve the full context: reclaim the surviving prefix, then free residents, then (only
-        # under genuine over-subscription) PREEMPT an idle herd resident (``herd_pending`` minus
-        # in-flight) per ``preempt_policy`` — vLLM RECOMPUTE. The preempted session re-prefills
-        # its trimmed tail on its turn (a MISS). In-flight KV is never evicted. If even that can't
-        # free the delta (one over-large head behind pinned in-flight KV), DEFER and retry on a
-        # completion — never a hard stall.
+        # Reserve the full context: reclaim the surviving prefix, then free residents, then
+        # (only under genuine over-subscription) PARTIALLY trim idle herd residents
+        # (``herd_pending`` minus in-flight) LRU-oldest — the engine's free-queue recycling
+        # (S7). A trimmed session re-prefills its lost tail on its turn (a partial MISS).
+        # In-flight KV is never evicted. If even that can't free the delta (one over-large
+        # head behind pinned in-flight KV), DEFER and retry on a completion — never a hard
+        # stall.
         if not cache.grow_to(sid, target_blocks, in_flight, state.herd_pending, state.preempt_policy):
             deferred.append(head)
             continue
@@ -672,7 +845,8 @@ def _schedule(state: _ServerState) -> None:
         # the grow_to success so a DEFERRED head never falsely primes a block nobody prefilled.
         if state.shared_prefix_tokens > 0.0:
             state.shared_primed = True
-        budget -= min(head.remaining_prefill, LONG_PREFILL_TOKEN_THRESHOLD)
+        state.dup_primed = True
+        budget -= min(head.remaining_prefill, state.sched_long_prefill_threshold)
     state.waiting = deferred
 
 
@@ -692,6 +866,10 @@ def _on_arrival(state: _ServerState, session_id: int, turn_index: int) -> None:
         remaining_prefill=new,  # provisional; _schedule sets hit/miss at admission
         output_left=max(1, int(round(spec.output_tokens))),
         kv_tokens=cached + new,
+        # the previous turn's generated response (it sits at the FRONT of this turn's
+        # ``new_prefill`` in the benchmark's prompt-basis accounting) — the S7
+        # response-resident credit basis; 0.0 at turn 0 (no previous response).
+        prev_output=(sess.turns[turn_index - 1].output_tokens if turn_index >= 1 else 0.0),
     )
     state.waiting.append(req)
     state.results[(session_id, turn_index)] = {"arrival_epoch": state.clock}
@@ -705,6 +883,27 @@ def _ensure_step(state: _ServerState) -> None:
     if state.running or state.prefilling:
         state.push(state.clock, _STEP, None)
         state.step_scheduled = True
+
+
+def _prefill_host_fa3_rates(p: RooflineParams) -> tuple[float, float, float]:
+    """(fa3_coef, host_shared_rate, host_perreq_rate) for ``_price_step``'s prefill terms.
+
+    Per-config MEASURED prefill HOST-cached SUM + FA3 coefficient (L11 round 2: the
+    like-for-like tp1/tpN stage-split pair, ``build_stage_split_rates.py``). ``None`` — every
+    config that does not pin them — returns the tp1-measured module constants UNCHANGED
+    (byte-identical). A pinned host SUM keeps the production measured shared/per-request
+    FRACTION (0.5236, prefill_host_split_H100.json; no tpN B-sweep exists) applied to the
+    per-config SUM. Explicit ``is None`` checks so a 0.0 pin is respected."""
+    fa3_coef = getattr(p, "prefill_fa3_ms_per_token2", None)
+    if fa3_coef is None:
+        fa3_coef = PREFILL_FA3_MS_PER_TOKEN2
+    host_sum = getattr(p, "prefill_host_cached_ms_per_token", None)
+    if host_sum is None:
+        return fa3_coef, PREFILL_HOST_SHARED_MS_PER_TOKEN, PREFILL_HOST_PERREQ_MS_PER_TOKEN
+    prod_sum = PREFILL_HOST_SHARED_MS_PER_TOKEN + PREFILL_HOST_PERREQ_MS_PER_TOKEN
+    return (fa3_coef,
+            host_sum * (PREFILL_HOST_SHARED_MS_PER_TOKEN / prod_sum),
+            host_sum * (PREFILL_HOST_PERREQ_MS_PER_TOKEN / prod_sum))
 
 
 def _price_step(state: _ServerState) -> float:
@@ -722,7 +921,9 @@ def _price_step(state: _ServerState) -> float:
     decode_batch = len(state.running)
     decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p) if decode_batch > 0 else 0.0
 
-    budget = max(0, MAX_NUM_BATCHED_TOKENS - decode_batch)
+    fa3_coef, host_shared_rate, host_perreq_rate = _prefill_host_fa3_rates(p)
+
+    budget = max(0, state.sched_max_num_batched_tokens - decode_batch)
     total_chunk = 0.0       # batched NEW-token rate scales with total tokens this step
     gpu_fa3_ms = 0.0        # pipeline FA3 attention (per request; super-linear for re-prefills)
     host_perreq_ms = 0.0    # per-request host re-tokenize (summed over concurrent prefills)
@@ -730,7 +931,7 @@ def _price_step(state: _ServerState) -> float:
     cached_w_n = 0
     any_prefill = False
     for r in state.prefilling.values():  # dict insertion order == FIFO admission order
-        chunk = min(r.remaining_prefill, float(LONG_PREFILL_TOKEN_THRESHOLD), float(budget))
+        chunk = min(r.remaining_prefill, float(state.sched_long_prefill_threshold), float(budget))
         if chunk <= 0:
             r._chunk = 0.0  # type: ignore[attr-defined]
             continue
@@ -741,14 +942,14 @@ def _price_step(state: _ServerState) -> float:
         frac = chunk / r.prefill_total if r.prefill_total > 0 else 1.0
         M = r.prefill_total          # tokens this turn (re-)prefills (reprefill_cached + new)
         R = r.resident_prefix        # resident prefix the (re-)prefill attends
-        gpu_fa3_ms += PREFILL_FA3_MS_PER_TOKEN2 * M * (R + 0.5 * M) * frac
-        host_perreq_ms += PREFILL_HOST_PERREQ_MS_PER_TOKEN * r.cached * frac
+        gpu_fa3_ms += fa3_coef * M * (R + 0.5 * M) * frac
+        host_perreq_ms += host_perreq_rate * r.cached * frac
         cached_w_sum += r.cached * frac
         cached_w_n += 1
     if any_prefill:
         gpu_new_ms = (_prefill_gemm_per_tok_loaded(p, total_chunk) + PREFILL_NEW_DISPATCH_RESIDUAL_MS_PER_TOKEN) * total_chunk
         mean_cached = cached_w_sum / cached_w_n if cached_w_n else 0.0
-        host_shared_ms = PREFILL_HOST_SHARED_MS_PER_TOKEN * mean_cached  # amortized once/step
+        host_shared_ms = host_shared_rate * mean_cached  # amortized once/step
         # Per-STEP fixed cost is the scheduler/launch overhead (one engine tick), NOT the full
         # PREFILL_FLOOR — the floor's first-token-emit/detok/return part is a per-REQUEST cost
         # added ONCE at first-token (see _on_first_token). Charging the full floor every step
@@ -859,13 +1060,22 @@ def _release_herd(state: _ServerState, turn_idx: int) -> None:
     state.current_turn = turn_idx
     state.herd_remaining = len(herd)
     # Freeze each herd member's resident prefix AT release: this turn's hit/miss is decided
-    # against what was cache-resident when the herd was scheduled, so admitting one member can
-    # NOT retroactively turn a peer's resident hit into a MISS (the cascade that over-counted
-    # osworld ~2x the physical working-set overflow). Physical eviction still runs live below.
+    # against what was cache-resident when the herd was scheduled. RETAINED COMPENSATING
+    # RULE (audit-v2 S8): the engine decides hits LIVE at scheduling — the trace-adjudicated
+    # unfreeze was gate-rejected 2026-06-10 (see the S8 comment in ``_schedule`` and
+    # defit_log_entries/L4-queue.md). Physical eviction still runs live below; cross-turn
+    # eviction IS visible (the snapshot is re-taken at every barrier) — only MID-TURN
+    # erosion is hidden from hit accounting.
     state.resident_at_barrier = {s.session_id: state.cache.cached_blocks(s.session_id) for s in herd}
-    # Every herd member is evict-PROTECTED until it departs: a re-prefilling miss must not
-    # trim a herd member still awaiting its turn (that member is a hit-to-be). Only dead /
-    # already-completed-this-round sessions are evictable.
+    # Herd members still awaiting their turn are TIER-2 victims only: free residents (dead /
+    # completed-this-round sessions) are reclaimed first, and only genuine over-subscription
+    # partially trims an idle herd member's prefix (LRU-oldest — see ``_evict``). This tier
+    # structure is the counterfactual-validated combination (within 1.3-12.6% of engine
+    # re-prefill truth when paired with live lookups); the engine itself draws NO herd
+    # distinction (S9: waiting herd members supplied 43.0-69.6% of evicted blocks in the
+    # pressure traces, and just-finished sessions' blocks are evicted LAST, not first) — the
+    # residual session-granular tier ordering is the documented honest stop-point of this
+    # cache model.
     state.herd_pending = {s.session_id for s in herd}
     for s in herd:
         state.push(state.clock, _ARRIVAL, (s.session_id, turn_idx))
@@ -888,15 +1098,27 @@ def _advance_herd(state: _ServerState) -> None:
 
 def _run_sim(
     sessions: list[Session], params: RooflineParams, max_events: int,
-    preempt_policy: str = "tail",
+    preempt_policy: str = "lru",
     shared_prefix_tokens: float = 0.0,
     prefill_floor_ms: float | None = None,
+    sched: QSimSchedConfig | None = None,
 ) -> dict[tuple[int, int], float]:
     cache = PrefixLRUCache(params.available_kv_blocks, params.cache_block_size)
+    # Per-config scheduler truth: None (or None fields) -> the module H100 constants
+    # (byte-identical default). See QSimSchedConfig.
+    _sched = sched or QSimSchedConfig()
     state = _ServerState(
         params=params, cache=cache, sessions=sessions, preempt_policy=preempt_policy,
         shared_prefix_tokens=max(0.0, float(shared_prefix_tokens)),
         prefill_floor_ms=PREFILL_FLOOR_MS if prefill_floor_ms is None else float(prefill_floor_ms),
+        sched_max_num_batched_tokens=float(
+            MAX_NUM_BATCHED_TOKENS if _sched.max_num_batched_tokens is None
+            else _sched.max_num_batched_tokens),
+        sched_long_prefill_threshold=float(
+            LONG_PREFILL_TOKEN_THRESHOLD if _sched.long_prefill_token_threshold is None
+            else _sched.long_prefill_token_threshold),
+        sched_max_num_seqs=(
+            MAX_NUM_SEQS if _sched.max_num_seqs is None else int(_sched.max_num_seqs)),
     )
 
     _release_herd(state, 0)  # turn-0 herd: all sessions arrive at epoch 0
@@ -1020,11 +1242,12 @@ def predict_cell_ttft_qsim(
     *,
     oracle: bool = False,
     max_events: int = 4_000_000,
-    preempt_policy: str = "tail",
+    preempt_policy: str = "lru",
     shared_prefix_tokens: float = 0.0,
     oracle_bench_root: "Path | str | None" = None,
     gpu_key: str | None = None,
     prefill_floor_ms: float | None = None,
+    sched: QSimSchedConfig | None = None,
     _survival_override: list[float] | None = None,
     _scale_override: list[float] | None = None,
 ) -> list[float]:
@@ -1035,13 +1258,19 @@ def predict_cell_ttft_qsim(
     to ``turns`` order; ``[]`` for empty; a turn_index reached by no session falls back to the
     forward static predictor. Forward by default (cohort from ``forward_survival``);
     ``oracle=True`` overlays measured ``session_timelines`` (validation only). ``preempt_policy``
-    selects the over-subscription victim: ``'tail'`` (vLLM RECOMPUTE, MRU-first) or ``'lru'``.
+    orders tier-2 partial trims: ``'lru'`` (oldest-first — ENGINE-FAITHFUL, the production
+    default since the S7 re-derivation 2026-06-10) or ``'tail'`` (MRU-first; trace-falsified,
+    kept only as the adjudication falsification seam).
 
     ``shared_prefix_tokens`` (S) models a profile-constant cross-session APC prefix (the
     ``prefix_aware_synthetic`` workloads): the front S tokens of every session's context are an
     identical shared block that vLLM dedups — ONE session prefills it, the rest HIT. Threaded by
     the emitter from ``request_metadata.shared_prefix_actual_tokens``; ``0.0`` (default) is a
-    no-op (byte-identical). NOT a fitted constant (per-cell measured workload input)."""
+    no-op (byte-identical). NOT a fitted constant (per-cell measured workload input).
+
+    ``sched`` (QSimSchedConfig) is the per-deployment vLLM scheduler truth for the admission
+    arithmetic (token budget / per-request chunk cap / running-set cap); ``None`` (default)
+    resolves to the module-level H100 constants — byte-identical. See QSimSchedConfig."""
     if not turns:
         return []
     p = params or RooflineParams()
@@ -1064,6 +1293,7 @@ def predict_cell_ttft_qsim(
         sessions, p, max_events, preempt_policy=preempt_policy,
         shared_prefix_tokens=shared_prefix_tokens,
         prefill_floor_ms=floor,
+        sched=sched,
     )
     return _aggregate(ttfts, turns, profile, float(concurrency), p, gpu_key)
 

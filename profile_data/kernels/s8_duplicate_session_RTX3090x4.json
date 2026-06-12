@@ -1,0 +1,54 @@
+{
+ "constants": {
+  "qsim_duplicate_session_fraction": 0.516590187080833
+ },
+ "n_cells": 5,
+ "cells": [
+  {
+   "profile": "terminalbench-multiturn-synth",
+   "conc": 10,
+   "computed": 39418.0,
+   "bench_new": 99354.0,
+   "final_ctx_med": 8132.5
+  },
+  {
+   "profile": "terminalbench-multiturn-synth",
+   "conc": 20,
+   "computed": 90387.0,
+   "bench_new": 186978.0,
+   "final_ctx_med": 7907.0
+  },
+  {
+   "profile": "terminalbench-multiturn-synth",
+   "conc": 40,
+   "computed": 199339.0,
+   "bench_new": 381038.0,
+   "final_ctx_med": 7626.0
+  },
+  {
+   "profile": "swebench-multiturn-synth",
+   "conc": 10,
+   "computed": 94723.0,
+   "bench_new": 164016.0,
+   "final_ctx_med": 12475.0
+  },
+  {
+   "profile": "swebench-multiturn-synth",
+   "conc": 20,
+   "computed": 142373.0,
+   "bench_new": 302032.0,
+   "final_ctx_med": 11713.0
+  }
+ ],
+ "cell_ratios": [
+  0.3967,
+  0.4714,
+  0.4834,
+  0.5231,
+  0.5775
+ ],
+ "pool_tokens": 477856,
+ "estimator": "f = 1 - median(cell_computed/cell_bench_new) over cells with conc>=10 and conc*median_final_ctx <= pool_tokens (no-eviction); cell-level monotonic /metrics counter deltas",
+ "source": "S8 engine-side /metrics prefix-cache counters, 3090 host, GT protocol replay (one server per profile ladder, ascending concs, VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1, vllm 0.19.0), tp4; profiles: ['terminalbench-multiturn-synth', 'swebench-multiturn-synth']",
+ "date": "2026-06-12"
+}

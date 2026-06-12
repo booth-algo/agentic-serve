@@ -5,6 +5,6 @@
   "util_flops": 0.65,
   "util_bw": 0.93,
   "scheduler_overhead_ms_per_step": 5.7,
-  "total_memory_bytes": 11811160064,
-  "_notes": "RTX 2080 Ti (TU102, Turing, 11 GiB GDDR6). peak_bw 616 GB/s datasheet. peak_flops = 53.8 TFLOPS FP16 tensor with FP32 accumulate (107.6 with FP16 accumulate). HEAVY FIRST-CUT: Turing has NO bf16 and NO FlashAttention-3; runs fp16. util_*/scheduler_overhead are H100 PLACEHOLDERS; no measured kernels."
+  "total_memory_bytes": 23622320128,
+  "_notes": "RTX 2080 Ti (TU102, Turing, sm75). HOST HARDWARE TRUTH (L9-consumer, 2026-06-10): the 2080ti host runs 8x 22GiB-modded cards — nvidia-smi memory.total = 22528 MiB on ALL 8 GPUs (= 23622320128 bytes; matches sweep.yaml hosts.2080ti.vram_gb_per_gpu: 22 and the orchestrator gpu-state snapshots), NOT the stock 11 GiB this file previously carried. The mod doubles GDDR6 density on the SAME 352-bit bus at 14 Gbps, so peak_bw stays the datasheet 616 GB/s. peak_flops = 53.8 TFLOPS dense FP16 tensor with FP32 accumulate — VERIFIED for the GT runs: the vLLM server logs show 'Casting torch.bfloat16 to torch.float16' + dtype=torch.float16 (sm75 has no bf16), and PyTorch/cuBLAS HGEMM uses FP32 accumulation (CUBLAS_COMPUTE_32F), which GeForce Turing runs at half the FP16-accumulate rate (107.6) per the NVIDIA Turing architecture whitepaper. util_*/scheduler_overhead remain H100 PLACEHOLDERS (NB: the H100 source values re-derive to 0.5886/0.8111/4.5574 under the pinned recipe, roofline_utils_H100.json; per-GPU measurement recipe: build_roofline_utils.py); no measured kernels."
 }

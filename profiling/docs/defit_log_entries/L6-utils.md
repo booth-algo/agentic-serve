@@ -1,0 +1,256 @@
+# L6 — roofline utils (audit-v2 G4 + G7)
+
+Lane: `a100-roofline-utils` / `/root/agentic-serve-a100`. Scope: own the roofline-utils
+RECIPE (deterministic builder over serving-wall traces); re-derive H100 `util_bw = 0.93`
+with the pinned recipe; A100 measurement (G7) is **DEFERRED** — 7/8 GPUs on the A100 host
+are running someone else's latency-sensitive benchmark campaign (decided at lane launch);
+this entry ships the recipe, the H100 re-derivation, and a ready-to-run A100 runbook +
+preflight instead.
+
+Baseline: replay-ON `gate_scoped_rows` captured in this worktree BEFORE any edit
+(`/tmp/l6_base.json`, `/tmp/l6_base.metrics.json`).
+
+## Input data (pinned)
+
+The four H100 serving-wall step traces documented by audit-v2's refuted-KV-pool item
+(`fitted_constants_audit_v2.md`, `available_kv_blocks` row — 4/4 traces parse):
+
+| trace | steps |
+|---|---|
+| `vllm_engine_step_trace_swe_c40_t12_benchmark_serving_wall.jsonl` | 1993 |
+| `vllm_engine_step_trace_swe_c80_t12_benchmark_serving_wall.jsonl` | 1822 |
+| `vllm_engine_step_trace_swe_c320_t2_benchmark_serving_wall.jsonl` | 454 |
+| `vllm_engine_step_trace_terminal_c80_t16_benchmark_serving_wall.jsonl` | 3587 |
+
+Provenance correction (recorded here, fixes the audit's wording): these traces are NOT
+git-committed — `profile_data/_archive/` is gitignored and the files exist only in the
+main checkout's working tree (`git log --all` has no trace of them). They are the pinned
+working-set artifacts the audit verified. This lane worktree symlinks
+`profile_data/_archive -> /root/agentic-serve/profile_data/_archive` (untracked).
+
+## PRE-REGISTERED RECIPE (written before any util number was computed)
+
+Registered 2026-06-10, before running the builder. The builder
+(`profiling/process/build_roofline_utils.py`) implements exactly this; any deviation
+found later must be recorded below as a deviation, not silently edited here.
+
+Constants are read from `profile_data/kernels/roofline_params_H100_llama31_8b.json`:
+`n_params = 8.03e9`, `bytes_per_param = 2.0`, `kv_bytes_per_token = 131072`,
+`peak_flops_per_s = 989e12`, `peak_bw_bytes_per_s = 3.35e12`. `SCHED_PRIOR = 5.7 ms`
+(the current pinned value) is used ONLY as an eligibility threshold, never in the
+output arithmetic.
+
+Step classification (per JSONL record, file order):
+- **decode-only**: `decode_batch > 0`, `prefill_tokens == 0`, `model_executed == "true"`.
+- **pure-prefill**: `prefill_tokens > 0`, `decode_batch == 0`, `model_executed == "true"`.
+- mixed steps are excluded from all three constants.
+
+Per-request context reconstruction (deterministic, for decode KV-read bytes):
+- `prompt_tokens[request_id]` from each step's `engine_cache_truth.requests[*].prompt_tokens`
+  (first sighting wins; chunked prefill repeats the same value).
+- `generated[request_id]` = count of PRIOR steps (any kind) in which the id appears in
+  `decode_request_ids`. Context of request r at step s = `prompt_tokens[r] + generated[r]`
+  (prefix-cached tokens are part of the prompt and ARE read at decode — no shared-prefix
+  dedup, matching the formula `closed_form_tpot._decode_step_ms` prices in its default path
+  and the G4 anchor arithmetic).
+- A decode step containing any request with unknown `prompt_tokens` is EXCLUDED (count
+  reported in the artifact).
+
+Roofline times per step (the sim's own pricing conventions, `closed_form_tpot.py:16-30`):
+- decode: `bw_roofline_ms = (bytes_per_param·n_params + Σ_r ctx_r·kv_bpt + decode_batch·kv_bpt) / peak_bw · 1e3`
+- prefill: `compute_roofline_ms = 2·n_params·prefill_tokens / peak_flops · 1e3`
+  (`prefill_tokens` = scheduled NEW tokens; cached tokens compute nothing).
+
+### util_bw (headline)
+
+Eligible steps: decode-only, AND
+1. full batch: `decode_batch >= 0.9 × per-trace max decode_batch` (steady state; also
+   excludes ramp/drain),
+2. warmup: `step_id > 5`,
+3. bandwidth-dominated vs host floor: `bw_roofline_ms >= 2 × SCHED_PRIOR` (= 11.4 ms) —
+   the ratio must measure bandwidth, not the additive host overhead; this mirrors the
+   original anchor's ~16 ms byte scale without hand-picking steps,
+4. outlier rule (catches the audit's 290 ms step): drop steps whose `engine_step_wall_ms`
+   lies outside `[0.5×, 2×]` the per-trace median wall of steps passing 1–3.
+
+`util_bw = median over eligible steps (all four traces pooled) of
+bw_roofline_ms / engine_step_wall_ms`.
+
+Wall convention: `engine_step_wall_ms`, exactly what the pinned anchor's arithmetic used
+(`roofline_params_H100_llama31_8b.json` `_notes.util_bw_anchor`: 16.06/17) and what
+`closed_form_tpot` predicts (it adds NO separate scheduler term to tpot — util_bw absorbs
+host overhead at the anchor byte scale). Diagnostic (reported, not headline):
+the same median against `engine_step_wall_ms − sched` (the `ttft_queue_sim:762`
+convention, which DOES add the scheduler term), and per-trace + per-byte-quartile medians
+so the additive-host-overhead scale dependence is visible instead of hidden.
+
+### util_flops
+
+Eligible steps: pure-prefill, `prefill_tokens >= 1024` (compute roofline ≥ 3× bandwidth
+roofline there, so the step is compute-bound), `step_id > 5` dropped — DEVIATION RISK
+NOTED UP FRONT: big prefills cluster at trace start (turn-0 cohort), so the warmup rule
+for prefill is instead the per-token outlier trim: drop steps whose per-token
+`model_submit_wall_ms/prefill_tokens` lies outside `[0.5×, 2×]` the per-trace median.
+
+`util_flops = median over eligible steps (pooled) of
+compute_roofline_ms / model_submit_wall_ms`.
+
+Wall convention: `model_submit_wall_ms`, following the pinned anchor's own documented
+arithmetic (`_notes.util_flops_anchor`: 116.6/178). Diagnostic: same vs
+`engine_step_wall_ms`. Honesty note registered up front: pure-prefill steps ≥1024 tokens
+are RARE in these decode-heavy serving traces (schema scan: ~7 steps ≥2048 across all
+four), so this re-derivation is thin by construction; the measured per-step util curve
+(`prefill_gemm_util_H100.json`, R1 artifact, plateau 0.754) remains the better prefill
+source. We report n per trace and refuse a headline if n_total < 5.
+
+### scheduler_overhead_ms_per_step
+
+Eligible: decode-only steps with `decode_batch == 1` (minimal work; the pinned comment's
+"lowest-work decode steps" population, `closed_form_tpot.py:74`).
+`sched = median over eligible steps (pooled) of engine_step_wall_ms − model_submit_wall_ms`.
+Median, not mean (robust; no trim needed). Per-trace medians + counts reported.
+
+### Decision rule (registered before the numbers)
+
+- `matches_093` iff `|util_bw − 0.93| <= 0.01`.
+- If it does NOT match: keep `0.93` in `configs/gpus/*.json` / `closed_form_tpot.py`
+  defaults for now (honest stop-point: document the measured disagreement; rewiring is a
+  prediction-moving change gated H100 ±0.3 and is deferred to integration), but fix the
+  PROVENANCE comments to point at the builder artifact instead of the irreproducible
+  "16.06/17 = 0.945 ≈ 0.93" anchor.
+- Artifact: `profile_data/kernels/roofline_utils_H100.json` (medians, counts, per-trace
+  and per-quartile breakdowns, exclusion counts, recipe echo).
+
+## Results (builder run 2026-06-10, after the pre-registration commit)
+
+Artifact: `profile_data/kernels/roofline_utils_H100.json` (deterministic — two
+consecutive runs byte-identical, sha256 `a8e644b6…`). No recipe deviations were needed;
+the builder implements the registered text as written.
+
+| constant | pinned | re-derived (pre-registered recipe) | n steps |
+|---|---|---|---|
+| `util_bw` | 0.93 | **0.8111** | 62 (26/21/2/13 per trace after trim) |
+| `util_flops` | 0.65 | 0.5886 (THIN — see below) | 7 |
+| `scheduler_overhead_ms_per_step` | 5.7 | 4.5574 | 2666 |
+
+**G4 verdict: 0.93 does NOT fall out** (|0.8111 − 0.93| = 0.12 ≫ 0.01). Neither does
+the audit's "documented recipe" value 0.945 nor its "real step walls" range 0.90-0.92 —
+those used the anchor's hand-written byte count (T≈7200/req ⇒ 53.8 GB); the
+trace-reconstructed contexts of the actual steady-state steps top out at a 21.3 ms
+roofline and give stable medians per byte-quartile (0.804/0.830/0.805/0.818 — flat, so
+the 0.81 is not an artifact of byte scale within the eligible range). Per-trace medians
+0.828 (swe_c40) / 0.810 (swe_c80) / 0.724 (swe_c320, n=2) / 0.748 (terminal_c80).
+The 290 ms outlier class the audit flagged is handled by the registered trim rule
+(11 steps trimmed across traces).
+
+Diagnostics worth recording:
+- `util_bw_net_of_sched_prior` = **1.2536 (> 1, unphysical)**: you cannot subtract the
+  full pinned 5.7 ms scheduler term from these walls and still attribute the remainder
+  to bandwidth — i.e. the `ttft_queue_sim:762` convention (decode_ms + sched) and
+  util_bw=0.93 cannot BOTH be honest descriptions of these steps. The closed-form
+  convention (util absorbs host overhead; no separate sched term) is the one the data
+  supports, at util ≈ 0.81.
+- `util_flops` is thin by construction (7 pure-prefill steps ≥1024 tokens in 7856
+  steps) AND the pinned `model_submit_wall` convention is unreliable under
+  AsyncScheduler: swe_c80's two steps give util 2.69 (> 1, impossible — submit returns
+  before the GPU finishes). Against `engine_step_wall` the median is 0.5441. The R1
+  measured curve (`prefill_gemm_util_H100.json`, plateau 0.754) remains the
+  authoritative prefill-util source; this re-derivation only shows 0.65 is not
+  reproducible from the serving-wall traces either.
+- `sched` = 4.56 ms (median over 2666 batch-1 decode steps) vs pinned 5.7 (mean over 99
+  steps of one trace). Per-trace medians 4.62/4.58/5.61/4.53 — the pinned value sits at
+  the top of the range (swe_c320's quiet steps), not the center.
+
+### Action taken (per the registered decision rule)
+
+- `configs/gpus/*.json`, `closed_form_tpot.py` defaults, `roofline_params_*` values:
+  **unchanged** (0.93/0.65/5.7 stay). Rewiring moves predictions and is deferred to
+  integration where the H100 ±0.3 gate is re-checked; this lane's deliverable is the
+  pinned recipe + the measured disagreement (honest stop-point, knee/util-cap
+  precedent).
+- Provenance comments/_notes updated to point at the builder artifact and state the
+  re-derived values, replacing the irreproducible "16.06/17 = 0.945 ≈ 0.93" story.
+- Byte-identity of predictions after the comment edits is established by construction
+  + equivalence proof rather than a second 25-min gate run: the baseline
+  (`/tmp/l6_base.*`, replay-ON, zero warnings) completed at 16:46 BEFORE any
+  simulator/config edit; the edits touch only Python comments and free-text `_notes`
+  (verified consumers: `RooflineParams.from_json` filters to dataclass fields;
+  `configs/loader.py` / `generate_deployments.py` read named fields only); the
+  functional-field equality pre/post edit is asserted programmatically (see commit) and
+  the full pinned test suites pass. Integration re-gates anyway (merge protocol).
+
+### A100 (G7) — deferred, ready to run
+
+- Runbook: `profiling/docs/a100_roofline_utils_runbook.md`.
+- Preflight: `profiling/process/preflight_a100_roofline_utils.sh` — executed read-only
+  2026-06-10 against the live host: reachability PASS (alias `a100` = hostname
+  `gpu-4`), **gpu_quiet FAIL (7 compute apps — the deferral condition, by design)**,
+  vllm 0.19.0 PASS, `/data/models/Llama-3.1-8B-Instruct` (30G) PASS, 1879G free PASS.
+- Known gap recorded in the runbook: the serving-wall capture harness was never
+  committed; the runbook pins the exact JSONL field contract the builder consumes.
+
+## Candidate gate (2026-06-10, run in-lane — supersedes "rewiring deferred to integration")
+
+After the re-derivation commit the lane was directed to gate the candidate IN-LANE
+instead of deferring: wire `util_bw = 0.8111`, run the replay-ON gate, adopt on pass /
+keep 0.93 + document on fail. Setup: the ONLY change was `configs/gpus/H100.json`
+`util_bw 0.93 → 0.8111` (flows to the H100 and H100x2 deployments via `configs/loader`;
+the A100 placeholder was NOT touched — its measurement is the deferred G7).
+`gate_scoped_rows` → `/tmp/l6_cand.*` vs the pre-edit baseline `/tmp/l6_base.*`
+(both replay-ON: realized pools symlinked, no warning, A100 rows byte-identical).
+
+| binding metric | base | candidate | delta | ±0.3 |
+|---|---|---|---|---|
+| H100 tpot_cell | 14.3182 | 14.9887 | **+0.6705** | **FAIL** |
+| H100 ttft_cell | 18.1328 | 18.1415 | +0.0087 | ok |
+| H100 e2el_cell | 10.7586 | 10.9928 | +0.2342 | ok |
+| H100 tpot chat | 5.4631 | 6.2323 | **+0.7692** | **FAIL** |
+| H100 swe-plateau | 8.8219 | 8.7732 | −0.0487 | ok |
+| A100 tpot/ttft/e2el/chat | — | — | +0.0000 | ok |
+
+Diagnostics (non-binding): H100x2 tpot_cell 28.7486 → 31.0120 (+2.2634), H100x2
+e2el_cell +0.8062, H100 tpot osworld +1.3389, H100 tpot_turn_overall +0.7268.
+
+**Verdict: FAIL** (one-sided ≤ +0.3 and two-sided ±0.3 alike) — **candidate REJECTED,
+0.93 kept** (the established honest fallback: pinned-with-measured-disagreement).
+
+Reading: replacing 0.93 with the honestly-measured 0.8111 raises every analytic decode
+price by ~14.7% and moves predictions AWAY from measurement everywhere TPOT is
+analytic-fill-priced (grid-covered cells don't move). I.e. 0.93 is not just a pinned
+constant with bad provenance — it is doing COMPENSATING-FIT work for the host-overhead
+term the decode pricing does not carry (consistent with the net-of-sched util 1.25 > 1
+diagnostic above). Retiring it is only possible as a PAIRED change (measured util + an
+explicit host floor in decode pricing), which touches L3-owned pricing files — out of
+this lane's scope; recorded here for integration.
+
+Final state: `configs/gpus/*.json` and `closed_form_tpot.py` defaults unchanged at
+0.93/0.65/5.7; provenance comments in `configs/gpus/H100.json`,
+`closed_form_tpot.py:69`, and `roofline_params_H100_llama31_8b.json`
+`_notes.util_provenance.values_kept` now record the gate numbers and the rejection.
+pytest after revert: 145 passed, 1 skipped.
+
+## Lane-final status (2026-06-10)
+
+- **Action taken: `kept-documented-disagreement`.** Pinned 0.93/0.65/5.7 stay in
+  `configs/gpus/*.json` and the `RooflineParams` defaults; the pre-registered recipe's
+  re-derived values 0.8111/0.5886/4.5574 live in
+  `profile_data/kernels/roofline_utils_H100.json` and in the provenance comments next to
+  every kept constant. The 0.8111 candidate was wired, replay-ON gated, and REJECTED
+  (H100 tpot_cell +0.67pt, chat +0.77pt > +0.3) — see the gate table above. Retiring
+  0.93 requires the paired host-floor change in L3-owned decode pricing (integration
+  concern, recorded above).
+- **A100 measurement (G7): DEFERRED, not attempted.** 7/8 GPUs on the A100 host
+  (ssh alias `a100`, hostname gpu-4) are running another latency-sensitive benchmark
+  campaign; a util measurement there now would contaminate both sides (decided at lane
+  launch). Deliverables instead: runbook `profiling/docs/a100_roofline_utils_runbook.md`
+  (env `/home/kevinlau/miniconda3/envs/vllm`, weights under `/data/models`, exact JSONL
+  field contract, builder invocation) + preflight
+  `profiling/process/preflight_a100_roofline_utils.sh` (read-only run 2026-06-10:
+  everything PASS except gpu_quiet — the deferral condition). A100 JSON keeps its H100
+  placeholders, `_notes` says so and points at the runbook.
+- Deliverables tracked in this lane (all committed locally, never pushed):
+  `profiling/process/build_roofline_utils.py` (deterministic builder),
+  `profile_data/kernels/roofline_utils_H100.json` (artifact, sha256 `a8e644b6…`),
+  `configs/gpus/*.json` + `simulator/closed_form_tpot.py` provenance comments,
+  runbook + preflight, this entry. `prediction_construction.md` untouched (integration
+  merges this entry).

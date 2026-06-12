@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import json
+
+import pytest
+
+import simulator.ramp_tpot as ramp_tpot
 from simulator.closed_form_tpot import RooflineParams
 from simulator.kernel_step_cost import decode_step_ms
 from simulator.ramp_tpot import (
     DEF_LO,
+    DIST_DIR,
     PROFILE_DIST,
     forward_survival,
     predict_cell_tpot_ramp,
@@ -80,6 +86,90 @@ def test_select_conc_nearest_rule() -> None:
     assert _select_conc({}, 80) is None             # no by_concurrency -> pooled
     assert _select_conc(None, 80) is None
     assert _select_conc(fake, None) is None          # concurrency None -> pooled
+
+
+# ------------------------- S13: committed replay pools + loud missing-pool path -------------------
+# The per-GPU realized files carry the TTFT trajectory-replay pools. They were gitignored
+# (~105MB pretty-printed) and fresh checkouts silently fell back to the pooled cohort, which
+# flipped two gate verdicts on 2026-06-09/10. Decision rule executed 2026-06-10: minified, the
+# full Llama-3.1-8B ground-truth set is 19.9MB <= 25MB, so the files are COMMITTED. These tests
+# make a missing pool impossible to miss: presence is pinned for the gate gpu_keys, and the
+# resolver path warns loudly / hard-fails for anything absent.
+
+GATE_GPU_SLUGS = ("h100", "a100", "h100x2")  # gate_scoped_rows DEFAULT_GPU_KEYS, slugged
+
+
+def _per_gpu_path(profile: str, slug: str):
+    return DIST_DIR / PROFILE_DIST[profile].replace(".json", f"_{slug}.json")
+
+
+def test_committed_pools_present_for_gate_gpu_keys() -> None:
+    """A fresh checkout MUST carry the replay pools for every gate gpu_key x profile —
+    if this fails, the replay-ON gate baseline cannot be trusted (S13)."""
+    for prof in PROFILE_DIST:
+        for slug in GATE_GPU_SLUGS:
+            f = _per_gpu_path(prof, slug)
+            assert f.exists(), (
+                f"missing committed per-GPU replay pool {f} — gates would silently run "
+                f"replay-OFF; regenerate via build_realized_session_distributions"
+            )
+            d = json.loads(f.read_text())
+            bc = d.get("by_concurrency") or {}
+            assert bc, f
+            # the fields production reads (ramp_tpot readers) must be present
+            assert any(blk.get("trajectory_pool") for blk in bc.values()), f
+            assert any(blk.get("turn_count") for blk in bc.values()), f
+            assert any(blk.get("context_scale_quantiles") for blk in bc.values()), f
+
+
+def test_committed_pools_carry_regeneration_note() -> None:
+    files = sorted(DIST_DIR.glob("*_realized_*.json"))
+    assert len(files) >= len(PROFILE_DIST) * len(GATE_GPU_SLUGS)
+    for f in files:
+        d = json.loads(f.read_text())
+        note = d.get("_committed_note", "")
+        assert "build_realized_session_distributions" in note, f
+
+
+def test_per_gpu_resolver_prefers_committed_file() -> None:
+    p = ramp_tpot._resolve_dist_path("swebench-multiturn-synth", "H100")
+    assert p == _per_gpu_path("swebench-multiturn-synth", "h100")
+    pool = ramp_tpot.trajectory_pool("swebench-multiturn-synth", 80, "H100")
+    assert pool and all(len(t) == 3 for s in pool[:3] for t in s)
+
+
+def test_missing_per_gpu_pool_warns_loudly_once(capsys) -> None:
+    """Absent per-GPU file -> pooled fallback PLUS one unmissable stderr warning per
+    (gpu_key, profile) — never silent, never a flood."""
+    ramp_tpot._MISSING_POOL_WARNED.clear()
+    prof = "chat-multiturn-synth"
+    p1 = ramp_tpot._resolve_dist_path(prof, "ghost-gpu-9000")
+    p2 = ramp_tpot._resolve_dist_path(prof, "ghost-gpu-9000")
+    assert p1 == p2 == DIST_DIR / PROFILE_DIST[prof]  # pooled fallback unchanged
+    err = capsys.readouterr().err
+    assert err.count("PER-GPU REPLAY POOL MISSING") == 1
+    assert "ghostgpu9000" in err and prof in err
+
+
+def test_no_warning_without_gpu_key(capsys) -> None:
+    ramp_tpot._MISSING_POOL_WARNED.clear()
+    ramp_tpot._resolve_dist_path("chat-multiturn-synth", None)
+    ramp_tpot._resolve_dist_path("chat-multiturn-synth", "")
+    assert "PER-GPU REPLAY POOL MISSING" not in capsys.readouterr().err
+
+
+def test_require_pools_env_escalates_to_hard_error(monkeypatch) -> None:
+    """RAMP_TPOT_REQUIRE_POOLS=1 (gate runs): a requested-but-absent per-GPU pool is FATAL,
+    on every occurrence; present committed pools still resolve."""
+    monkeypatch.setenv("RAMP_TPOT_REQUIRE_POOLS", "1")
+    with pytest.raises(FileNotFoundError, match="REPLAY POOL MISSING"):
+        ramp_tpot._resolve_dist_path("chat-multiturn-synth", "ghost-gpu-9001")
+    with pytest.raises(FileNotFoundError):  # raises again — no warn-once swallowing
+        ramp_tpot._resolve_dist_path("chat-multiturn-synth", "ghost-gpu-9001")
+    with pytest.raises(FileNotFoundError):  # and through the public reader
+        ramp_tpot.trajectory_pool("osworld-multiturn-synth", 80, "ghost-gpu-9001")
+    # committed files keep working under the strict env
+    assert ramp_tpot.trajectory_pool("swebench-multiturn-synth", 80, "H100")
 
 
 def test_unknown_profile_falls_back_to_concurrency() -> None:

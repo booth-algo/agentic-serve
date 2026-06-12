@@ -1,0 +1,83 @@
+3090 Llama-3.1-8B tp2/tp4 vLLM GT-class KV pool evidence (L13-3090multi, 2026-06-11)
+=====================================================================================
+
+Purpose (L12 P0 pattern): exact engine pool truth for the RTX3090x2 / RTX3090x4 vllm
+deployments, replacing the kv_pool.py derived estimates (9893 / 27445 blocks, 3.5 GB
+generic reserve) whose under-estimate the L9 lane flagged (~1.63 GB measured reserve on
+this host). Captures were one fresh server start each at the GT flags on the GT host
+(ssh alias `3090`), vllm 0.19.0 (the GT engine version), then killed after the pool
+line; no benchmark traffic.
+
+Host / device (nvidia-smi, 2026-06-11):
+  0, NVIDIA GeForce RTX 3090, 24576 MiB
+  torch.cuda.get_device_properties(0).total_memory = 25,296,044,032 bytes (< 70 GiB ->
+  vllm 0.19.0 arg_utils.py get_batch_defaults routes OPENAI_API_SERVER to the small
+  defaults max_num_batched_tokens=2048 / max_num_seqs=256; cited in the L13 entry's
+  scheduler-truth section against the installed engine source, lines 2024-2072)
+
+GT server metadata being matched (committed GT config blocks, tp2 + tp4
+chat-multiturn-synth_conc10.json): max_model_len 32768, gpu_memory_utilization 0.85,
+max_num_batched_tokens null, max_num_seqs null; _engine_version.txt = vllm 0.19.0.
+
+--- tp2 capture (GPUs 0,1; launch: /home/kevinlau/miniconda3/envs/vllm/bin/python -m
+vllm.entrypoints.openai.api_server --model /home/kevinlau/models/Llama-3.1-8B-Instruct
+--tensor-parallel-size 2 --max-model-len 32768 --gpu-memory-utilization 0.85
+--port 8791  [defaults otherwise = GT null batched/seqs]; log
+3090:/home/kevinlau/m3090_run/l13/vllm_gtflags_tp2.log) ---
+
+(Worker_TP0 pid=591412) INFO 06-11 21:12:55 [gpu_worker.py:436] Available KV cache memory: 11.93 GiB
+(EngineCore pid=591192) INFO 06-11 21:12:55 [kv_cache_utils.py:1319] GPU KV cache size: 195,520 tokens
+(EngineCore pid=591192) INFO 06-11 21:12:55 [kv_cache_utils.py:1324] Maximum concurrency for 32,768 tokens per request: 5.97x
+
+  -> 195,520 tokens / 16 = 12,220 blocks   (manifest available_kv_blocks 9893 -> 12220;
+     derived under-estimated 19.0%)
+
+--- tp4 capture (GPUs 0-3; same flags with --tensor-parallel-size 4 --port 8792; log
+3090:/home/kevinlau/m3090_run/l13/vllm_gtflags_tp4.log) ---
+
+(Worker_TP0 pid=594615) INFO 06-11 21:22:45 [gpu_worker.py:436] Available KV cache memory: 15.66 GiB
+(EngineCore pid=594389) INFO 06-11 21:22:45 [kv_cache_utils.py:1319] GPU KV cache size: 513,120 tokens
+(EngineCore pid=594389) INFO 06-11 21:22:45 [kv_cache_utils.py:1324] Maximum concurrency for 32,768 tokens per request: 15.66x
+
+  -> 513,120 tokens / 16 = 32,070 blocks   (manifest available_kv_blocks 27445 -> 32070;
+     derived under-estimated 14.4%)
+
+Cross-checks:
+* vLLM reports the pool in TOKENS with per-GPU bytes_per_token = kv_bytes_per_token /
+  kv_shards (Llama-3.1-8B 131,072 B/token total; 65,536 B at tp2, 32,768 B at tp4).
+  Per-GPU KV bytes reproduce the worker log lines exactly: tp2 = 195,520 * 65,536 =
+  12.81e9 (= the logged 11.93 GiB); tp4 = 513,120 * 32,768 = 16.81e9 (= 15.66 GiB).
+* Back-solved per-GPU reserve (budget 25,296,044,032 * 0.85 = 21.50e9; weights 16.06e9
+  bf16 / tp): tp2 = 21.50e9 - 8.03e9 - 12.81e9 = 0.66 GB; tp4 = 21.50e9 - 4.015e9 -
+  16.81e9 = 0.68 GB - mutually consistent (+-0.02 GB) and far below the generic 3.5 GB
+  rule mean (the L9 small-pool amplification, now MEASURED at this host's multi-GPU
+  configs; the tp1-log back-solve gave ~1.63 GB - tp1 carries the larger single-rank
+  activation peak).
+* Consistency with the stage-split-flag launches (util 0.90, prefix-caching ON, same
+  mml): tp2 214,576 tokens, tp4 551,712 tokens; delta vs GT-class = exactly the 0.05
+  util step (tp2: 19,056 tokens * 65,536 B = 1.249e9 = 0.05 * 24.98e9 per GPU; tp4:
+  38,592 * 32,768 = 1.265e9). Pool is max_len-insensitive at fixed util (L9 finding) and
+  prefix-caching-insensitive; util is the only mover.
+
+Capture hygiene: GPUs verified 0 compute apps before each launch and 0 after each kill
+(first tp4 attempt aborted on leaked tp2 worker pids 591412/591413 holding both GPUs -
+killed, host re-verified clean, retried with process-group kill; no GT data was running
+on this host at any point - host idle, all 8 GPUs owned by this lane).
+
+--- L13 ROUND-2 CORRECTION (S7 GT-protocol replay, 2026-06-11/12): the GT sweep launcher is
+sweep_multiturn_profiles.sh (evidence: it alone writes the _engine_version.txt the GT dirs
+carry, and its WARMUP=3 / mml 32768 / util 0.85 / ${PROFILE}_conc${CONC}.json naming match the
+GT config blocks), and it exports VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 — which the S4
+captures above did NOT set. With the env var (the GT-true protocol; vllm logs it explicitly:
+"--gpu-memory-utilization=0.8500 is equivalent to --gpu-memory-utilization=0.8043 [tp4] /
+0.7989 [tp2] without CUDA graph memory profiling") the pools are SMALLER: ---
+
+tp2 (GPUs 0,1; full GT flag set incl. the env var; log 3090:/home/kevinlau/m3090_run/l13/s7/vllm_s7_tp2.log):
+(Worker_TP0 pid=636978) INFO 06-11 23:52:40 [gpu_worker.py:436] Available KV cache memory: 10.73 GiB
+(EngineCore pid=636705) INFO 06-11 23:52:40 [kv_cache_utils.py:1319] GPU KV cache size: 175,808 tokens
+  -> 175,808 / 16 = 10,988 blocks  (supersedes the S4 no-env-var 195,520 / 12,220)
+
+tp4 (GPUs 0-3; same; log 3090:/home/kevinlau/m3090_run/l13/s7/vllm_s7_tp4.log):
+(Worker_TP0 pid=627509) INFO 06-11 23:34:25 [gpu_worker.py:436] Available KV cache memory: 14.58 GiB
+(EngineCore pid=627193) INFO 06-11 23:34:25 [kv_cache_utils.py:1319] GPU KV cache size: 477,856 tokens
+  -> 477,856 / 16 = 29,866 blocks  (supersedes the S4 no-env-var 513,120 / 32,070)

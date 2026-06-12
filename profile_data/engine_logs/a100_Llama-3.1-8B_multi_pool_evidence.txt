@@ -1,0 +1,162 @@
+A100 Llama-3.1-8B tp1/tp2/tp4 vllm — engine-config evidence (read-only harvest)
+================================================================================
+Lane: L12-a100multi (profiling/docs/defit_log_entries/L12-a100multi.md), 2026-06-11.
+All host material read off the a100 host over ssh (READ-ONLY; 7/8 GPUs busy with an
+unrelated campaign — nothing was launched). Local GT mirror:
+/mnt/100g/agent-bench/results/synthetic_distributional/a100_Llama-3.1-8B_tp{1,2,4}_vllm.
+This file is the durable verbatim record (L9-consumer pattern) behind:
+  * the P1 pool pins  : A100x2 available_kv_blocks 23820 -> 24574, A100x4 55298 -> 56806
+  * the P2/P4 scheduler-truth pins: max_model_len=32768, max_num_seqs=256 (budget 2048
+    already pinned) for the A100 family (tp1/tp2/tp4).
+
+--------------------------------------------------------------------------------
+(i) INSTALLED ENGINE: the vLLM A100 carve-out (scheduler defaults)
+--------------------------------------------------------------------------------
+Host install: /home/kevinlau/miniconda3/envs/vllm/lib/python3.12/site-packages/vllm
+  vllm.__version__ = 0.19.0 ; _version.py: __commit_id__ = commit_id = 'g2a69949bd'
+  (same version AND commit as the 2080ti install cited in L10-tp1sub20 round 2.)
+
+vllm/engine/arg_utils.py, def get_batch_defaults (line 2024), lines 2040-2072 verbatim:
+
+2040:        # vLLM with Ray) and has no GPUs. In this case we use the default
+2041:        # values for non-H100/H200 GPUs.
+2042:        try:
+2043:            device_memory = current_platform.get_device_total_memory()
+2044:            device_name = current_platform.get_device_name().lower()
+2045:        except Exception:
+2046:            # This is only used to set default_max_num_batched_tokens
+2047:            device_memory = 0
+2048:            device_name = ""
+2049:
+2050:        # NOTE(Kuntai): Setting large `max_num_batched_tokens` for A100 reduces
+2051:        # throughput, see PR #17885 for more details.
+2052:        # So here we do an extra device name check to prevent such regression.
+2053:        if device_memory >= 70 * GiB_bytes and "a100" not in device_name:
+2054:            # For GPUs like H100 and MI300x, use larger default values.
+2055:            default_max_num_batched_tokens = {
+2056:                UsageContext.LLM_CLASS: 16384,
+2057:                UsageContext.OPENAI_API_SERVER: 8192,
+2058:            }
+2059:            default_max_num_seqs = {
+2060:                UsageContext.LLM_CLASS: 1024,
+2061:                UsageContext.OPENAI_API_SERVER: 1024,
+2062:            }
+2063:        else:
+2064:            # TODO(woosuk): Tune the default values for other hardware.
+2065:            default_max_num_batched_tokens = {
+2066:                UsageContext.LLM_CLASS: 8192,
+2067:                UsageContext.OPENAI_API_SERVER: 2048,
+2068:            }
+2069:            default_max_num_seqs = {
+2070:                UsageContext.LLM_CLASS: 256,
+2071:                UsageContext.OPENAI_API_SERVER: 256,
+2072:            }
+
+Device truth (nvidia-smi --query-gpu=index,name,memory.total --format=csv, 2026-06-11):
+index, name, memory.total [MiB]
+0, NVIDIA A100-SXM4-40GB, 39936 MiB
+1, NVIDIA A100-SXM4-40GB, 39936 MiB
+2, NVIDIA A100-SXM4-40GB, 39936 MiB
+3, NVIDIA A100-SXM4-40GB, 39936 MiB
+4, NVIDIA A100-SXM4-40GB, 39936 MiB
+5, NVIDIA A100-SXM4-40GB, 39936 MiB
+6, NVIDIA A100-SXM4-40GB, 39936 MiB
+7, NVIDIA A100-SXM4-40GB, 39936 MiB
+
+=> BOTH halves of the line-2053 condition route this host to the SMALL defaults:
+   39936 MiB = 39 GiB < 70 GiB, AND "a100" IS in "nvidia a100-sxm4-40gb".
+   Resolved OPENAI_API_SERVER defaults that actually ran (GT launched both unset, see
+   (iv)): max_num_batched_tokens = 2048, max_num_seqs = 256.
+
+--------------------------------------------------------------------------------
+(ii) SURVIVING SAME-HOST SAME-MODEL tp1 ENGINE POOL LINES (vllm 0.19.0, util 0.85)
+--------------------------------------------------------------------------------
+a100:/tmp/vllm_mse.log (mtime 2026-05-04 14:12):
+(APIServer pid=1196494) INFO 05-04 12:46:26 [utils.py:299]  ... version 0.19.0
+(APIServer pid=1196494) INFO 05-04 12:46:26 [utils.py:233] non-default args: {'port': 8090, 'model': '/data/models/Llama-3.1-8B-Instruct', 'max_model_len': 32768, 'gpu_memory_utilization': 0.85, 'enable_prefix_caching': True, 'enable_chunked_prefill': True}
+(EngineCore pid=1197196) INFO 05-04 12:46:55 [gpu_worker.py:436] Available KV cache memory: 17.12 GiB
+(EngineCore pid=1197196) INFO 05-04 12:46:55 [kv_cache_utils.py:1319] GPU KV cache size: 140,208 tokens
+(EngineCore pid=1197196) INFO 05-04 12:46:55 [kv_cache_utils.py:1324] Maximum concurrency for 32,768 tokens per request: 4.28x
+
+a100:/tmp/vllm_smoke.log (mtime 2026-04-30 19:37):
+(APIServer pid=4068543) INFO 04-30 19:34:14 [utils.py:233] non-default args: {'port': 8089, 'api_key': ['test'], 'model': '/data/models/Llama-3.1-8B-Instruct', 'trust_remote_code': True, 'max_model_len': 8192, 'gpu_memory_utilization': 0.85, 'enable_prefix_caching': True, 'enable_chunked_prefill': True}
+(EngineCore pid=4069697) INFO 04-30 19:34:21 [core.py:105] Initializing a V1 LLM engine (v0.19.0) with config: model='/data/models/Llama-3.1-8B-Instruct', ...
+(EngineCore pid=4069697) INFO 04-30 19:34:39 [gpu_worker.py:436] Available KV cache memory: 17.12 GiB
+(EngineCore pid=4069697) INFO 04-30 19:34:39 [kv_cache_utils.py:1319] GPU KV cache size: 140,208 tokens
+(EngineCore pid=4069697) INFO 04-30 19:34:39 [kv_cache_utils.py:1324] Maximum concurrency for 8,192 tokens per request: 17.12x
+
+=> 140,208 tokens / 16 = 8763 blocks at mml 32768 AND at mml 8192: the pool is
+   max_model_len-INSENSITIVE at fixed util (L9 3090 finding, reconfirmed on this host).
+=> The GT-era tp1 anchor is the manifest's MEASURED pool 8458 blocks ("135328 tokens /
+   16 @ gpu_mem=0.85", configs/deployments/a100_llama31-8b_tp1.json). Gap to the
+   surviving lines: 8763 - 8458 = 305 blocks = 305*2,097,152 B = 0.6396 GB ~= the
+   CUDA-graph estimate enabled by the GT launcher (the exact 1475-vs-1201 structure
+   L10 found on the 2080ti tp1 config; these two servers ran without it).
+
+--------------------------------------------------------------------------------
+(iii) tp2/tp4 GT WRAPPER LOGS + ENGINE-LOG OVERWRITE EVIDENCE
+--------------------------------------------------------------------------------
+tp2 GT run (the bench dir the gate scores):
+a100:/tmp/bench_Llama-3.1-8B_tp2_multi_vllm_p8089.log (mtime 2026-05-12 13:10:34 +0000):
+[mt-sweep] MODEL=/data/models/Llama-3.1-8B-Instruct TP=2 OUT=/tmp/results/synthetic_distributional/a100_Llama-3.1-8B_tp2_vllm
+[mt-sweep] concurrencies: 1 5 10 20 40 80 120 160 200 256 320
+[mt-sweep] profiles: chat-multiturn-synth swebench-multiturn-synth terminalbench-multiturn-synth osworld-multiturn-synth
+[mt-sweep] dashboard scope: synthetic_distributional
+[mt-sweep] gdn prefill backend: triton
+[mt-sweep] vllm PID=1527971 (port 8089)
+[mt-sweep] server ready after 9x5s
+[mt-sweep] API health check passed
+[sweep] captured engine version: vllm 0.19.0
+
+tp4 GT top-up run:
+a100:/tmp/bench_Llama-3.1-8B_tp4_multi_vllm_p8090.log (mtime 2026-05-18 20:24:22 +0000):
+[mt-sweep] MODEL=/data/models/Llama-3.1-8B-Instruct TP=4 OUT=/tmp/results/synthetic/a100_Llama-3.1-8B_tp4_vllm
+[mt-sweep] concurrencies: 200 320
+[mt-sweep] profiles: chat-multiturn-synth swebench-multiturn-synth terminalbench-multiturn-synth osworld-multiturn-synth
+[mt-sweep] dashboard scope: synthetic
+[mt-sweep] vllm PID=3078853 (port 8090)
+[mt-sweep] server ready after 13x5s
+[mt-sweep] API health check passed
+[sweep] captured engine version: vllm 0.19.0
+(earlier tp4 main sweep: /tmp/bench_Llama-3.1-8B_tp4_multi_vllm.log, mtime 2026-04-28.)
+
+OVERWRITE EVIDENCE (why no exact tp2/tp4 pool line survives — same failure mode as the
+L10 2080ti tp1 case): the per-port engine logs are truncated per launch; both GT ports
+were re-used 2026-05-26 by Llama-3.3-70B sglang launches:
+stat: 2026-05-26 01:56:32 +0000 /tmp/vllm_8089.log
+stat: 2026-05-26 00:40:03 +0000 /tmp/vllm_8090.log
+head -1 /tmp/vllm_8089.log: [2026-05-26 00:53:36] server_args=ServerArgs(model_path='/data/models/Llama-3.3-70B-Instruct', tokenizer_path='/data/models/Llama-3.3-70B-Instruct', ...
+head -1 /tmp/vllm_8090.log: [2026-05-24 21:12:22] server_args=ServerArgs(model_path='/data/models/Llama-3.3-70B-Instruct', tokenizer_path='/data/models/Llama-3.3-70B-Instruct', ...
+
+--------------------------------------------------------------------------------
+(iv) GT CONFIG BLOCKS + ENGINE VERSION (local /mnt/100g mirror)
+--------------------------------------------------------------------------------
+/mnt/100g/agent-bench/results/synthetic_distributional/a100_Llama-3.1-8B_tp{1,2,4}_vllm/
+_engine_version.txt (all three, verbatim): backend=vllm version=0.19.0
+
+chat-multiturn-synth_conc10.json "config" block (identical relevant subset in tp1, tp2
+and tp4 dirs; verbatim):
+  "model": "/data/models/Llama-3.1-8B-Instruct",
+  "max_model_len": 32768,
+  "gpu_memory_utilization": 0.85,
+  "max_num_batched_tokens": null,
+  "max_num_seqs": null
+=> both scheduler caps ran at the vLLM resolved defaults of section (i): 2048 / 256.
+
+--------------------------------------------------------------------------------
+DERIVATION RECORD (P1 pool pins; configs/kv_pool.py G6 back-solve, no new constants)
+--------------------------------------------------------------------------------
+total_memory_bytes(A100) = 42,949,672,960 (40 GiB, configs/gpus/A100.json); util 0.85;
+weights 16.06e9 B bf16; bytes_per_block(per GPU) = 16*131072/min(tp,8).
+reserve_A100 = 42,949,672,960*0.85 - 16.06e9 - 8458*2,097,152 = 2,709,510,400 B
+             = 2.710 GB (already cited in the kv_pool.py G6 docstring table).
+tp2: floor((36,507,222,016 - 16.06e9/2 - 2,709,510,400)/1,048,576) = 24,574 blocks
+tp4: floor((36,507,222,016 - 16.06e9/4 - 2,709,510,400)/  524,288) = 56,806 blocks
+Brackets: LOWER = vLLM v1 startup feasibility at GT mml 32768 -> 32768/16 = 2048 blocks
+(vllm/v1/core/kv_cache_utils.py check_enough_kv_cache_memory). UPPER = zero-reserve host
+arithmetic: tp2 27,157 / tp4 61,973. Corroboration: the surviving zero-CG tp1 lines
+(8763 blocks -> reserve 2.0699 GB) transfer to tp2 25,184 / tp4 58,026; the pins sit
+2.5 % / 2.1 % BELOW those lighter-CG ceilings, as they must (GT ran WITH the CG
+estimate). The generic 3.5 GB RESERVE rule gives 23,820 / 55,298 (the pre-lane values);
+the per-host anchored reserve replaces the rule mean with THIS host's own back-solved
+constant — the L9 "engine-anchored reconstruction" method (Qwen-tp2 precedent).

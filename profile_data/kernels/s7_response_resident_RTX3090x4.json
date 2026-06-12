@@ -1,0 +1,27 @@
+{
+ "constants": {
+  "qsim_response_resident_fraction": 0.7217
+ },
+ "n_clusters": 16,
+ "cluster_rho_values": [
+  0.4703,
+  0.4839,
+  0.5914,
+  0.597,
+  0.6143,
+  0.6688,
+  0.6862,
+  0.6991,
+  0.7443,
+  0.7541,
+  0.7731,
+  0.8839,
+  0.9155,
+  0.9485,
+  1.007,
+  1.4014
+ ],
+ "filter": "turns 1-4, 10<=conc<=80, chat-multiturn-synth GT-protocol replay",
+ "source": "S7 engine-side /metrics prefix-cache counters (s7_metrics_tp4.jsonl), 3090 host, GT protocol (sweep_multiturn_profiles.sh class: one server, ascending ladder, VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1, vllm 0.19.0); rho per turn cluster = (hits/req - blockfloor16(prompt_med)) / prev_output_med",
+ "date": "2026-06-12"
+}

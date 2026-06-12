@@ -48,6 +48,12 @@ class Deployment:
     saturated_ceiling: Path | None  # None -> in-code default (H100) saturated-ITL ceiling
     roofline: RooflineParams        # composed from gpu + model + (available_kv_blocks, tp)
     data: dict                      # per-input provenance / coverage manifest
+    # Optional ENGINE-CONFIG keys (verified GT server metadata / resolved engine defaults,
+    # NOT fit knobs): when pinned in the deployment JSON, build_simulator_rows threads them
+    # into the TTFT queue sim as QSimSchedConfig (per-config scheduler truth). None ->
+    # the sim's module-level H100 constants (byte-identical inherit).
+    max_model_len: int | None = None   # GT server metadata (recorded launch flag)
+    max_num_seqs: int | None = None    # resolved engine default (arg_utils get_batch_defaults)
 
 
 def _read(path: Path) -> dict:
@@ -75,6 +81,32 @@ def load_deployment(dep_path: Path) -> Deployment:
     # Any explicitly-launched value belongs in the deployment JSON, same key.
     if "max_num_batched_tokens" in d:
         merged["max_num_batched_tokens"] = int(d["max_num_batched_tokens"])
+    # Optional MEASURED prefill tp-comm total (ms per new token at this config's tp degree, G3
+    # like-for-like; see RooflineParams.prefill_tp_comm_ms_per_token). Absent -> None -> the
+    # sim's PREFILL_TP_COMM_MS_PER_TOKEN·(tp−1) fallback (byte-identical for unpinned configs).
+    if d.get("prefill_tp_comm_ms_per_token") is not None:
+        merged["prefill_tp_comm_ms_per_token"] = float(d["prefill_tp_comm_ms_per_token"])
+    # Optional MEASURED per-config prefill HOST-cached SUM + FA3 coefficient (L11 round 2,
+    # like-for-like tp1/tpN stage-split pair — build_stage_split_rates.py; see the
+    # RooflineParams fields). Absent -> None -> the sim's tp1-measured module constants
+    # (byte-identical for unpinned configs).
+    for _k in ("prefill_host_cached_ms_per_token", "prefill_fa3_ms_per_token2"):
+        if d.get(_k) is not None:
+            merged[_k] = float(d[_k])
+    # Optional MEASURED saturated (batched-drain) prefill comm rate + the engine-semantics
+    # sequence-resident-credit pin (L13 S7 probe, 2026-06-12; see the RooflineParams field
+    # comments). Absent -> None -> flat c1 comm / legacy prompt-basis credit (byte-identical
+    # for unpinned configs).
+    if d.get("prefill_tp_comm_saturated_ms_per_token") is not None:
+        merged["prefill_tp_comm_saturated_ms_per_token"] = float(
+            d["prefill_tp_comm_saturated_ms_per_token"])
+    if d.get("qsim_response_resident_fraction") is not None:
+        merged["qsim_response_resident_fraction"] = float(d["qsim_response_resident_fraction"])
+    # Optional MEASURED duplicate-session fraction (L13 S8 probe, 2026-06-12; trace-replay
+    # cohorts repeat traces -> engine-side cross-session dedup; see the RooflineParams field
+    # comment). Absent -> None -> no duplicate credit (byte-identical for unpinned configs).
+    if d.get("qsim_duplicate_session_fraction") is not None:
+        merged["qsim_duplicate_session_fraction"] = float(d["qsim_duplicate_session_fraction"])
     fields = RooflineParams.__dataclass_fields__
     roofline = RooflineParams(**{k: v for k, v in merged.items() if k in fields})
     data = d.get("data", {})
@@ -86,6 +118,8 @@ def load_deployment(dep_path: Path) -> Deployment:
         decode_grid=_owned_path(data, "decode_grid"),
         saturated_ceiling=_owned_path(data, "saturated_ceiling"),
         roofline=roofline, data=data,
+        max_model_len=int(d["max_model_len"]) if d.get("max_model_len") is not None else None,
+        max_num_seqs=int(d["max_num_seqs"]) if d.get("max_num_seqs") is not None else None,
     )
 
 

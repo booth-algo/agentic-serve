@@ -1,5 +1,14 @@
 """Kernel-composition TPOT with the standalone classifier's stepping-ramp HINT.
 
+RETIRED 2026-06-10 (de-fit campaign lane L7; audit-v2 item D9): moved to
+``simulator/_legacy/``. Not reachable from any production entrypoint
+(``build_simulator_rows`` / ``validate_*`` / ``gate_scoped_rows`` / dashboards);
+the only caller is ``profiling/process/_legacy/
+augment_simulator_predictions_with_kernel.py``, an opt-in dashboard diagnostic
+that injects a ``tpot_pred_kernel_hint`` comparison column on demand. Production
+``build_simulator_rows`` does NOT emit that column (shipped predictions contain
+zero such fields). Kept (not deleted) so the diagnostic still runs.
+
 The production kernel predictor (``simulator/kernel_tpot.py``) is a pure
 pressure-driven amplifier. It nails the plateau MAGNITUDE but its rise can lag
 the measured saturation step by a few turns (the pressure ramp is gradual).
@@ -12,7 +21,8 @@ width). This module folds that timing hint into the kernel prediction as a
     ramp_target[t] = kstep[t] + smoothstep(t; jump_start, jump_end) * (ceiling - kstep[t])
     ramp_target[t] = min(ramp_target[t], max(pressure_path[t:]))   # forward-max recovery cap
 
-Why this shape (all verified by measurement, workflow wf_9a938421):
+Why this shape (claimed verified by workflow wf_9a938421 — unarchived; see the
+HISTORICAL note below):
 
 * ONE-SIDED (``max(0, ...)``): the hint can only pull a turn UP toward the
   output-keyed saturation ceiling, never push it down. So no cell can score worse
@@ -27,11 +37,16 @@ Why this shape (all verified by measurement, workflow wf_9a938421):
   recovery DOWN instead of pinning to the static ceiling; for coding families
   whose pressure path is still climbing it is a no-op.
 
-Measured vs the production kernel (all 1043 cells): overall MAPE 16.48 -> 16.2,
-and improves on EVERY profile + plateau slice (osworld-plateau 19.5 -> 16.2,
-swebench-plateau 9.2 -> 8.9, terminalbench-plateau 18.3 -> 17.7). The production
-``predict_cell_tpot`` is untouched (the ``tpot_pred_kernel`` headline column is
-byte-identical); this is an additive ``tpot_pred_kernel_hint`` column.
+HISTORICAL — figures unverifiable today (audit-v2 D9): the numbers below were
+read from workflow wf_9a938421, which left no artifact, and the underlying
+kernel has changed twice since (tuned knees retired in ``aea241e``; firing-gate
+hysteresis added 2026-06-10), so they no longer describe the current kernel.
+The former claim that this is "an additive ``tpot_pred_kernel_hint`` column" is
+stale: ``build_simulator_rows`` never emits it; only the _legacy augmenter
+injects it on demand. As measured THEN, vs the then-production kernel (all 1043
+cells): overall MAPE 16.48 -> 16.2, improving on every profile + plateau slice
+(osworld-plateau 19.5 -> 16.2, swebench-plateau 9.2 -> 8.9, terminalbench-plateau
+18.3 -> 17.7), with the production ``predict_cell_tpot`` untouched.
 """
 
 from __future__ import annotations
@@ -46,7 +61,7 @@ from simulator.kernel_tpot import (
     predict_cell_tpot,
     saturated_ceiling_ms,
 )
-from simulator.session_regime_classifier import session_ramp_window
+from simulator._legacy.session_regime_classifier import session_ramp_window
 
 
 def predict_cell_tpot_hinted(

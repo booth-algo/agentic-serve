@@ -193,7 +193,9 @@ def main(argv: list[str] | None = None) -> None:
         print("WARNING: no per-GPU realized distribution files found under "
               "inference-benchmark/data/distributions/ — TTFT trajectory REPLAY IS OFF "
               "(pooled cohort, non-production). TTFT/E2EL gates are NOT production-faithful; "
-              "symlink the *_realized_*.json files from the main checkout first.", flush=True)
+              "the pools are COMMITTED since 2026-06-10 (lane L2) — a missing file means a stale/"
+              "corrupted checkout: git checkout -- inference-benchmark/data/distributions/ or "
+              "regenerate via build_realized_session_distributions.", flush=True)
 
     orig_grid = kernel_step_cost._default_grid
     orig_ceiling = kernel_tpot._active_ceiling_json

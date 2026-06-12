@@ -5,6 +5,7 @@
   "tp": 1,
   "engine": "sglang",
   "available_kv_blocks": 30228,
+  "max_num_batched_tokens": 4096,
   "bench_dir": "a100_Qwen3.5-9B_tp1_sglang",
   "backend": "a100-tp1-sglang-analytic-roofline",
   "calibration_status": "a100_tp1_sglang_analytic_roofline_firstcut",
