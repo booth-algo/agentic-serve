@@ -63,3 +63,21 @@ Capture hygiene: GPUs verified 0 compute apps before each launch and 0 after eac
 (first tp4 attempt aborted on leaked tp2 worker pids 591412/591413 holding both GPUs -
 killed, host re-verified clean, retried with process-group kill; no GT data was running
 on this host at any point - host idle, all 8 GPUs owned by this lane).
+
+--- L13 ROUND-2 CORRECTION (S7 GT-protocol replay, 2026-06-11/12): the GT sweep launcher is
+sweep_multiturn_profiles.sh (evidence: it alone writes the _engine_version.txt the GT dirs
+carry, and its WARMUP=3 / mml 32768 / util 0.85 / ${PROFILE}_conc${CONC}.json naming match the
+GT config blocks), and it exports VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 — which the S4
+captures above did NOT set. With the env var (the GT-true protocol; vllm logs it explicitly:
+"--gpu-memory-utilization=0.8500 is equivalent to --gpu-memory-utilization=0.8043 [tp4] /
+0.7989 [tp2] without CUDA graph memory profiling") the pools are SMALLER: ---
+
+tp2 (GPUs 0,1; full GT flag set incl. the env var; log 3090:/home/kevinlau/m3090_run/l13/s7/vllm_s7_tp2.log):
+(Worker_TP0 pid=636978) INFO 06-11 23:52:40 [gpu_worker.py:436] Available KV cache memory: 10.73 GiB
+(EngineCore pid=636705) INFO 06-11 23:52:40 [kv_cache_utils.py:1319] GPU KV cache size: 175,808 tokens
+  -> 175,808 / 16 = 10,988 blocks  (supersedes the S4 no-env-var 195,520 / 12,220)
+
+tp4 (GPUs 0-3; same; log 3090:/home/kevinlau/m3090_run/l13/s7/vllm_s7_tp4.log):
+(Worker_TP0 pid=627509) INFO 06-11 23:34:25 [gpu_worker.py:436] Available KV cache memory: 14.58 GiB
+(EngineCore pid=627193) INFO 06-11 23:34:25 [kv_cache_utils.py:1319] GPU KV cache size: 477,856 tokens
+  -> 477,856 / 16 = 29,866 blocks  (supersedes the S4 no-env-var 513,120 / 32,070)
