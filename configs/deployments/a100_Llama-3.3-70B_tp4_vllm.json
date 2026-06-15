@@ -4,7 +4,7 @@
   "model": "Llama-3.3-70B",
   "tp": 4,
   "engine": "vllm",
-  "available_kv_blocks": 1545,
+  "available_kv_blocks": 2147,
   "max_num_batched_tokens": 2048,
   "bench_dir": "a100_Llama-3.3-70B_tp4_vllm",
   "backend": "a100-tp4-vllm-analytic-roofline",
@@ -17,9 +17,9 @@
     },
     "kv_pool": {
       "status": "derived",
-      "value": 1545,
+      "value": 2147,
       "source": "configs/kv_pool.py",
-      "note": "40GiB util 0.95, weights 141.1GB/tp4, reserve 3.5GB"
+      "note": "40GiB util 0.95, weights 141.1GB/tp4, corrected per-host reserve 2.71GB (A100 measured back-solve, profile_data/engine_logs/a100_Llama-3.1-8B_multi_pool_evidence.txt + kv_pool.py G6 docstring); replaces the generic 3.5GB rule that over-subtracts on this knife-edge config"
     },
     "saturated_ceiling": {
       "status": "inherited",

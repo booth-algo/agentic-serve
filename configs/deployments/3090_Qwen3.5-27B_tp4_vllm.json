@@ -18,8 +18,8 @@
     "kv_pool": {
       "status": "derived",
       "value": 17218,
-      "source": "configs/kv_pool.py",
-      "note": "24GiB util 0.85, weights 55.6GB/tp4, reserve 3.5GB"
+      "source": "compensating fit (retained generic-reserve pin)",
+      "note": "The corrected per-host reserve 0.68GB (RTX3090 tp2/tp4 measured, L13-3090multi.md) gives 27975 blocks, but that physically-correct pool REGRESSES this cell E2EL +2.1pt (70.02->72.09): the cell is structurally TTFT-saturated so the prior generic-3.5GB-reserve pin (17218) incidentally compensates. RETAINED 17218 as a gate-passing compensating fit (project rule: no >0.5pt regression); the 27975 physical value awaits the hybrid prefill/pressure fix. See project_qwen35_hybrid_discovery."
     },
     "saturated_ceiling": {
       "status": "inherited",

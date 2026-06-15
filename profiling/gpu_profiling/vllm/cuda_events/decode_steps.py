@@ -38,6 +38,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.70)
     parser.add_argument("--tensor-parallel-size", type=int, default=1,
                         help="TP degree (set 2 for 2xH100; requires CUDA_VISIBLE_DEVICES with that many GPUs).")
+    parser.add_argument("--enforce-eager", action="store_true",
+                        help="Disable CUDA graphs. REQUIRED for hybrid linear-attention models "
+                             "(qwen3_5 / gated-delta-net) whose engine init fails under graph capture; "
+                             "match the cell's GT launch flags.")
+    parser.add_argument("--trust-remote-code", action="store_true",
+                        help="Pass trust_remote_code to the engine (needed for some custom architectures).")
+    parser.add_argument("--gdn-prefill-backend", default=None,
+                        help="vLLM additional_config gdn_prefill_backend, e.g. 'triton'. On Hopper (sm90) "
+                             "the default 'auto' selects the flashinfer GDN kernel which JIT-compiles and "
+                             "needs cuda/ptx headers (fails on some toolchains); 'triton' avoids it. Match "
+                             "the cell's GT launcher (the GT sweep set 'triton').")
     parser.add_argument(
         "--max-total-kv-tokens",
         type=int,
@@ -84,14 +95,19 @@ def main() -> None:
     from vllm import LLM, SamplingParams
 
     print(f"Loading {args.model}")
-    llm = LLM(
+    llm_kwargs: dict[str, Any] = dict(
         model=args.model,
         max_model_len=args.max_model_len,
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_num_seqs=args.max_num_seqs,
         max_num_batched_tokens=args.max_num_batched_tokens,
         tensor_parallel_size=args.tensor_parallel_size,
+        enforce_eager=args.enforce_eager,
+        trust_remote_code=args.trust_remote_code,
     )
+    if args.gdn_prefill_backend:
+        llm_kwargs["additional_config"] = {"gdn_prefill_backend": args.gdn_prefill_backend}
+    llm = LLM(**llm_kwargs)
     # Capture the actual allocated GPU KV-block pool (the available_kv_blocks the predictor
     # needs for this hardware/TP config). Path differs across vLLM versions; best-effort.
     num_gpu_blocks = None

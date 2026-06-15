@@ -4,7 +4,7 @@
   "model": "Qwen3.5-9B",
   "tp": 4,
   "engine": "vllm",
-  "available_kv_blocks": 103590,
+  "available_kv_blocks": 125105,
   "max_num_batched_tokens": 2048,
   "bench_dir": "3090_Qwen3.5-9B_tp4_vllm",
   "backend": "rtx3090-tp4-vllm-analytic-roofline",
@@ -17,9 +17,9 @@
     },
     "kv_pool": {
       "status": "derived",
-      "value": 103590,
+      "value": 125105,
       "source": "configs/kv_pool.py",
-      "note": "24GiB util 0.85, weights 19.3GB/tp4, reserve 3.5GB"
+      "note": "24GiB util 0.85, weights 19.3GB/tp4, corrected per-host reserve 0.68GB (RTX3090 tp2/tp4 measured back-solve, profiling/docs/defit_log_entries/L13-3090multi.md + profile_data/engine_logs/3090_Llama-3.1-8B_multi_pool_evidence.txt); replaces the generic 3.5GB rule that over-subtracts on this consumer host. FIRST-CUT: hybrid full-attention pool accounting; engine-pin pending."
     },
     "saturated_ceiling": {
       "status": "inherited",
