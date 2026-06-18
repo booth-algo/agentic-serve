@@ -10,10 +10,12 @@ import {
 
 // The Predictions tab: one large hardware × model matrix. Rows = hardware configs
 // (gpu + tensor-parallel + serving backend, i.e. the payload's gpu_key), columns =
-// models, cells = average predicted AND measured TTFT / TPOT / E2EL over every
-// (profile × concurrency) prediction row for that pair. The cell background is the
-// cell's E2EL MAPE, using the same error bands as the Simulator tab
-// (servingErrorTone: <10% green, 10–25% blue, 25–50% orange, ≥50% red).
+// models. A metric toggle (E2EL / TTFT / TPOT) selects which metric the cells show:
+// each cell = average predicted / measured of the selected metric over every
+// (profile × concurrency) row for that pair, and the cell background = that metric's
+// MAPE — i.e. the toggle switches between a self-consistent E2EL, TTFT, or TPOT matrix.
+// Bands match the Simulator tab (servingErrorTone: <10% green, 10–25% blue, 25–50%
+// orange, ≥50% red). Hover a cell for all three metrics.
 
 interface MetricAgg {
   pred: number | null;
@@ -24,7 +26,11 @@ interface CellAgg {
   ttft: MetricAgg;
   tpot: MetricAgg;
   e2el: MetricAgg;
-  e2elMape: number | null; // mean of row e2el_err (%) — drives the background band
+  // Per-metric MAPE (mean of the row *_err %). The SELECTED metric's MAPE drives the cell
+  // background + badge, so each toggle is a self-consistent TTFT / TPOT / E2EL matrix.
+  ttftMape: number | null;
+  tpotMape: number | null;
+  e2elMape: number | null;
   n: number;
 }
 
@@ -50,9 +56,16 @@ function aggregateCell(rows: ServingRow[]): CellAgg {
     ttft: metric('ttft'),
     tpot: metric('tpot'),
     e2el: metric('e2el'),
+    ttftMape: average(collect('ttft_err')),
+    tpotMape: average(collect('tpot_err')),
     e2elMape: average(collect('e2el_err')),
     n: rows.length,
   };
+}
+
+// The MAPE that drives the cell color/badge for the currently-selected metric.
+function mapeFor(cell: CellAgg, metric: MetricKey): number | null {
+  return metric === 'ttft' ? cell.ttftMape : metric === 'tpot' ? cell.tpotMape : cell.e2elMape;
 }
 
 function formatMs(value: number | null): string {
@@ -99,14 +112,12 @@ const METRICS = [
 ] as const;
 type MetricKey = (typeof METRICS)[number]['key'];
 
-// All three metrics as a compact pred/meas summary for the cell hover tooltip.
+// All three metrics (pred / meas + MAPE) for the cell hover tooltip.
 function cellTooltip(gpuKey: string, model: string, cell: CellAgg): string {
-  const line = (label: string, m: MetricAgg) =>
-    `${label} ${formatMs(m.pred)} / ${formatMs(m.meas)}`;
-  const head = `${gpuKey} × ${model} — avg over ${cell.n} profile×concurrency cells`;
-  const metrics = `${line('TTFT', cell.ttft)} · ${line('TPOT', cell.tpot)} · ${line('E2EL', cell.e2el)}`;
-  const mape = cell.e2elMape != null ? `E2EL MAPE ${cell.e2elMape.toFixed(1)}%` : 'no ground truth';
-  return `${head}\n${metrics}\npredicted / measured · ${mape}`;
+  const line = (label: string, m: MetricAgg, mape: number | null) =>
+    `${label} ${formatMs(m.pred)} / ${formatMs(m.meas)}` + (mape != null ? ` (${mape.toFixed(1)}% MAPE)` : '');
+  const head = `${gpuKey} × ${model} — avg over ${cell.n} profile×concurrency cells (predicted / measured)`;
+  return `${head}\n${line('TTFT', cell.ttft, cell.ttftMape)}\n${line('TPOT', cell.tpot, cell.tpotMape)}\n${line('E2EL', cell.e2el, cell.e2elMape)}`;
 }
 
 export function PredictionsMatrixPage({
@@ -179,6 +190,8 @@ export function PredictionsMatrixPage({
     );
   }
 
+  const metricLabel = METRICS.find(mm => mm.key === metric)!.label;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -188,7 +201,7 @@ export function PredictionsMatrixPage({
             Per hardware config × model, averaged over all profiles and concurrencies
             ({DATA_SCOPE_META[dataScope].label.toLowerCase()}). Each cell:{' '}
             <span className="text-[#e6edf3]">predicted</span> /{' '}
-            <span className="text-[#8b949e]">measured</span>; background = E2EL MAPE. Hover for all metrics.
+            <span className="text-[#8b949e]">measured</span>; cells show the selected metric, background = its MAPE. Hover for all metrics.
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -209,7 +222,7 @@ export function PredictionsMatrixPage({
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-medium text-[#8b949e]">E2EL MAPE:</span>
+          <span className="font-medium text-[#8b949e]">{metricLabel} MAPE:</span>
           <span className="rounded border border-[#3fb950]/30 bg-[#3fb950]/10 px-2 py-0.5 text-[#3fb950]">&lt;10%</span>
           <span className="rounded border border-[#58a6ff]/30 bg-[#58a6ff]/10 px-2 py-0.5 text-[#58a6ff]">10–25%</span>
           <span className="rounded border border-[#f0883e]/30 bg-[#f0883e]/10 px-2 py-0.5 text-[#f0883e]">25–50%</span>
@@ -254,9 +267,10 @@ export function PredictionsMatrixPage({
                       </td>
                     );
                   }
-                  const tone = mapeTone(cell.e2elMape);
                   const m = cell[metric];
-                  const hasGt = cell.e2elMape != null;
+                  const mape = mapeFor(cell, metric);
+                  const tone = mapeTone(mape);
+                  const hasGt = mape != null;
                   return (
                     <td
                       key={model}
@@ -267,7 +281,7 @@ export function PredictionsMatrixPage({
                         <span className="tabular-nums text-[#e6edf3]">{formatMs(m.pred)}</span>
                         <span className="tabular-nums text-[#6e7681]">/ {m.meas != null ? formatMs(m.meas) : '—'}</span>
                         {hasGt && (
-                          <span className={`tabular-nums text-[10px] ${tone.badge}`}>{cell.e2elMape!.toFixed(0)}%</span>
+                          <span className={`tabular-nums text-[10px] ${tone.badge}`}>{mape!.toFixed(0)}%</span>
                         )}
                       </div>
                     </td>
