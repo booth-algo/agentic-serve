@@ -44,6 +44,7 @@ CACHE_BLOCK_SIZE = 16
 @dataclass(frozen=True)
 class CeilingConfig:
     gpu: str
+    model: str
     tp: int
     bench_dir: str
     available_kv_blocks: int
@@ -53,8 +54,10 @@ class CeilingConfig:
 # Generate a ceiling for every deployment that OWNS one (manifest data.saturated_ceiling status
 # measured/derived, with a path). Configs that INHERIT the H100 ceiling (e.g. H100x2) are skipped.
 # Driven by configs/deployments/*.json — to add one, set that deployment's saturated_ceiling status.
+# Model-general: the ceiling is the measured plateau for THIS (gpu, model), so Llama, MoE (gpt-oss /
+# Mixtral), etc. all flow through the same builder — the model label comes from the deployment.
 CONFIGS = [
-    CeilingConfig(d.gpu_key, d.tp, d.bench_dir, d.available_kv_blocks,
+    CeilingConfig(d.gpu_key, d.model, d.tp, d.bench_dir, d.available_kv_blocks,
                   Path((d.data.get("saturated_ceiling") or {})["path"]))
     for d in all_deployments()
     if (d.data.get("saturated_ceiling") or {}).get("status") in ("measured", "derived")
@@ -146,16 +149,21 @@ def _sensitivity_note(turns: list[tuple[float, float, float]],
             + ". Production cuts unchanged (2026-06-10, lane L5).")
 
 
-def build(cfg: CeilingConfig) -> dict:
+def build(cfg: CeilingConfig) -> dict | None:
     turns = _turns_with_pressure(cfg)
     sat = [(o, m) for o, m, p in turns if p >= PRESSURE_THRESHOLD]
     if not sat:
-        raise SystemExit(f"{cfg.gpu}: no saturated turns (pressure>={PRESSURE_THRESHOLD})")
+        # The cell never reaches the saturated regime at its pool (large-pool / multi-GPU MoE
+        # cells) — the ramp never targets the ceiling there, so a measured ceiling is moot.
+        # Warn + skip rather than crash a batch build; the manifest should keep status=inherited.
+        print(f"SKIP {cfg.gpu} {cfg.model}: no saturated turns (pressure>={PRESSURE_THRESHOLD}) "
+              f"at pool {cfg.available_kv_blocks} — keep inherited ceiling")
+        return None
     anchors = _anchors_for(sat)
     all_ms = sorted(m for _, m in sat)
     return {
         "gpu": cfg.gpu,
-        "model": "Llama-3.1-8B",
+        "model": cfg.model,
         "tensor_parallel": cfg.tp,
         "criterion": (f"median measured tpot_ms over turns at KV pressure >= "
                       f"{PRESSURE_THRESHOLD} (the saturated 'C=300+' asymptote)"),
@@ -184,6 +192,8 @@ def main() -> None:
             print(f"SKIP {cfg.gpu}: bench root missing ({BENCH_BASE / cfg.bench_dir})")
             continue
         payload = build(cfg)
+        if payload is None:
+            continue
         cfg.out_json.parent.mkdir(parents=True, exist_ok=True)
         cfg.out_json.write_text(json.dumps(payload, indent=2) + "\n")
         anchors = ", ".join(f"out={a['output_tokens']}->{a['plateau_ms']}ms(n={a['n']})"

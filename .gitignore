@@ -10,7 +10,9 @@ inference-benchmark/results/
 *.ncu-rep
 # Profiling/simulator data lives in profile_data/ (kernels/ = committed curated grids;
 # results/ = regenerable measured grids + prediction outputs; _archive/ = stale scratch).
+profile_data/results
 profile_data/results/
+profile_data/_archive
 profile_data/_archive/
 
 # Dashboard generated data (regenerated from results, exceeds GitHub 100MB limit)
