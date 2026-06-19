@@ -112,6 +112,14 @@ const METRICS = [
 ] as const;
 type MetricKey = (typeof METRICS)[number]['key'];
 
+// Serving-backend filter so vLLM and SGLang configs don't conflate in one matrix.
+const BACKENDS = [
+  { key: 'all', label: 'All' },
+  { key: 'vllm', label: 'vLLM' },
+  { key: 'sglang', label: 'SGLang' },
+] as const;
+type BackendKey = (typeof BACKENDS)[number]['key'];
+
 // All three metrics (pred / meas + MAPE) for the cell hover tooltip.
 function cellTooltip(gpuKey: string, model: string, cell: CellAgg): string {
   const line = (label: string, m: MetricAgg, mape: number | null) =>
@@ -131,6 +139,7 @@ export function PredictionsMatrixPage({
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [metric, setMetric] = useState<MetricKey>('e2el');
+  const [backend, setBackend] = useState<BackendKey>('vllm');
 
   useEffect(() => {
     setLoading(true);
@@ -190,6 +199,13 @@ export function PredictionsMatrixPage({
     );
   }
 
+  // Backend filter: split vLLM vs SGLang so they don't conflate. Falls back to "All" if the
+  // selected backend has no configs in this scope.
+  const availableBackends = Array.from(new Set(matrix.hardware.map(h => h.parts.backend)));
+  const effBackend: BackendKey =
+    backend !== 'all' && !availableBackends.includes(backend) ? 'all' : backend;
+  const shownHardware = matrix.hardware.filter(h => effBackend === 'all' || h.parts.backend === effBackend);
+  const shownModelList = matrix.modelList.filter(model => shownHardware.some(h => h.byModel[model]));
   const metricLabel = METRICS.find(mm => mm.key === metric)!.label;
 
   return (
@@ -205,6 +221,24 @@ export function PredictionsMatrixPage({
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
+          {availableBackends.length > 1 && (
+            <div className="inline-flex overflow-hidden rounded-md border border-[#30363d] text-xs">
+              {BACKENDS.filter(b => b.key === 'all' || availableBackends.includes(b.key)).map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setBackend(key)}
+                  className={`px-3 py-1 font-medium transition-colors ${
+                    effBackend === key
+                      ? 'bg-[#1f6feb] text-white'
+                      : 'bg-[#161b22] text-[#8b949e] hover:bg-[#21262d]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="inline-flex overflow-hidden rounded-md border border-[#30363d] text-xs">
             {METRICS.map(({ key, label }) => (
               <button
@@ -239,7 +273,7 @@ export function PredictionsMatrixPage({
               <th className="sticky left-0 top-0 z-30 border-b border-r border-[#30363d] bg-[#161b22] px-2.5 py-1 text-left font-medium text-[#8b949e]">
                 Hardware config
               </th>
-              {matrix.modelList.map(model => (
+              {shownModelList.map(model => (
                 <th
                   key={model}
                   className="sticky top-0 z-20 whitespace-nowrap border-b border-[#30363d] bg-[#161b22] px-2.5 py-1 text-left font-medium text-[#e6edf3]"
@@ -250,7 +284,7 @@ export function PredictionsMatrixPage({
             </tr>
           </thead>
           <tbody>
-            {matrix.hardware.map(({ gpuKey, parts, byModel }) => (
+            {shownHardware.map(({ gpuKey, parts, byModel }) => (
               <tr key={gpuKey} className="odd:bg-[#0d1117] even:bg-[#10151c]">
                 <td className="sticky left-0 z-10 whitespace-nowrap border-r border-t border-[#30363d] bg-[#161b22] px-2.5 py-0.5 align-middle">
                   <div className="flex items-baseline gap-1.5 leading-none">
@@ -258,7 +292,7 @@ export function PredictionsMatrixPage({
                     <span className="text-xs text-[#8b949e]">tp{parts.tp} · {parts.backend}</span>
                   </div>
                 </td>
-                {matrix.modelList.map(model => {
+                {shownModelList.map(model => {
                   const cell = byModel[model];
                   if (!cell) {
                     return (

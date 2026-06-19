@@ -393,6 +393,7 @@ export function ServingPredictionsPage({
   const [fixedTpotFit, setFixedTpotFit] = useState<FixedTpotFitData | null>(null);
   const [gpu, setGpu] = useState('H100');
   const [model, setModel] = useState('');
+  const [backend, setBackend] = useState<'all' | 'vllm' | 'sglang'>('vllm');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -435,12 +436,19 @@ export function ServingPredictionsPage({
 
   // GPU options — restricted to those that actually have rows for the selected model
   // (the "GPU given model" dropdown); otherwise every GPU config in the scope.
+  // Does this scope have any SGLang configs? (gpu_key carries a "(sglang)" suffix.) Drives the
+  // backend dropdown so SGLang and vLLM configs don't conflate in the GPU selector.
+  const hasSglang = useMemo(
+    () => (scopeIndex ? scopeIndex.gpuOptions.some(g => /\(sglang\)/i.test(g)) : false),
+    [scopeIndex]);
   const gpuOptions = useMemo(() => {
     if (!scopeIndex) return EMPTY_GPU_OPTIONS;
     if (!selectorMode) return scopeIndex.gpuOptions;
+    const matchesBackend = (g: string) =>
+      backend === 'all' ? true : backend === 'sglang' ? /\(sglang\)/i.test(g) : !/\(sglang\)/i.test(g);
     return scopeIndex.gpuOptions.filter(g =>
-      (scopeIndex.rowsByGpu[g] ?? []).some(row => row.model === selectedModel));
-  }, [scopeIndex, selectorMode, selectedModel]);
+      (scopeIndex.rowsByGpu[g] ?? []).some(row => row.model === selectedModel) && matchesBackend(g));
+  }, [scopeIndex, selectorMode, selectedModel, backend]);
   const selectedGpu = focus?.gpu ?? (gpuOptions.includes(gpu) ? gpu : (gpuOptions[0] ?? gpu));
 
   useEffect(() => {
@@ -491,6 +499,9 @@ export function ServingPredictionsPage({
           gpuOptions={gpuOptions}
           selectedGpu={selectedGpu}
           onGpu={setGpu}
+          backend={backend}
+          onBackend={setBackend}
+          showBackend={hasSglang}
           ttftMape={meanMetricError(rows, 'ttft_err')}
           tpotMape={meanMetricError(rows, 'tpot_err')}
           e2elMape={meanMetricError(rows, 'e2el_err')}
@@ -710,6 +721,9 @@ function SimulatorTargetBar({
   gpuOptions,
   selectedGpu,
   onGpu,
+  backend,
+  onBackend,
+  showBackend,
   ttftMape,
   tpotMape,
   e2elMape,
@@ -720,6 +734,9 @@ function SimulatorTargetBar({
   gpuOptions: string[];
   selectedGpu: string;
   onGpu: (gpu: string) => void;
+  backend: 'all' | 'vllm' | 'sglang';
+  onBackend: (backend: 'all' | 'vllm' | 'sglang') => void;
+  showBackend: boolean;
   ttftMape: OptionalMetric;
   tpotMape: OptionalMetric;
   e2elMape: OptionalMetric;
@@ -730,6 +747,20 @@ function SimulatorTargetBar({
         <div className="flex flex-wrap items-end gap-3">
           <LabeledSelect label="Model" value={selectedModel} options={modelOptions} onChange={onModel} />
           <LabeledSelect label="GPU" value={selectedGpu} options={gpuOptions} onChange={onGpu} />
+          {showBackend && (
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#6e7681]">Backend</span>
+              <select
+                value={backend}
+                onChange={event => onBackend(event.target.value as 'all' | 'vllm' | 'sglang')}
+                className="min-w-[150px] rounded border border-[#30363d] bg-[#0d1117] px-2 py-1 font-mono text-sm text-[#e6edf3] outline-none focus:border-[#58a6ff]"
+              >
+                <option value="vllm">vLLM</option>
+                <option value="sglang">SGLang</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+          )}
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           <MetricBadge label="TTFT MAPE" value={ttftMape} />
