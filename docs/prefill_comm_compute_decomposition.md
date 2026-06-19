@@ -77,3 +77,17 @@ Mixtral / DeepSeek-class across nodes). All-to-all ≠ all-reduce, so the #1 TP 
 Ablation: `/tmp/ablate_comm.py` (monkeypatch `_prefill_gemm_per_tok_loaded`, big-pool 8B cells).
 Audit: 5-agent workflow `ep-moe-comm-audit` (adversarial finder survived; topology + data checked
 directly). `ttft_err` in the predictions JSON is **abs MAPE**; signed direction via `pred-meas`.
+
+## Activating the EP all-to-all term (#3 implementation)
+Built gated-off in `simulator/ttft_queue_sim.py` (`_ep_all_to_all_ms_per_token`, constant
+`EP_ALLTOALL_REF_MS_PER_TOKEN`). `RooflineParams` gains `n_active_experts` (top-k, from the model
+JSON) and `ep_size` (EP degree, default 1). The term is
+`EP_ALLTOALL_REF · n_active_experts · (ep_size−1)/ep_size` ms/token, added to the prefill comm —
+**zero** for `ep_size ≤ 1` or non-MoE, so every current cell is byte-identical (all GT is pure TP).
+To activate when an EP deployment exists:
+1. Launch the GT with `--enable-expert-parallel` and record the EP degree.
+2. Set `"ep_size": <N>` in that deployment JSON (the loader plumbs it into `RooflineParams`).
+3. Measure prefill comm under EP (stage-split, analogous to `build_tp_comm.py`) and replace the
+   first-cut `EP_ALLTOALL_REF_MS_PER_TOKEN` anchor with the measured all-to-all rate; gate that
+   pure-TP cells stay byte-identical (their `ep_size` is still 1).
+The anchor is the measured TP all-reduce per-token rate as a first cut — NOT calibrated to EP GT.

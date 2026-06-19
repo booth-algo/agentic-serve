@@ -2,6 +2,7 @@
   "name": "Mixtral-8x7B",
   "n_params": 46702792704,
   "n_active_params": 12900000000,
+  "n_active_experts": 2,
   "kv_bytes_per_token": 131072.0,
   "kv_heads": 8,
   "bytes_per_param": 2.0,

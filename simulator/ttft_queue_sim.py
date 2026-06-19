@@ -256,6 +256,28 @@ PREFILL_GEMM_UTIL_SAT = 1.0                      # compensating-fit cap (measure
 # tp>1 only; tp1 → 0 (tp1 predictions byte-identical by construction).
 PREFILL_TP_COMM_MS_PER_TOKEN = 0.003278887802709865
 
+# MoE expert-parallel (EP) all-to-all dispatch+combine per (re)prefilled token. ZERO unless the
+# deployment declares EP (ep_size>1) — every current cell is pure TP (vLLM default), so this is
+# BYTE-IDENTICAL today (separate collective from the TP all-reduce above; the TP fix does not
+# touch it). FIRST-CUT magnitude (no EP GT to calibrate against yet): under EP each MoE layer
+# routes a token's hidden state to its top-k experts on remote ranks (dispatch) and gathers the
+# outputs back (combine); the (ep−1)/ep fraction lands off-rank. Anchored to the MEASURED TP
+# all-reduce per-token rate as a first-cut per-collective cost (all-to-all of comparable
+# hidden-state volume), scaled by the top-k experts routed and the off-rank fraction. ACTIVATE +
+# CALIBRATE when an EP deployment exists (set ep_size in the deployment JSON; measure vs GT).
+EP_ALLTOALL_REF_MS_PER_TOKEN = PREFILL_TP_COMM_MS_PER_TOKEN  # first-cut anchor; recalibrate for EP
+
+
+def _ep_all_to_all_ms_per_token(p: RooflineParams) -> float:
+    """MoE EP all-to-all (dispatch+combine) prefill comm per token. 0 for non-EP (ep_size<=1) or
+    non-MoE (n_active_experts unset) -> BYTE-IDENTICAL for every current pure-TP cell. First-cut,
+    gated; calibrate against EP ground truth before relying on the magnitude."""
+    ep = max(1, int(getattr(p, "ep_size", 1)))
+    nae = getattr(p, "n_active_experts", None)
+    if ep <= 1 or not nae:
+        return 0.0
+    return EP_ALLTOALL_REF_MS_PER_TOKEN * float(nae) * (ep - 1) / ep
+
 
 def _prefill_gemm_per_tok(p: RooflineParams) -> float:
     """DERIVED compute-bound prefill GEMM time per (re)prefilled token: 2·(n_params/tp) FLOPs
@@ -302,6 +324,7 @@ def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> floa
     comm_sat = getattr(p, "prefill_tp_comm_saturated_ms_per_token", None)
     if comm_sat is not None:
         comm = comm + (comm_sat - comm) * frac
+    comm += _ep_all_to_all_ms_per_token(p)  # 0 unless the deployment declares EP (ep_size>1)
     return gemm + comm
 
 

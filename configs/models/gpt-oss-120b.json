@@ -2,6 +2,7 @@
   "name": "gpt-oss-120b",
   "n_params": 117000000000,
   "n_active_params": 5100000000,
+  "n_active_experts": 4,
   "kv_bytes_per_token": 73728.0,
   "kv_heads": 8,
   "bytes_per_param": 0.5577,

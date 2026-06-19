@@ -2,6 +2,7 @@
   "name": "gpt-oss-20b",
   "n_params": 21000000000,
   "n_active_params": 3600000000,
+  "n_active_experts": 4,
   "kv_bytes_per_token": 49152.0,
   "kv_heads": 8,
   "bytes_per_param": 0.6553,

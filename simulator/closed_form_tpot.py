@@ -81,6 +81,13 @@ class RooflineParams:
     # memory-bound) is a SEPARATE axis and still uses total n_params (the active-expert decode
     # read is handled independently). NOT a fit — a config constant from the model card.
     n_active_params: int | None = None
+    # MoE EXPERT PARALLELISM (EP): n_active_experts = top-k experts routed per token; ep_size = EP
+    # degree (ranks the experts are sharded across). ep_size=1 (default) = no EP (vLLM's default:
+    # experts sharded by TP + all-reduced like dense) -> the EP all-to-all comm term is ZERO ->
+    # BYTE-IDENTICAL for every current cell (all GT is pure TP). Set ep_size>1 in a deployment JSON
+    # ONLY when it was launched with --enable-expert-parallel. See ttft_queue_sim._ep_all_to_all_ms_per_token.
+    n_active_experts: int | None = None
+    ep_size: int = 1
     # Per-config MEASURED prefill tensor-parallel comm term: TOTAL ms per new token at THIS config's
     # tp degree (G3 like-for-like method, comm = prefill_span.new(tpN) − span.new(tp1)/N, both legs
     # the same multiprocess api_server stage-split). None -> ttft_queue_sim falls back to
