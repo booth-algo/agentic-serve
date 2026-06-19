@@ -51,6 +51,12 @@ export const simulatorPredictionsJsonUrl = withBuildHash(
   import.meta.env.VITE_SIMULATOR_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'simulator-predictions.json'),
 );
 
+// Forward predictor (no-GT path, run over the same cells) — MAPE counterpart to the backtester's
+// simulator-predictions.json. Joined per (gpu_key, model, profile, concurrency) in the matrix.
+export const forwardPredictionsJsonUrl = withBuildHash(
+  import.meta.env.VITE_FORWARD_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'forward-predictions.json'),
+);
+
 export const simulatorV2PredictionsJsonUrl = withBuildHash(
   import.meta.env.VITE_SIMULATOR_V2_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'simulator-v2-predictions.json'),
 );
