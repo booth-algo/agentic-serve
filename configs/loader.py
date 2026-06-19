@@ -68,47 +68,49 @@ def _owned_path(data: dict, key: str) -> Path | None:
     return None
 
 
+_PIN_KEYS = (
+    "prefill_tp_comm_ms_per_token", "prefill_host_cached_ms_per_token",
+    "prefill_fa3_ms_per_token2", "prefill_tp_comm_saturated_ms_per_token",
+    "qsim_response_resident_fraction", "qsim_duplicate_session_fraction",
+)
+
+
+def compose_roofline(
+    gpu_name: str, model_name: str, tp: int, available_kv_blocks: int,
+    pins: dict | None = None,
+) -> RooflineParams:
+    """Compose a :class:`RooflineParams` from configs/gpus/<gpu>.json + configs/models/<model>.json
+    + tp + KV pool, applying optional non-None engine/measurement pins (the same keys
+    ``load_deployment`` reads from a deployment JSON: ``max_num_batched_tokens`` + the like-for-like
+    prefill tp-comm/host/FA3/saturated rates + the S7/S8 credits). This is the SINGLE source of the
+    gpu+model -> RooflineParams merge; reused by the forward predictor for (gpu, tp, engine, model)
+    that has no deployment JSON. Unpinned keys fall back to the RooflineParams/H100 defaults."""
+    gpu = _read(CONFIGS_DIR / "gpus" / f"{gpu_name}.json")
+    model = _read(CONFIGS_DIR / "models" / f"{model_name}.json")
+    merged = {**gpu, **model,
+              "available_kv_blocks": int(available_kv_blocks), "tensor_parallel": int(tp)}
+    for k, v in (pins or {}).items():
+        if v is not None:
+            merged[k] = v
+    fields = RooflineParams.__dataclass_fields__
+    return RooflineParams(**{k: v for k, v in merged.items() if k in fields})
+
+
 def load_deployment(dep_path: Path) -> Deployment:
     d = _read(dep_path)
-    gpu = _read(CONFIGS_DIR / "gpus" / f"{d['gpu']}.json")
-    model = _read(CONFIGS_DIR / "models" / f"{d['model']}.json")
-    merged = {**gpu, **model,
-              "available_kv_blocks": d["available_kv_blocks"], "tensor_parallel": d["tp"]}
-    # Optional ENGINE-CONFIG key (not a fit knob): the vLLM per-step token budget the
-    # deployment actually ran with. vLLM resolves the OPENAI_API_SERVER default by device
-    # name (vllm/engine/arg_utils.py _set_default_args): 8192 for >=70GiB non-A100 GPUs
-    # (= the RooflineParams default), 2048 for A100 — a100 deployments pin 2048 here.
-    # Any explicitly-launched value belongs in the deployment JSON, same key.
+    # Optional ENGINE-CONFIG + MEASUREMENT pins (NOT fit knobs): the vLLM per-step token budget the
+    # deployment ran with (8192 for >=70GiB non-A100 = the RooflineParams default, 2048 for A100),
+    # the like-for-like prefill tp-comm / host / FA3 / saturated rates, and the S7/S8 engine-semantics
+    # credits. Absent -> None -> the sim's module-constant inherit (byte-identical for unpinned
+    # configs). See the RooflineParams field comments.
+    pins: dict = {}
     if "max_num_batched_tokens" in d:
-        merged["max_num_batched_tokens"] = int(d["max_num_batched_tokens"])
-    # Optional MEASURED prefill tp-comm total (ms per new token at this config's tp degree, G3
-    # like-for-like; see RooflineParams.prefill_tp_comm_ms_per_token). Absent -> None -> the
-    # sim's PREFILL_TP_COMM_MS_PER_TOKEN·(tp−1) fallback (byte-identical for unpinned configs).
-    if d.get("prefill_tp_comm_ms_per_token") is not None:
-        merged["prefill_tp_comm_ms_per_token"] = float(d["prefill_tp_comm_ms_per_token"])
-    # Optional MEASURED per-config prefill HOST-cached SUM + FA3 coefficient (L11 round 2,
-    # like-for-like tp1/tpN stage-split pair — build_stage_split_rates.py; see the
-    # RooflineParams fields). Absent -> None -> the sim's tp1-measured module constants
-    # (byte-identical for unpinned configs).
-    for _k in ("prefill_host_cached_ms_per_token", "prefill_fa3_ms_per_token2"):
+        pins["max_num_batched_tokens"] = int(d["max_num_batched_tokens"])
+    for _k in _PIN_KEYS:
         if d.get(_k) is not None:
-            merged[_k] = float(d[_k])
-    # Optional MEASURED saturated (batched-drain) prefill comm rate + the engine-semantics
-    # sequence-resident-credit pin (L13 S7 probe, 2026-06-12; see the RooflineParams field
-    # comments). Absent -> None -> flat c1 comm / legacy prompt-basis credit (byte-identical
-    # for unpinned configs).
-    if d.get("prefill_tp_comm_saturated_ms_per_token") is not None:
-        merged["prefill_tp_comm_saturated_ms_per_token"] = float(
-            d["prefill_tp_comm_saturated_ms_per_token"])
-    if d.get("qsim_response_resident_fraction") is not None:
-        merged["qsim_response_resident_fraction"] = float(d["qsim_response_resident_fraction"])
-    # Optional MEASURED duplicate-session fraction (L13 S8 probe, 2026-06-12; trace-replay
-    # cohorts repeat traces -> engine-side cross-session dedup; see the RooflineParams field
-    # comment). Absent -> None -> no duplicate credit (byte-identical for unpinned configs).
-    if d.get("qsim_duplicate_session_fraction") is not None:
-        merged["qsim_duplicate_session_fraction"] = float(d["qsim_duplicate_session_fraction"])
-    fields = RooflineParams.__dataclass_fields__
-    roofline = RooflineParams(**{k: v for k, v in merged.items() if k in fields})
+            pins[_k] = float(d[_k])
+    roofline = compose_roofline(d["gpu"], d["model"], int(d["tp"]),
+                                int(d["available_kv_blocks"]), pins)
     data = d.get("data", {})
     return Deployment(
         gpu_key=d["gpu_key"], gpu=d["gpu"], model=d["model"], tp=int(d["tp"]),

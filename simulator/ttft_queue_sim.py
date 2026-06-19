@@ -1277,6 +1277,7 @@ def predict_cell_ttft_qsim(
     gpu_key: str | None = None,
     prefill_floor_ms: float | None = None,
     sched: QSimSchedConfig | None = None,
+    cohort: "list[Session] | None" = None,
     _survival_override: list[float] | None = None,
     _scale_override: list[float] | None = None,
 ) -> list[float]:
@@ -1304,8 +1305,11 @@ def predict_cell_ttft_qsim(
         return []
     p = params or RooflineParams()
 
-    sessions: list[Session] | None = None
-    if oracle:
+    # ``cohort`` (forward driver): a caller-supplied cohort of Sessions built directly from a
+    # client's workload trace, bypassing the GT-derived _build_cohort. None (default) -> the
+    # production cohort (oracle/replay/marginal), BYTE-IDENTICAL. See simulator/forward.py.
+    sessions: list[Session] | None = cohort
+    if sessions is None and oracle:
         sessions = _build_cohort_oracle(turns, profile, float(concurrency), oracle_bench_root)
     if sessions is None:
         sessions = _build_cohort(
