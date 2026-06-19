@@ -186,7 +186,7 @@ class KernelTurnInput:
     cohort_scale_mean: float = 1.0
 
 
-def saturated_ceiling_ms(output_tokens: float) -> float:
+def saturated_ceiling_ms(output_tokens: float, *, ceiling: "Path | None" = None) -> float:
     """Saturated ITL ceiling for a turn producing ``output_tokens`` per session.
 
     Linear interpolation between the measured saturated-plateau anchors, clamped
@@ -194,7 +194,7 @@ def saturated_ceiling_ms(output_tokens: float) -> float:
     output saturates higher). Fit-free — the anchors are measured medians.
     """
     out = max(1.0, float(output_tokens))
-    anchors = _ceiling_anchors(_active_ceiling_json)
+    anchors = _ceiling_anchors(ceiling if ceiling is not None else _active_ceiling_json)
     if out <= anchors[0][0]:
         return anchors[0][1]
     if out >= anchors[-1][0]:
@@ -205,7 +205,7 @@ def saturated_ceiling_ms(output_tokens: float) -> float:
     return anchors[-1][1]
 
 
-def _kernel_step_ms(inp: KernelTurnInput, params: RooflineParams | None = None) -> float:
+def _kernel_step_ms(inp: KernelTurnInput, params: RooflineParams | None = None, *, grid=None) -> float:
     """The unsaturated decode-kernel step floor for one turn — the same floor used
     inside :func:`predict_turn_tpot` (KV-throttled batch ``b_eff`` at ``ctx``).
 
@@ -220,7 +220,7 @@ def _kernel_step_ms(inp: KernelTurnInput, params: RooflineParams | None = None) 
     per_session_blocks = max(1, math.ceil(ctx / max(1, p.cache_block_size)))
     capacity_batch = max(1.0, p.available_kv_blocks / per_session_blocks)
     b_eff = max(1.0, min(sched, capacity_batch))
-    return decode_step_ms(b_eff, ctx, p)
+    return decode_step_ms(b_eff, ctx, p, grid=grid)
 
 
 def _overflow_weight(pressure: float, qbar: float, out_steps: float,
@@ -330,6 +330,8 @@ def predict_turn_tpot(
     ceiling_output: float | None = None,
     developed: bool = True,
     armed: bool = False,
+    grid=None,
+    ceiling=None,
 ) -> float:
     """Per-turn TPOT (mean ITL, ms) for one (cached, new, output, scheduled) row.
 
@@ -376,8 +378,8 @@ def predict_turn_tpot(
     b_eff = max(1.0, min(sched, capacity_batch))
     pressure = sched * per_session_blocks / p.available_kv_blocks
 
-    kernel_step = decode_step_ms(b_eff, ctx, p)
-    t_upper = max(kernel_step, saturated_ceiling_ms(ceil_out))
+    kernel_step = decode_step_ms(b_eff, ctx, p, grid=grid)
+    t_upper = max(kernel_step, saturated_ceiling_ms(ceil_out, ceiling=ceiling))
     # Output-sustain gate: a turn too short to co-reside through the eviction
     # buildup can't reach the saturation ceiling, regardless of pressure.
     sustain = _smoothstep(out, SAT_SUSTAIN_LO, SAT_SUSTAIN_HI)
@@ -415,7 +417,8 @@ def _turn_overflows(inp: KernelTurnInput, p: RooflineParams) -> bool:
 
 
 def predict_cell_tpot(
-    turns: list[KernelTurnInput], params: RooflineParams | None = None
+    turns: list[KernelTurnInput], params: RooflineParams | None = None,
+    *, grid=None, ceiling=None,
 ) -> list[float]:
     """Per-turn TPOT predictions for a whole (profile, concurrency) cell.
 
@@ -452,7 +455,8 @@ def predict_cell_tpot(
         elif pressure >= 1.0:
             armed = True           # pool physically full with demand overflow
         preds.append(predict_turn_tpot(t, p, ceiling_output=median_output,
-                                       developed=developed, armed=armed))
+                                       developed=developed, armed=armed,
+                                       grid=grid, ceiling=ceiling))
         developed = (z > 1.0
                      and max(1.0, float(t.output_tokens)) >= sustain_mid)
     return preds

@@ -494,15 +494,20 @@ def analytic_grid(launch_floor_ms: float | None = None) -> DecodeStepGrid:
 
 
 def decode_step_ms(
-    batch: float, context_tokens: float, params: RooflineParams | None = None
+    batch: float, context_tokens: float, params: RooflineParams | None = None,
+    *, grid: "DecodeStepGrid | None" = None,
 ) -> float:
     """Measured decode-step wall time for ``batch`` running requests each at
     ``context_tokens`` of resident KV. Uses the measured kernel grid where
     covered, the analytic decode roofline (anchored to the grid) for interior
     holes, and the grid's own measured scaling (sub-linear in ``b·ctx``) beyond
     the measured hull / grid edge.
+
+    ``grid`` (dependency injection): an explicit DecodeStepGrid; None -> the swappable
+    module-global ``_default_grid()`` (byte-identical). Lets the forward predictor pass the
+    per-config grid without mutating the global.
     """
-    return _default_grid().lookup(
+    return (grid if grid is not None else _default_grid()).lookup(
         max(1.0, float(batch)),
         max(1.0, float(context_tokens)),
         params or RooflineParams(),

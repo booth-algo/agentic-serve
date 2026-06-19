@@ -124,6 +124,21 @@ def _sched_for(max_model_len, max_num_seqs, params: RooflineParams) -> QSimSched
     )
 
 
+def _resolve_grid(decode_grid: "Path | None"):
+    """The explicit decode grid for dependency injection: the measured per-config CSV if it exists,
+    else the analytic decode roofline (NOT the H100 global) — mirrors active_hardware's grid branch."""
+    if decode_grid is not None and Path(decode_grid).exists():
+        return load_grid(Path(decode_grid))
+    return analytic_grid()
+
+
+def _resolve_ceiling(saturated_ceiling: "Path | None"):
+    """The explicit ceiling path if it exists, else None -> the predictor's inherited H100 default
+    (mirrors active_hardware's leave-the-global branch)."""
+    return (Path(saturated_ceiling)
+            if (saturated_ceiling is not None and Path(saturated_ceiling).exists()) else None)
+
+
 def resolve_hardware(gpu: str, model: str, tp: int, engine: str = "vllm") -> HardwareResolved:
     """Assemble the hardware model for ``(gpu, model, tp, engine)``. If a calibrated deployment JSON
     exists, reuse its measured RooflineParams + owned decode grid / saturated ceiling + measured
@@ -190,13 +205,15 @@ def predict_turns(
         )
         for t in turns
     ]
-    with active_hardware(decode_grid, saturated_ceiling):
-        tpot = predict_cell_tpot(kin, params)
-        ttft = predict_cell_ttft_qsim(
-            turns, profile, float(concurrency), params,
-            shared_prefix_tokens=shared_prefix_tokens, gpu_key=gpu_key,
-            prefill_floor_ms=prefill_floor_ms, sched=sched, cohort=cohort,
-        )
+    grid = _resolve_grid(decode_grid)
+    ceiling = _resolve_ceiling(saturated_ceiling)
+    tpot = predict_cell_tpot(kin, params, grid=grid, ceiling=ceiling)
+    ttft = predict_cell_ttft_qsim(
+        turns, profile, float(concurrency), params,
+        shared_prefix_tokens=shared_prefix_tokens, gpu_key=gpu_key,
+        prefill_floor_ms=prefill_floor_ms, sched=sched, cohort=cohort,
+        grid=grid, ceiling=ceiling,
+    )
     e2el = [float(tf) + float(t["output_tokens"]) * float(tp) for t, tp, tf in zip(turns, tpot, ttft)]
     return tpot, ttft, e2el
 
@@ -341,11 +358,12 @@ def _run_and_score(
                         t["scheduled_requests"], cohort_scale_mean=qbar)
         for t in turns
     ]
-    with active_hardware(hw.decode_grid, hw.saturated_ceiling):
-        tpot = predict_cell_tpot(kin, params)
-        raw = _run_sim(cohort, params, 4_000_000, shared_prefix_tokens=shared_prefix_tokens,
-                       prefill_floor_ms=hw.prefill_floor_ms, sched=hw.sched)
-    ttft_turn = _aggregate(raw, turns, "forward", float(concurrency), params, None)
+    grid = _resolve_grid(hw.decode_grid)
+    ceiling = _resolve_ceiling(hw.saturated_ceiling)
+    tpot = predict_cell_tpot(kin, params, grid=grid, ceiling=ceiling)
+    raw = _run_sim(cohort, params, 4_000_000, shared_prefix_tokens=shared_prefix_tokens,
+                   prefill_floor_ms=hw.prefill_floor_ms, sched=hw.sched, grid=grid)
+    ttft_turn = _aggregate(raw, turns, "forward", float(concurrency), params, None, grid=grid, ceiling=ceiling)
     tpot_by_ti = {int(t.get("turn_index", i)): tpot[i] for i, t in enumerate(turns)}
     last_tpot = tpot[-1] if tpot else 0.0
     ttft_reqs: list[float] = []

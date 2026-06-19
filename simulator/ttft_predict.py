@@ -86,6 +86,8 @@ def predict_turn_ttft(
     sched: float,
     tpot: float,
     params: RooflineParams | None = None,
+    *,
+    grid=None,
 ) -> float:
     """TTFT (ms) for one turn from its workload + forecast cohort `sched`.
 
@@ -101,7 +103,7 @@ def predict_turn_ttft(
     pressure = sched * blocks / kv
 
     baseline = _baseline_prefill_ms(new_prefill, cached, p)
-    step = decode_step_ms(min(sched, capacity_batch), float(cached) + float(new_prefill), p)
+    step = decode_step_ms(min(sched, capacity_batch), float(cached) + float(new_prefill), p, grid=grid)
     sub = RESIDUAL * min(1.0, pressure) * sched * step
     over = max(0.0, pressure - 1.0) * float(output) * float(tpot)
     return baseline + sub + over

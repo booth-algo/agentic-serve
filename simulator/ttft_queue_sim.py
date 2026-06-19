@@ -598,6 +598,10 @@ class _ServerState:
     sched_max_num_batched_tokens: float = float(MAX_NUM_BATCHED_TOKENS)
     sched_long_prefill_threshold: float = float(LONG_PREFILL_TOKEN_THRESHOLD)
     sched_max_num_seqs: int = MAX_NUM_SEQS
+    # Explicit decode grid (dependency injection); None -> kernel_step_cost._default_grid()
+    # (byte-identical). Set by the forward predictor so the qsim decode pricing uses the
+    # per-config grid without the global swap.
+    decode_grid: Any = None
 
     def push(self, epoch: float, kind: int, payload: Any) -> None:
         heapq.heappush(self.heap, (epoch, self.seq, kind, payload))
@@ -948,7 +952,7 @@ def _price_step(state: _ServerState) -> float:
     which reqs advance each step."""
     p = state.params
     decode_batch = len(state.running)
-    decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p) if decode_batch > 0 else 0.0
+    decode_ms = decode_step_ms(decode_batch, _running_ctx_mean(state), p, grid=state.decode_grid) if decode_batch > 0 else 0.0
 
     fa3_coef, host_shared_rate, host_perreq_rate = _prefill_host_fa3_rates(p)
 
@@ -1131,6 +1135,7 @@ def _run_sim(
     shared_prefix_tokens: float = 0.0,
     prefill_floor_ms: float | None = None,
     sched: QSimSchedConfig | None = None,
+    grid: Any = None,
 ) -> dict[tuple[int, int], float]:
     cache = PrefixLRUCache(params.available_kv_blocks, params.cache_block_size)
     # Per-config scheduler truth: None (or None fields) -> the module H100 constants
@@ -1138,6 +1143,7 @@ def _run_sim(
     _sched = sched or QSimSchedConfig()
     state = _ServerState(
         params=params, cache=cache, sessions=sessions, preempt_policy=preempt_policy,
+        decode_grid=grid,
         shared_prefix_tokens=max(0.0, float(shared_prefix_tokens)),
         prefill_floor_ms=PREFILL_FLOOR_MS if prefill_floor_ms is None else float(prefill_floor_ms),
         sched_max_num_batched_tokens=float(
@@ -1180,6 +1186,9 @@ def _aggregate(
     concurrency: float,
     params: RooflineParams,
     gpu_key: str | None = None,
+    *,
+    grid: Any = None,
+    ceiling=None,
 ) -> list[float]:
     by_idx: dict[int, list[float]] = {}
     for (_sid, ti), v in ttfts.items():
@@ -1189,13 +1198,14 @@ def _aggregate(
     for t in turns:
         ti = int(t.get("turn_index", 0))
         vals = by_idx.get(ti)
-        out.append(statistics.median(vals) if vals else _fallback_ttft(t, profile, concurrency, params, gpu_key))
+        out.append(statistics.median(vals) if vals
+                   else _fallback_ttft(t, profile, concurrency, params, gpu_key, grid=grid, ceiling=ceiling))
     return out
 
 
 def _fallback_ttft(
     turn: dict[str, Any], profile: str, concurrency: float, params: RooflineParams,
-    gpu_key: str | None = None,
+    gpu_key: str | None = None, *, grid: Any = None, ceiling=None,
 ) -> float:
     """Forward static-formula fallback for a turn no session reached (keeps list length).
     ``gpu_key`` selects the per-(conc,gpu) cohort survival (pooled fallback when absent)."""
@@ -1206,8 +1216,8 @@ def _fallback_ttft(
     new = float(turn.get("new_prefill_tokens") or 0.0)
     out = float(turn.get("output_tokens") or 1.0)
     sched = sched_hat(profile, float(concurrency), ti, gpu_key) if profile in PROFILE_DIST else float(concurrency)
-    tpot = predict_cell_tpot([KernelTurnInput(cached, new, out, sched)], params)[0]
-    return predict_turn_ttft(cached, new, out, sched, tpot, params)
+    tpot = predict_cell_tpot([KernelTurnInput(cached, new, out, sched)], params, grid=grid, ceiling=ceiling)[0]
+    return predict_turn_ttft(cached, new, out, sched, tpot, params, grid=grid)
 
 
 # --------------------------------------------------------- oracle (validation only)
@@ -1278,6 +1288,8 @@ def predict_cell_ttft_qsim(
     prefill_floor_ms: float | None = None,
     sched: QSimSchedConfig | None = None,
     cohort: "list[Session] | None" = None,
+    grid: Any = None,
+    ceiling=None,
     _survival_override: list[float] | None = None,
     _scale_override: list[float] | None = None,
 ) -> list[float]:
@@ -1327,8 +1339,9 @@ def predict_cell_ttft_qsim(
         shared_prefix_tokens=shared_prefix_tokens,
         prefill_floor_ms=floor,
         sched=sched,
+        grid=grid,
     )
-    return _aggregate(ttfts, turns, profile, float(concurrency), p, gpu_key)
+    return _aggregate(ttfts, turns, profile, float(concurrency), p, gpu_key, grid=grid, ceiling=ceiling)
 
 
 def predict_cell_e2el_qsim(
