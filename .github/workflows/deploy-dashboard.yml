@@ -1,8 +1,9 @@
 name: Deploy Dashboard to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  # Auto-deploy on push to main REMOVED 2026-06-19 — the live dashboard is the Tailscale-served
+  # dist/ (built on the Hetzner host), so the Pages build ran on every push and wasted CI minutes.
+  # Still runnable on demand via the Actions tab (workflow_dispatch).
   workflow_dispatch:
 
 permissions:
