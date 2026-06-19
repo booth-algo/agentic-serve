@@ -282,10 +282,16 @@ def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> floa
     gemm = 2.0 * (float(p.prefill_n_params) / tp) / (p.peak_flops_per_s * util) * 1e3
     # Comm term: the per-config MEASURED total (RooflineParams.prefill_tp_comm_ms_per_token, G3
     # like-for-like at the config's OWN tp degree — L11 de-fit) when the deployment pins it; else
-    # the tp2-measured per-extra-rank extrapolation (BYTE-IDENTICAL fallback; tp1 -> 0 either way).
+    # the tp2-measured comm scaled to this tp by the RING all-reduce law 2·(tp−1)/tp (the per-rank
+    # volume a ring all-reduce moves): byte-identical at tp1 (→0) and tp2 (2·1/2 = 1, the measured
+    # anchor), and SUB-linear above — tp4 = 1.5× the tp2 rate, not the old linear (tp−1) = 3×. The
+    # linear extrapolation over-charged tp>2 prefill comm (ablation: a100 8B tp4 c320 +5949 ms, ~70%
+    # of it this term; h100 8B tp4 comm_off under-shot → the rate is also GPU-specific). GPU
+    # follow-up: measure comm directly at tp4 per GPU (build_tp_comm.py stage-split) and pin
+    # prefill_tp_comm_ms_per_token (NVLink vs PCIe differ); this physics law is the zero-GPU interim.
     comm = getattr(p, "prefill_tp_comm_ms_per_token", None)
     if comm is None:
-        comm = PREFILL_TP_COMM_MS_PER_TOKEN * (tp - 1)
+        comm = PREFILL_TP_COMM_MS_PER_TOKEN * (2.0 * (tp - 1) / tp)
     # Batched-drain amortization (L13 S7, 2026-06-12): the c1 stage-split comm rate is measured at
     # single-request chunks; the engine's BARRIER DRAIN (many requests' chunks batched per step)
     # amortizes the PCIe all-reduce well below it (S7: replayed GT ladder, engine-side computed
