@@ -65,7 +65,7 @@ _GRID_U_MAX = 1024.0
 
 def _prefill_per_token_ms(params: RooflineParams) -> float:
     """Chunk-saturated prefill compute per token (FLOPs roofline)."""
-    return (2.0 * params.n_params) / (params.peak_flops_per_s * params.util_flops) * 1e3
+    return (2.0 * params.prefill_n_params) / (params.peak_flops_per_s * params.util_flops) * 1e3
 
 
 def _baseline_prefill_ms(

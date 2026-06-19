@@ -74,6 +74,13 @@ class RooflineParams:
     scheduler_overhead_ms_per_step: float = 5.7  # PINNED; per-step Python/dispatcher cost, originally mean over 99 lowest-work decode steps of swe_c40. Pre-registered re-derivation (median over 2666 batch-1 decode steps, all 4 traces) gives 4.5574 — roofline_utils_H100.json; 5.7 sits at the top of the per-trace range, not the center.
     tensor_parallel: int = 1                   # TP degree: shards KV (by head) + weights across GPUs. tp=1 = single-GPU (unchanged).
     kv_heads: int = 8                          # GQA KV heads (Llama-3.1-8B); caps KV sharding at min(tp, kv_heads).
+    # MoE PREFILL: a prefill forward pass activates only top-k experts, so the compute roofline
+    # scales with ACTIVE params, not total. Set for MoE deployments (from the model JSON); dense
+    # models leave it None -> total n_params (BYTE-IDENTICAL). Consumed via the prefill_n_params
+    # property by the TTFT prefill GEMM (ttft_queue_sim / ttft_predict). Decode (weight-read,
+    # memory-bound) is a SEPARATE axis and still uses total n_params (the active-expert decode
+    # read is handled independently). NOT a fit — a config constant from the model card.
+    n_active_params: int | None = None
     # Per-config MEASURED prefill tensor-parallel comm term: TOTAL ms per new token at THIS config's
     # tp degree (G3 like-for-like method, comm = prefill_span.new(tpN) − span.new(tp1)/N, both legs
     # the same multiprocess api_server stage-split). None -> ttft_queue_sim falls back to
@@ -133,6 +140,13 @@ class RooflineParams:
         return self.available_kv_blocks * self.cache_block_size * int(
             self.kv_bytes_per_token
         )
+
+    @property
+    def prefill_n_params(self) -> int:
+        """FLOP-bearing params for one prefill forward pass: ACTIVE params for MoE
+        (n_active_params, top-k experts only), total n_params for dense (n_active_params is
+        None). Byte-identical to n_params for every dense config."""
+        return int(self.n_active_params) if self.n_active_params else int(self.n_params)
 
     @classmethod
     def from_json(cls, path: Path) -> "RooflineParams":

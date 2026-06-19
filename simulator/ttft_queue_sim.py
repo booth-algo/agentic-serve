@@ -262,7 +262,7 @@ def _prefill_gemm_per_tok(p: RooflineParams) -> float:
     per token at ``peak_flops·util_flops``, tensor-parallel sharded. The fit-free dominant part
     of the serving NEW rate — 0.02498 ms/tok on tp1, halving per added TP rank. No fitted constant."""
     tp = max(1, int(getattr(p, "tensor_parallel", 1)))
-    return 2.0 * (float(p.n_params) / tp) / (p.peak_flops_per_s * p.util_flops) * 1e3
+    return 2.0 * (float(p.prefill_n_params) / tp) / (p.peak_flops_per_s * p.util_flops) * 1e3
 
 
 def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> float:
@@ -279,7 +279,7 @@ def _prefill_gemm_per_tok_loaded(p: RooflineParams, batch_tokens: float) -> floa
     lo, hi = float(LONG_PREFILL_TOKEN_THRESHOLD), float(MAX_NUM_BATCHED_TOKENS)
     frac = 0.0 if hi <= lo else min(1.0, max(0.0, (batch_tokens - lo) / (hi - lo)))
     util = p.util_flops + (PREFILL_GEMM_UTIL_SAT - p.util_flops) * frac
-    gemm = 2.0 * (float(p.n_params) / tp) / (p.peak_flops_per_s * util) * 1e3
+    gemm = 2.0 * (float(p.prefill_n_params) / tp) / (p.peak_flops_per_s * util) * 1e3
     # Comm term: the per-config MEASURED total (RooflineParams.prefill_tp_comm_ms_per_token, G3
     # like-for-like at the config's OWN tp degree — L11 de-fit) when the deployment pins it; else
     # the tp2-measured per-extra-rank extrapolation (BYTE-IDENTICAL fallback; tp1 -> 0 either way).
