@@ -10,10 +10,12 @@ import {
 
 // The Predictions tab: one large hardware × model matrix. Rows = hardware configs
 // (gpu + tensor-parallel + serving backend, i.e. the payload's gpu_key), columns =
-// models, cells = average predicted AND measured TTFT / TPOT / E2EL over every
-// (profile × concurrency) prediction row for that pair. The cell background is the
-// cell's E2EL MAPE, using the same error bands as the Simulator tab
-// (servingErrorTone: <10% green, 10–25% blue, 25–50% orange, ≥50% red).
+// models. A metric toggle (E2EL / TTFT / TPOT) selects which metric the cells show:
+// each cell = average predicted / measured of the selected metric over every
+// (profile × concurrency) row for that pair, and the cell background = that metric's
+// MAPE — i.e. the toggle switches between a self-consistent E2EL, TTFT, or TPOT matrix.
+// Bands match the Simulator tab (servingErrorTone: <10% green, 10–25% blue, 25–50%
+// orange, ≥50% red). Hover a cell for all three metrics.
 
 interface MetricAgg {
   pred: number | null;
@@ -24,7 +26,11 @@ interface CellAgg {
   ttft: MetricAgg;
   tpot: MetricAgg;
   e2el: MetricAgg;
-  e2elMape: number | null; // mean of row e2el_err (%) — drives the background band
+  // Per-metric MAPE (mean of the row *_err %). The SELECTED metric's MAPE drives the cell
+  // background + badge, so each toggle is a self-consistent TTFT / TPOT / E2EL matrix.
+  ttftMape: number | null;
+  tpotMape: number | null;
+  e2elMape: number | null;
   n: number;
 }
 
@@ -50,9 +56,16 @@ function aggregateCell(rows: ServingRow[]): CellAgg {
     ttft: metric('ttft'),
     tpot: metric('tpot'),
     e2el: metric('e2el'),
+    ttftMape: average(collect('ttft_err')),
+    tpotMape: average(collect('tpot_err')),
     e2elMape: average(collect('e2el_err')),
     n: rows.length,
   };
+}
+
+// The MAPE that drives the cell color/badge for the currently-selected metric.
+function mapeFor(cell: CellAgg, metric: MetricKey): number | null {
+  return metric === 'ttft' ? cell.ttftMape : metric === 'tpot' ? cell.tpotMape : cell.e2elMape;
 }
 
 function formatMs(value: number | null): string {
@@ -92,11 +105,28 @@ function hardwareParts(gpuKey: string, rows: ServingRow[]): { gpu: string; tp: n
   };
 }
 
-const METRIC_ROWS = [
+const METRICS = [
+  { key: 'e2el', label: 'E2EL' },
   { key: 'ttft', label: 'TTFT' },
   { key: 'tpot', label: 'TPOT' },
-  { key: 'e2el', label: 'E2EL' },
 ] as const;
+type MetricKey = (typeof METRICS)[number]['key'];
+
+// Serving-backend filter so vLLM and SGLang configs don't conflate in one matrix.
+const BACKENDS = [
+  { key: 'all', label: 'All' },
+  { key: 'vllm', label: 'vLLM' },
+  { key: 'sglang', label: 'SGLang' },
+] as const;
+type BackendKey = (typeof BACKENDS)[number]['key'];
+
+// All three metrics (pred / meas + MAPE) for the cell hover tooltip.
+function cellTooltip(gpuKey: string, model: string, cell: CellAgg): string {
+  const line = (label: string, m: MetricAgg, mape: number | null) =>
+    `${label} ${formatMs(m.pred)} / ${formatMs(m.meas)}` + (mape != null ? ` (${mape.toFixed(1)}% MAPE)` : '');
+  const head = `${gpuKey} × ${model} — avg over ${cell.n} profile×concurrency cells (predicted / measured)`;
+  return `${head}\n${line('TTFT', cell.ttft, cell.ttftMape)}\n${line('TPOT', cell.tpot, cell.tpotMape)}\n${line('E2EL', cell.e2el, cell.e2elMape)}`;
+}
 
 export function PredictionsMatrixPage({
   dataScope,
@@ -108,6 +138,8 @@ export function PredictionsMatrixPage({
   const [servingIndex, setServingIndex] = useState<ServingIndex | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [metric, setMetric] = useState<MetricKey>('e2el');
+  const [backend, setBackend] = useState<BackendKey>('vllm');
 
   useEffect(() => {
     setLoading(true);
@@ -167,6 +199,15 @@ export function PredictionsMatrixPage({
     );
   }
 
+  // Backend filter: split vLLM vs SGLang so they don't conflate. Falls back to "All" if the
+  // selected backend has no configs in this scope.
+  const availableBackends = Array.from(new Set(matrix.hardware.map(h => h.parts.backend)));
+  const effBackend: BackendKey =
+    backend !== 'all' && !availableBackends.includes(backend) ? 'all' : backend;
+  const shownHardware = matrix.hardware.filter(h => effBackend === 'all' || h.parts.backend === effBackend);
+  const shownModelList = matrix.modelList.filter(model => shownHardware.some(h => h.byModel[model]));
+  const metricLabel = METRICS.find(mm => mm.key === metric)!.label;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -176,30 +217,66 @@ export function PredictionsMatrixPage({
             Per hardware config × model, averaged over all profiles and concurrencies
             ({DATA_SCOPE_META[dataScope].label.toLowerCase()}). Each cell:{' '}
             <span className="text-[#e6edf3]">predicted</span> /{' '}
-            <span className="text-[#8b949e]">measured</span>; background = E2EL MAPE.
+            <span className="text-[#8b949e]">measured</span>; cells show the selected metric, background = its MAPE. Hover for all metrics.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-medium text-[#8b949e]">E2EL MAPE:</span>
+        <div className="flex flex-col items-end gap-2">
+          {availableBackends.length > 1 && (
+            <div className="inline-flex overflow-hidden rounded-md border border-[#30363d] text-xs">
+              {BACKENDS.filter(b => b.key === 'all' || availableBackends.includes(b.key)).map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setBackend(key)}
+                  className={`px-3 py-1 font-medium transition-colors ${
+                    effBackend === key
+                      ? 'bg-[#1f6feb] text-white'
+                      : 'bg-[#161b22] text-[#8b949e] hover:bg-[#21262d]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="inline-flex overflow-hidden rounded-md border border-[#30363d] text-xs">
+            {METRICS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMetric(key)}
+                className={`px-3 py-1 font-medium transition-colors ${
+                  metric === key
+                    ? 'bg-[#1f6feb] text-white'
+                    : 'bg-[#161b22] text-[#8b949e] hover:bg-[#21262d]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-medium text-[#8b949e]">{metricLabel} MAPE:</span>
           <span className="rounded border border-[#3fb950]/30 bg-[#3fb950]/10 px-2 py-0.5 text-[#3fb950]">&lt;10%</span>
           <span className="rounded border border-[#58a6ff]/30 bg-[#58a6ff]/10 px-2 py-0.5 text-[#58a6ff]">10–25%</span>
           <span className="rounded border border-[#f0883e]/30 bg-[#f0883e]/10 px-2 py-0.5 text-[#f0883e]">25–50%</span>
           <span className="rounded border border-[#f85149]/30 bg-[#f85149]/10 px-2 py-0.5 text-[#f85149]">≥50%</span>
           <span className="rounded border border-[#30363d] bg-[#21262d] px-2 py-0.5 text-[#6e7681]">no GT</span>
+          </div>
         </div>
       </div>
 
-      <div className="overflow-auto rounded-lg border border-[#30363d]" style={{ maxHeight: 'calc(100vh - 220px)' }}>
+      <div className="overflow-auto rounded-lg border border-[#30363d]" style={{ maxHeight: 'calc(100vh - 180px)' }}>
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 top-0 z-30 border-b border-r border-[#30363d] bg-[#161b22] px-3 py-2 text-left font-medium text-[#8b949e]">
+              <th className="sticky left-0 top-0 z-30 border-b border-r border-[#30363d] bg-[#161b22] px-2.5 py-1 text-left font-medium text-[#8b949e]">
                 Hardware config
               </th>
-              {matrix.modelList.map(model => (
+              {shownModelList.map(model => (
                 <th
                   key={model}
-                  className="sticky top-0 z-20 whitespace-nowrap border-b border-[#30363d] bg-[#161b22] px-3 py-2 text-left font-medium text-[#e6edf3]"
+                  className="sticky top-0 z-20 whitespace-nowrap border-b border-[#30363d] bg-[#161b22] px-2.5 py-1 text-left font-medium text-[#e6edf3]"
                 >
                   {model}
                 </th>
@@ -207,44 +284,40 @@ export function PredictionsMatrixPage({
             </tr>
           </thead>
           <tbody>
-            {matrix.hardware.map(({ gpuKey, parts, byModel }) => (
+            {shownHardware.map(({ gpuKey, parts, byModel }) => (
               <tr key={gpuKey} className="odd:bg-[#0d1117] even:bg-[#10151c]">
-                <td className="sticky left-0 z-10 whitespace-nowrap border-r border-t border-[#30363d] bg-[#161b22] px-3 py-2 align-top">
-                  <div className="font-medium text-[#e6edf3]">{parts.gpu}</div>
-                  <div className="text-xs text-[#8b949e]">
-                    tp{parts.tp} · {parts.backend}
+                <td className="sticky left-0 z-10 whitespace-nowrap border-r border-t border-[#30363d] bg-[#161b22] px-2.5 py-0.5 align-middle">
+                  <div className="flex items-baseline gap-1.5 leading-none">
+                    <span className="font-medium text-[#e6edf3]">{parts.gpu}</span>
+                    <span className="text-xs text-[#8b949e]">tp{parts.tp} · {parts.backend}</span>
                   </div>
                 </td>
-                {matrix.modelList.map(model => {
+                {shownModelList.map(model => {
                   const cell = byModel[model];
                   if (!cell) {
                     return (
-                      <td key={model} className="border-t border-[#30363d] px-3 py-2 align-top text-[#484f58]">
+                      <td key={model} className="border-t border-[#30363d] px-2.5 py-1 text-center align-middle text-[#484f58]">
                         —
                       </td>
                     );
                   }
-                  const tone = mapeTone(cell.e2elMape);
-                  const hasMeas = cell.ttft.meas != null || cell.tpot.meas != null || cell.e2el.meas != null;
+                  const m = cell[metric];
+                  const mape = mapeFor(cell, metric);
+                  const tone = mapeTone(mape);
+                  const hasGt = mape != null;
                   return (
                     <td
                       key={model}
-                      className={`whitespace-nowrap border-t border-[#30363d] px-3 py-2 align-top ${hasMeas ? tone.cell : 'bg-[#21262d]/40'}`}
-                      title={`${gpuKey} × ${model}: averaged over ${cell.n} profile×concurrency cells${cell.e2elMape != null ? ` · E2EL MAPE ${cell.e2elMape.toFixed(1)}%` : ' · no ground truth'}`}
+                      className={`whitespace-nowrap border-t border-[#30363d] px-2.5 py-0.5 align-middle leading-none ${hasGt ? tone.cell : 'bg-[#21262d]/40'}`}
+                      title={cellTooltip(gpuKey, model, cell)}
                     >
-                      <div className="grid grid-cols-[auto_1fr_1fr] gap-x-2 text-xs leading-5">
-                        {METRIC_ROWS.map(({ key, label }) => {
-                          const m = cell[key];
-                          return (
-                            <MetricRow key={key} label={label} pred={m.pred} meas={m.meas} />
-                          );
-                        })}
+                      <div className="flex items-baseline justify-between gap-2 font-mono text-xs">
+                        <span className="tabular-nums text-[#e6edf3]">{formatMs(m.pred)}</span>
+                        <span className="tabular-nums text-[#6e7681]">/ {m.meas != null ? formatMs(m.meas) : '—'}</span>
+                        {hasGt && (
+                          <span className={`tabular-nums text-[10px] ${tone.badge}`}>{mape!.toFixed(0)}%</span>
+                        )}
                       </div>
-                      {cell.e2elMape != null && (
-                        <div className={`mt-1 text-right font-mono text-[10px] ${tone.badge}`}>
-                          {cell.e2elMape.toFixed(1)}% e2el
-                        </div>
-                      )}
                     </td>
                   );
                 })}
@@ -254,15 +327,5 @@ export function PredictionsMatrixPage({
         </table>
       </div>
     </div>
-  );
-}
-
-function MetricRow({ label, pred, meas }: { label: string; pred: number | null; meas: number | null }) {
-  return (
-    <>
-      <span className="text-[#8b949e]">{label}</span>
-      <span className="text-right tabular-nums text-[#e6edf3]">{formatMs(pred)}</span>
-      <span className="text-right tabular-nums text-[#8b949e]">{formatMs(meas)}</span>
-    </>
   );
 }
