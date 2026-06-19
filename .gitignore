@@ -36,8 +36,7 @@ __pycache__/
 search/__pycache__/
 
 # Frontend/build/test outputs
-inference-benchmark/dashboard/dist/
-inference-benchmark/dashboard/dist-ssr/
+inference-benchmark/dashboard/dist*/
 inference-benchmark/dashboard/.vite/
 inference-benchmark/dashboard/playwright-report/
 inference-benchmark/dashboard/test-results/

@@ -6,10 +6,6 @@ Inference benchmarking and GPU performance prediction for agentic LLM workloads.
 
 ## Overview
 
-Current LLM inference benchmarks use single-turn chat workloads with short input sequences. Real agentic workloads — coding agents, terminal automation, tool-use systems — have fundamentally different characteristics: high input/output ratios (17K:800 tokens), multi-turn sessions spanning hundreds of steps, and growing context that shifts GPU utilization from memory-bound decode to compute-bound prefill.
-
-AgentServe-Bench provides:
-
 1. **Agentic inference benchmarks** — real traces from SWE-Bench and TerminalBench alongside chat baselines, with saturation analysis across concurrency levels
 2. **Kernel-level roofline analysis** — Nsight Compute (ncu) hardware counter profiles showing actual GPU resource utilization per kernel
 3. **Per-operator ML predictors** — XGBoost models trained on profiling data for latency estimation without GPU experiments
