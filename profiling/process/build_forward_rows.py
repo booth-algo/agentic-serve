@@ -17,6 +17,7 @@ Run: PYTHONPATH=/root/agentic-serve python -m profiling.process.build_forward_ro
 from __future__ import annotations
 
 import json
+import os
 import statistics as st
 import sys
 from collections import defaultdict
@@ -29,6 +30,10 @@ from configs.loader import all_deployments  # noqa: E402
 from simulator.forward import predict_forward  # noqa: E402
 
 FORWARD_JSON = Path("inference-benchmark/dashboard/public/forward-predictions.json")
+# The high-concurrency qsim cells (c>=120) are too slow to score the full grid; cap here and let the
+# dashboard compare only the MATCHED cells (so the cap can't flatter forward by skipping the worst
+# high-conc cells). Override with FORWARD_MAX_CONC=999 for a full (slow) run.
+FORWARD_MAX_CONC = int(os.environ.get("FORWARD_MAX_CONC", "80"))
 
 
 def _trajectories(bench: Path) -> list[list[tuple[float, float, float]]]:
@@ -78,9 +83,13 @@ def build_forward_row(cfg, profile: str, conc: int, bench: Path) -> dict | None:
 
 
 def main(model_filter: str | None = None) -> None:
-    payload: dict[str, list[dict]] = {}
+    # model_filter: comma-separated model names (subset run). MERGES into any existing JSON so
+    # incremental runs accumulate (replaces only the (gpu_key, model) rows it produces). None = full.
+    filters = set(model_filter.split(",")) if model_filter else None
+    payload: dict[str, list[dict]] = (
+        json.loads(FORWARD_JSON.read_text()) if FORWARD_JSON.exists() else {})
     for cfg in all_deployments():
-        if model_filter and cfg.model != model_filter:
+        if filters is not None and cfg.model not in filters:
             continue
         root = B.BENCH_BASE / cfg.bench_dir
         if not root.exists():
@@ -88,6 +97,8 @@ def main(model_filter: str | None = None) -> None:
         rows: list[dict] = []
         for profile in B.PROFILES:
             for conc in B.CONCURRENCIES:
+                if conc > FORWARD_MAX_CONC:
+                    continue
                 bench = root / f"{profile}_conc{conc}.json"
                 if not bench.exists():
                     continue
@@ -99,7 +110,8 @@ def main(model_filter: str | None = None) -> None:
                 if r:
                     rows.append(r)
         if rows:
-            payload.setdefault(cfg.gpu_key, []).extend(rows)
+            kept = [r for r in payload.get(cfg.gpu_key, []) if r.get("model") != cfg.model]
+            payload[cfg.gpu_key] = kept + rows
             print(f"{cfg.gpu_key} [{cfg.model}] += {len(rows)} forward rows")
     FORWARD_JSON.write_text(json.dumps(payload, indent=2))
     print(f"\nwrote {sum(len(v) for v in payload.values())} forward rows across {len(payload)} configs "
