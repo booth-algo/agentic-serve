@@ -37,8 +37,10 @@ from simulator.kernel_tpot import KernelTurnInput, predict_cell_tpot
 from simulator.ttft_queue_sim import (
     QSimSchedConfig,
     Session,
+    _aggregate,
     _cohort_from_pool,
     _prefill_floor_for,
+    _run_sim,
     predict_cell_ttft_qsim,
 )
 from configs.loader import all_deployments, compose_roofline
@@ -245,7 +247,118 @@ class ForwardResult:
     isl: float
     osl: float
     calibration_detail: str = ""
+    # Per-REQUEST distributions across the cohort {"p50","p90","p99","mean"} (empty if no requests
+    # completed). TTFT spread = queueing; E2EL spread = queueing + the OSL distribution.
+    ttft_pcts: dict = field(default_factory=dict)
+    e2el_pcts: dict = field(default_factory=dict)
     per_turn: dict = field(default_factory=dict)
+
+
+def _cohort_from_trajectories(
+    trajectories: Sequence[Sequence[tuple[float, float, float]]], concurrency: float,
+) -> tuple[list[Session], list[dict], float]:
+    """Multi-turn: each trajectory is a session's list of ``(cached, new, output)`` per turn. Cohort
+    = ``concurrency`` sessions cycled from the trajectories; per-turn-index specs = median over the
+    sessions present at that turn, with ``scheduled_requests`` scaled by the alive fraction."""
+    C = max(1, int(round(float(concurrency))))
+    pool = [[[float(c), float(n), max(1.0, float(o))] for (c, n, o) in traj]
+            for traj in trajectories if traj]
+    if not pool:
+        raise ValueError("trajectories is empty")
+    cohort = _cohort_from_pool(pool, C)
+    max_t = max(len(traj) for traj in pool)
+    turns: list[dict] = []
+    for ti in range(max_t):
+        present = [traj[ti] for traj in pool if len(traj) > ti]
+        cached = st.median([x[0] for x in present])
+        new = st.median([x[1] for x in present])
+        out = st.median([x[2] for x in present])
+        sched = C * (len(present) / len(pool))  # alive fraction of the cohort at this turn
+        turns.append({
+            "turn_index": ti,
+            "cached_context_tokens": float(cached),
+            "new_prefill_tokens": float(new),
+            "output_tokens": float(out),
+            "total_context_tokens": float(cached + new),
+            "scheduled_requests": float(sched),
+        })
+    sess_ctx = [st.mean([t[0] + t[1] for t in traj]) for traj in pool]
+    med = st.median(sess_ctx) if sess_ctx else 1.0
+    qbar = st.mean([c / med for c in sess_ctx]) if med > 0 else 1.0
+    return cohort, turns, qbar
+
+
+def _samples_from_quantiles(
+    isl_q: dict, osl_q: dict, n: int,
+) -> list[tuple[float, float]]:
+    """Expand quantile summaries ``{quantile: value}`` (e.g. ``{0.5: 1800, 0.9: 4000}``) into ``n``
+    deterministic single-turn samples at quantiles ``(i+0.5)/n``. Pairs ISL & OSL at the SAME
+    quantile (assumes ISL/OSL rank-correlation — a documented simplification of the joint)."""
+    iq = sorted((float(k), float(v)) for k, v in isl_q.items())
+    oq = sorted((float(k), float(v)) for k, v in osl_q.items())
+
+    def interp(qs: list[tuple[float, float]], p: float) -> float:
+        if p <= qs[0][0]:
+            return qs[0][1]
+        if p >= qs[-1][0]:
+            return qs[-1][1]
+        for (q0, v0), (q1, v1) in zip(qs, qs[1:]):
+            if q0 <= p <= q1:
+                f = (p - q0) / (q1 - q0) if q1 > q0 else 0.0
+                return v0 + (v1 - v0) * f
+        return qs[-1][1]
+
+    return [(interp(iq, (i + 0.5) / n), interp(oq, (i + 0.5) / n)) for i in range(max(1, n))]
+
+
+def _percentiles(vals: list[float]) -> dict:
+    """{"p50","p90","p99","mean"} of a per-request value list (linear-interpolated); {} if empty."""
+    if not vals:
+        return {}
+    s = sorted(vals)
+
+    def pct(q: float) -> float:
+        if len(s) == 1:
+            return s[0]
+        idx = q * (len(s) - 1)
+        lo = int(idx)
+        return s[lo] + (s[min(lo + 1, len(s) - 1)] - s[lo]) * (idx - lo)
+
+    return {"p50": round(pct(0.5), 2), "p90": round(pct(0.90), 2),
+            "p99": round(pct(0.99), 2), "mean": round(st.mean(s), 2)}
+
+
+def _run_and_score(
+    cohort: list[Session], turns: list[dict], hw: HardwareResolved, *,
+    qbar: float, shared_prefix_tokens: float, concurrency: float,
+) -> tuple[list[float], list[float], dict, dict]:
+    """Run the predictors once and return ``(per_turn_tpot, per_turn_ttft_median, ttft_pcts,
+    e2el_pcts)``. The per-turn median is IDENTICAL to predict_cell_ttft_qsim(cohort=...) (same
+    _run_sim + _aggregate); the percentiles come from the raw per-request TTFTs the median discards."""
+    params = hw.params
+    kin = [
+        KernelTurnInput(t["cached_context_tokens"], t["new_prefill_tokens"], t["output_tokens"],
+                        t["scheduled_requests"], cohort_scale_mean=qbar)
+        for t in turns
+    ]
+    with active_hardware(hw.decode_grid, hw.saturated_ceiling):
+        tpot = predict_cell_tpot(kin, params)
+        raw = _run_sim(cohort, params, 4_000_000, shared_prefix_tokens=shared_prefix_tokens,
+                       prefill_floor_ms=hw.prefill_floor_ms, sched=hw.sched)
+    ttft_turn = _aggregate(raw, turns, "forward", float(concurrency), params, None)
+    tpot_by_ti = {int(t.get("turn_index", i)): tpot[i] for i, t in enumerate(turns)}
+    last_tpot = tpot[-1] if tpot else 0.0
+    ttft_reqs: list[float] = []
+    e2el_reqs: list[float] = []
+    for s in cohort:
+        for spec in s.turns:
+            v = raw.get((s.session_id, spec.turn_index))
+            if v is None or v <= 0:
+                continue
+            tp = tpot_by_ti.get(spec.turn_index, last_tpot)
+            ttft_reqs.append(v)
+            e2el_reqs.append(v + float(spec.output_tokens) * float(tp))
+    return tpot, ttft_turn, _percentiles(ttft_reqs), _percentiles(e2el_reqs)
 
 
 def predict_forward(
@@ -254,28 +367,43 @@ def predict_forward(
     model: str,
     tp: int,
     concurrency: float,
-    isl_osl_samples: Sequence[tuple[float, float]],
+    isl_osl_samples: Sequence[tuple[float, float]] | None = None,
+    trajectories: Sequence[Sequence[tuple[float, float, float]]] | None = None,
+    quantiles: dict | None = None,
     engine: str = "vllm",
     shared_prefix_tokens: float = 0.0,
 ) -> ForwardResult:
-    """Forward prediction for a client's single-turn ISL:OSL sample set on ``(gpu, tp, engine, model)``
-    at a given concurrency. Returns TTFT/TPOT/E2EL (ms) + a ``calibration_status`` ("measured" when a
-    calibrated deployment backs this hardware, "extrapolated" when composed from the spec sheet)."""
-    if not isl_osl_samples:
-        raise ValueError("isl_osl_samples is empty")
+    """Forward prediction for a client workload on ``(gpu, tp, engine, model)`` at a concurrency.
+    Provide exactly one workload form:
+      * ``isl_osl_samples``: ``[(isl, osl), ...]`` single-turn requests;
+      * ``trajectories``: ``[[(cached, new, output), ...], ...]`` per-session multi-turn traces;
+      * ``quantiles``: ``{"isl": {q: v}, "osl": {q: v}}`` summary -> deterministic samples.
+    Returns cohort-mean TTFT/TPOT/E2EL (the build_row headline convention) PLUS per-request
+    percentiles (ttft_pcts / e2el_pcts) and a ``calibration_status``."""
     hw = resolve_hardware(gpu, model, int(tp), engine)
-    cohort, turns, qbar = _single_turn_cohort(isl_osl_samples, concurrency, shared_prefix_tokens)
-    tpot, ttft, e2el = predict_turns(
-        turns, hw.params, concurrency,
-        decode_grid=hw.decode_grid, saturated_ceiling=hw.saturated_ceiling,
-        qbar=qbar, shared_prefix_tokens=shared_prefix_tokens, sched=hw.sched,
-        prefill_floor_ms=hw.prefill_floor_ms, cohort=cohort, gpu_key=None,
+    if trajectories:
+        cohort, turns, qbar = _cohort_from_trajectories(trajectories, concurrency)
+    elif quantiles:
+        n = max(1, int(round(float(concurrency))))
+        samples = _samples_from_quantiles(quantiles["isl"], quantiles["osl"], n)
+        cohort, turns, qbar = _single_turn_cohort(samples, concurrency, shared_prefix_tokens)
+    elif isl_osl_samples:
+        cohort, turns, qbar = _single_turn_cohort(isl_osl_samples, concurrency, shared_prefix_tokens)
+    else:
+        raise ValueError("provide one of: isl_osl_samples, trajectories, quantiles")
+
+    tpot, ttft_turn, ttft_pcts, e2el_pcts = _run_and_score(
+        cohort, turns, hw, qbar=qbar, shared_prefix_tokens=shared_prefix_tokens, concurrency=concurrency,
     )
+    e2el_turn = [tf + float(t["output_tokens"]) * tp for t, tp, tf in zip(turns, tpot, ttft_turn)]
     return ForwardResult(
-        ttft_ms=round(ttft[0], 4), tpot_ms=round(tpot[0], 4), e2el_ms=round(e2el[0], 4),
+        ttft_ms=round(st.mean(ttft_turn), 4),
+        tpot_ms=round(st.mean(tpot), 4),
+        e2el_ms=round(st.mean(e2el_turn), 4),
         calibration_status=hw.calibration_status, gpu_key=hw.gpu_key,
         concurrency=float(concurrency),
         isl=turns[0]["total_context_tokens"], osl=turns[0]["output_tokens"],
         calibration_detail=hw.calibration_detail,
-        per_turn={"tpot": tpot, "ttft": ttft, "e2el": e2el},
+        ttft_pcts=ttft_pcts, e2el_pcts=e2el_pcts,
+        per_turn={"tpot": tpot, "ttft": ttft_turn, "e2el": e2el_turn},
     )

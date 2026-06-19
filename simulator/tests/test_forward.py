@@ -98,3 +98,35 @@ def test_predict_forward_smoke_calibrated():
 def test_predict_forward_rejects_empty():
     with pytest.raises(ValueError):
         forward.predict_forward(gpu="A100", model="Llama-3.1-8B", tp=1, concurrency=8, isl_osl_samples=[])
+    with pytest.raises(ValueError):  # no workload form at all
+        forward.predict_forward(gpu="A100", model="Llama-3.1-8B", tp=1, concurrency=8)
+
+
+def test_predict_forward_single_turn_percentiles():
+    """A varied single-turn distribution yields per-request percentiles, ordered p50<=p90<=p99."""
+    samples = [(1000, 100), (2000, 150), (3000, 200), (1500, 300), (2500, 80)] * 6
+    res = forward.predict_forward(gpu="A100", model="Llama-3.1-8B", tp=1, concurrency=30,
+                                  isl_osl_samples=samples)
+    assert res.ttft_pcts and res.e2el_pcts
+    assert 0 < res.ttft_pcts["p50"] <= res.ttft_pcts["p90"] <= res.ttft_pcts["p99"]
+    assert 0 < res.e2el_pcts["p50"] <= res.e2el_pcts["p90"] <= res.e2el_pcts["p99"]
+
+
+def test_predict_forward_multi_turn():
+    """Multi-turn trajectories produce one headline per turn index + finite metrics."""
+    trajs = [
+        [(0, 1000, 100), (1100, 200, 120)],
+        [(0, 1500, 80)],
+        [(0, 2000, 150), (2150, 300, 90), (2540, 100, 60)],
+    ]
+    res = forward.predict_forward(gpu="A100", model="Llama-3.1-8B", tp=1, concurrency=9,
+                                  trajectories=trajs)
+    assert len(res.per_turn["ttft"]) == 3  # max turn count across sessions
+    assert res.ttft_ms > 0 and res.e2el_ms >= res.ttft_ms
+
+
+def test_predict_forward_quantiles():
+    """A quantile-summary workload runs and yields finite metrics + percentiles."""
+    q = {"isl": {0.5: 1800, 0.9: 4000, 0.99: 8000}, "osl": {0.5: 150, 0.9: 400, 0.99: 900}}
+    res = forward.predict_forward(gpu="A100", model="Llama-3.1-8B", tp=1, concurrency=16, quantiles=q)
+    assert res.ttft_ms > 0 and res.tpot_ms > 0 and res.ttft_pcts

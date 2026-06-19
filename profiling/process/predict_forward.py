@@ -25,12 +25,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, so th
 from simulator.forward import predict_forward  # noqa: E402
 
 
-def _load_samples(path: str) -> list[tuple[float, float]]:
+def _load_workload(path: str) -> dict:
+    """Parse the workload file into a predict_forward kwargs dict. JSON may be a list of [isl,osl]
+    (single-turn), or an object with "trajectories" (multi-turn: list of [[cached,new,output],...])
+    or "quantiles"/{"isl":{q:v},"osl":{q:v}} (summary). CSV/whitespace = single-turn isl,osl rows."""
     p = Path(path)
     text = p.read_text()
     if p.suffix.lower() == ".json":
         data = json.loads(text)
-        return [(float(a), float(b)) for a, b in data]
+        if isinstance(data, dict):
+            if "trajectories" in data:
+                return {"trajectories": [[tuple(t) for t in traj] for traj in data["trajectories"]]}
+            if "quantiles" in data:
+                return {"quantiles": data["quantiles"]}
+            if "isl" in data and "osl" in data:
+                return {"quantiles": {"isl": data["isl"], "osl": data["osl"]}}
+        return {"isl_osl_samples": [(float(a), float(b)) for a, b in data]}
     out: list[tuple[float, float]] = []
     for line in text.splitlines():
         line = line.strip()
@@ -41,7 +51,7 @@ def _load_samples(path: str) -> list[tuple[float, float]]:
             out.append((float(parts[0]), float(parts[1])))
         except (ValueError, IndexError):
             continue  # skip a header / malformed row
-    return out
+    return {"isl_osl_samples": out}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -57,28 +67,36 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="emit a JSON object instead of a table")
     args = ap.parse_args(argv)
 
-    samples = _load_samples(args.isl_osl)
-    if not samples:
-        print(f"error: no (isl, osl) samples parsed from {args.isl_osl}", file=sys.stderr)
+    workload = _load_workload(args.isl_osl)
+    n = (len(workload.get("isl_osl_samples", [])) or len(workload.get("trajectories", []))
+         or (1 if workload.get("quantiles") else 0))
+    if not n:
+        print(f"error: no workload parsed from {args.isl_osl}", file=sys.stderr)
         return 2
+    kind = ("trajectories" if "trajectories" in workload
+            else "quantile-summary" if "quantiles" in workload else "(isl,osl) samples")
 
     res = predict_forward(
         gpu=args.gpu, model=args.model, tp=args.tp, engine=args.engine,
-        concurrency=args.concurrency, isl_osl_samples=samples,
-        shared_prefix_tokens=args.shared_prefix,
+        concurrency=args.concurrency, shared_prefix_tokens=args.shared_prefix, **workload,
     )
 
     if args.json:
         d = {k: v for k, v in dataclasses.asdict(res).items() if k != "per_turn"}
-        d["n_samples"] = len(samples)
+        d["n_workload"] = n
         print(json.dumps(d, indent=2))
         return 0
 
     print(f"{args.gpu} tp{args.tp} {args.engine} / {args.model}  @ concurrency {args.concurrency:g}")
-    print(f"  workload : {len(samples)} (isl,osl) samples; median isl={res.isl:.0f}  osl={res.osl:.0f}")
-    print(f"  TTFT     : {res.ttft_ms:9.1f} ms")
+    print(f"  workload : {n} {kind}; median isl={res.isl:.0f}  osl={res.osl:.0f}")
+    print(f"  TTFT     : {res.ttft_ms:9.1f} ms (cohort mean)")
     print(f"  TPOT     : {res.tpot_ms:9.2f} ms/token")
-    print(f"  E2EL     : {res.e2el_ms:9.1f} ms")
+    print(f"  E2EL     : {res.e2el_ms:9.1f} ms (cohort mean)")
+    if res.ttft_pcts:
+        print(f"  per-req  : TTFT p50 {res.ttft_pcts['p50']:.0f}  p90 {res.ttft_pcts['p90']:.0f}  "
+              f"p99 {res.ttft_pcts['p99']:.0f} ms")
+        print(f"             E2EL p50 {res.e2el_pcts['p50']:.0f}  p90 {res.e2el_pcts['p90']:.0f}  "
+              f"p99 {res.e2el_pcts['p99']:.0f} ms")
     status = res.calibration_status.upper()
     print(f"  CONFIDENCE: {status}" + (f"  ({res.calibration_detail})" if res.calibration_detail else ""))
     if res.calibration_status == "extrapolated":

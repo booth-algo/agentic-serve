@@ -56,11 +56,23 @@ from the client trace, and calls the same predictors the dashboard uses —
 `kernel_tpot.predict_cell_tpot` (TPOT) and `ttft_queue_sim.predict_cell_ttft_qsim(cohort=…)` (TTFT) —
 with no ground-truth file. Verified self-consistent with `build_row` to <1e-3 ms (`test_forward.py`).
 
-## Current limits (planned)
+## Inputs & outputs
 
-- Single-turn ISL:OSL only; multi-turn trajectories + quantile-summary input are a follow-up.
-- Reports the cohort-median TTFT/TPOT/E2EL; per-request percentiles (p90/p99) are a follow-up
-  (the queue sim aggregates to the median internally).
+Three workload forms (CLI `--isl-osl <file>`, library kwargs):
+- **single-turn samples** — JSON `[[isl, osl], ...]` or a 2-column CSV; each row is one request.
+- **multi-turn trajectories** — JSON `{"trajectories": [[[cached,new,output], ...], ...]}`; each
+  inner list is one session's turns.
+- **quantile summary** — JSON `{"quantiles": {"isl": {q: v, ...}, "osl": {q: v, ...}}}`; expanded
+  deterministically into per-quantile samples.
+
+Outputs: cohort-mean TTFT/TPOT/E2EL (the dashboard headline convention) **plus per-request
+percentiles** — `ttft_pcts` / `e2el_pcts` = `{p50, p90, p99, mean}`. TTFT spread is queueing;
+E2EL spread is queueing + the OSL distribution. (TPOT is per-token/batch-level, reported as the
+cohort value.)
+
+## Notes / simplifications
+- The quantile form pairs ISL and OSL at the **same** quantile (assumes ISL/OSL rank-correlation);
+  pass explicit `[(isl,osl)]` samples or trajectories for the true joint.
 - The `(…)` detail after CONFIDENCE is the deployment's own `calibration_status` string, which can be
-  stale relative to the artifacts actually present — the coarse word (MEASURED/PARTIAL/EXTRAPOLATED) is
-  the authoritative signal.
+  stale relative to the artifacts actually present — the coarse word (MEASURED/PARTIAL/EXTRAPOLATED)
+  is the authoritative signal.
