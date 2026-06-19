@@ -569,7 +569,9 @@ def test_prefill_tp_comm_per_config_override_and_byte_identical_default():
     p1 = RooflineParams()
     p4 = _replace(p1, tensor_parallel=4)
     base4 = mod._prefill_gemm_per_tok_loaded(p4, 512.0)
-    gemm4 = base4 - mod.PREFILL_TP_COMM_MS_PER_TOKEN * 3   # the fallback charges 3 extra ranks
+    # Ring all-reduce fallback (2026-06-19): the unpinned comm scales 2*(tp-1)/tp, so tp4 charges
+    # 1.5x the tp2 rate (NOT the old linear (tp-1)=3x). Byte-identical at tp1->0 and tp2->1.
+    gemm4 = base4 - mod.PREFILL_TP_COMM_MS_PER_TOKEN * (2 * 3 / 4)
     # pinning the measured total replaces exactly the comm share
     p4_pin = _replace(p4, prefill_tp_comm_ms_per_token=0.005)
     assert abs(mod._prefill_gemm_per_tok_loaded(p4_pin, 512.0) - (gemm4 + 0.005)) < 1e-12
@@ -892,6 +894,9 @@ def test_no_fitted_constants():
                            / "profile_data/kernels/prefill_tp_comm_H100.json").read_text())
     assert mod.PREFILL_TP_COMM_MS_PER_TOKEN == _tpc_art["constants"]["PREFILL_TP_COMM_MS_PER_TOKEN"]
     assert _tpc_art["retired_backed_out_remainder"] == 0.00585
+    # MoE EP all-to-all anchor: an ALIAS of the measured TP all-reduce rate (first-cut, gated OFF
+    # for every current pure-TP cell — ep_size<=1 -> 0). Not a new fitted constant.
+    assert mod.EP_ALLTOALL_REF_MS_PER_TOKEN == mod.PREFILL_TP_COMM_MS_PER_TOKEN
     # Public uppercase numeric module globals: the four config-derived vLLM values + the
     # three measured prefill-law coefficients. Private (underscore-prefixed) names — the
     # event-kind enum ints and _GRID_U_MAX=1024 — are physics/structure, excluded.
@@ -915,6 +920,7 @@ def test_no_fitted_constants():
         "PREFILL_HOST_PERREQ_MS_PER_TOKEN",
         "PREFILL_GEMM_UTIL_SAT",
         "PREFILL_TP_COMM_MS_PER_TOKEN",
+        "EP_ALLTOALL_REF_MS_PER_TOKEN",  # alias of PREFILL_TP_COMM_MS_PER_TOKEN (EP first-cut, gated off)
     }
     # And the private numeric constants are only the grid edge + the 4 event-kind ints.
     private_numeric = {
