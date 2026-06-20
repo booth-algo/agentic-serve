@@ -58,7 +58,7 @@ const RUNTIME_NAV_PAGES: NavPage[] = [
   },
   {
     id: 'serving',
-    label: 'Predictions',
+    label: 'Matrix',
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 19V5" />
@@ -171,7 +171,7 @@ export function Layout({
             ) : showRuntimeNav && activePage === 'serving' ? (
               <span className="flex items-center gap-2">
                 <span className="inline-block h-2 w-2 rounded-full bg-[#58a6ff]" />
-                Predictions loaded
+                Matrix loaded
               </span>
             ) : showRuntimeNav && activePage === 'simulator' ? (
               <span className="flex items-center gap-2">
@@ -217,7 +217,7 @@ export function Layout({
               {showRuntimeNav && activePage === 'gpu'
                 ? 'live GPU state'
                 : showRuntimeNav && activePage === 'serving'
-                  ? 'predictions'
+                  ? 'matrix'
                   : showRuntimeNav && activePage === 'simulator'
                     ? 'H100 / Llama-3.1-8B'
                     : activePage === 'coverage'

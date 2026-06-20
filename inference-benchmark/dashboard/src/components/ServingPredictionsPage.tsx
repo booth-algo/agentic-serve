@@ -17,7 +17,8 @@ import {
   normalizeProfileName,
   profileDisplayName,
 } from '../profileMeta';
-import { llama31H100TpotFitJsonUrl, servingPredictionsJsonUrl } from '../dataUrls';
+import { forwardPredictionsJsonUrl, llama31H100TpotFitJsonUrl, servingPredictionsJsonUrl } from '../dataUrls';
+import { buildFwdLookup, fwdKey, type FwdLookup } from '../forwardPredictions';
 
 interface ServingTurnPrediction {
   turn_index: number;
@@ -378,6 +379,118 @@ const SERVING_TPOT_METRIC = SERVING_METRICS[1];
 const SERVING_MAPE_COLUMN_WIDTH = 74;
 const SERVING_MAPE_RAIL_WIDTH = SERVING_METRICS.length * SERVING_MAPE_COLUMN_WIDTH;
 
+// Prediction source the Simulator page renders, mirroring the Predictions matrix' source toggle.
+type ValueMode = 'mape' | 'delta';
+type PredictionSource = 'backtester' | 'forward' | 'delta';
+
+const PREDICTION_SOURCES: { key: PredictionSource; label: string }[] = [
+  { key: 'backtester', label: 'Backtest' },
+  { key: 'forward', label: 'Forward' },
+  { key: 'delta', label: 'Δ' },
+];
+
+function finiteOrUndef(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+// Re-key the backtester serving rows onto the forward predictor's per-cell metrics, joined by
+// (gpu_key, model, profile, concurrency) — same join the Predictions matrix uses.
+//  - 'backtester' is identity (build_simulator_rows, scored vs measured GT).
+//  - 'forward' swaps pred/err to the no-GT forward values; measured GT is unchanged. Forward has no
+//    per-turn / emulator detail, so those are cleared (the per-turn panel + emu/steady tags hide).
+//  - 'delta' replaces each *_err with the signed MAPE gap |fwd| - |bt| (negative = forward closer to
+//    measured); pred/meas are cleared because the cell now shows a gap, not a latency.
+function applyPredictionSource(
+  rows: ServingRow[],
+  gpuKey: string,
+  source: PredictionSource,
+  fwd: FwdLookup,
+): ServingRow[] {
+  if (source === 'backtester') return rows;
+  return rows.map(row => {
+    const match = row.model != null && row.profile != null && row.concurrency != null
+      ? fwd.get(fwdKey(gpuKey, row.model, row.profile, row.concurrency))
+      : undefined;
+    const base: ServingRow = {
+      ...row,
+      multiturn_turn_predictions: undefined,
+      backend_emulator_status: undefined,
+      continuous_batching_mode: undefined,
+      ttft_signed_err_ms: undefined,
+      tpot_signed_err_ms: undefined,
+      e2el_signed_err_ms: undefined,
+      ttft_abs_err_ms: undefined,
+      tpot_abs_err_ms: undefined,
+      e2el_abs_err_ms: undefined,
+    };
+    if (source === 'forward') {
+      return {
+        ...base,
+        ttft_pred: finiteOrUndef(match?.fwd_ttft_pred),
+        tpot_pred: finiteOrUndef(match?.fwd_tpot_pred),
+        e2el_pred: finiteOrUndef(match?.fwd_e2el_pred),
+        ttft_err: finiteOrUndef(match?.fwd_ttft_err),
+        tpot_err: finiteOrUndef(match?.fwd_tpot_err),
+        e2el_err: finiteOrUndef(match?.fwd_e2el_err),
+      };
+    }
+    const gap = (fwdErr: number | null | undefined, btErr: number | undefined): number | undefined => {
+      const fe = finiteOrUndef(fwdErr);
+      return fe !== undefined && btErr !== undefined ? Math.abs(fe) - Math.abs(btErr) : undefined;
+    };
+    return {
+      ...base,
+      ttft_pred: undefined,
+      tpot_pred: undefined,
+      e2el_pred: undefined,
+      ttft_meas: undefined,
+      tpot_meas: undefined,
+      e2el_meas: undefined,
+      ttft_err: gap(match?.fwd_ttft_err, finiteOrUndef(row.ttft_err)),
+      tpot_err: gap(match?.fwd_tpot_err, finiteOrUndef(row.tpot_err)),
+      e2el_err: gap(match?.fwd_e2el_err, finiteOrUndef(row.e2el_err)),
+    };
+  });
+}
+
+// Δ tone mirrors the Predictions matrix: green = forward >=3pt closer to measured, red = >=3pt
+// worse, neutral between.
+function servingDeltaTone(value: OptionalMetric): { className: string } {
+  if (value === undefined || value === null) return { className: 'border border-[#30363d] bg-[#21262d] text-[#6e7681]' };
+  if (value <= -3) return { className: 'border border-[#3fb950]/30 bg-[#3fb950]/10 text-[#3fb950]' };
+  if (value >= 3) return { className: 'border border-[#f85149]/30 bg-[#f85149]/10 text-[#f85149]' };
+  return { className: 'border border-[#30363d] bg-[#21262d] text-[#8b949e]' };
+}
+
+function formatSignedDeltaPct(value: OptionalMetric): string {
+  if (value === undefined || value === null) return 'N/A';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(0)}`;
+}
+
+// Signed Δ with one decimal — for the headline / best / worst summary figures.
+function formatSignedDeltaValue(value: OptionalMetric): string {
+  if (value === undefined || value === null) return 'N/A';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(1)}`;
+}
+
+// Source-aware tone + compact formatting shared by the cells, the row-MAPE rail and the badges.
+function toneFor(value: OptionalMetric, valueMode: ValueMode): { className: string } {
+  return valueMode === 'delta' ? servingDeltaTone(value) : servingErrorTone(value);
+}
+
+function compactValueFor(value: OptionalMetric, valueMode: ValueMode): string {
+  return valueMode === 'delta' ? formatSignedDeltaPct(value) : formatCompactPercent(value);
+}
+
+function meanSignedMetric(rows: ServingRow[], errKey: ServingMetricKey): number | undefined {
+  const values = rows
+    .map(row => numericMetric(row, errKey))
+    .filter((value): value is number => value !== undefined);
+  return values.length ? mean(values) : undefined;
+}
+
 export function ServingPredictionsPage({
   dataScope,
   focus,
@@ -394,6 +507,8 @@ export function ServingPredictionsPage({
   const [gpu, setGpu] = useState('H100');
   const [model, setModel] = useState('');
   const [backend, setBackend] = useState<'all' | 'vllm' | 'sglang'>('vllm');
+  const [source, setSource] = useState<PredictionSource>('backtester');
+  const [fwd, setFwd] = useState<FwdLookup>(new Map());
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -417,6 +532,14 @@ export function ServingPredictionsPage({
       .then(response => response.ok ? response.json() : null)
       .then((json: FixedTpotFitData | null) => setFixedTpotFit(json))
       .catch(() => setFixedTpotFit(null));
+  }, []);
+
+  // Forward predictions are optional — absent (404) until build_forward_rows has run.
+  useEffect(() => {
+    fetch(forwardPredictionsJsonUrl)
+      .then(response => (response.ok ? response.json() : null))
+      .then(json => setFwd(buildFwdLookup(json)))
+      .catch(() => setFwd(new Map()));
   }, []);
 
   const scopeIndex = servingIndex?.[dataScope];
@@ -463,6 +586,14 @@ export function ServingPredictionsPage({
     if (selectorMode) return base.filter(row => row.model === selectedModel);
     return base;
   }, [scopeIndex, selectedGpu, focus, selectorMode, selectedModel]);
+  // Source toggle (Backtest / Forward / Δ). Forward/Δ collapse to Backtest until forward rows load.
+  const hasForward = fwd.size > 0;
+  const effectiveSource: PredictionSource = source !== 'backtester' && !hasForward ? 'backtester' : source;
+  const valueMode: ValueMode = effectiveSource === 'delta' ? 'delta' : 'mape';
+  const sourcedRows = useMemo(
+    () => applyPredictionSource(rows, selectedGpu, effectiveSource, fwd),
+    [rows, selectedGpu, effectiveSource, fwd],
+  );
   // In selector mode, keep the table's focused single-config view via a synthesized focus.
   const tableFocus: ServingFocus | undefined = selectorMode && selectedModel
     ? { gpu: selectedGpu, model: selectedModel, title: 'Simulator', description: '' }
@@ -473,10 +604,11 @@ export function ServingPredictionsPage({
     && (focus
       ? focus.model === fixedTpotFit.experiment.model
       : (!selectorMode || selectedModel === fixedTpotFit.experiment.model));
-  const fixedTpotOnly = Boolean(showFixedTpotFit && pageKind === 'simulator');
+  // The fixed-TPOT validation overlay is a backtester-only artifact; Forward/Δ show the live rows.
+  const fixedTpotOnly = Boolean(showFixedTpotFit && pageKind === 'simulator' && effectiveSource === 'backtester');
   const tableSourceRows = useMemo(
-    () => fixedTpotOnly ? rows.filter(row => !isSingleTurnServingRow(row)) : rows,
-    [fixedTpotOnly, rows],
+    () => fixedTpotOnly ? sourcedRows.filter(row => !isSingleTurnServingRow(row)) : sourcedRows,
+    [fixedTpotOnly, sourcedRows],
   );
   const fixedTpotRows = fixedTpotOnly && fixedTpotFit
     ? fixedTpotServingRows(fixedTpotFit, pageKind)
@@ -502,9 +634,13 @@ export function ServingPredictionsPage({
           backend={backend}
           onBackend={setBackend}
           showBackend={hasSglang}
-          ttftMape={meanMetricError(rows, 'ttft_err')}
-          tpotMape={meanMetricError(rows, 'tpot_err')}
-          e2elMape={meanMetricError(rows, 'e2el_err')}
+          source={effectiveSource}
+          onSource={setSource}
+          hasForward={hasForward}
+          valueMode={valueMode}
+          ttftMape={valueMode === 'delta' ? meanSignedMetric(sourcedRows, 'ttft_err') : meanMetricError(sourcedRows, 'ttft_err')}
+          tpotMape={valueMode === 'delta' ? meanSignedMetric(sourcedRows, 'tpot_err') : meanMetricError(sourcedRows, 'tpot_err')}
+          e2elMape={valueMode === 'delta' ? meanSignedMetric(sourcedRows, 'e2el_err') : meanMetricError(sourcedRows, 'e2el_err')}
         />
       ) : (
         <>
@@ -544,6 +680,7 @@ export function ServingPredictionsPage({
         focus={tableFocus}
         tpotOnly={fixedTpotOnly}
         validationRows={useFixedTpotRows}
+        valueMode={valueMode}
       />
     </div>
   );
@@ -724,6 +861,10 @@ function SimulatorTargetBar({
   backend,
   onBackend,
   showBackend,
+  source,
+  onSource,
+  hasForward,
+  valueMode,
   ttftMape,
   tpotMape,
   e2elMape,
@@ -737,10 +878,15 @@ function SimulatorTargetBar({
   backend: 'all' | 'vllm' | 'sglang';
   onBackend: (backend: 'all' | 'vllm' | 'sglang') => void;
   showBackend: boolean;
+  source: PredictionSource;
+  onSource: (source: PredictionSource) => void;
+  hasForward: boolean;
+  valueMode: ValueMode;
   ttftMape: OptionalMetric;
   tpotMape: OptionalMetric;
   e2elMape: OptionalMetric;
 }) {
+  const badgeSuffix = valueMode === 'delta' ? 'Δ' : 'MAPE';
   return (
     <section className="rounded-md border border-[#21262d] bg-[#161b22] px-4 py-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -761,11 +907,36 @@ function SimulatorTargetBar({
               </select>
             </label>
           )}
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[#6e7681]">Source</span>
+            <div className="inline-flex overflow-hidden rounded-md border border-[#30363d] text-xs">
+              {PREDICTION_SOURCES.map(({ key, label }) => {
+                const disabled = key !== 'backtester' && !hasForward;
+                const active = source === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onSource(key)}
+                    title={disabled ? 'forward-predictions.json not loaded yet' : undefined}
+                    className={`px-3 py-[5px] font-medium transition-colors ${
+                      active ? 'bg-[#1f6feb] text-white'
+                        : disabled ? 'bg-[#161b22] text-[#484f58] cursor-not-allowed'
+                        : 'bg-[#161b22] text-[#8b949e] hover:bg-[#21262d]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </label>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
-          <MetricBadge label="TTFT MAPE" value={ttftMape} />
-          <MetricBadge label="TPOT MAPE" value={tpotMape} />
-          <MetricBadge label="E2EL MAPE" value={e2elMape} />
+          <MetricBadge label={`TTFT ${badgeSuffix}`} value={ttftMape} mode={valueMode} />
+          <MetricBadge label={`TPOT ${badgeSuffix}`} value={tpotMape} mode={valueMode} />
+          <MetricBadge label={`E2EL ${badgeSuffix}`} value={e2elMape} mode={valueMode} />
         </div>
       </div>
     </section>
@@ -894,15 +1065,17 @@ function MetricBadge({
   label,
   value,
   compact = false,
+  mode = 'mape',
 }: {
   label: string;
   value: OptionalMetric;
   compact?: boolean;
+  mode?: ValueMode;
 }) {
   return (
-    <span className={`inline-flex items-center justify-between gap-1 rounded px-1.5 py-0.5 font-mono ${compact ? 'text-[9px]' : 'text-[10px]'} ${servingErrorTone(value).className}`}>
+    <span className={`inline-flex items-center justify-between gap-1 rounded px-1.5 py-0.5 font-mono ${compact ? 'text-[9px]' : 'text-[10px]'} ${toneFor(value, mode).className}`}>
       <span className="font-sans font-semibold uppercase tracking-wide">{label}</span>
-      <span>{formatCompactPercent(value)}</span>
+      <span>{compactValueFor(value, mode)}</span>
     </span>
   );
 }
@@ -1001,6 +1174,7 @@ function ServingTable({
   focus,
   tpotOnly = false,
   validationRows = false,
+  valueMode = 'mape',
 }: {
   rows: ServingRow[];
   summaryRows?: ServingRow[];
@@ -1009,7 +1183,9 @@ function ServingTable({
   focus?: ServingFocus;
   tpotOnly?: boolean;
   validationRows?: boolean;
+  valueMode?: ValueMode;
 }) {
+  const isDelta = valueMode === 'delta';
   const [selectedPerTurnKey, setSelectedPerTurnKey] = useState<string | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<ServingMetric>(SERVING_TPOT_METRIC);
   const tableData = useMemo(() => {
@@ -1053,6 +1229,7 @@ function ServingTable({
             rows={metricSummaryRows}
             rowCount={summaryRowCount}
             fallbackRows={rows}
+            valueMode={valueMode}
           />
         ))}
       </div>
@@ -1075,8 +1252,8 @@ function ServingTable({
                 style={{ right: 0, width: `${SERVING_MAPE_RAIL_WIDTH}px` }}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#c9d1d9]">Row MAPE</span>
-                  <span className="text-[9px] font-normal text-[#6e7681]">mean abs error</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#c9d1d9]">{isDelta ? 'Row Δ' : 'Row MAPE'}</span>
+                  <span className="text-[9px] font-normal text-[#6e7681]">{isDelta ? 'fwd − bt (pt)' : 'mean abs error'}</span>
                 </div>
               </th>
             </tr>
@@ -1151,6 +1328,7 @@ function ServingTable({
                             row={row.cells[concurrency]}
                             selectedKey={selectedPerTurnRowKey}
                             onSelectPerTurn={setSelectedPerTurnKey}
+                            valueMode={valueMode}
                           />
                         ))}
                         {SERVING_METRICS.map((metric, metricIndex) => (
@@ -1159,6 +1337,7 @@ function ServingTable({
                             matrixRow={row}
                             metric={metric}
                             metricIndex={metricIndex}
+                            valueMode={valueMode}
                           />
                         ))}
                       </tr>
@@ -1177,19 +1356,33 @@ function ServingTable({
         onSelectMetric={setSelectedMetric}
       />
 
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#6e7681]">
-        <span>
-          {tpotOnly ? 'Cells show TPOT-only kernel-composed error; TTFT and E2EL are N/A.' : (
-            <>Cells show % error left-to-right: <span className="text-[#f0883e]">TTFT</span> / <span className="text-[#58a6ff]">TPOT</span> / <span className="text-[#a855f7]">E2EL</span>.</>
-          )}
-        </span>
-        <span className="font-medium text-[#8b949e]">Error bands:</span>
-        <span className="rounded border border-[#3fb950]/30 bg-[#3fb950]/10 px-2 py-0.5 text-[#3fb950]">&lt;10%</span>
-        <span className="rounded border border-[#58a6ff]/30 bg-[#58a6ff]/10 px-2 py-0.5 text-[#58a6ff]">10-25%</span>
-        <span className="rounded border border-[#f0883e]/30 bg-[#f0883e]/10 px-2 py-0.5 text-[#f0883e]">25-50%</span>
-        <span className="rounded border border-[#f85149]/30 bg-[#f85149]/10 px-2 py-0.5 text-[#f85149]">&gt;=50%</span>
-        <span>Rightmost MAPE columns are mean absolute row errors across concurrency cells.</span>
-      </div>
+      {isDelta ? (
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#6e7681]">
+          <span>
+            Cells show <span className="text-[#c9d1d9]">Δ MAPE</span> (forward − backtest, pp) left-to-right:{' '}
+            <span className="text-[#f0883e]">TTFT</span> / <span className="text-[#58a6ff]">TPOT</span> / <span className="text-[#a855f7]">E2EL</span>. Negative = forward closer to measured.
+          </span>
+          <span className="font-medium text-[#8b949e]">Δ bands:</span>
+          <span className="rounded border border-[#3fb950]/30 bg-[#3fb950]/10 px-2 py-0.5 text-[#3fb950]">fwd ≥3pt better</span>
+          <span className="rounded border border-[#30363d] bg-[#21262d] px-2 py-0.5 text-[#8b949e]">~equal</span>
+          <span className="rounded border border-[#f85149]/30 bg-[#f85149]/10 px-2 py-0.5 text-[#f85149]">fwd ≥3pt worse</span>
+          <span>Rightmost columns are the mean Δ across concurrency cells.</span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#6e7681]">
+          <span>
+            {tpotOnly ? 'Cells show TPOT-only kernel-composed error; TTFT and E2EL are N/A.' : (
+              <>Cells show % error left-to-right: <span className="text-[#f0883e]">TTFT</span> / <span className="text-[#58a6ff]">TPOT</span> / <span className="text-[#a855f7]">E2EL</span>.</>
+            )}
+          </span>
+          <span className="font-medium text-[#8b949e]">Error bands:</span>
+          <span className="rounded border border-[#3fb950]/30 bg-[#3fb950]/10 px-2 py-0.5 text-[#3fb950]">&lt;10%</span>
+          <span className="rounded border border-[#58a6ff]/30 bg-[#58a6ff]/10 px-2 py-0.5 text-[#58a6ff]">10-25%</span>
+          <span className="rounded border border-[#f0883e]/30 bg-[#f0883e]/10 px-2 py-0.5 text-[#f0883e]">25-50%</span>
+          <span className="rounded border border-[#f85149]/30 bg-[#f85149]/10 px-2 py-0.5 text-[#f85149]">&gt;=50%</span>
+          <span>Rightmost MAPE columns are mean absolute row errors across concurrency cells.</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -1710,30 +1903,35 @@ function ServingMetricSummary({
   rows,
   rowCount,
   fallbackRows,
+  valueMode = 'mape',
 }: {
   metric: ServingMetric;
   rows: ServingRow[];
   rowCount?: number;
   fallbackRows?: ServingRow[];
+  valueMode?: ValueMode;
 }) {
-  const errorsFrom = (rs: ServingRow[]) => rs
+  const isDelta = valueMode === 'delta';
+  // MAPE view aggregates absolute errors; Δ view keeps the sign so a net-better metric reads negative.
+  const valuesFrom = (rs: ServingRow[]) => rs
     .map(row => numericMetric(row, metric.errKey))
     .filter((value): value is number => value !== undefined)
-    .map(value => Math.abs(value));
+    .map(value => (isDelta ? value : Math.abs(value)));
   // Primary rows (e.g. the fixed TPOT fit set) only carry tpot_err; for TTFT/E2EL
   // fall back to the real per-cell rows, which carry ttft_err / e2el_err.
-  let absoluteErrors = errorsFrom(rows);
+  let values = valuesFrom(rows);
   let usedFallback = false;
-  if (!absoluteErrors.length && fallbackRows && fallbackRows !== rows) {
-    absoluteErrors = errorsFrom(fallbackRows);
-    usedFallback = absoluteErrors.length > 0;
+  if (!values.length && fallbackRows && fallbackRows !== rows) {
+    values = valuesFrom(fallbackRows);
+    usedFallback = values.length > 0;
   }
-  const mape = absoluteErrors.length ? mean(absoluteErrors) : undefined;
-  const best = absoluteErrors.length ? Math.min(...absoluteErrors) : undefined;
-  const worst = absoluteErrors.length ? Math.max(...absoluteErrors) : undefined;
-  const displayedRowCount = mape !== undefined && rowCount !== undefined && !usedFallback
+  const headline = values.length ? mean(values) : undefined;
+  const best = values.length ? Math.min(...values) : undefined;
+  const worst = values.length ? Math.max(...values) : undefined;
+  const displayedRowCount = headline !== undefined && rowCount !== undefined && !usedFallback
     ? rowCount
-    : absoluteErrors.length;
+    : values.length;
+  const fmt = (value: OptionalMetric) => (isDelta ? formatSignedDeltaValue(value) : formatPercent(value));
 
   return (
     <div className="border-b border-[#21262d] px-3 py-2.5 last:border-b-0 md:border-b-0">
@@ -1743,13 +1941,13 @@ function ServingMetricSummary({
           <div className="mt-0.5 text-[11px] text-[#6e7681]">{metric.description}</div>
         </div>
         <div className="text-right">
-          <div className="text-lg font-semibold text-[#e6edf3]">{formatPercent(mape)}</div>
-          <div className="text-[10px] text-[#6e7681]">MAPE</div>
+          <div className="text-lg font-semibold text-[#e6edf3]">{fmt(headline)}</div>
+          <div className="text-[10px] text-[#6e7681]">{isDelta ? 'mean Δ (pp)' : 'MAPE'}</div>
         </div>
       </div>
       <div className="mt-2 flex items-center justify-between border-t border-[#21262d] pt-2 text-[10px] text-[#6e7681]">
         <span>{displayedRowCount} rows</span>
-        <span>best {formatPercent(best)} / worst {formatPercent(worst)}</span>
+        <span>best {fmt(best)} / worst {fmt(worst)}</span>
       </div>
     </div>
   );
@@ -1823,10 +2021,12 @@ function ServingMatrixCell({
   row,
   selectedKey,
   onSelectPerTurn,
+  valueMode = 'mape',
 }: {
   row?: ServingRow;
   selectedKey: string | null;
   onSelectPerTurn: (key: string) => void;
+  valueMode?: ValueMode;
 }) {
   if (!row) {
     return (
@@ -1849,7 +2049,7 @@ function ServingMatrixCell({
       <div className="min-w-0 space-y-0.5" title={`ISL->OSL ${row.isl}->${row.osl}`}>
         <div className="grid min-w-0 grid-cols-3 gap-0.5">
           {SERVING_METRICS.map(metric => (
-            <ServingMiniMetric key={metric.label} row={row} metric={metric} />
+            <ServingMiniMetric key={metric.label} row={row} metric={metric} valueMode={valueMode} />
           ))}
         </div>
       </div>
@@ -1861,13 +2061,17 @@ function ServingRowMeanCell({
   matrixRow,
   metric,
   metricIndex,
+  valueMode = 'mape',
 }: {
   matrixRow: ServingMatrixRow;
   metric: ServingMetric;
   metricIndex: number;
+  valueMode?: ValueMode;
 }) {
-  const value = meanMatrixRowMetricError(matrixRow, metric.errKey);
-  const tone = servingErrorTone(value);
+  const value = valueMode === 'delta'
+    ? meanMatrixRowMetricSigned(matrixRow, metric.errKey)
+    : meanMatrixRowMetricError(matrixRow, metric.errKey);
+  const tone = toneFor(value, valueMode);
   const rows = Object.values(matrixRow.cells).length;
 
   return (
@@ -1876,10 +2080,12 @@ function ServingRowMeanCell({
         metricIndex === 0 ? 'serving-mape-rail-start' : 'border-l border-[#1f2937]'
       }`}
       style={{ right: `${(SERVING_METRICS.length - metricIndex - 1) * SERVING_MAPE_COLUMN_WIDTH}px` }}
-      title={`${matrixRow.profile} ${matrixRow.backend ?? ''}: mean absolute ${metric.label} error across ${rows} concurrency cells`}
+      title={valueMode === 'delta'
+        ? `${matrixRow.profile} ${matrixRow.backend ?? ''}: mean ${metric.label} Δ MAPE (forward − backtest) across ${rows} concurrency cells`
+        : `${matrixRow.profile} ${matrixRow.backend ?? ''}: mean absolute ${metric.label} error across ${rows} concurrency cells`}
     >
       <span className={`block rounded px-1 py-0.5 text-center font-mono text-[10px] leading-none ${tone.className}`}>
-        {formatCompactPercent(value)}
+        {compactValueFor(value, valueMode)}
       </span>
     </td>
   );
@@ -1890,6 +2096,15 @@ function meanMatrixRowMetricError(matrixRow: ServingMatrixRow, errKey: ServingMe
     .map(row => numericMetric(row, errKey))
     .filter((value): value is number => value !== undefined)
     .map(value => Math.abs(value));
+  return values.length ? mean(values) : undefined;
+}
+
+// Signed mean (no abs) for the Δ view — preserves the sign so a row of forward-better cells reads
+// negative.
+function meanMatrixRowMetricSigned(matrixRow: ServingMatrixRow, errKey: ServingMetricKey): number | undefined {
+  const values = Object.values(matrixRow.cells)
+    .map(row => numericMetric(row, errKey))
+    .filter((value): value is number => value !== undefined);
   return values.length ? mean(values) : undefined;
 }
 
@@ -1914,29 +2129,35 @@ function backendTooltipForMatrixRow(matrixRow: ServingMatrixRow): string {
   return row ? backendTooltip(row) : 'legacy scheduler';
 }
 
-function ServingMiniMetric({ row, metric }: { row: ServingRow; metric: ServingMetric }) {
+function ServingMiniMetric({ row, metric, valueMode = 'mape' }: { row: ServingRow; metric: ServingMetric; valueMode?: ValueMode }) {
   const pred = numericMetric(row, metric.predKey);
   const meas = numericMetric(row, metric.measKey);
   const err = numericMetric(row, metric.errKey);
   const signedMs = rowSignedErrorMs(row, metric);
-  const tone = servingErrorTone(err);
-  const title = [
-    `${metric.label}: ${formatPercent(err)} error`,
-    `signed ${formatSignedLatency(signedMs)}`,
-    `pred ${formatLatency(pred, metric.isTotal)}`,
-    `meas ${formatLatency(meas, metric.isTotal)}`,
-    `ISL->OSL ${row.isl}->${row.osl}`,
-    cacheTooltip(row),
-    backendTooltip(row),
-    measurementTooltip(row),
-  ].join(' | ');
+  const tone = toneFor(err, valueMode);
+  const title = valueMode === 'delta'
+    ? [
+        `${metric.label} Δ MAPE ${formatSignedDeltaPct(err)} pp (forward − backtest)`,
+        'negative = forward closer to measured',
+        `ISL->OSL ${row.isl}->${row.osl}`,
+      ].join(' | ')
+    : [
+        `${metric.label}: ${formatPercent(err)} error`,
+        `signed ${formatSignedLatency(signedMs)}`,
+        `pred ${formatLatency(pred, metric.isTotal)}`,
+        `meas ${formatLatency(meas, metric.isTotal)}`,
+        `ISL->OSL ${row.isl}->${row.osl}`,
+        cacheTooltip(row),
+        backendTooltip(row),
+        measurementTooltip(row),
+      ].join(' | ');
 
   return (
     <span
       title={title}
       className={`block rounded px-1 py-0.5 text-center font-mono text-[9px] leading-none ${tone.className}`}
     >
-      {formatCompactPercent(err)}
+      {compactValueFor(err, valueMode)}
     </span>
   );
 }
