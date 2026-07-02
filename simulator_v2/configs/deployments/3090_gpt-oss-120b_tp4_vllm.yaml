@@ -1,0 +1,58 @@
+gpu_key: RTX3090x4
+gpu: RTX3090
+model: gpt-oss-120b
+tp: 4
+engine: vllm
+available_kv_blocks: 8194
+max_num_batched_tokens: 2048
+bench_dir: 3090_gpt-oss-120b_tp4_vllm
+backend: rtx3090-tp4-vllm-analytic-roofline
+calibration_status: 3090_tp4_vllm_analytic_roofline_firstcut
+ground_truth: true
+data:
+  decode_grid:
+    status: missing
+    note: no measured kernel grid for this GPU/model -> analytic decode roofline (configs
+      scale by weight bytes / bandwidth / KV)
+  kv_pool:
+    status: measured
+    value: 8194
+    source: vLLM v1 engine log (engine-config truth)
+    note: 'ENGINE LOG: 3090:/tmp/vllm_8089.log (2026-06-04, vllm 0.19.0, gpt-oss-120b
+      tp4, max_seq_len=8192, util 0.95 — matches GT config metadata 0.95): ''GPU KV
+      cache size: 131,104 tokens'' -> 131104/16 = 8194 blocks. Replaces derived 15830
+      (MXFP4 + sliding-window layer pools are not modeled by the rule).'
+  saturated_ceiling:
+    status: inherited
+    from: H100
+    note: TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model
+      plateaus -> first-cut
+  roofline_peak:
+    status: derived
+    note: 'datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (2080Ti:
+      fp16 cast, sm75; 3090: bf16 — both FP32-accumulate GeForce half-rate) — see
+      configs/gpus/*.json _notes (L9-consumer 2026-06-10)'
+  util_flops:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  util_bw:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  scheduler_overhead:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  cached_prefill_grid:
+    status: inherited
+    from: H100
+    note: TTFT prefill law H100-measured -> first-cut
+  fa3_grid:
+    status: inherited
+    from: H100
+    note: FA3 prefill grid H100-measured -> first-cut
+  ground_truth:
+    status: measured
+    path: 3090_gpt-oss-120b_tp4_vllm
+    source: /mnt/100g

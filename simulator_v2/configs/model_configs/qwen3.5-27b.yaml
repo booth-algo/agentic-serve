@@ -1,0 +1,12 @@
+name: Qwen3.5-27B
+n_params: 27781436400
+kv_bytes_per_token: 65536.0
+kv_heads: 4
+bytes_per_param: 2.0
+cache_block_size: 16
+notes: 'HYBRID linear+full attention (qwen3_5): 48 linear_attention layers (O(1) recurrent
+  state, NO growing KV) + 16 full_attention layers (full_attention_interval=4). kv_bytes_per_token
+  counts ONLY the 16 full layers = 2*16*4 kv_heads*256 head_dim*2 = 65536 -> ~4x smaller
+  than a same-size dense model. n_params = total_size 55562872800 / 2. FIRST-CUT:
+  linear-attention compute/state cost not modeled (decode roofline treats them as
+  free). config.json (text_config) read from h100 host 2026-06-02.'

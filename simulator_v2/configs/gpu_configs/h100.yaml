@@ -1,0 +1,34 @@
+name: H100
+
+# These values need to be re-derived - they're quite hand-wavy right now
+
+compute:
+  peak_flops_per_s: 9.89e14   # BF16 dense, 989 TFLOPS
+  util_flops: 0.65            # prefill util
+  # MEASURED FA3-cached prefill slope: a chunk of U tokens attending P resident tokens
+  # costs +rate*U*P ms (full model). From the H100 fa3_cached grid fit (3.0% APE,
+  # U 64..1024, P 512..8192; linear-in-P continuation verified); cross-checks against
+  # the committed fa3_prefill_H100.csv causal diagonal asymptote (~8.3e-7) within 13%.
+  # Grid CSV not yet in profile_data/kernels -- re-profile to upgrade to grid interp.
+  cross_attn_ms_per_token_pair: 7.29e-7
+
+memory:
+  peak_bw_bytes_per_s: 3.35e12  # HBM3, 3.35 TB/s
+  util_bw: 0.93                 # decode util
+  total_bytes: 85899245920      # 80 GiB - KV-pool
+  gpu_mem_util: 0.90            # vLLM --gpu-memory-utilization
+  kv_pool_blocks: 27250         # MEASURED (max free_kv_blocks across vLLM engine traces, Llama-3.1-8B tp1); overrides the analytic ~27537
+
+scheduler:
+  overhead_ms_per_step: 5.7
+  max_model_len: 32768       # vLLM --max-model-len; sets the chunked-prefill per-request cap (~4%)
+  request_overhead_ms: 25.0  # per-request host overhead (tokenize+dispatch+detok+return); handwavy, re-measure
+
+# Measured serving-stack host costs (ms/token), from v1's live stage-split microbench
+# (serving_stage_split / prefill_host_split). Re-tokenize the re-sent context each turn;
+# dominates TTFT in the sub-saturation regime. Probe-measured -- v1 noted real chat
+# prompts may run heavier, so treat as a first cut and re-probe on replayed prompts.
+prefill_host:
+  shared_ms_per_token: 0.003082   # cached re-tokenize, amortized once/step
+  perreq_ms_per_token: 0.002805   # cached re-tokenize, per request
+  new_ms_per_token: 0.005745      # new-token dispatch

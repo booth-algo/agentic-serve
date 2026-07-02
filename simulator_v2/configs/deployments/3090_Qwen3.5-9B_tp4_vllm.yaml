@@ -1,0 +1,57 @@
+gpu_key: RTX3090x4
+gpu: RTX3090
+model: Qwen3.5-9B
+tp: 4
+engine: vllm
+available_kv_blocks: 125105
+max_num_batched_tokens: 2048
+bench_dir: 3090_Qwen3.5-9B_tp4_vllm
+backend: rtx3090-tp4-vllm-analytic-roofline
+calibration_status: 3090_tp4_vllm_analytic_roofline_firstcut
+ground_truth: true
+data:
+  decode_grid:
+    status: missing
+    note: no measured kernel grid for this GPU/model -> analytic decode roofline (configs
+      scale by weight bytes / bandwidth / KV)
+  kv_pool:
+    status: derived
+    value: 125105
+    source: configs/kv_pool.py
+    note: '24GiB util 0.85, weights 19.3GB/tp4, corrected per-host reserve 0.68GB
+      (RTX3090 tp2/tp4 measured back-solve, profiling/docs/defit_log_entries/L13-3090multi.md
+      + profile_data/engine_logs/3090_Llama-3.1-8B_multi_pool_evidence.txt); replaces
+      the generic 3.5GB rule that over-subtracts on this consumer host. FIRST-CUT:
+      hybrid full-attention pool accounting; engine-pin pending.'
+  saturated_ceiling:
+    status: inherited
+    from: H100
+    note: TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model
+      plateaus -> first-cut
+  roofline_peak:
+    status: placeholder
+    note: datasheet peak FLOPS/BW (FP16-accumulate ambiguity on consumer GPUs)
+  util_flops:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  util_bw:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  scheduler_overhead:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  cached_prefill_grid:
+    status: inherited
+    from: H100
+    note: TTFT prefill law H100-measured -> first-cut
+  fa3_grid:
+    status: inherited
+    from: H100
+    note: FA3 prefill grid H100-measured -> first-cut
+  ground_truth:
+    status: measured
+    path: 3090_Qwen3.5-9B_tp4_vllm
+    source: /mnt/100g

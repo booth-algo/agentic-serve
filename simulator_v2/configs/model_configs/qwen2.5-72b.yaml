@@ -1,0 +1,9 @@
+name: Qwen2.5-72B
+n_params: 72706203648
+kv_bytes_per_token: 327680.0
+kv_heads: 8
+bytes_per_param: 2.0
+cache_block_size: 16
+notes: Dense Qwen2. kv_bytes_per_token = 2*80 layers*8 kv_heads*128 head_dim*2 = 327680.
+  n_params from total_size 145412407296 / 2. sliding_window 131072 = full max_model_len
+  here (no effective windowing at 32k ctx). config.json read from h100 host 2026-06-02.

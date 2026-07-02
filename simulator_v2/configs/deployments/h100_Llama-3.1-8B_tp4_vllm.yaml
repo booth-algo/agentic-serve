@@ -1,0 +1,126 @@
+gpu_key: H100x4
+gpu: H100
+model: Llama-3.1-8B
+tp: 4
+engine: vllm
+available_kv_blocks: 133122
+max_num_batched_tokens: 8192
+bench_dir: h100_Llama-3.1-8B_tp4_vllm
+backend: h100-tp4-vllm-analytic-roofline
+calibration_status: h100_tp4_vllm_analytic_decode_measured_tp4_prefill_law
+ground_truth: true
+data:
+  decode_grid:
+    status: missing
+    note: 'KEPT analytic BY MEASUREMENT -- twice. (1) L8 (2026-06-10): the 96-cell
+      ISOLATED-kernel lattice (decode_profile_H100x4_merged_2026-06-10.csv, md5 81552f697d0a4c9d6a68ec14d2e442ff)
+      was refused per-cell (TPOT 37.10 -> 64.80; 6/44 cells improve vs 38/44 degrade;
+      GT at conc>=120 sits below the isolated wall). (2) L11 (2026-06-11): the SERVING-context
+      grid (serving_decode_grid_H100x4_merged_2026-06-11.csv, md5 a3814643bcbd2ce191c6d7333b93fbb8;
+      live tp4 api_server, prefix caching OFF, per-request mid-stream ITL p50 in the
+      all-B-decoding steady window, 26 pre-registered cells, 3 client passes merged
+      latest-wins, values reproducible <=0.5% across 1/8-shard + SCHED_RR client topologies)
+      measures the quantity the sim actually prices and FALSIFIES the L8 overlap hypothesis
+      in magnitude: serving = median 0.846x of the isolated wall (not the ~0.57x the
+      GT would need), and at B>=256 x T=512 serving EXCEEDS the isolated wall (320x512
+      1.32x: per-token host/stream cost grows with B). Wiring it moves TPOT 37.10
+      -> 45.66 and E2EL 29.81 -> 31.67 (26.56 stacked on the adopted tp4-comm pin
+      vs 25.62 without) -- refused by the pre-registered gate. The GT chat c320 TPOT
+      6.56 ms equals the MEASURED serving ITL at B~100-110/ctx~2k, while the pipeline
+      queries the grid at b_eff~300: the residual is the b_eff/regime over-estimation
+      (S10/S8/util-cap successor cluster), now bounded by a measured serving-truth
+      grid on BOTH sides. No decode price >= measured serving truth can fit conc>=120;
+      banding refused (compensating fit). Artifacts retained.'
+  kv_pool:
+    status: derived
+    value: 133122
+    source: configs/kv_pool.py
+    note: 80GiB util 0.9, weights 16.1GB/tp4, reserve 3.5GB
+  saturated_ceiling:
+    status: inherited
+    from: H100
+    note: 'KEPT inherited BY MEASUREMENT (2026-06-10, lane L8): the tp4 GT never reaches
+      the saturated regime (max KV pressure 1.81 over 1043 turns vs build_saturated_ceiling
+      threshold 2.5; builder would refuse) -> no own ceiling is derivable. The inherited
+      H100-tp1 anchors bind ONLY as a clamp on swebench conc320 (pred pinned at 243.1
+      ms vs measured 83-90): they truncate the analytic-decode amplifier over-prediction
+      rather than model a real tp4 plateau. Fix is the measured tp4 decode grid, not
+      a ceiling.'
+  prefill_tp_comm:
+    status: measured
+    value: 0.00396346764752022
+    path: profile_data/kernels/prefill_tp_comm_H100x4.json
+    source: 'build_tp_comm.py --tp 4 (G3 like-for-like: serving_stage_split.py tp1/tp4
+      pair, comm_total = span.new(tp4) 3.9635 ms/1k above span.new(tp1)/4; tp4 leg
+      serving_stage_split_H100_tp4.csv 2026-06-11, GPUs 4-7)'
+    date: '2026-06-11'
+    note: 'TOTAL tp4 comm per new prefill token, pinned via the top-level deployment
+      key prefill_tp_comm_ms_per_token -> RooflineParams (loader). Replaces the tp2-measured
+      per-extra-rank extrapolation 3x3.279=9.84 ms/1k for THIS config only (every
+      unpinned config keeps the fallback byte-identically). Gate: TTFT cell 39.4507
+      -> 33.8703, E2EL 29.8081 -> 25.6170, TPOT byte-unchanged; trio byte-identical.'
+  prefill_stage_rates:
+    status: measured
+    host_cached_ms_per_token: 0.003530270322580645
+    fa3_ms_per_token2: 2.679109720598808e-07
+    path: profile_data/kernels/prefill_stage_rates_H100x4.json
+    source: 'build_stage_split_rates.py --tp 4 (L11 round 2, like-for-like tp1/tp4
+      stage-split pair, same script + lattice both legs; tp4 leg serving_stage_split_H100_tp4.csv
+      2026-06-11, GPUs 4-7 -- the round-1 Phase-B session). HOST: 3-param OLS ttft
+      ~ floor + a*new + b*cached per leg (the production build_host_split.fit_c1_rate
+      family); tp1 leg reproduces the production SUM 5.8872e-3 within +1.7% (estimator
+      validation), tp4 leg = 3.5303e-3 pinned DIRECT (the prefill_floor precedent).
+      FA3: 4-param OLS prefill_span ~ floor + a*new + b*cached + c*new*(cached+new/2)
+      per leg; pinned = production 8.31e-7 x c(tp4)/c(tp1) = 8.31e-7 x 0.32240 (ratio
+      transport via the tp1 bridge leg, the G3 pattern; direct c(tp4)=1.7965e-7 reported
+      as sensitivity in the artifact).'
+    date: '2026-06-11'
+    note: 'Per-config tp4 serving-stack prefill rates, pinned via the top-level deployment
+      keys prefill_host_cached_ms_per_token / prefill_fa3_ms_per_token2 -> RooflineParams
+      (loader) -> ttft_queue_sim._price_step. Replaces the tp1-measured host SUM 5.8872e-3
+      (the tp4 stack''s own measured rate is 0.59x; the GT''s c1 osworld turns independently
+      anchor ~2.4 ms/1k marginal) and the tp1 FA3 8.31e-7 (head-sharded attention
+      prefill) for THIS config only -- every unpinned config keeps the module constants
+      byte-identically. The shared/per-request host PARTITION stays the production
+      measured fraction 0.5236 applied to the pinned SUM (no tp4 B-sweep exists; documented
+      caveat). Gate (L11 R2): TTFT cell 33.8703 -> 24.9634, E2EL 25.6170 -> 16.3179,
+      TPOT byte-unchanged 37.0951; H100/A100/H100x2 byte-identical.'
+  prefill_floor:
+    status: measured
+    value: 18.08
+    path: profile_data/kernels/prefill_floor_llama31_8b.json
+    source: build_prefill_floor.py (min_clean_c1, n=63; regenerated 2026-06-10 byte-identical)
+    date: '2026-06-10'
+    note: per-config measured floor resolved by ttft_queue_sim._prefill_floor_for('H100x4')
+      -> 18.08 ms (slug h100x4); supersedes the 26.0 tp1 fallback. Already active
+      in the L8 baseline (TTFT 39.4507).
+  roofline_peak:
+    status: measured
+    note: datasheet peak FLOPS/BW
+  util_flops:
+    status: inherited
+    from: H100-Llama-3.1-8B
+    note: H100 util scalars reused for a different model on the same GPU
+  util_bw:
+    status: inherited
+    from: H100-Llama-3.1-8B
+    note: H100 util scalars reused for a different model on the same GPU
+  scheduler_overhead:
+    status: inherited
+    from: H100-Llama-3.1-8B
+    note: H100 util scalars reused for a different model on the same GPU
+  cached_prefill_grid:
+    status: inherited
+    from: H100
+    note: TTFT prefill law H100-measured -> first-cut
+  fa3_grid:
+    status: inherited
+    from: H100
+    note: FA3 prefill grid H100-measured -> first-cut
+  ground_truth:
+    status: measured
+    path: h100_Llama-3.1-8B_tp4_vllm
+    source: /mnt/100g
+prefill_tp_comm_ms_per_token: 0.00396346764752022
+prefill_host_cached_ms_per_token: 0.003530270322580645
+prefill_fa3_ms_per_token2: 2.679109720598808e-07

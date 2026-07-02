@@ -1,0 +1,50 @@
+gpu_key: H100x2
+gpu: H100
+model: Llama-3.1-8B
+tp: 2
+engine: vllm
+available_kv_blocks: 62416
+bench_dir: h100_Llama-3.1-8B_tp2_vllm
+backend: kernel-tp2-decode-measured-kv
+calibration_status: tp2_decode_grid_measured_kv_tp1_prefill
+ground_truth: true
+data:
+  decode_grid:
+    status: measured
+    path: profile_data/results/decode_profile_H100x2_merged_2026-06-10.csv
+    source: build_decode_grid.py merge of 2026-06-01 + 2026-06-10 runs (54 cells,
+      dense B x T rectangle + T=24576 tail up to the 998,656-token KV pool; newest
+      run wins per cell)
+    date: '2026-06-10'
+  kv_pool:
+    status: measured
+    value: 62416
+  saturated_ceiling:
+    status: derived
+    path: profile_data/kernels/saturated_ceiling_H100x2_llama31_8b.json
+    source: build_saturated_ceiling.py (tp2 ground truth @pressure>=2.5)
+    date: '2026-06-03'
+  roofline_peak:
+    status: inherited
+    from: H100
+    note: uses single-H100 peak_bw for tp2 (known over-pred; should be ~2x aggregate
+      bw)
+  util_flops:
+    status: inherited
+    from: H100
+  util_bw:
+    status: inherited
+    from: H100
+  scheduler_overhead:
+    status: inherited
+    from: H100
+  cached_prefill_grid:
+    status: inherited
+    from: H100
+    note: TTFT first-cut
+  fa3_grid:
+    status: inherited
+    from: H100
+  ground_truth:
+    status: measured
+    path: h100_Llama-3.1-8B_tp2_vllm

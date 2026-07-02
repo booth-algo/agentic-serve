@@ -1,0 +1,11 @@
+name: Qwen3.5-9B
+n_params: 9653108208
+kv_bytes_per_token: 32768.0
+kv_heads: 4
+bytes_per_param: 2.0
+cache_block_size: 16
+notes: 'HYBRID linear+full attention (qwen3_5): 24 linear_attention layers (no growing
+  KV) + 8 full_attention layers. kv_bytes_per_token counts ONLY the 8 full layers
+  = 2*8*4 kv_heads*256 head_dim*2 = 32768. n_params = total_size 19306216416 / 2.
+  FIRST-CUT: linear-attention state cost not modeled. config.json (text_config) read
+  from h100 host 2026-06-02.'

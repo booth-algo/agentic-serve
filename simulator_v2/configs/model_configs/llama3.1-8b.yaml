@@ -1,0 +1,15 @@
+name: Llama-3.1-8B
+
+n_params: 8030000000
+kv_bytes_per_token: 131072.0  # 2(K+V) * 32 layers * 8 kv_heads * 128 head_dim * 2 (bf16)
+kv_heads: 8
+bytes_per_param: 2.0
+cache_block_size: 16  # vLLM v1 default block size
+
+# Architectural dims for kernel_floor composition
+n_layers: 32
+hidden_dim: 4096
+intermediate_size: 14336
+n_heads: 32
+head_dim: 128
+vocab_size: 128256

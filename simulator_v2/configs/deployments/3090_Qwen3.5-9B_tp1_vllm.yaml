@@ -1,0 +1,60 @@
+gpu_key: RTX3090
+gpu: RTX3090
+model: Qwen3.5-9B
+tp: 1
+engine: vllm
+available_kv_blocks: 1846
+max_num_batched_tokens: 2048
+bench_dir: 3090_Qwen3.5-9B_tp1_vllm
+backend: rtx3090-tp1-vllm-analytic-roofline
+calibration_status: 3090_tp1_vllm_analytic_roofline_firstcut
+ground_truth: true
+data:
+  decode_grid:
+    status: missing
+    note: no measured kernel grid for this GPU/model -> analytic decode roofline (configs
+      scale by weight bytes / bandwidth / KV)
+  kv_pool:
+    status: derived
+    value: 1846
+    source: configs/kv_pool.py
+    note: '24GiB util 0.85, weights 19.3GB/tp1, corrected per-host reserve 1.63GB
+      (RTX3090 tp1 measured back-solve, profiling/docs/defit_log_entries/L13-3090multi.md
+      + profile_data/engine_logs/3090_Llama-3.1-8B_multi_pool_evidence.txt). The generic
+      3.5GB rule gave budget <= 0 on this 24GiB host -> the cell was pinned to a 256-block
+      engine-feasibility floor; the corrected reserve restores a real kv_pool.py pool.
+      FIRST-CUT: hybrid full-attention pool accounting; engine-pin pending.'
+  saturated_ceiling:
+    status: inherited
+    from: H100
+    note: TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model
+      plateaus -> first-cut
+  roofline_peak:
+    status: derived
+    note: 'datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (2080Ti:
+      fp16 cast, sm75; 3090: bf16 — both FP32-accumulate GeForce half-rate) — see
+      configs/gpus/*.json _notes (L9-consumer 2026-06-10)'
+  util_flops:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  util_bw:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  scheduler_overhead:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  cached_prefill_grid:
+    status: inherited
+    from: H100
+    note: TTFT prefill law H100-measured -> first-cut
+  fa3_grid:
+    status: inherited
+    from: H100
+    note: FA3 prefill grid H100-measured -> first-cut
+  ground_truth:
+    status: measured
+    path: 3090_Qwen3.5-9B_tp1_vllm
+    source: /mnt/100g

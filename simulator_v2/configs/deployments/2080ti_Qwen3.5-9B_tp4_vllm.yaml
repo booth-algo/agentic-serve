@@ -1,0 +1,59 @@
+gpu_key: RTX2080Tix4
+gpu: RTX2080Ti
+model: Qwen3.5-9B
+tp: 4
+engine: vllm
+available_kv_blocks: 22011
+max_num_batched_tokens: 2048
+bench_dir: 2080ti_Qwen3.5-9B_tp4_vllm
+backend: rtx2080ti-tp4-vllm-analytic-roofline
+calibration_status: 2080ti_tp4_vllm_analytic_roofline_firstcut
+ground_truth: true
+data:
+  decode_grid:
+    status: missing
+    note: no measured kernel grid for this GPU/model -> analytic decode roofline (configs
+      scale by weight bytes / bandwidth / KV)
+  kv_pool:
+    status: measured
+    value: 22011
+    source: vLLM v1 engine log (engine-config truth)
+    note: 'ENGINE LOG: 2080ti:/tmp/vllm_8089.log (2026-05-22, vllm 0.19.0, Qwen3.5-9B
+      tp4, max_seq_len=32768, dtype=float16 cast, util 0.85 — matches GT config metadata):
+      ''GPU KV cache size: 352,176 tokens'' -> 352176/16 = 22011 blocks. NB the kv_pool.py
+      rule gives 89663 (4.1x over) — the hybrid linear-attention page padding is not
+      modeled by the rule; engine value pinned.'
+  saturated_ceiling:
+    status: inherited
+    from: H100
+    note: TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model
+      plateaus -> first-cut
+  roofline_peak:
+    status: derived
+    note: 'datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (2080Ti:
+      fp16 cast, sm75; 3090: bf16 — both FP32-accumulate GeForce half-rate) — see
+      configs/gpus/*.json _notes (L9-consumer 2026-06-10)'
+  util_flops:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  util_bw:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  scheduler_overhead:
+    status: placeholder
+    from: H100
+    note: H100 util scalars; re-anchor from a measured grid for this GPU
+  cached_prefill_grid:
+    status: inherited
+    from: H100
+    note: TTFT prefill law H100-measured -> first-cut
+  fa3_grid:
+    status: inherited
+    from: H100
+    note: FA3 prefill grid H100-measured -> first-cut
+  ground_truth:
+    status: measured
+    path: 2080ti_Qwen3.5-9B_tp4_vllm
+    source: /mnt/100g

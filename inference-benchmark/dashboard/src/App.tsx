@@ -14,14 +14,14 @@ import { CoveragePage } from './components/CoveragePage';
 import { GpuStatePage } from './components/GpuStatePage';
 import { ServingPredictionsPage } from './components/ServingPredictionsPage';
 import { PredictionsMatrixPage } from './components/PredictionsMatrixPage';
-import { simulatorPredictionsJsonUrl } from './dataUrls';
+import { simulatorPredictionsJsonUrl, simulatorV2SimPredictionsJsonUrl } from './dataUrls';
 import type { TabId } from './types';
 import { hasSyntheticRuntime, normalizeDataScope, type DataScope } from './profileMeta';
 import './index.css';
 
-type PageId = 'benchmark' | 'coverage' | 'serving' | 'simulator' | 'gpu';
-const PAGE_IDS: PageId[] = ['benchmark', 'coverage', 'serving', 'simulator', 'gpu'];
-const SYNTHETIC_RUNTIME_PAGES = new Set<PageId>(['gpu', 'serving', 'simulator']);
+type PageId = 'benchmark' | 'coverage' | 'serving' | 'simulator' | 'simulator_v2' | 'gpu';
+const PAGE_IDS: PageId[] = ['benchmark', 'coverage', 'serving', 'simulator', 'simulator_v2', 'gpu'];
+const SYNTHETIC_RUNTIME_PAGES = new Set<PageId>(['gpu', 'serving', 'simulator', 'simulator_v2']);
 const DATA_SCOPE_STORAGE_KEY = 'inference-dashboard-data-scope';
 
 function initialDataScope(): DataScope {
@@ -187,6 +187,12 @@ function App() {
         <ServingPredictionsPage
           dataScope={dataScope}
           predictionsUrl={simulatorPredictionsJsonUrl}
+          pageKind="simulator"
+        />
+      ) : visiblePage === 'simulator_v2' ? (
+        <ServingPredictionsPage
+          dataScope={dataScope}
+          predictionsUrl={simulatorV2SimPredictionsJsonUrl}
           pageKind="simulator"
         />
       ) : visiblePage === 'coverage' ? (

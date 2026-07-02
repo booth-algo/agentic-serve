@@ -57,12 +57,9 @@ export const forwardPredictionsJsonUrl = withBuildHash(
   import.meta.env.VITE_FORWARD_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'forward-predictions.json'),
 );
 
-export const simulatorV2PredictionsJsonUrl = withBuildHash(
-  import.meta.env.VITE_SIMULATOR_V2_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'simulator-v2-predictions.json'),
-);
-
-export const simulatorV3PredictionsJsonUrl = withBuildHash(
-  import.meta.env.VITE_SIMULATOR_V3_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'simulator-v3-predictions.json'),
+// simulator_v2 (kernel-composition rewrite) backtest predictions — drives the "Simulator v2" tab.
+export const simulatorV2SimPredictionsJsonUrl = withBuildHash(
+  import.meta.env.VITE_SIMULATOR_V2SIM_PREDICTIONS_JSON_URL || joinUrl(publicAssetBase, 'simulator-v2sim-predictions.json'),
 );
 
 export const profilingStateJsonUrl = withBuildHash(

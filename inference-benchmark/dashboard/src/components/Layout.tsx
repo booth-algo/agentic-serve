@@ -6,7 +6,7 @@ import {
   type DataScope,
 } from '../profileMeta';
 
-type PageId = 'benchmark' | 'coverage' | 'serving' | 'simulator' | 'gpu';
+type PageId = 'benchmark' | 'coverage' | 'serving' | 'simulator' | 'simulator_v2' | 'gpu';
 type NavPage = { id: PageId; label: string; icon: ReactNode };
 
 interface LayoutProps {
@@ -77,6 +77,20 @@ const RUNTIME_NAV_PAGES: NavPage[] = [
         <path d="M7 15h3" />
         <path d="M12 11h3" />
         <path d="M17 7h3" />
+      </svg>
+    ),
+  },
+  {
+    id: 'simulator_v2',
+    label: 'Simulator v2',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 19V5" />
+        <path d="M4 19h16" />
+        <path d="M7 15h3" />
+        <path d="M12 11h3" />
+        <path d="M17 7h3" />
+        <circle cx="20" cy="5" r="2" />
       </svg>
     ),
   },
@@ -173,7 +187,7 @@ export function Layout({
                 <span className="inline-block h-2 w-2 rounded-full bg-[#58a6ff]" />
                 Matrix loaded
               </span>
-            ) : showRuntimeNav && activePage === 'simulator' ? (
+            ) : showRuntimeNav && (activePage === 'simulator' || activePage === 'simulator_v2') ? (
               <span className="flex items-center gap-2">
                 <span className="inline-block h-2 w-2 rounded-full bg-[#58a6ff]" />
                 Simulator target loaded
@@ -218,7 +232,7 @@ export function Layout({
                 ? 'live GPU state'
                 : showRuntimeNav && activePage === 'serving'
                   ? 'matrix'
-                  : showRuntimeNav && activePage === 'simulator'
+                  : showRuntimeNav && (activePage === 'simulator' || activePage === 'simulator_v2')
                     ? 'H100 / Llama-3.1-8B'
                     : activePage === 'coverage'
                       ? 'coverage view'

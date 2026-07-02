@@ -1,0 +1,14 @@
+name: gpt-oss-120b
+n_params: 117000000000
+n_active_params: 5100000000
+n_active_experts: 4
+kv_bytes_per_token: 73728.0
+kv_heads: 8
+bytes_per_param: 0.5577
+cache_block_size: 16
+notes: 'MoE (128 experts, 4 active/token, ~5.1B active), MXFP4-quantized experts.
+  bytes_per_param = total_size 65248815744 / 117e9 nominal = 0.558 (n_params*bytes_per_param
+  = real weight bytes, quant-aware). kv_bytes_per_token counts the 18 full_attention
+  layers = 2*18*8 kv_heads*64 head_dim*2 = 73728; 18 sliding_attention layers (window
+  128) window-capped, omitted. FIRST-CUT: MoE active-vs-total + sliding-window not
+  precisely modeled. config.json read from a100 host (/data/models/gpt-oss-120b) 2026-06-02.'

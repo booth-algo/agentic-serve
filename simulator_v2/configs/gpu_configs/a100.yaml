@@ -1,0 +1,20 @@
+name: A100
+compute:
+  peak_flops_per_s: 312000000000000.0
+  util_flops: 0.65
+memory:
+  peak_bw_bytes_per_s: 1555000000000.0
+  util_bw: 0.93
+  total_bytes: 42949672960
+  gpu_mem_util: 0.9
+scheduler:
+  overhead_ms_per_step: 5.7
+notes: 'A100-SXM4-40GB (1.555 TB/s HBM2e, 312 TFLOPS BF16 dense, 40 GiB). peak_flops/peak_bw
+  are datasheet (measured-equivalent). util_flops/util_bw/scheduler_overhead are H100
+  PLACEHOLDERS — re-anchor from an A100 grid (affects only the analytic OOM-fill).
+  Measurement recipe pinned and ready: profiling/docs/a100_roofline_utils_runbook.md
+  + profiling/process/preflight_a100_roofline_utils.sh (DEFERRED 2026-06-10: 7/8 GPUs
+  busy with another campaign). NB the H100 source values themselves re-derive to 0.5886/0.8111/4.5574
+  under the pinned recipe (roofline_utils_H100.json). total_memory_bytes (40 GiB)
+  is read by configs/kv_pool.py only. Tracked as ''placeholder'' in the deployment
+  manifest.'

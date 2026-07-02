@@ -35,6 +35,11 @@ __pycache__/
 *.py[cod]
 search/__pycache__/
 
+# HF tokenizer caches (downloaded at runtime by trace/dataset tooling)
+.gptoss_tokenizer/
+.llama_tokenizer/
+.mixtral_tokenizer/
+
 # Frontend/build/test outputs
 inference-benchmark/dashboard/dist*/
 inference-benchmark/dashboard/.vite/
