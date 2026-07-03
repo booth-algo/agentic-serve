@@ -8,15 +8,16 @@ max_num_batched_tokens: 2048
 max_model_len: 32768
 max_num_seqs: 256
 bench_dir: a100_Llama-3.1-8B_tp1_vllm
-backend: a100-measured-decode
-calibration_status: a100_tp1_measured_decode_kv_roofline_ceiling_real_gt
+backend: a100-tp1-vllm-analytic-roofline
+calibration_status: a100_tp1_analytic_roofline_firstcut
 ground_truth: true
 data:
   decode_grid:
-    status: measured
-    path: profile_data/results/decode_profile_A100_2026-06-02.csv
-    source: decode_steps.py (a100 GPU2)
-    date: '2026-06-02'
+    status: retired
+    note: 'POLICY (2026-07-03): step-level decode grids are NOT kernel models and
+      are excluded from the cost path. The v1-era CSV (decode_profile_A100_2026-06-02.csv)
+      remains on disk as validation data only. A100 calibration = profile A100 leaf
+      kernels (GEMM/FA/elementwise tables), same recipe as H100.'
   kv_pool:
     status: measured
     value: 8458

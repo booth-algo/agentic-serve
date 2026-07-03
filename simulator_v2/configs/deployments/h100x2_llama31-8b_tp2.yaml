@@ -5,17 +5,18 @@ tp: 2
 engine: vllm
 available_kv_blocks: 62416
 bench_dir: h100_Llama-3.1-8B_tp2_vllm
-backend: kernel-tp2-decode-measured-kv
-calibration_status: tp2_decode_grid_measured_kv_tp1_prefill
+backend: h100-tp2-vllm-analytic-roofline
+calibration_status: h100_tp2_vllm_analytic_roofline_firstcut
 ground_truth: true
 data:
   decode_grid:
-    status: measured
-    path: profile_data/results/decode_profile_H100x2_merged_2026-06-10.csv
-    source: build_decode_grid.py merge of 2026-06-01 + 2026-06-10 runs (54 cells,
-      dense B x T rectangle + T=24576 tail up to the 998,656-token KV pool; newest
-      run wins per cell)
-    date: '2026-06-10'
+    status: retired
+    note: 'POLICY (2026-07-03): step-level decode grids are NOT kernel models and
+      are excluded from the cost path (v1 refused them empirically for H100x4 --
+      see that manifest). The v1-era CSV (decode_profile_H100x2_merged_2026-06-10.csv)
+      remains on disk as validation data only. tp2 decode = kernel-ADJUSTED
+      composition: tp1 GEMM table at sharded shapes + sharded-head attention +
+      explicit comm terms.'
   kv_pool:
     status: measured
     value: 62416

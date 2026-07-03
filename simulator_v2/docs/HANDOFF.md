@@ -74,7 +74,19 @@ unexplained); terminalbench c120 t17–19 still over (~160–180%).
    still armed behind the GPU watcher on the h100, result → `pool_capacity_H100.txt`).
    Separated out: **osworld c40/c80 (~27/37) never evicts** — its hump is frontend
    over-shoot at huge cached contexts (t2 ratios up to 322), same family as chat c1/c5.
-3. **Forward mode** — `getters/workload.load_distribution` raises `NotImplementedError`;
+3. **tp>1 port (ACTIVE 2026-07-03)** — dashboard now carries the full v1 config matrix
+   (21 gpu_keys / 9 models / 2974 rows) as labeled `v2_roofline_firstcut`; only
+   H100-8B-tp1 is calibrated. **POLICY: step-level decode grids are BANNED as cost
+   models** (they are whole-forward-pass measurements, not kernels; v1 empirically
+   refused them for H100x4 — isolated-kernel walls sit above serving GT). tp>1 decode
+   = kernel-ADJUSTED composition: tp1 GEMM table queried at sharded shapes (free —
+   table is shape-indexed), sharded-head attention (FA grids head-mismatch -> roofline
+   fallback until tp2-head grids are profiled), explicit comm terms (prefill all-reduce
+   MEASURED at 3.28e-3 ms/tok, `prefill_tp_comm_H100.json`; decode all-reduce needs a
+   latency-bound analytic or measurement). Measured per-deployment facts stay: tp2
+   pool 62,416 blocks, tp2 GT-derived ceiling. Current first-cut: H100x2 TTFT 36 /
+   TPOT 137; H100x4 42 / 340 (anchored-analytic ceiling scales the wrong way with tp).
+4. **Forward mode** — `getters/workload.load_distribution` raises `NotImplementedError`;
    forward ceiling `saturated_step_ms` is a 200ms placeholder. The unsolved
    no-ground-truth path, and the strategic reason v2 exists.
 4. **FA3-cached grid re-profile** — upgrade the 7.29e-7 cross-attn constant to grid interp
