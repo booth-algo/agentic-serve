@@ -2,62 +2,77 @@
 
 > Session snapshot for whoever picks this up next. Where things stand, what changed, what's
 > open, and how to run it. Deep refs: `CODEBASE_MAP.md` (architecture), `ttft.md` (TTFT model
-> + findings), `knobs.md` (every tunable). Last updated 2026-07-01.
+> + findings), `knobs.md` (every tunable). Last updated 2026-07-02.
 
 ## Status
 
 v2 predicts per-turn TTFT / TPOT / E2EL via **kernel composition** (backtest) — no in-situ
 fits. Backtest + the "Simulator v2" dashboard tab are wired and deployed. Forward mode is
-still a stub.
+still a stub. The 2026-07-02 landing (shared-prefix pool dedup + tail step-cost terms,
+commits `9392b59` + `866da21`) took the headline from 26.9 to **23.6**.
 
-Headline TTFT (H100 / Llama-3.1-8B tp1, cell-MAPE, mean of per-turn APE):
+Headline TTFT (H100 / Llama-3.1-8B tp1, cell-MAPE, mean of per-turn APE), after the
+2026-07-03 frontend landing (open thread 1 below):
 
 | aggregate | chat | osworld | swebench | terminalbench |
 |---|---|---|---|---|
-| **26.9%** | 32.6 | 17.5 | 28.1 | 29.3 |
+| **16.7%** | 19.6 | 16.9 | 12.6 | 17.5 |
 
-## What changed this session
+(2026-07-02 pool-dedup + step-cost landing: 26.9 → 23.6; 2026-07-03 frontend stage:
+23.6 → 16.7.) swebench c80–c320 sits at 6–15; chat c160–c256 at 10–13. Largest
+remaining cells: osworld c80 (37), chat c5 (33), chat c1 (29), osworld c40 (27).
 
-1. **Removed the `response_resident_fraction` (ρ) knob** — it double-counted. The ground
-   truth accounts prefill as `cache_estimate_source="previous_prompt_tokens"`, so the prev
-   response is already inside `new_prefill`; ρ credited it again. Deleted from `GpuConfig`,
-   the `Hardware` protocol, `queue_sim`, the loader, and the YAML. Aggregate 28.6→26.9%.
-   (`ttft.md` / `knobs.md` "Finding: response-resident".)
-2. **Confirmed the host rate is correct** — re-probed on the live H100
-   (`serving_stage_split_H100_reprobe.csv`): cached 6.13e-3 vs production 5.887e-3 (+4%,
-   within tolerance), and real prompts are *lighter* per token (~0.83×). So the earlier
-   host×1.3–1.5 "fix" was a fudge; **do not scale the host rate.**
-3. **Identified the residual sub-saturation gap = vLLM API-server frontend serialization**
-   (not GPU, not scheduler). A live multi-concurrency probe (`serving_herd_scaling.py`) shows
-   the server's own frontend growing 7–10× c1→c20 while queue≈0 and GPU prefill stays flat.
-   Measured `f(new,cached) = 6.5 + 0.0046·(new+cached)` ms, ~serial. **Characterized but not
-   modeled** — see below. Housed in `engine/serving_frontend.py`.
+## What changed this session (2026-07-02)
 
-## Key finding: sub-saturation TTFT is frontend serialization
+1. **Shared-prefix POOL dedup** — the transition-band (c40–c160 onset) overshoot was
+   phantom KV demand: the session-granular cache charged every session its own copy of the
+   cross-session shared prefix, which vLLM's APC stores ONCE (256×1024 ≈ 60% of the pool at
+   swebench c256) → the eviction cascade fired 2–3 turns early. Reservation (`_schedule`)
+   and decode-growth (`_on_step`) are now net of `shared_prefix_tokens`. **Both paths must
+   be net** — an earlier `_schedule`-only attempt silently failed (decode growth re-claimed
+   the span every turn).
+2. **Tail step-cost terms** — deep saturation was a −25% *slope* error: mixed steps priced
+   ~197ms vs the measured ~250ms saturated step. Landed (a) cross-context chunk attention
+   `rate·U·P` (measured FA3-cached slope, `h100.yaml compute.cross_attn_ms_per_token_pair`
+   = 7.29e-7) and (b) additive GPU composition (`decode + prefill + cross`, host still
+   pipelined via max) in `_price_step`.
+3. **Falsified with data (keep dead)**: the global barrier is EXACT (GT timestamps, 0% turn
+   interleave; `runner.py:334` gather); cohort taper is faithful; flat-LRU eviction is a
+   no-op; incremental block allocation regresses tails. With 60% phantom demand, any
+   eviction policy cascades — the demand was wrong, not the policy.
+4. **GT-inference technique** (no engine cache telemetry exists; GT cache fields are
+   harness estimates): real recompute per turn = drain-window(p95−p5 TTFT) ×
+   (budget−herd)/drain-ITL ÷ beyond-shared cached. Validated at saturation (92–101% vs sim
+   99–101%); at onset it was the smoking gun (GT 0–30% where sim said 73–86%).
+5. **Docs/dashboard**: ttft.md + knobs.md updated for the new model; dashboard JSON
+   regenerated + deployed to `dist/`; repo pushed (the whole `simulator_v2/` tree is now
+   committed for the first time).
 
-- At **c1 the engine model is already accurate** (0.9–1.0); the gap switches on the instant a
-  herd forms (c5+: ~0.56) and recovers once recompute dominates. So it's a *herd* effect.
-- It is **serving-harness overhead** (HTTP/tokenize/IPC/stream), **not kernel physics**. The
-  kernel sim faithfully predicts *engine* TTFT; the benchmark's measured TTFT additionally
-  carries this frontend cost.
-- **Not shipped as a term.** The `barrier_stagger_epochs` prototype lifts the high
-  sub-saturation band but leaves the c5–c20 dip and over-predicts at the saturation transition
-  (full-serial `f` over-extrapolates; the real frontend parallelizes by c80). A shippable term
-  needs load-dependent parallelism + engine pipelining — a fixed lane count is a regime fudge.
-  Full detail in `ttft.md`.
+Accepted regressions in the landing: osworld c160 +5.6, c80 +3.3 (a residual mid-conc hump,
+unexplained); terminalbench c120 t17–19 still over (~160–180%).
 
 ## Open threads (ranked)
 
-1. **Frontend-serialization term** (if deemed in-scope — it's harness overhead). Needs: a
-   probe sweep to c40–c160 for the parallelism curve, then a *pipelined* frontend/engine
-   resource (delay hidden under recompute via `max`). Model + measured `f` live in
-   `engine/serving_frontend.py`; probe in `serving_herd_scaling.py`. Honest option: just keep
-   it documented as a scope boundary and don't model it.
-2. **Forward mode** — `getters/workload.load_distribution` raises `NotImplementedError`;
-   forward ceiling `saturated_step_ms` is a 200ms placeholder. The unsolved no-ground-truth path.
-3. **Agentic residuals** — swebench / terminalbench ~28–29%, not yet dug into.
-4. **Handwavy YAML** — `util_flops` / `util_bw`, `request_overhead_ms` (flat 25ms). See
-   `knobs.md` "accuracy levers".
+1. **Frontend stage LANDED 2026-07-03 → aggregate 16.7** (from 23.6). Client-referenced
+   measured model (f_cli floor+slopes, lanes curve, streaming-load mult curve) wired via
+   `engine/serving_frontend.py` + `frontend:` YAML; `prefill_host` and
+   `request_overhead_ms` retired (double-count — proven by the V1 A/B breaking every c1
+   cell). Probe CSVs: `serving_herd_scaling_H100_{c160,loaded,smallD}.csv`. Remaining
+   residuals from this band: **chat c1/c5 (~29/33)** — small-TTFT turns where the f_cli
+   floor/slopes over-shoot; likely needs the real-prompt chars/token correction (~0.83×,
+   see corollary above) or a chat-prompt re-probe.
+2. **osworld c40/c80 residual hump** (~27/37 post-frontend) — undiagnosed; persists
+   through every frontend variant, so it's engine-side (transition-pressure related).
+3. **Forward mode** — `getters/workload.load_distribution` raises `NotImplementedError`;
+   forward ceiling `saturated_step_ms` is a 200ms placeholder. The unsolved
+   no-ground-truth path, and the strategic reason v2 exists.
+4. **FA3-cached grid re-profile** — upgrade the 7.29e-7 cross-attn constant to grid interp
+   (the original grid CSV never made it into `profile_data/`; producer candidates in
+   `profiling/gpu_profiling/vllm/cuda_events/cached_prefill_steps_v3.py`).
+5. **Handwavy YAML** — `util_flops` / `util_bw`, `request_overhead_ms` (flat 25ms). See
+   `knobs.md` "accuracy levers". Also `sum_kernels.fused_step_ms`'s mixed `max()` docstring
+   is stale (path now only corner-called; the claim "cheaper phase rides free" is
+   known-wrong for mixed steps).
 
 ## How to run
 
@@ -65,6 +80,7 @@ Headline TTFT (H100 / Llama-3.1-8B tp1, cell-MAPE, mean of per-turn APE):
 # backtest MAPE / diagnostics
 python -m simulator_v2.engine.kv_pressure                       # KV-pressure per cell
 python -m simulator_v2.engine.step_trace chat-multiturn-synth 120   # per-step TTFT decomposition
+python3 /tmp/wf-hint/verify_landed.py                           # 44-cell gate (expects 23.56)
 
 # dashboard: regenerate the v2 predictions JSON, then deploy (copy into dist/)
 python3 inference-benchmark/scripts/build_simulator_v2_predictions.py
@@ -75,28 +91,35 @@ cp inference-benchmark/dashboard/public/simulator-v2sim-predictions.json \
 
 **H100 probes** (this box is CPU-only; the GPU is remote):
 ```bash
-ssh h100                       # 10.250.30.45 over wg0; GPUs 0-3,7 usually free (avoid 4-6)
-# env: CUDA_VISIBLE_DEVICES=7  PYTHON=~/miniconda3/envs/vllm/bin/python
+ssh h100                       # 10.250.30.45 over wg0; GPUs 0-3 usually free (7 was BUSY 2026-07-02; avoid 4-6)
+# env: CUDA_VISIBLE_DEVICES=<free>  PYTHON=~/miniconda3/envs/vllm/bin/python
 #      MODEL=/data48/kevinlau/models/Llama-3.1-8B-Instruct
 # the h100 repo checkout is STALE — rsync the probe script over before running:
 rsync -az profiling/gpu_profiling/vllm/serving_herd_scaling.py h100:/home/kevinlau/agentic-serve/profiling/gpu_profiling/vllm/
-# then self-launching sweep (writes CSV):
-#   CUDA_VISIBLE_DEVICES=7 <PYTHON> profiling/gpu_profiling/vllm/serving_herd_scaling.py --news 128,2048 --cacheds 0,8000 --concs 1,5,10,20,40,80
+# then self-launching sweep (writes CSV incrementally):
+#   CUDA_VISIBLE_DEVICES=3 <PYTHON> profiling/gpu_profiling/vllm/serving_herd_scaling.py \
+#     --port 8793 --news 128,2048 --cacheds 0,8000 --concs 1,5,10,20,40,80,160 --trials 3 \
+#     --out profile_data/results/serving_herd_scaling_H100_c160.csv
 ```
 
 ## Artifacts
 
 - Dashboard JSON: `inference-benchmark/dashboard/public/simulator-v2sim-predictions.json`
-  (44 cells, 4 multi-turn profiles; deployed to `dist/`).
+  (44 cells, 4 multi-turn profiles; deployed to `dist/`, committed).
 - Probe data: `profile_data/results/serving_stage_split_H100_reprobe.csv` (c1 stage split),
-  `serving_herd_scaling_H100.csv` (concurrency × (new,cached)).
-- Diagnostics/probes: `engine/step_trace.py`, `engine/serving_frontend.py`,
+  `serving_herd_scaling_H100.csv` (c1–c20), `serving_herd_scaling_H100_c160.csv` (c1–c160,
+  in flight — on the h100 checkout, scp back when done).
+- Session probes/A-Bs (scratch, this box): `/tmp/wf-hint/regime1_*.py` (volume/steps/price),
+  `regime2*_*.py` (evict/alloc/dedup), `regime3_gate.py`, `verify_landed.py`.
+- Diagnostics: `engine/step_trace.py`, `engine/serving_frontend.py`,
   `profiling/gpu_profiling/vllm/serving_herd_scaling.py`.
 
 ## Principles (held this session)
 
-- **No compensating fudges.** We deleted ρ, rejected host-rate scaling, and deferred the
-  frontend term rather than tune a lane count per regime. Prefer measured provenance or an
-  honest scope boundary over a knob that only fits by coincidence of shape.
-- **Provenance over parity.** Every constant should trace to a datasheet, arch, or a probe
-  (`knobs.md`). Don't tune forward toward backtest.
+- **No compensating fudges.** Both step-cost terms are measured physics; the dedup is
+  vLLM's actual storage semantics. Three plausible mechanism fixes (flat-LRU, incremental
+  allocation, and earlier the fixed-serial frontend) were tested and rejected on data
+  rather than tuned into place.
+- **Falsify with ground truth before landing.** The barrier/taper/eviction-policy suspects
+  each got a direct GT measurement; the one that survived (phantom shared-prefix demand)
+  also had exact demand-crossing arithmetic behind it.

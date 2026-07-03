@@ -108,28 +108,35 @@ def _sub(a, b):
     return None if (a is None or b is None) else a - b
 
 
-async def ttft_once(session, url, model, content):
+async def ttft_once(session, url, model, content, _retried=False):
     payload = {"model": model, "messages": [{"role": "user", "content": content}],
                "max_tokens": 1, "temperature": 0.0, "stream": True,
                "stream_options": {"include_usage": True}}
     headers = {"Authorization": "Bearer test", "Content-Type": "application/json"}
     t_send = time.perf_counter()
-    async with session.post(url, json=payload, headers=headers) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"HTTP {resp.status}: {(await resp.text())[:200]}")
-        ttft_ms = None
-        async for raw in resp.content:
-            line = raw.decode("utf-8").strip()
-            if not line.startswith("data:"):
-                continue
-            ds = line[len("data:"):].strip()
-            if ds == "[DONE]":
-                break
-            ch = json.loads(ds)
-            cc = ch.get("choices", [])
-            if ttft_ms is None and cc and cc[0].get("delta", {}).get("content") is not None:
-                ttft_ms = (time.perf_counter() - t_send) * 1000.0
-        return ttft_ms
+    try:
+        async with session.post(url, json=payload, headers=headers) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status}: {(await resp.text())[:200]}")
+            ttft_ms = None
+            async for raw in resp.content:
+                line = raw.decode("utf-8").strip()
+                if not line.startswith("data:"):
+                    continue
+                ds = line[len("data:"):].strip()
+                if ds == "[DONE]":
+                    break
+                ch = json.loads(ds)
+                cc = ch.get("choices", [])
+                if ttft_ms is None and cc and cc[0].get("delta", {}).get("content") is not None:
+                    ttft_ms = (time.perf_counter() - t_send) * 1000.0
+            return ttft_ms
+    except (aiohttp.ServerDisconnectedError, aiohttp.ClientOSError):
+        # Stale keep-alive (uvicorn closes idle conns between trials); retry once on a
+        # fresh connection with fresh timing -- the dead-socket attempt is discarded.
+        if _retried:
+            raise
+        return await ttft_once(session, url, model, content, _retried=True)
 
 
 async def burst(session, base_url, model, cached, new, conc, trials):
@@ -141,6 +148,7 @@ async def burst(session, base_url, model, cached, new, conc, trials):
         await ttft_once(session, chat_url, model, prefix)  # prime -> APC hit for the burst
 
     c_med, c_max, q_ms, p_ms, sttft_ms = [], [], [], [], []
+    c_all = []  # pooled per-request client TTFTs (staircase shape across the herd)
     for t in range(trials + 1):  # +1 warmup
         contents = [(prefix + " " + fresh_tail(new)) if cached > 0 else fresh_tail(new)
                     for _ in range(conc)]
@@ -152,6 +160,7 @@ async def burst(session, base_url, model, cached, new, conc, trials):
         tt = sorted(x for x in res if x is not None)
         if not tt:
             continue
+        c_all.extend(tt)
         c_med.append(tt[len(tt) // 2])
         c_max.append(tt[-1])
         dq = _sub(after["queue_span_s"], before["queue_span_s"])
@@ -167,6 +176,12 @@ async def burst(session, base_url, model, cached, new, conc, trials):
     def med(xs):
         return st.median(xs) if xs else None
 
+    def pct(xs, q_frac):
+        if not xs:
+            return None
+        s = sorted(xs)
+        return s[min(len(s) - 1, int(round(q_frac * (len(s) - 1))))]
+
     cm, q, p, sttft = med(c_med), med(q_ms), med(p_ms), med(sttft_ms)
     # SERVER frontend = server ttft - engine(queue+prefill): immune to client event-loop.
     server_frontend = None if None in (sttft, q, p) else sttft - q - p
@@ -174,6 +189,8 @@ async def burst(session, base_url, model, cached, new, conc, trials):
     client_frontend = None if None in (cm, q, p) else cm - q - p
     return {"new": new, "cached": cached, "conc": conc, "trials": trials,
             "ttft_client_med_ms": cm, "ttft_client_max_ms": med(c_max),
+            "ttft_client_p10_ms": pct(c_all, 0.10), "ttft_client_p25_ms": pct(c_all, 0.25),
+            "ttft_client_p75_ms": pct(c_all, 0.75), "ttft_client_p90_ms": pct(c_all, 0.90),
             "ttft_server_ms": sttft, "mean_queue_ms": q, "mean_prefill_ms": p,
             "server_frontend_ms": server_frontend, "client_frontend_ms": client_frontend}
 
@@ -204,29 +221,68 @@ def launch_server(model, port, gpu_mem, max_model_len, api_key, log_path):
     return subprocess.Popen(cmd, stdout=open(log_path, "w"), stderr=subprocess.STDOUT)
 
 
-_CSV_FIELDS = ["new", "cached", "conc", "trials", "ttft_client_med_ms", "ttft_client_max_ms",
-               "ttft_server_ms", "mean_queue_ms", "mean_prefill_ms",
-               "server_frontend_ms", "client_frontend_ms"]
+_CSV_FIELDS = ["decoys", "new", "cached", "conc", "trials", "ttft_client_med_ms",
+               "ttft_client_max_ms", "ttft_client_p10_ms", "ttft_client_p25_ms",
+               "ttft_client_p75_ms", "ttft_client_p90_ms", "ttft_server_ms",
+               "mean_queue_ms", "mean_prefill_ms", "server_frontend_ms",
+               "client_frontend_ms"]
 
 
-async def run(base_url, model, news, cacheds, concs, trials, out_path):
-    rows = []
-    conn = aiohttp.TCPConnector(limit=0)  # no client-side cap -> true concurrency
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=600), connector=conn) as s:
-        present = [k for k, v in (await scrape(s, base_url)).items() if v is not None]
-        print(f"/metrics histograms present: {present}", flush=True)
-        for cached in cacheds:
-            for new in news:
-                for conc in concs:
-                    r = await burst(s, base_url, model, cached, new, conc, trials)
-                    rows.append(r)
-                    def f(x):
-                        return "n/a" if x is None else f"{x:.1f}"
-                    print(f"  new={new:>4} cached={cached:>5} conc={conc:>3} | "
-                          f"cli_med={f(r['ttft_client_med_ms']):>7} srv_ttft={f(r['ttft_server_ms']):>7} "
-                          f"queue={f(r['mean_queue_ms']):>6} prefill={f(r['mean_prefill_ms']):>6} "
-                          f"| SRV_frontend={f(r['server_frontend_ms']):>7} "
-                          f"cli_frontend={f(r['client_frontend_ms']):>7}", flush=True)
+# --- decoy streaming load (frontend-under-load variant) --------------------------
+#
+# The idle-loop L(c) curve may not transfer to production: at mid concurrency the
+# API server's event loop is simultaneously pumping SSE deltas for every decoding
+# request while it tokenizes the arriving herd. `--decoys D` runs the burst sweep
+# while D requests (unique small prompts, ignore_eos, auto-restarted) stream through
+# the same server from a SEPARATE process (so the burst client's loop stays clean).
+# Caveat: restarted decoys add small observations to the /metrics deltas (~128-tok
+# prefills, small TTFTs); the burst signal is 10-100x larger.
+
+
+async def _decoy_stream(session, url, model, content, max_tokens):
+    payload = {"model": model, "messages": [{"role": "user", "content": content}],
+               "max_tokens": max_tokens, "temperature": 1.0, "stream": True,
+               "ignore_eos": True}
+    headers = {"Authorization": "Bearer test", "Content-Type": "application/json"}
+    async with session.post(url, json=payload, headers=headers) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"decoy HTTP {resp.status}")
+        got_first = False
+        async for raw in resp.content:
+            if not got_first and raw.strip().startswith(b"data:"):
+                got_first = True
+                yield True  # first token seen
+        yield False
+
+
+async def _daemon_main(base_url, model, n, prompt_tokens, max_tokens):
+    chat_url = base_url + "/v1/chat/completions"
+    first_seen = [False] * n
+    announced = False
+
+    async def runner(i):
+        nonlocal announced
+        rng = random.Random(9000 + i)
+        conn_words = " ".join(rng.choice(_VOCAB) for _ in range(int(prompt_tokens * 0.96)))
+        while True:
+            try:
+                async for evt in _decoy_stream(session, chat_url, model,
+                                               f"decoy {i}: " + conn_words, max_tokens):
+                    if evt and not first_seen[i]:
+                        first_seen[i] = True
+                        if all(first_seen) and not announced:
+                            announced = True
+                            print("READY", flush=True)
+            except Exception:
+                await asyncio.sleep(0.5)
+
+    conn = aiohttp.TCPConnector(limit=0)
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None),
+                                     connector=conn) as session:
+        await asyncio.gather(*[runner(i) for i in range(n)])
+
+
+def _write_csv(rows, out_path):
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="") as fh:
@@ -235,7 +291,29 @@ async def run(base_url, model, news, cacheds, concs, trials, out_path):
         for r in rows:
             w.writerow({k: (round(v, 3) if isinstance(v, float) else ("" if v is None else v))
                         for k, v in r.items()})
-    print(f"\nwrote {out}", flush=True)
+
+
+async def run(base_url, model, news, cacheds, concs, trials, out_path, rows=None, decoys=0):
+    rows = [] if rows is None else rows
+    conn = aiohttp.TCPConnector(limit=0)  # no client-side cap -> true concurrency
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=600), connector=conn) as s:
+        present = [k for k, v in (await scrape(s, base_url)).items() if v is not None]
+        print(f"/metrics histograms present: {present}  (decoys={decoys})", flush=True)
+        for cached in cacheds:
+            for new in news:
+                for conc in concs:
+                    r = await burst(s, base_url, model, cached, new, conc, trials)
+                    r["decoys"] = decoys
+                    rows.append(r)
+                    _write_csv(rows, out_path)  # incremental: a crash keeps completed cells
+                    def f(x):
+                        return "n/a" if x is None else f"{x:.1f}"
+                    print(f"  D={decoys:>3} new={new:>4} cached={cached:>5} conc={conc:>3} | "
+                          f"cli_med={f(r['ttft_client_med_ms']):>7} srv_ttft={f(r['ttft_server_ms']):>7} "
+                          f"queue={f(r['mean_queue_ms']):>6} prefill={f(r['mean_prefill_ms']):>6} "
+                          f"| SRV_frontend={f(r['server_frontend_ms']):>7} "
+                          f"cli_frontend={f(r['client_frontend_ms']):>7}", flush=True)
+    print(f"wrote {out_path}", flush=True)
 
 
 def main():
@@ -250,15 +328,25 @@ def main():
     ap.add_argument("--cacheds", default="0,8000", help="shared primed-prefix token counts (cached dependence)")
     ap.add_argument("--concs", default="1,5,10,20", help="burst concurrencies (overlap curve)")
     ap.add_argument("--trials", type=int, default=5)
+    ap.add_argument("--decoys", default="0", help="streaming decoy counts; sweep per value (0 = idle loop)")
+    ap.add_argument("--decoy-prompt-tokens", type=int, default=128)
+    ap.add_argument("--decoy-max-tokens", type=int, default=2048)
+    ap.add_argument("--decoy-daemon", type=int, default=0, help="[internal] run as decoy daemon")
     ap.add_argument("--out", default="profile_data/results/serving_herd_scaling_H100.csv")
     ap.add_argument("--no-launch", action="store_true")
     ap.add_argument("--server-log", default="vllm_server_herd_scaling.log")
     a = ap.parse_args()
 
     base_url = f"http://127.0.0.1:{a.port}"
+    if a.decoy_daemon > 0:
+        asyncio.run(_daemon_main(base_url, a.served_model_name, a.decoy_daemon,
+                                 a.decoy_prompt_tokens, a.decoy_max_tokens))
+        return
+
     news = [int(x) for x in a.news.split(",")]
     cacheds = [int(x) for x in a.cacheds.split(",")]
     concs = [int(x) for x in a.concs.split(",")]
+    decoy_counts = [int(x) for x in a.decoys.split(",")]
     proc = None
     if not a.no_launch:
         proc = launch_server(a.model, a.port, a.gpu_mem, a.max_model_len, a.api_key, a.server_log)
@@ -267,7 +355,41 @@ def main():
             print(f"SERVER DID NOT BECOME HEALTHY -- see {a.server_log}", flush=True)
             sys.exit(1)
         print("server healthy; starting herd-scaling sweep", flush=True)
-        asyncio.run(run(base_url, a.served_model_name, news, cacheds, concs, a.trials, a.out))
+        rows = []
+        for d in decoy_counts:
+            dproc = None
+            if d > 0:
+                dproc = subprocess.Popen(
+                    [sys.executable, __file__, "--decoy-daemon", str(d),
+                     "--port", str(a.port), "--served-model-name", a.served_model_name,
+                     "--decoy-prompt-tokens", str(a.decoy_prompt_tokens),
+                     "--decoy-max-tokens", str(a.decoy_max_tokens), "--no-launch"],
+                    stdout=subprocess.PIPE, text=True, bufsize=1)
+                print(f"waiting for {d} decoys to reach steady streaming ...", flush=True)
+                deadline = time.time() + 300
+                ready = False
+                while time.time() < deadline:
+                    line = dproc.stdout.readline()
+                    if not line:
+                        break  # daemon died
+                    if "READY" in line:
+                        ready = True
+                        break
+                if not ready:
+                    print(f"DECOY DAEMON FAILED (d={d}); skipping this block", flush=True)
+                    dproc.terminate()
+                    continue
+                time.sleep(3)  # let decoy TTFT/prefill observations land before scrapes
+            try:
+                asyncio.run(run(base_url, a.served_model_name, news, cacheds, concs,
+                                a.trials, a.out, rows=rows, decoys=d))
+            finally:
+                if dproc is not None:
+                    dproc.terminate()
+                    try:
+                        dproc.wait(timeout=15)
+                    except Exception:
+                        dproc.kill()
     finally:
         if proc is not None:
             proc.terminate()

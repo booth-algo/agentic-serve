@@ -22,13 +22,19 @@ memory:
 scheduler:
   overhead_ms_per_step: 5.7
   max_model_len: 32768       # vLLM --max-model-len; sets the chunked-prefill per-request cap (~4%)
-  request_overhead_ms: 25.0  # per-request host overhead (tokenize+dispatch+detok+return); handwavy, re-measure
+  request_overhead_ms: 0.0   # RETIRED 2026-07-03: the frontend floor (client-referenced) carries the send+return path
 
-# Measured serving-stack host costs (ms/token), from v1's live stage-split microbench
-# (serving_stage_split / prefill_host_split). Re-tokenize the re-sent context each turn;
-# dominates TTFT in the sub-saturation regime. Probe-measured -- v1 noted real chat
-# prompts may run heavier, so treat as a first cut and re-probe on replayed prompts.
+# RETIRED (0 = off): double-counted the frontend tokenize cost; see docs/knobs.md.
 prefill_host:
-  shared_ms_per_token: 0.003082   # cached re-tokenize, amortized once/step
-  perreq_ms_per_token: 0.002805   # cached re-tokenize, per request
-  new_ms_per_token: 0.005745      # new-token dispatch
+  shared_ms_per_token: 0.0
+  perreq_ms_per_token: 0.0
+  new_ms_per_token: 0.0
+
+# Measured API-server frontend (engine/serving_frontend.py), client-referenced.
+# serving_herd_scaling.py sweeps, H100 2026-07-02/03; provenance in docs/knobs.md.
+frontend:
+  floor_ms: 9.8
+  new_ms_per_token: 6.0e-3
+  cached_ms_per_token: 6.1e-3
+  mult_curve: [[0, 1.0], [2, 1.05], [5, 1.11], [10, 1.09], [20, 1.22], [40, 1.45]]
+  lanes_curve: [[1, 1.0], [5, 0.85], [10, 0.93], [20, 1.22], [40, 1.59], [80, 2.08], [160, 2.25]]

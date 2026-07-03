@@ -8,10 +8,8 @@ Under load the cohort's KV overflows the pool -> LRU tail-trim eviction -> evict
 sessions re-prefill next turn (recompute), congesting the prefill budget and driving
 the high-concurrency TTFT climb. SHARED across modes; only the cohort source differs.
 
-Scope: this file is the ENGINE (scheduler) only. The vLLM API-server FRONTEND
-serialization that dominates the sub-saturation band (HTTP/tokenize/IPC/stream, in front
-of the scheduler) is serving-harness overhead and lives in `serving_frontend.py`, not
-here. The per-step `prefill_host` term below is only a crude in-engine proxy for it.
+The API-server frontend (`serving_frontend.py`) delays each ARRIVAL to its drain
+epoch at herd release; TTFT stays clocked from the release (= client dispatch).
 """
 
 from __future__ import annotations
@@ -24,6 +22,7 @@ from typing import Any
 
 from simulator_v2.core.mode import Mode, mode
 from simulator_v2.core.types import Hardware, SchedulerSettings, Turn
+from simulator_v2.engine.serving_frontend import herd_arrival_epochs
 
 # Event kinds on the heap (ordered by epoch, then insertion seq).
 _ARRIVAL, _STEP, _FIRST_TOKEN, _DEPART = 0, 1, 2, 3
@@ -344,15 +343,20 @@ def _ensure_step(state: _ServerState) -> None:
 
 
 @mode(Mode.SHARED)
-def _on_arrival(state: _ServerState, session_id: int, turn_index: int) -> None:
-    """A request becomes available: build its _Req and enqueue it to `waiting`."""
+def _on_arrival(
+    state: _ServerState, session_id: int, turn_index: int,
+    release_epoch: float | None = None,
+) -> None:
+    """A request reaches the engine (post-frontend): build its _Req and enqueue it.
+    TTFT clocks from `release_epoch`, not the frontend-drained engine arrival."""
     session = state.by_id[session_id]
     turn = session.turns[turn_index]
     new_prefill = max(0.0, float(turn.new_prefill_tokens))
     output = max(1, int(round(turn.osl_tokens)))
+    arrival = state.clock if release_epoch is None else float(release_epoch)
     state.waiting.append(_Req(
         rid=_encode_rid(session_id, turn_index),
-        session_id=session_id, turn_index=turn_index, arrival_epoch=state.clock,
+        session_id=session_id, turn_index=turn_index, arrival_epoch=arrival,
         cached=float(turn.cache_hit_tokens), new_prefill=new_prefill, output=float(output),
         remaining_prefill=new_prefill, output_left=output,
         kv_tokens=float(turn.cache_hit_tokens) + new_prefill,
@@ -431,8 +435,8 @@ def _on_depart(state: _ServerState, session_id: int, turn_index: int) -> None:
 
 @mode(Mode.SHARED)
 def _release_next_herd(state: _ServerState) -> None:
-    """Barrier round-robin: advance to the next turn index and arrive every session
-    that has a turn there, all at the current clock (the synchronized herd)."""
+    """Barrier round-robin: release the next turn's herd at the current clock;
+    ARRIVALs land at their frontend-drain epochs."""
     nxt = state.current_turn + 1
     arrivals = [s for s in state.sessions if len(s.turns) > nxt]
     if not arrivals:
@@ -440,8 +444,10 @@ def _release_next_herd(state: _ServerState) -> None:
     state.current_turn = nxt
     state.herd_remaining = len(arrivals)
     state.herd_pending = {s.session_id for s in arrivals}
-    for s in arrivals:
-        state.push(state.clock, _ARRIVAL, (s.session_id, nxt))
+    epochs = herd_arrival_epochs(
+        state.hw.frontend, [s.turns[nxt] for s in arrivals], state.clock)
+    for s, epoch in zip(arrivals, epochs):
+        state.push(epoch, _ARRIVAL, (s.session_id, nxt, state.clock))
 
 
 # ----------------------------------------------------------------- driver
@@ -501,12 +507,13 @@ def predict_ttft(
         by_id={s.session_id: s for s in cohort},
         shared_prefix_tokens=max(0.0, float(shared_prefix_tokens)),
     )
-    # Release the turn-0 herd: every session arrives at t=0 (synchronized).
+    # Release the turn-0 herd at t=0 (synchronized).
     arrivals = [s for s in cohort if s.turns]
     state.herd_remaining = len(arrivals)
     state.herd_pending = {s.session_id for s in arrivals}
-    for s in arrivals:
-        state.push(0.0, _ARRIVAL, (s.session_id, 0))
+    epochs = herd_arrival_epochs(hw.frontend, [s.turns[0] for s in arrivals], 0.0)
+    for s, epoch in zip(arrivals, epochs):
+        state.push(epoch, _ARRIVAL, (s.session_id, 0, 0.0))
 
     raw = _run_sim(state)
     if stats is not None:

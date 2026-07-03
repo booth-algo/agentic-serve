@@ -11,9 +11,11 @@ TTFT[turn] = queue wait (chunked-prefill scheduling, KV eviction → recompute)
            + request_overhead_ms        (per-request host floor, added at first token)
 ```
 
-Per-step cost is `max(decode, prefill, host)`: the composed GPU floor
-`hw.fused_step_ms` (`max(decode, prefill)` piggyback) plus a **measured** host
-serving term that pipelines with the GPU prefill (see The model).
+Per-step cost is `max(gpu, host)` where **gpu = decode + prefill + cross-context
+attention, additive** (one fused forward pass; FLOPs add — the old `max(decode,
+prefill)` piggyback under-priced heavily-mixed steps ~25% at the saturated tail),
+and `host` is a **measured** serving term that pipelines with the GPU (see The
+model and the 2026-07-02 finding).
 
 ## The model
 
@@ -27,13 +29,24 @@ serving term that pipelines with the GPU prefill (see The model).
 - **KV prefix cache** (`PrefixLRUCache`): each session's cached prefix persists
   across turns; under pressure the globally-LRU-oldest prefixes are trimmed from
   their **tail** (dead/departed residents first, then idle herd). Hit/miss is
-  decided live from resident blocks.
+  decided live from resident blocks. **Pool accounting dedups the cross-session
+  shared prefix** (vLLM's APC stores it once, by block content hash): sessions
+  reserve only their beyond-shared context, in both the admission reservation and
+  the decode-growth path — charging every session its own copy is phantom demand
+  (concurrency × shared tokens) that fires the eviction cascade 2–3 turns early
+  (see the 2026-07-02 finding).
 - **Host serving cost** (`prefill_host` rates, ms/token): re-tokenize/parse/IPC of
   the re-sent prompt each turn (shared once/step + per-request, frac-spread over the
   prefill steps; measured from v1's stage-split, not fit). It **pipelines** with the
-  GPU, so the prefill branch is `max(gpu_prefill, host)`: host-bound for a cheap
-  cache-hit prefill (the sub-saturation lift), hidden under a big recompute (the
-  saturated regime is unchanged). 0 rates → byte-identical GPU-only step.
+  GPU, so the step is `max(gpu, host)`: host-bound for a cheap cache-hit prefill
+  (the sub-saturation lift), hidden under a big recompute (the saturated regime is
+  unchanged). 0 rates → byte-identical GPU-only step.
+- **Cross-context chunk attention** (`cross_attn_ms_per_token_pair`, measured
+  FA3-cached slope): a prefill chunk of U tokens attends everything already
+  resident for its request (hit prefix + previously completed chunks), costing
+  +rate·U·P on top of the full-causal chunk grid. Negligible sub-saturation
+  (small U·P); ~+35 ms/step at the recompute tail where 13k-token contexts
+  re-prefill in 1310-token chunks.
 
 ## The climb mechanism (KV pressure)
 
@@ -173,23 +186,78 @@ tokenizes/parses the full re-sent prompt). Serialization `s(N)=frontend(N)/f` tr
 barrier-serial `(N+1)/2` at small N (3.2 / 5.1 at N=5/10) then goes **sub-linear** at N=20
 (7.4–8.8 vs 10.5) — the frontend gains parallelism/GPU-overlap under load.
 
-**Not shipped — a fixed model doesn't generalize.** A prototype that staggers each herd's
-engine-arrivals by a serial frontend (`f` pinned above, TTFT still clocked from herd release)
-lifts the *high* sub-saturation band well (chat c80/120/200: 0.70/0.76/0.75 → 0.88/0.91/1.09)
-but (1) leaves the **c5–c20 dip** (~0.56) and (2) **over-predicts at the saturation transition**
-(terminal c80 → 1.37): full-serial `f` implies a ~3.4 s frontend makespan at c80 with big
-contexts, exceeding the ~1.5 s engine time, so the serial frontend wrongly becomes the
-bottleneck. The real frontend clearly parallelizes by c80 — but lanes=2/3 under-fit the low band.
-A shippable term therefore needs **load-dependent frontend parallelism** (the probe only reached
-c20) and **pipelined frontend/engine resources** (so the delay is hidden under recompute via a
-max, not added to it). Tuning a lane count per regime would be the fudge we keep refusing, so
-the term is **deferred**; the mechanism + magnitude are recorded and the probes
-(`serving_herd_scaling.py`, `profile_data/results/serving_herd_scaling_H100*.csv`) are banked.
+**SHIPPED 2026-07-03** — the blockers above were resolved by measurement, not tuning.
+Three probe campaigns on the live H100 (`serving_herd_scaling.py`, extended to c160 +
+decoy-loaded variants; CSVs in `profile_data/results/serving_herd_scaling_H100_{c160,loaded,smallD}.csv`):
+(1) the **lanes curve** to c160 (≈1 through c10 → ~2.5 at c160; the frontend never gets
+very parallel, it just stops being strictly serial); (2) the **streaming-load multiplier**
+on f (×1.26–1.59 when peers pump SSE, ramping gently from ×1.05 at 2 streams); (3) the
+**client-side reference**: the benchmark clocks TTFT on a single-process asyncio client
+whose own loop adds ~1.3× over the server-side span — so the shipped model is
+client-referenced (f_cli = 9.8 + 6.0e-3·new + 6.1e-3·cached; its floor IS the send+return
+path, retiring `request_overhead_ms`). Mechanism in `engine/serving_frontend.py`
+(`herd_arrival_epochs`: FIFO drain at fractional measured lanes, ARRIVAL delayed into the
+engine, TTFT clocked from release — engine-hiding falls out structurally); constants in
+the `frontend:` YAML section. The `prefill_host` in-engine proxy is retired with it (same
+cost measured twice — keeping both broke every c1 cell in the V1 A/B, the double-count
+proof). Gate: aggregate 23.56 → **16.7**; chat c160–c256 29–33 → 10–13; the c5–c20 band
+34–44 → 8–33. Residuals: chat c1/c5 (~29/33), osworld c40/c80 (~27/37).
 
 **Scope note.** This is **serving-harness overhead** (API server HTTP/tokenize/IPC/stream),
 not GPU/kernel physics. The kernel-composition sim faithfully predicts the *engine* TTFT
 (queue+prefill); the benchmark's measured TTFT additionally carries this frontend
 serialization. Most of the sub-saturation gap is that boundary, not a kernel-floor error.
+
+## Finding (2026-07-02): the three-band fix — shared-prefix pool dedup + tail step cost
+
+The per-turn signed grids split the residual error into three bands with independent
+causes; two were fixed this session (aggregate 26.86 → **23.56**), the third
+(frontend, above) is in measurement.
+
+**Band 1 — deep saturation (c200+, tails): −25% *slope*, a step-pricing error.**
+The sim's recompute *volume* was exonerated first: at the c256/c320 tail it already
+re-prefills 91–93% of every cached token (miss% = 100), and the per-request
+distribution shows sim p5 ≈ GT p5 with the whole gap in the drain window (sim 91.5 s
+vs GT 119.9 s at swebench c320 t29). The step audit found the sim charging ~197 ms
+for a ~7.5k-token mixed step the real engine takes ~250 ms over (our own measured
+TPOT plateau). Two missing kernel terms close it almost exactly (197+35+21 ≈ 253):
+cross-context chunk attention (rate·U·P, the measured FA3-cached slope — the
+"separate future grid" the old `fused_step_ms` docstring promised) and decode no
+longer riding free under `max()` (one fused pass; FLOPs add).
+
+**Band 2 — transition (c40–c160 onset): +80–150%, a phantom-demand error.**
+With no engine cache telemetry in the GT (all cache fields are harness estimates),
+real recompute was inferred per turn as `drain-window(p95−p5 TTFT) ×
+(budget−herd)/drain-ITL`, ÷ beyond-shared cached tokens — validated at saturation
+(GT-implied 92–101% vs sim 99–101%). At onset it read **GT 12/0/0/30/69% (swebench
+c256 t1–5) vs sim 40/73/81/86/98%**: the sim's cascade fired 2–3 turns early. Root
+cause: the session-granular pool charged **every session its own copy of the
+cross-session shared prefix**, which vLLM's APC stores **once** — 256×1024 ≈ 262k
+phantom tokens = 60% of the pool at swebench c256. The demand-crossing arithmetic
+matches exactly: real (deduped) demand crosses the pool at ctx ≈ 2.7k ≈ t4–5, where
+GT's recompute takes off; the sim's gross demand crossed at t1–2, where its cascade
+fired. Post-dedup the sim's onset is 0/0/0/37/76/100% at t1–7 — the real cascade.
+The phantom fraction shrinks from 60% of the pool at onset to ~7% of demand at t29,
+which is why the error was confined to the transition band.
+
+**Falsified along the way (keep these dead):**
+- **Global barrier arrivals are EXACT** — GT `dispatch/completed` timestamps show
+  0% turn interleave at every cell checked, next herd fires +0.0 s after the last
+  straggler (`runner.py:334` `asyncio.gather`). Not a modeling gap.
+- **Cohort taper is faithful** — sim herd size tracks GT per turn to within the few
+  failed requests (osworld c200 collapses 200→55 by t15 and the trajectory-cycled
+  cohort reproduces it).
+- **Flat-LRU eviction** (dropping the departed-first tier): no-op. **Incremental
+  block allocation**: negative (wrecks tails). With 60% phantom demand, *any*
+  eviction policy cascades — the demand was wrong, not the policy.
+- **Dedup leak warning**: an earlier `_schedule`-only dedup attempt silently failed
+  because the `_on_step` decode-growth path still claimed blocks gross-of-shared,
+  re-inflating the phantom demand every turn. Both paths must be net-of-shared.
+
+**Gate (44 cells, cell-MAPE mean)**: 26.86 → 23.56. swebench c80–c320: 24–29% →
+7–15%; terminalbench c200/c256 halved; osworld c320 12.3 → 6.6. Accepted
+regressions: osworld c160 +5.6, c80 +3.3 (a residual mid-conc hump, unexplained).
+TPOT byte-identical.
 
 ## Why an 8B on an H100 preempts at all
 
@@ -206,13 +274,15 @@ not swap.
 | Piece | Where | State |
 |---|---|---|
 | Event-driven queue sim (barrier herd, chunked prefill, capacity gate) | `engine/queue_sim.py` | ✅ done |
-| Per-step cost — `fused_step_ms` (`max` piggyback) | `kernel_floor/sum_kernels.py` | ✅ done |
+| Per-step cost — additive `decode + prefill + cross` (2026-07-02; was `max` piggyback) | `engine/queue_sim.py` `_price_step` | ✅ done (`fused_step_ms`'s mixed `max()` path is now only corner-called; docstring stale) |
+| Cross-context chunk attention (measured FA3-cached slope) | `_price_step` + `cross_attn_ms_per_token_pair` (YAML) | ✅ done 2026-07-02 (constant; upgrade to grid interp when the cached grid is re-profiled) |
 | Session-persistent KV + LRU tail-trim eviction + recompute | `engine/queue_sim.py` (`PrefixLRUCache`) | ✅ done |
+| Shared-prefix POOL dedup (reservation + decode-growth net of shared) | `engine/queue_sim.py` `_schedule`/`_on_step` | ✅ done 2026-07-02 — fixes the transition-band cascade onset |
 | Per-request host floor — `request_overhead_ms` | `getters/hardware.py` (config) | ✅ done (flat 25 ms; handwavy) |
 | Real per-session trajectories | `getters/workload.py` (`load_benchmark`) | ✅ done (incl. single-turn `input_tokens` fallback) |
 | KV-pressure readout (`pressure`, `recompute_tokens`) | `engine/kv_pressure.py` | ✅ done |
 | Sub-saturation host term (re-tokenize the re-sent prompt, `max(gpu, host)`) | `engine/queue_sim.py` + `prefill_host` config | ✅ done — lifts the pressure<1 band (per-turn 54.9→33.7%) |
-| Cached-prefix attention (FA3 re-encode) | — | investigated, reverted (not the lever; decode-dominated at high conc, over-prices small-M) |
+| Cached-prefix attention (FA3 re-encode) | — | superseded 2026-07-02 — the earlier c1-band attempt was reverted (not the lever there); the *recompute-tail* form landed as the cross-context term above |
 | Per-request prefill attention (fix single-turn lumping) | — | ❌ open follow-up (single-turn over-prediction) |
 | Re-probe host rates on replayed chat prompts | — | ❌ open — measured probe rate leaves c5–c20 mildly under (v1's caveat) |
 
@@ -224,7 +294,12 @@ Cumulative, per lever:
 |---|---|---|
 | pre-recompute (queue only) | 71.0% | 66.5% |
 | + recompute (`PrefixLRUCache`) | 54.9% | 50.9% |
-| + sub-saturation host term | **33.7%** | **38.3%** |
+| + sub-saturation host term | 33.7% | 38.3% |
+
+On the 44-cell multi-turn dashboard aggregate (mean of cell-MAPEs, the HANDOFF
+headline metric): ρ-removal 28.6→26.9, **+ pool dedup + step-cost terms
+(2026-07-02) 26.9→23.6** — per profile: chat 32.4, osworld 17.9, swebench 18.2,
+terminalbench 25.8. The swebench high-conc column (c80–c320) sits at 7–15%.
 
 - **Recompute regime (pressure > 1): TTFT ratio ≈ 0.9–1.15** — the climb is captured,
   and unchanged by the host term (`max(gpu, host)` hides host under the recompute).

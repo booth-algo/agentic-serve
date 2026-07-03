@@ -70,6 +70,10 @@ class Roofline:
     def cross_attn_ms_per_token_pair(self) -> float:
         return self.gpu.cross_attn_ms_per_token_pair
 
+    @property
+    def frontend(self):
+        return self.gpu.frontend
+
     @classmethod
     def from_config(
         cls,
@@ -193,6 +197,10 @@ class KernelComposition:
     @property
     def cross_attn_ms_per_token_pair(self) -> float:
         return self.gpu.cross_attn_ms_per_token_pair
+
+    @property
+    def frontend(self):
+        return self.gpu.frontend
 
     def decode_step_ms(self, batch: int, ctx_tokens: float) -> float:
         """Per-step decode floor -> KernelFloor.decode_step_ms."""

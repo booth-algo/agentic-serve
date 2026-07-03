@@ -9,6 +9,24 @@ from simulator_v2.core.mode import Mode, mode
 
 @mode(Mode.SHARED)
 @dataclass(frozen=True)
+class FrontendParams:
+    """Measured API-server frontend model (engine/serving_frontend.py).
+    All-zero (the default) disables the stage."""
+    floor_ms: float = 0.0
+    new_ms_per_token: float = 0.0
+    cached_ms_per_token: float = 0.0
+    load_mult: float = 1.0
+    mult_curve: tuple[tuple[int, float], ...] = ()  # (streams, mult); overrides load_mult
+    lanes_curve: tuple[tuple[int, float], ...] = ()
+
+    @property
+    def enabled(self) -> bool:
+        return (self.floor_ms > 0.0 or self.new_ms_per_token > 0.0
+                or self.cached_ms_per_token > 0.0)
+
+
+@mode(Mode.SHARED)
+@dataclass(frozen=True)
 class GpuConfig:
     name: str
     peak_flops_per_s: float
@@ -34,6 +52,9 @@ class GpuConfig:
     # full model): a prefill chunk of U tokens attending P already-resident tokens costs
     # +rate*U*P on top of the full-causal chunk grid. 0 = off (byte-identical).
     cross_attn_ms_per_token_pair: float = 0.0
+    # Measured API-server frontend model (engine/serving_frontend.py). Defaults
+    # disabled -> no frontend stage (byte-identical for unmeasured GPUs).
+    frontend: FrontendParams = FrontendParams()
 
 
 @mode(Mode.SHARED)
@@ -122,6 +143,7 @@ class Hardware(Protocol):
     saturated_step_ms: float
     sched: SchedulerSettings
     cross_attn_ms_per_token_pair: float  # measured chunk-vs-resident attention slope (ms/token-pair)
+    frontend: FrontendParams  # measured API-server frontend model (serving_frontend.py)
 
     @property
     def prefill_host_rates(self) -> tuple[float, float, float]:

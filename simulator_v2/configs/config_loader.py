@@ -3,7 +3,7 @@
 import yaml
 from pathlib import Path
 
-from simulator_v2.core.types import GpuConfig, ModelConfig
+from simulator_v2.core.types import FrontendParams, GpuConfig, ModelConfig
 from simulator_v2.core.mode import Mode, mode
 
 
@@ -14,6 +14,15 @@ def load_gpu_config(path: Path) -> GpuConfig:
     memory = data["memory"]
     scheduler = data["scheduler"]
     host = data.get("prefill_host") or {}
+    fe = data.get("frontend") or {}
+    frontend = FrontendParams(
+        floor_ms=float(fe.get("floor_ms", 0.0)),
+        new_ms_per_token=float(fe.get("new_ms_per_token", 0.0)),
+        cached_ms_per_token=float(fe.get("cached_ms_per_token", 0.0)),
+        load_mult=float(fe.get("load_mult", 1.0)),
+        mult_curve=tuple((int(c), float(m)) for c, m in (fe.get("mult_curve") or [])),
+        lanes_curve=tuple((int(c), float(l)) for c, l in (fe.get("lanes_curve") or [])),
+    )
     return GpuConfig(
         name=data["name"],
         peak_flops_per_s=float(compute["peak_flops_per_s"]),
@@ -30,6 +39,7 @@ def load_gpu_config(path: Path) -> GpuConfig:
         prefill_host_perreq_ms_per_token=float(host.get("perreq_ms_per_token", 0.0)),
         prefill_host_new_ms_per_token=float(host.get("new_ms_per_token", 0.0)),
         cross_attn_ms_per_token_pair=float(compute.get("cross_attn_ms_per_token_pair", 0.0)),
+        frontend=frontend,
     )
 
 

@@ -23,10 +23,14 @@ parameter · `⚠ handwavy` = placeholder/probe, the accuracy levers to re-measu
 | `memory.gpu_mem_util` | 0.90 | config | vLLM `--gpu-memory-utilization` |
 | `scheduler.overhead_ms_per_step` | 5.7 | ⚠ handwavy | per-step scheduler cost (Roofline only) |
 | `scheduler.max_model_len` | 32768 | config | sets chunked-prefill cap (×0.04) |
-| `scheduler.request_overhead_ms` | 25.0 | ⚠ handwavy | per-request host floor added at first token |
-| `prefill_host.shared_ms_per_token` | 0.003082 | ⚠ probe | re-tokenize cached, once/step (TTFT sub-sat) |
-| `prefill_host.perreq_ms_per_token` | 0.002805 | ⚠ probe | re-tokenize cached, per request |
-| `prefill_host.new_ms_per_token` | 0.005745 | ⚠ probe | new-token dispatch |
+| `scheduler.request_overhead_ms` | 0.0 (RETIRED) | measured | superseded 2026-07-03: the client-referenced frontend floor carries the send+return path |
+| `prefill_host.*` | 0.0 (RETIRED) | — | superseded 2026-07-03 by `frontend:` (was the same tokenize cost measured at the c1 stage split; keeping both double-counts — V1 A/B broke every c1 cell) |
+| `frontend.floor_ms` | 9.8 | measured | client-referenced per-request frontend floor (send+parse+return path) |
+| `frontend.new_ms_per_token` | 6.0e-3 | measured | frontend slope on new tokens (tokenize the re-sent prompt) |
+| `frontend.cached_ms_per_token` | 6.1e-3 | measured | frontend slope on cached tokens (same re-tokenize; APC can't skip it) |
+| `frontend.mult_curve` | (0,1.0)…(40,1.45) | measured | streaming-load inflation of f, evaluated at herd/2 (decoy sweep D=2..160; D≥40 mean anchors the tail) |
+| `frontend.lanes_curve` | (1,1.0)…(160,2.25) | measured | effective frontend parallelism vs herd size (client-side drain rate) |
+| `compute.cross_attn_ms_per_token_pair` | 7.29e-7 | measured | chunk-vs-resident cross-attention slope (rate·U·P per prefill chunk); drives the saturated-tail TTFT slope. Constant from the FA3-cached grid fit (grid CSV not in profile_data — re-profile to upgrade to interp). 0 = off |
 | `memory.kv_pool_blocks` | 27250 | measured | KV pool; overrides analytic estimate (0 = analytic) |
 
 ## 2. Model — `configs/model_configs/llama3.1-8b.yaml` → `ModelConfig`
@@ -81,7 +85,8 @@ Consumes §1 (`request_overhead_ms`, `prefill_host`), §3 (scheduler), §5 (pool
 | `_DEFAULT_MAX_SEQS` | 256 | config | running-set fallback |
 | `_TURNS_PER_SESSION` | 4096 | struct | rid encoding headroom (not tunable) |
 | `_EVENT_GUARD` | 5e6 | struct | runaway-event safety cap (not tunable) |
-| step price | `max(decode, prefill_gpu + host?)` | struct | `max(gpu_prefill, host)` overlap; recompute via `PrefixLRUCache` |
+| step price | `max(decode + prefill + cross, host)` | struct | additive GPU (fused pass, 2026-07-02; was max piggyback); host pipelines via max |
+| shared-prefix pool dedup | — | struct | reservation + decode-growth net of `shared_prefix_tokens` (APC stores the span once); no knob — falls out of the measured shared-prefix input |
 
 ## 8. Roofline (forward) — `getters/hardware.py`
 
@@ -130,7 +135,7 @@ compensating fits. Status (from `simulator/closed_form_tpot.py` `RooflineParams`
 | `qsim_duplicate_session_fraction` | tracereplay cohorts repeat traces; twin's KV is a cross-session hit | ❌ workload artifact (finite trace pool), not production physics |
 | hit/miss **freeze** at barrier | decide hit/miss on the barrier snapshot, not live | ❌ compensating fit; v2 decides live (correct) |
 | `PREFILL_GEMM_UTIL_SAT` (util ramp 0.65→1.0) | prefill GEMM util ramps to 1.0 | ❌ measured plateau is 0.754; v2 uses the flat measured floor |
-| `PREFILL_FA3_MS_PER_TOKEN2` (cached-prefix re-encode) | FA3 attention over the resident prefix | ❌ tried, reverted (small, not the lever) |
+| `PREFILL_FA3_MS_PER_TOKEN2` (cached-prefix re-encode) | FA3 attention over the resident prefix | ✅ landed 2026-07-02 in recompute-tail form: `cross_attn_ms_per_token_pair` (rate·U·P per chunk; the earlier c1-band attempt stays reverted) |
 | `PREFILL_TP_COMM` / `EP_ALLTOALL` | tp>1 all-reduce / MoE all-to-all | ❌ N/A at tp1-dense (→0) |
 | eviction `policy='tail'` | MRU-first trim | ❌ trace-falsified, retired in v1 too |
 | TPOT cell-state (**B2**) | fixes TPOT onset *timing* per cell | ❌ deferred (v2 amplifier is stateless B1) |
