@@ -259,6 +259,28 @@ which is why the error was confined to the transition band.
 regressions: osworld c160 +5.6, c80 +3.3 (a residual mid-conc hump, unexplained).
 TPOT byte-identical.
 
+## Finding (2026-07-03): moderate-pressure churn is bistable — no cheap fix, nothing landed
+
+The residual over-prediction at demand/pool ~1.1–1.8 (terminalbench c80–c160) was traced
+(who-evicts-whom, `/tmp/wf-hint/regime7`): the sim churns ~4.7× the arithmetic shortfall
+vs GT's ~2.6×, and the amplifier is admit-recompute reserving its FULL context up-front,
+stealing 184–285k tok/turn from not-yet-run herd members. A variant ladder followed
+(lazy per-chunk reservation; + eager admission gate with committed accounting; + flat-LRU;
++ whole-victim "prefix-chain cliff" eviction). Outcome: lazy timing fixes terminalbench
+(22.4/21.5 → ~17) and the hybrid holds every deep-saturation tail, but **osworld c200
+breaks 9.4 → ~27 under every lazy variant** regardless of victim order or depth.
+
+Why: churn is **bistable**. Banked hits get admitted → hard-protected → survive → hit
+again; misses re-prefill → consume parked caches → beget misses. Both equilibria are
+self-consistent. tb c80 (GT churn 39–55%) sits near the low one — lazy finds it; osworld
+c200 (GT ~100%; within-turn pool turnover ~1.5× means parked caches *cannot* all survive)
+sits at the high one — eager's brute-force reservation lands there, lazy settles into a
+protected hit-aristocracy reality doesn't have. Equilibrium selection happens at block-flow
+timing our session-granular cache can't resolve. Verdict: keep eager (landed); the
+moderate band stays a known residual. Future pass, if wanted: parked-cache survival from
+occupancy arithmetic (survivable = pool − actual claim flow) — physics, but a real
+modeling effort, not a variant.
+
 ## Why an 8B on an H100 preempts at all
 
 The small model is exactly *why* the pool is large: ~16 GB of weights leaves ~57 GB

@@ -61,8 +61,19 @@ unexplained); terminalbench c120 t17–19 still over (~160–180%).
    residuals from this band: **chat c1/c5 (~29/33)** — small-TTFT turns where the f_cli
    floor/slopes over-shoot; likely needs the real-prompt chars/token correction (~0.83×,
    see corollary above) or a chat-prompt re-probe.
-2. **osworld c40/c80 residual hump** (~27/37 post-frontend) — undiagnosed; persists
-   through every frontend variant, so it's engine-side (transition-pressure related).
+2. **Moderate-pressure over-churn — DUG, NOT LANDED** (see ttft.md 2026-07-03 finding):
+   terminalbench c80–c160 (~20–22) over-predicts because the sim churns ~4.7× the
+   arithmetic shortfall vs GT's ~2.6× (amplifier = admit-recompute's up-front full
+   reservation stealing the live herd's caches). A lazy/hybrid/flat/cliff variant ladder
+   fixes tb (→~17) and holds every tail, but osworld c200 breaks 9.4→27 under every lazy
+   variant: **churn is bistable** (hit-aristocracy vs full-rotation equilibria) and
+   allocation timing selects the equilibrium — our session-granular cache can't resolve
+   the block-flow timing that picks it in vLLM. Kept eager. Future pass: occupancy-based
+   parked-cache survival. Scratch: `/tmp/wf-hint/regime{7,8,9}*.py`. Related, exonerated:
+   pool constant (back-solve 432–470k ≈ pinned 436k; confirmatory `pool_capacity_probe.py`
+   still armed behind the GPU watcher on the h100, result → `pool_capacity_H100.txt`).
+   Separated out: **osworld c40/c80 (~27/37) never evicts** — its hump is frontend
+   over-shoot at huge cached contexts (t2 ratios up to 322), same family as chat c1/c5.
 3. **Forward mode** — `getters/workload.load_distribution` raises `NotImplementedError`;
    forward ceiling `saturated_step_ms` is a 200ms placeholder. The unsolved
    no-ground-truth path, and the strategic reason v2 exists.
