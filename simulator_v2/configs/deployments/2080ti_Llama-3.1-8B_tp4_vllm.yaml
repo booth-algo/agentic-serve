@@ -3,66 +3,9 @@ gpu: RTX2080Ti
 model: Llama-3.1-8B
 tp: 4
 engine: vllm
-available_kv_blocks: 24570
-max_num_batched_tokens: 2048
 bench_dir: 2080ti_Llama-3.1-8B_tp4_vllm
 backend: rtx2080ti-tp4-vllm-analytic-roofline
 calibration_status: 2080ti_tp4_vllm_analytic_roofline_firstcut
 ground_truth: true
-data:
-  decode_grid:
-    status: missing
-    note: no measured kernel grid for this GPU/model -> analytic decode roofline (configs
-      scale by weight bytes / bandwidth / KV)
-  kv_pool:
-    status: measured
-    value: 24570
-    source: vLLM v1 engine log (engine-config truth)
-    note: 'ENGINE LOG: 2080ti:/tmp/vllm_8090.log (2026-05-22, vllm 0.19.0, Llama-3.1-8B
-      tp4, max_seq_len=32768, dtype=float16, util 0.85 — matches GT config metadata):
-      ''GPU KV cache size: 393,120 tokens'' / ''Available KV cache memory: 12.0 GiB''
-      -> 393120/16 = 24570 blocks. Hand-pinned vs derived 23963 (-2.5%); keep measured
-      on regeneration.'
-  saturated_ceiling:
-    status: inherited
-    from: H100
-    note: 'H100-inherited ceiling KEPT: with the engine-measured pool (24570 blocks)
-      this config has ZERO saturated turns (pressure>=2.5) in GT — build_saturated_ceiling
-      verified 2026-06-10 (L9-consumer); no measured plateau to own. The tp4 bias
-      is the unpriced tp-collective decode term (see defit_log_entries/L9-consumer.md),
-      not the ceiling.'
-  roofline_peak:
-    status: derived
-    note: 'datasheet peak FLOPS/BW; accumulate mode VERIFIED from engine logs (2080Ti:
-      fp16 cast, sm75; 3090: bf16 — both FP32-accumulate GeForce half-rate) — see
-      configs/gpus/*.json _notes (L9-consumer 2026-06-10)'
-  util_flops:
-    status: placeholder
-    from: H100
-    note: H100 util scalars; re-anchor from a measured grid for this GPU
-  util_bw:
-    status: placeholder
-    from: H100
-    note: H100 util scalars; re-anchor from a measured grid for this GPU
-  scheduler_overhead:
-    status: placeholder
-    from: H100
-    note: H100 util scalars; re-anchor from a measured grid for this GPU
-  cached_prefill_grid:
-    status: inherited
-    from: H100
-    note: TTFT prefill law H100-measured -> first-cut
-  fa3_grid:
-    status: inherited
-    from: H100
-    note: FA3 prefill grid H100-measured -> first-cut
-  ground_truth:
-    status: measured
-    path: 2080ti_Llama-3.1-8B_tp4_vllm
-    source: /mnt/100g
-  prefill_floor:
-    status: measured
-    path: profile_data/kernels/prefill_floor_llama31_8b.json
-    note: own measured conc=1 min-TTFT floor (build_prefill_floor, min_clean_c1);
-      resolved by ttft_queue_sim._prefill_floor_for(gpu_key) — manifest entry documents
-      ownership (L9-consumer 2026-06-10)
+available_kv_blocks: 24570
+max_num_batched_tokens: 2048

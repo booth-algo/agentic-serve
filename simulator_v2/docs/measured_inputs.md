@@ -57,6 +57,18 @@ Absent `frontend:` section = stage disabled → sub-saturation TTFT under-predic
 | decode all-reduce | missing | latency-bound small payloads; analytic term until profiled |
 | sharded-head FA grids | missing | until profiled, head-mismatch → roofline fallback (automatic) |
 
+## Where data lives (2026-07-04 layout)
+
+| data | home |
+| --- | --- |
+| ground truth (bench cells) | `/mnt/100g/agent-bench/results/synthetic_distributional/<gpu>_<model>_tp<N>_<engine>/` |
+| measured probe/grid CSVs | `/mnt/100g/agent-bench/profiling-data/results/` (repo's `profile_data/results` is a symlink to it) |
+| curated committed kernel tables | `profile_data/kernels/` (in-repo — code loads these) |
+| LLMServingSim traces | R2 `data/llmservingsim_traces/<tokenizer>/` (canonical); regenerate via `build_llmservingsim_traces.py` |
+
+The H100 box does NOT mount `/mnt/100g` — probes there write to `/data48/kevinlau/`
+and get `scp`'d back into `profiling-data/results/`.
+
 ## Never
 
 - **Step-level decode grids (B×T whole-step tables) as cost models.** Policy

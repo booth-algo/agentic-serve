@@ -3,49 +3,8 @@ gpu: H100
 model: Llama-3.1-8B
 tp: 2
 engine: vllm
-available_kv_blocks: 62416
 bench_dir: h100_Llama-3.1-8B_tp2_vllm
 backend: h100-tp2-vllm-analytic-roofline
 calibration_status: h100_tp2_vllm_analytic_roofline_firstcut
 ground_truth: true
-data:
-  decode_grid:
-    status: retired
-    note: 'POLICY (2026-07-03): step-level decode grids are NOT kernel models and
-      are excluded from the cost path (v1 refused them empirically for H100x4 --
-      see that manifest). The v1-era CSV (decode_profile_H100x2_merged_2026-06-10.csv)
-      remains on disk as validation data only. tp2 decode = kernel-ADJUSTED
-      composition: tp1 GEMM table at sharded shapes + sharded-head attention +
-      explicit comm terms.'
-  kv_pool:
-    status: measured
-    value: 62416
-  saturated_ceiling:
-    status: derived
-    path: profile_data/kernels/saturated_ceiling_H100x2_llama31_8b.json
-    source: build_saturated_ceiling.py (tp2 ground truth @pressure>=2.5)
-    date: '2026-06-03'
-  roofline_peak:
-    status: inherited
-    from: H100
-    note: uses single-H100 peak_bw for tp2 (known over-pred; should be ~2x aggregate
-      bw)
-  util_flops:
-    status: inherited
-    from: H100
-  util_bw:
-    status: inherited
-    from: H100
-  scheduler_overhead:
-    status: inherited
-    from: H100
-  cached_prefill_grid:
-    status: inherited
-    from: H100
-    note: TTFT first-cut
-  fa3_grid:
-    status: inherited
-    from: H100
-  ground_truth:
-    status: measured
-    path: h100_Llama-3.1-8B_tp2_vllm
+available_kv_blocks: 62416

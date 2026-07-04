@@ -3,51 +3,9 @@ gpu: H100
 model: Llama-3.1-70B
 tp: 4
 engine: vllm
-available_kv_blocks: 29398
-max_num_batched_tokens: 8192
 bench_dir: h100_Llama-3.1-70B_tp4_vllm
 backend: h100-tp4-vllm-analytic-roofline
 calibration_status: h100_tp4_vllm_analytic_roofline_firstcut
 ground_truth: true
-data:
-  decode_grid:
-    status: missing
-    note: no measured kernel grid for this GPU/model -> analytic decode roofline (configs
-      scale by weight bytes / bandwidth / KV)
-  kv_pool:
-    status: derived
-    value: 29398
-    source: configs/kv_pool.py
-    note: 80GiB util 0.9, weights 141.1GB/tp4, reserve 3.5GB
-  saturated_ceiling:
-    status: inherited
-    from: H100
-    note: TPOT plateau ceiling is H100/Llama-3.1-8B-anchored; under-caps large-model
-      plateaus -> first-cut
-  roofline_peak:
-    status: measured
-    note: datasheet peak FLOPS/BW
-  util_flops:
-    status: inherited
-    from: H100-Llama-3.1-8B
-    note: H100 util scalars reused for a different model on the same GPU
-  util_bw:
-    status: inherited
-    from: H100-Llama-3.1-8B
-    note: H100 util scalars reused for a different model on the same GPU
-  scheduler_overhead:
-    status: inherited
-    from: H100-Llama-3.1-8B
-    note: H100 util scalars reused for a different model on the same GPU
-  cached_prefill_grid:
-    status: inherited
-    from: H100
-    note: TTFT prefill law H100-measured -> first-cut
-  fa3_grid:
-    status: inherited
-    from: H100
-    note: FA3 prefill grid H100-measured -> first-cut
-  ground_truth:
-    status: measured
-    path: h100_Llama-3.1-70B_tp4_vllm
-    source: /mnt/100g
+available_kv_blocks: 29398
+max_num_batched_tokens: 8192

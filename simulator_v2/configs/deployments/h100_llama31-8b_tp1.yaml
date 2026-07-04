@@ -3,35 +3,8 @@ gpu: H100
 model: Llama-3.1-8B
 tp: 1
 engine: vllm
-available_kv_blocks: 27250
 bench_dir: h100_Llama-3.1-8B_tp1_vllm
 backend: kernel-headline
 calibration_status: kernel_tpot_qsim_ttft_headline
 ground_truth: true
-data:
-  decode_grid:
-    status: measured
-    path: profile_data/results/decode_kernel_trace_H100_large_2026-05-17_wide_summary.csv
-  kv_pool:
-    status: measured
-    value: 27250
-  saturated_ceiling:
-    status: measured
-    path: profile_data/kernels/saturated_ceiling_H100_llama31_8b.json
-  roofline_peak:
-    status: measured
-  util_flops:
-    status: measured
-  util_bw:
-    status: measured
-  scheduler_overhead:
-    status: measured
-  cached_prefill_grid:
-    status: measured
-    path: profile_data/results/cached_prefill_v3_H100.csv
-  fa3_grid:
-    status: measured
-    path: profile_data/kernels/fa3_prefill_H100.csv
-  ground_truth:
-    status: measured
-    path: h100_Llama-3.1-8B_tp1_vllm
+available_kv_blocks: 27250

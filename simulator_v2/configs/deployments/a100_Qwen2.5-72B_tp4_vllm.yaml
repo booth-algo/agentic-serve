@@ -3,55 +3,9 @@ gpu: A100
 model: Qwen2.5-72B
 tp: 4
 engine: vllm
-available_kv_blocks: 1128
-max_num_batched_tokens: 2048
 bench_dir: a100_Qwen2.5-72B_tp4_vllm
 backend: a100-tp4-vllm-analytic-roofline
 calibration_status: a100_tp4_vllm_analytic_roofline_firstcut
 ground_truth: true
-data:
-  decode_grid:
-    status: missing
-    note: no measured kernel grid for this GPU/model -> analytic decode roofline (configs
-      scale by weight bytes / bandwidth / KV)
-  kv_pool:
-    status: measured
-    value: 1128
-    source: engine GPU KV cache size (vLLM startup, util 0.95 GT flags, NO CG-profiler),
-      tp4 (2026-06-18)
-    note: MEASURED engine pool 1128 blocks (18048 tokens); replaces the PR#80 reserve-corrected
-      estimate. 70B/72B barely fit 4x40GB -> tiny KV (~2x concurrency at full ctx).
-  saturated_ceiling:
-    status: derived
-    path: profile_data/kernels/saturated_ceiling_A100x4_Qwen2.5-72B.json
-    note: 'Measured A100x4 dense saturated-ITL plateau (median tpot_ms at KV pressure>=2.5)
-      from this cell''s GT; replaces inherited H100/Llama-8B (175/126ms) which OVER-caps
-      the 70B/72B low-batch-saturation plateau (~50-84ms). Fixes TPOT 108%->~18%.
-      E2EL stays TTFT-bound (small-pool queue). Regenerate: build_saturated_ceiling.'
-  roofline_peak:
-    status: measured
-    note: datasheet peak FLOPS/BW
-  util_flops:
-    status: placeholder
-    from: H100
-    note: H100 util scalars; re-anchor from a measured grid for this GPU
-  util_bw:
-    status: placeholder
-    from: H100
-    note: H100 util scalars; re-anchor from a measured grid for this GPU
-  scheduler_overhead:
-    status: placeholder
-    from: H100
-    note: H100 util scalars; re-anchor from a measured grid for this GPU
-  cached_prefill_grid:
-    status: inherited
-    from: H100
-    note: TTFT prefill law H100-measured -> first-cut
-  fa3_grid:
-    status: inherited
-    from: H100
-    note: FA3 prefill grid H100-measured -> first-cut
-  ground_truth:
-    status: measured
-    path: a100_Qwen2.5-72B_tp4_vllm
-    source: /mnt/100g
+available_kv_blocks: 1128
+max_num_batched_tokens: 2048

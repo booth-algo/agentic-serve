@@ -3,66 +3,11 @@ gpu: A100
 model: Llama-3.1-8B
 tp: 1
 engine: vllm
-available_kv_blocks: 8458
-max_num_batched_tokens: 2048
-max_model_len: 32768
-max_num_seqs: 256
 bench_dir: a100_Llama-3.1-8B_tp1_vllm
 backend: a100-tp1-vllm-analytic-roofline
 calibration_status: a100_tp1_analytic_roofline_firstcut
 ground_truth: true
-data:
-  decode_grid:
-    status: retired
-    note: 'POLICY (2026-07-03): step-level decode grids are NOT kernel models and
-      are excluded from the cost path. The v1-era CSV (decode_profile_A100_2026-06-02.csv)
-      remains on disk as validation data only. A100 calibration = profile A100 leaf
-      kernels (GEMM/FA/elementwise tables), same recipe as H100.'
-  kv_pool:
-    status: measured
-    value: 8458
-    note: 135328 tokens / 16 @ gpu_mem=0.85
-  saturated_ceiling:
-    status: measured
-    path: profile_data/kernels/saturated_ceiling_A100_llama31_8b.json
-    source: build_saturated_ceiling.py
-    date: '2026-06-02'
-    note: anchors 27->175 / 87->126 ms
-  roofline_peak:
-    status: measured
-    note: A100 datasheet 312 TFLOPS / 1.555 TB/s
-  util_flops:
-    status: placeholder
-    from: H100
-    note: affects only OOM-fill; re-anchor on A100
-  util_bw:
-    status: placeholder
-    from: H100
-  scheduler_overhead:
-    status: placeholder
-    from: H100
-  cached_prefill_grid:
-    status: inherited
-    from: H100
-    note: TTFT first-cut; drives A100 TTFT 46%
-  fa3_grid:
-    status: inherited
-    from: H100
-  ground_truth:
-    status: measured
-    path: a100_Llama-3.1-8B_tp1_vllm
-    source: /mnt/100g
-  scheduler:
-    status: measured
-    source: GT server metadata + installed-engine resolved defaults (vllm 0.19.0 g2a69949bd
-      on the a100 host, read-only 2026-06-11)
-    note: 'ENGINE-CONFIG TRUTH for the TTFT queue-sim admission arithmetic (QSimSchedConfig;
-      L10-tp1sub20 R2 mechanism, A100 adoption = L12-a100multi P4, gated +-0.3 as
-      a BINDING config). Same verbatim evidence as the tp2/tp4 manifests (full excerpts:
-      profile_data/engine_logs/a100_Llama-3.1-8B_multi_pool_evidence.txt): GT config
-      block ''max_model_len'': 32768, ''max_num_batched_tokens'': None, ''max_num_seqs'':
-      None; installed vllm/engine/arg_utils.py get_batch_defaults lines 2050-2072
-      A100 carve-out (PR #17885) -> OPENAI_API_SERVER 2048/256 on ''NVIDIA A100-SXM4-40GB,
-      39936 MiB''. long_prefill_token_threshold = int(32768*0.04) = 1310, numerically
-      unchanged vs the module constant; effective changes: budget 8192->2048, running-set
-      cap 1024->256 (binds at conc 256-320).'
+available_kv_blocks: 8458
+max_num_batched_tokens: 2048
+max_model_len: 32768
+max_num_seqs: 256
